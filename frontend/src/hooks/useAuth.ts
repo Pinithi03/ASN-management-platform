@@ -1,7 +1,14 @@
 /**
- * useAuth hook — access auth state and actions.
- *
- * Returns: { user, isAuthenticated, login, logout, hasRole }
+ * Authentication hook.
+ * Will integrate with Keycloak in Sprint 3-4.
  */
 
-// TODO: Sprint 2 (EP-03) — Implement
+export function useAuth() {
+  return {
+    isAuthenticated: true,
+    user: null,
+    login: () => {},
+    logout: () => {},
+    isLoading: false,
+  };
+}

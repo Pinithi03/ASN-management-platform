@@ -1,11 +1,20 @@
 /**
  * Authentication service.
- *
- * Wraps Keycloak JS adapter:
- *   - Login / logout / token refresh
- *   - User info extraction from JWT claims
- *   - Role checking helpers
- *   - Company context from token
+ * Will integrate with Keycloak in Sprint 3-4.
  */
 
-// TODO: Sprint 2 (EP-03) — Implement Keycloak integration
+export const authService = {
+  isAuthenticated: () => {
+    // Placeholder — always returns true until Keycloak is integrated
+    return true;
+  },
+
+  getToken: () => {
+    return null;
+  },
+
+  logout: () => {
+    // Will redirect to Keycloak logout in Sprint 4
+    console.log("Logout not yet implemented");
+  },
+};
