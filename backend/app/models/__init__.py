@@ -1,8 +1,6 @@
 """
 SQLAlchemy ORM models.
-
-Each model maps to a PostgreSQL table. All models include:
-    - company_id for multi-tenant isolation
-    - created_at / updated_at timestamps
-    - Soft-delete via is_active where applicable
+Import all models here so Alembic can detect them.
 """
+
+from app.models.base import Base, BaseModel, TimestampMixin, SoftDeleteMixin, CompanyScopedMixin
