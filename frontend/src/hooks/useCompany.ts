@@ -1,8 +1,13 @@
 /**
- * useCompany hook — access current company context.
- *
- * Returns: { company, companies, switchCompany }
- * Multi-company users can switch between assigned companies.
+ * Company context hook.
+ * Will provide current company selection in Sprint 3.
  */
 
-// TODO: Sprint 2 (EP-03) — Implement
+export function useCompany() {
+  return {
+    currentCompany: null,
+    companies: [],
+    switchCompany: (_id: string) => {},
+    isLoading: false,
+  };
+}

@@ -1,12 +1,42 @@
 """
 Database session management.
-
-Provides:
-    - AsyncEngine creation with connection pooling
-    - AsyncSession factory (async_sessionmaker)
-    - get_db() async generator for FastAPI Depends()
-    - Connection pool configuration (min=5, max=20 per process)
 """
 
-# TODO: Sprint 1 (EP-01) — Implement async session
-# from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from collections.abc import AsyncGenerator
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
+from app.core.config import get_settings
+
+settings = get_settings()
+
+engine = create_async_engine(
+    settings.DATABASE_URL,
+    echo=settings.SQL_ECHO,
+    pool_size=settings.DB_POOL_SIZE,
+    max_overflow=settings.DB_MAX_OVERFLOW,
+    pool_timeout=settings.DB_POOL_TIMEOUT,
+    pool_recycle=3600,
+    pool_pre_ping=True,
+)
+
+async_session_factory = async_sessionmaker(
+    bind=engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+)
+
+
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    """FastAPI dependency that yields a database session."""
+    async with async_session_factory() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()

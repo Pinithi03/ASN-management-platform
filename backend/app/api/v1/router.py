@@ -1,19 +1,21 @@
 """
-API v1 Router Aggregator.
-
-Collects all endpoint routers and mounts them under /api/v1.
-This is the single entry point included in the FastAPI app.
-
-Usage in main.py:
-    from app.api.v1.router import api_router
-    app.include_router(api_router, prefix="/api/v1")
+API v1 router aggregation.
+Mounts all endpoint routers under /api/v1.
 """
 
-# TODO: Sprint 1 — Import and include sub-routers
-# from fastapi import APIRouter
-# from app.api.v1.endpoints import auth, health, companies, ...
-#
-# api_router = APIRouter()
-# api_router.include_router(health.router, prefix="/health", tags=["Health"])
+from fastapi import APIRouter
+from app.api.v1.endpoints import health
+
+api_router = APIRouter()
+
+# Health endpoints (no prefix — mounted at /api/v1/health)
+api_router.include_router(health.router)
+
+# Future Sprint routers will be added here:
 # api_router.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 # api_router.include_router(companies.router, prefix="/companies", tags=["Companies"])
+# api_router.include_router(purchase_orders.router, prefix="/purchase-orders", tags=["Purchase Orders"])
+# api_router.include_router(emails.router, prefix="/emails", tags=["Emails"])
+# api_router.include_router(asn.router, prefix="/asn", tags=["ASN"])
+# api_router.include_router(dashboard.router, prefix="/dashboard", tags=["Dashboard"])
+# api_router.include_router(users.router, prefix="/users", tags=["Users"])

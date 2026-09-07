@@ -1,17 +1,31 @@
-/**
- * Axios HTTP client configured for the backend API.
- *
- * Features:
- *   - Base URL: /api/v1 (proxied in dev, Nginx in prod)
- *   - Automatic JWT injection via request interceptor
- *   - Token refresh on 401 via response interceptor
- *   - Request/response logging in development
- */
+import axios from "axios";
 
-// TODO: Sprint 1 (EP-02) — Implement API client
-// import axios from "axios";
-//
-// export const api = axios.create({
-//   baseURL: "/api/v1",
-//   headers: { "Content-Type": "application/json" },
-// });
+export const api = axios.create({
+  baseURL: "/api/v1",
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
+// Request interceptor — will add JWT token in Sprint 4
+api.interceptors.request.use(
+  (config) => {
+    // const token = localStorage.getItem("access_token");
+    // if (token) {
+    //   config.headers.Authorization = `Bearer ${token}`;
+    // }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Response interceptor — will handle 401 refresh in Sprint 4
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    // if (error.response?.status === 401) {
+    //   // Handle token refresh
+    // }
+    return Promise.reject(error);
+  }
+);
