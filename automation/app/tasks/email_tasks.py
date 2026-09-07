@@ -1,13 +1,29 @@
 """
 Email ingestion tasks.
 
-Tasks:
-    - fetch_emails_for_company: Connects to Outlook via Graph API,
-      fetches new emails since last check, publishes to processing queue
-    - fetch_all_companies: Periodic beat task that triggers per-company fetches
-
-Queue: email.ingestion
-Schedule: Every 2 minutes (configurable per company)
+Handles polling IMAP mailboxes and fetching new emails.
+Sprint 5 will add full implementation.
 """
 
-# TODO: Sprint 3-4 (EP-04) — Implement email ingestion
+from app.celery_app import celery_app
+
+
+@celery_app.task(name="app.tasks.email_tasks.ping")
+def ping() -> dict:
+    """Test task to verify Celery worker is running.
+
+    Usage:
+        from app.tasks.email_tasks import ping
+        result = ping.delay()
+        print(result.get(timeout=10))
+    """
+    return {"status": "pong", "service": "automation-engine"}
+
+
+@celery_app.task(name="app.tasks.email_tasks.poll_mailboxes")
+def poll_mailboxes() -> dict:
+    """Poll all configured IMAP mailboxes for new emails.
+
+    TODO: Sprint 5 — Full implementation
+    """
+    return {"status": "not_implemented", "message": "Email polling will be implemented in Sprint 5"}

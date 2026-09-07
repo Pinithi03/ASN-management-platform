@@ -1,13 +1,21 @@
 """
 Email parsing tasks.
 
-Tasks:
-    - parse_email: Runs the 3-tier parser chain on a single email
-    - calculate_confidence: Computes weighted confidence score
-    - route_by_confidence: Routes to auto-commit or human review queue
-
-Queue: email.processing
-Retry: 3 attempts with exponential backoff
+Handles parsing email content to extract PO/shipment data.
+Sprint 5-7 will add full implementation.
 """
 
-# TODO: Sprint 4-5 (EP-05) — Implement parsing pipeline
+from app.celery_app import celery_app
+
+
+@celery_app.task(name="app.tasks.parsing_tasks.parse_email")
+def parse_email(email_id: str) -> dict:
+    """Parse a single email to extract structured data.
+
+    TODO: Sprint 5-7 — Full implementation
+    """
+    return {
+        "status": "not_implemented",
+        "email_id": email_id,
+        "message": "Email parsing will be implemented in Sprint 5-7",
+    }

@@ -1,12 +1,16 @@
 """
 Notification tasks.
 
-Tasks:
-    - notify_review_needed: Alerts reviewers of items below confidence threshold
-    - notify_processing_complete: Summary notification after batch processing
-    - notify_error: Alerts on processing failures (DLQ items)
-
-Queue: email.notifications
+Handles sending notifications (WebSocket, email alerts).
 """
 
-# TODO: Sprint 6 (EP-06) — Implement notifications
+from app.celery_app import celery_app
+
+
+@celery_app.task(name="app.tasks.notification_tasks.send_notification")
+def send_notification(user_id: str, message: str) -> dict:
+    """Send a notification to a user.
+
+    TODO: Sprint 8 — Full implementation
+    """
+    return {"status": "not_implemented", "user_id": user_id}

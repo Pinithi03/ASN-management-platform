@@ -1,13 +1,16 @@
 """
 Data persistence tasks.
 
-Tasks:
-    - persist_parsed_data: Upserts PO data with conflict resolution
-      (ON CONFLICT company_id + client_code + po_number DO UPDATE)
-    - store_attachment: Uploads email attachments to MinIO
-    - update_email_status: Marks email as processed/failed
-
-Queue: email.persistence
+Handles saving parsed data to the database.
 """
 
-# TODO: Sprint 5 (EP-05) — Implement persistence
+from app.celery_app import celery_app
+
+
+@celery_app.task(name="app.tasks.persistence_tasks.save_parsed_data")
+def save_parsed_data(parsed_data: dict) -> dict:
+    """Save parsed email data to the database.
+
+    TODO: Sprint 5 — Full implementation
+    """
+    return {"status": "not_implemented", "message": "Persistence will be implemented in Sprint 5"}

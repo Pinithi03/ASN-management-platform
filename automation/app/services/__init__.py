@@ -1,6 +1,1 @@
-"""
-Business Logic Layer for the automation engine.
-
-Services contain parsing logic, confidence scoring algorithms,
-email filtering rules, and notification orchestration.
-"""
+"""Package placeholder — will be implemented in later sprints."""
