@@ -3,11 +3,17 @@
 # ============================================================
 name: CI
 
+# TEMPORARILY DISABLED — auto-trigger commented out until Sprint 1+ code is ready
+# To re-enable: uncomment push/pull_request and remove workflow_dispatch
+#
+# on:
+#   push:
+#     branches: [main, development]
+#   pull_request:
+#     branches: [main, development]
+
 on:
-  push:
-    branches: [main, develop]
-  pull_request:
-    branches: [main, develop]
+  workflow_dispatch:  # Manual trigger only — run from GitHub Actions tab when ready
 
 jobs:
   backend-lint:
