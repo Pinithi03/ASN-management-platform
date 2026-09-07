@@ -1,0 +1,50 @@
+{
+  "realm": "oniverse",
+  "enabled": true,
+  "displayName": "Oniverse Group — ANS Platform",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "roles": {
+    "realm": [
+      { "name": "super_admin", "description": "Full system access across all companies" },
+      { "name": "company_admin", "description": "Full access within assigned company" },
+      { "name": "operator", "description": "Create and manage POs and ASNs" },
+      { "name": "reviewer", "description": "Review and approve parsed email data" },
+      { "name": "viewer", "description": "Read-only access to assigned company data" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "ans-frontend",
+      "enabled": true,
+      "publicClient": true,
+      "directAccessGrantsEnabled": false,
+      "standardFlowEnabled": true,
+      "redirectUris": ["http://localhost:3000/*", "http://localhost/*"],
+      "webOrigins": ["http://localhost:3000", "http://localhost"],
+      "protocol": "openid-connect"
+    },
+    {
+      "clientId": "ans-backend",
+      "enabled": true,
+      "publicClient": false,
+      "bearerOnly": true,
+      "protocol": "openid-connect"
+    }
+  ],
+  "identityProviders": [
+    {
+      "alias": "microsoft",
+      "providerId": "oidc",
+      "enabled": true,
+      "config": {
+        "clientId": "REPLACE_WITH_ENTRA_CLIENT_ID",
+        "clientSecret": "REPLACE_WITH_ENTRA_CLIENT_SECRET",
+        "authorizationUrl": "https://login.microsoftonline.com/REPLACE_WITH_TENANT_ID/oauth2/v2.0/authorize",
+        "tokenUrl": "https://login.microsoftonline.com/REPLACE_WITH_TENANT_ID/oauth2/v2.0/token",
+        "defaultScope": "openid email profile User.Read Mail.Read"
+      }
+    }
+  ]
+}

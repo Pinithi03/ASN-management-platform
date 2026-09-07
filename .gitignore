@@ -1,0 +1,68 @@
+# ============================================================
+# ANS Management Platform — .gitignore
+# ============================================================
+
+# ── Python ──────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+htmlcov/
+.coverage
+.coverage.*
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# ── Node.js ─────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build output
+frontend/dist/
+frontend/build/
+
+# ── Docker ──────────────────────────────────────────────────
+# Docker volumes are managed by Compose, but don't track local data
+docker/volumes/
+
+# ── Environment ─────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ── IDE ─────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ── Logs ────────────────────────────────────────────────────
+logs/
+*.log
+
+# ── Alembic ─────────────────────────────────────────────────
+# Don't ignore migrations/versions — they're version controlled
+# Only ignore auto-generated __pycache__ inside
+
+# ── MinIO local data ────────────────────────────────────────
+minio_data/
+
+# ── Misc ────────────────────────────────────────────────────
+*.bak
+*.tmp
+*.temp

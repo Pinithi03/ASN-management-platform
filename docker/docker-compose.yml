@@ -1,0 +1,233 @@
+# ============================================================
+# ANS Management Platform — Docker Compose (Development)
+# ============================================================
+# Services: 13+ containers
+# Resource estimate: ~11 CPU cores, ~7.5 GB RAM
+#
+# Usage:
+#   make docker-up      # Start all services
+#   make docker-down    # Stop all services
+#   make docker-logs    # Tail logs
+# ============================================================
+
+services:
+  # ── Database ──────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: ans-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ans_platform}
+      POSTGRES_USER: ${POSTGRES_USER:-ans_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ans_password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ans_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ans-network
+
+  # ── Cache & Result Backend ────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: ans-redis
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ans-network
+
+  # ── Message Broker ────────────────────────────────────────
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: ans-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-ans_rabbit}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-ans_rabbit_pass}
+    ports:
+      - "5672:5672"     # AMQP
+      - "15672:15672"   # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_running"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    networks:
+      - ans-network
+
+  # ── Object Storage ────────────────────────────────────────
+  minio:
+    image: minio/minio:latest
+    container_name: ans-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-ans_minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-ans_minio_password}
+    ports:
+      - "9000:9000"     # S3 API
+      - "9001:9001"     # Console
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    networks:
+      - ans-network
+
+  # ── Identity Provider ─────────────────────────────────────
+  keycloak:
+    image: quay.io/keycloak/keycloak:25.0
+    container_name: ans-keycloak
+    command: start-dev
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-ans_platform}
+      KC_DB_USERNAME: ${POSTGRES_USER:-ans_user}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:-ans_password}
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_HEALTH_ENABLED: true
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - ans-network
+
+  # ── Backend API (System A) ────────────────────────────────
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: ans-backend
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-ans_user}:${POSTGRES_PASSWORD:-ans_password}@postgres:5432/${POSTGRES_DB:-ans_platform}
+      REDIS_URL: redis://redis:6379/0
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-ans_rabbit}:${RABBITMQ_PASSWORD:-ans_rabbit_pass}@rabbitmq:5672/
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-ans_minio}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-ans_minio_password}
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: oniverse
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ans-network
+
+  # ── Celery Worker (System B) ──────────────────────────────
+  celery-worker:
+    build:
+      context: ../automation
+      dockerfile: Dockerfile
+    container_name: ans-celery-worker
+    environment:
+      CELERY_BROKER_URL: amqp://${RABBITMQ_USER:-ans_rabbit}:${RABBITMQ_PASSWORD:-ans_rabbit_pass}@rabbitmq:5672/
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-ans_user}:${POSTGRES_PASSWORD:-ans_password}@postgres:5432/${POSTGRES_DB:-ans_platform}
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-ans_minio}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-ans_minio_password}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ans-network
+
+  # ── Celery Beat (Scheduler) ───────────────────────────────
+  celery-beat:
+    build:
+      context: ../automation
+      dockerfile: Dockerfile
+    container_name: ans-celery-beat
+    command: celery -A app.celery_app:celery_app beat --loglevel=info
+    environment:
+      CELERY_BROKER_URL: amqp://${RABBITMQ_USER:-ans_rabbit}:${RABBITMQ_PASSWORD:-ans_rabbit_pass}@rabbitmq:5672/
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ans-network
+
+  # ── Celery Flower (Monitoring) ────────────────────────────
+  flower:
+    build:
+      context: ../automation
+      dockerfile: Dockerfile
+    container_name: ans-flower
+    command: celery -A app.celery_app:celery_app flower --port=5555
+    ports:
+      - "5555:5555"
+    environment:
+      CELERY_BROKER_URL: amqp://${RABBITMQ_USER:-ans_rabbit}:${RABBITMQ_PASSWORD:-ans_rabbit_pass}@rabbitmq:5672/
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ans-network
+
+  # ── Frontend ──────────────────────────────────────────────
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: ans-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - ans-network
+
+  # ── Reverse Proxy ─────────────────────────────────────────
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: ans-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - ans-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
+  minio_data:
+
+networks:
+  ans-network:
+    driver: bridge
