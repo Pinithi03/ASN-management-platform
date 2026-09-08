@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import Boolean, ForeignKey, String, Text
-from sqlalchemy.dialects.postgresql import TIMESTAMPTZ, UUID
+from sqlalchemy.dialects.postgresql import TIMESTAMP, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, CompanyScopedMixin, TimestampMixin
@@ -63,10 +63,10 @@ class ASNRecord(Base, TimestampMixin, CompanyScopedMixin):
         String(30), nullable=False, server_default="DRAFT"
     )
     sent_at: Mapped[Optional[datetime]] = mapped_column(
-        TIMESTAMPTZ, nullable=True
+        TIMESTAMP, nullable=True
     )
     accepted_at: Mapped[Optional[datetime]] = mapped_column(
-        TIMESTAMPTZ, nullable=True
+        TIMESTAMP, nullable=True
     )
     rejection_reason: Mapped[Optional[str]] = mapped_column(
         Text, nullable=True
