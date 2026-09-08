@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date as date_type
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,6 +23,25 @@ from app.email.classifier import ClassificationResult
 from app.email.parsers import ParsedPO
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_date(value) -> Optional[date_type]:
+    """Convert a date string to datetime.date, or return None."""
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date_type):
+        return value
+    if not isinstance(value, str):
+        return None
+    for fmt in ("%d-%m-%Y", "%Y-%m-%d", "%d/%m/%Y", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(value, fmt).date()
+        except (ValueError, TypeError):
+            continue
+    logger.warning("Could not parse date: %r", value)
+    return None
 
 
 async def save_email_record(
@@ -163,7 +182,7 @@ async def save_purchase_order(
         existing.quantity = parsed_po.total_quantity
         existing.total_value = parsed_po.total_value
         existing.destination = parsed_po.destination or existing.destination
-        existing.delivery_date = parsed_po.delivery_date or existing.delivery_date
+        existing.delivery_date = _parse_date(parsed_po.delivery_date) or existing.delivery_date
         existing.currency = parsed_po.currency
         existing.source_email_id = email_record_id
 
@@ -179,7 +198,7 @@ async def save_purchase_order(
             quantity=parsed_po.total_quantity,
             total_value=parsed_po.total_value,
             destination=parsed_po.destination,
-            delivery_date=parsed_po.delivery_date,
+            delivery_date=_parse_date(parsed_po.delivery_date),
             currency=parsed_po.currency,
             version=1,
             source_email_id=email_record_id,
@@ -214,39 +233,44 @@ async def process_and_save(
     dict
         Summary with email_record_id, parsed_data_ids, and PO ids.
     """
-    # 1. Save the email record
-    status = "PARSED" if parsed_pos else "REVIEW"
-    email_record = await save_email_record(
-        db, decoded, classification, company_id, status=status,
-    )
-
-    # 2. Save each parsed PO → parsed_data + purchase_orders
-    po_ids = []
-    parsed_data_ids = []
-    for parsed_po in parsed_pos:
-        # Save raw parsed output as JSONB
-        pd = await save_parsed_data(
-            db,
-            parsed_po,
-            email_record_id=str(email_record.id),
-            company_id=company_id,
+    try:
+        # 1. Save the email record
+        status = "PARSED" if parsed_pos else "REVIEW"
+        email_record = await save_email_record(
+            db, decoded, classification, company_id, status=status,
         )
-        parsed_data_ids.append(str(pd.id))
 
-        # Upsert the purchase order
-        po = await save_purchase_order(
-            db,
-            parsed_po,
-            email_record_id=str(email_record.id),
-            company_id=company_id,
-        )
-        po_ids.append(str(po.id))
+        # 2. Save each parsed PO → parsed_data + purchase_orders
+        po_ids = []
+        parsed_data_ids = []
+        for parsed_po in parsed_pos:
+            # Save raw parsed output as JSONB
+            pd = await save_parsed_data(
+                db,
+                parsed_po,
+                email_record_id=str(email_record.id),
+                company_id=company_id,
+            )
+            parsed_data_ids.append(str(pd.id))
 
-    await db.commit()
+            # Upsert the purchase order
+            po = await save_purchase_order(
+                db,
+                parsed_po,
+                email_record_id=str(email_record.id),
+                company_id=company_id,
+            )
+            po_ids.append(str(po.id))
 
-    return {
-        "email_record_id": str(email_record.id),
-        "parsed_data_ids": parsed_data_ids,
-        "purchase_order_ids": po_ids,
-        "po_count": len(po_ids),
-    }
+        await db.commit()
+
+        return {
+            "email_record_id": str(email_record.id),
+            "parsed_data_ids": parsed_data_ids,
+            "purchase_order_ids": po_ids,
+            "po_count": len(po_ids),
+        }
+    except Exception as e:
+        await db.rollback()
+        logger.error("Failed to persist email data: %s", e)
+        raise
