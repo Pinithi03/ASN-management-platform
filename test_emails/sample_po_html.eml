@@ -1,0 +1,75 @@
+MIME-Version: 1.0
+From: orders@fabricindia.in
+To: sirio.asn.dev@gmail.com
+Subject: Purchase Order Update - PO-2026-08-0197
+Date: Mon, 08 Sep 2026 09:15:00 +0530
+Message-ID: <test-002@fabricindia.in>
+Content-Type: multipart/alternative; boundary="----=_boundary_002"
+
+------=_boundary_002
+Content-Type: text/plain; charset="utf-8"
+
+Purchase Order PO-2026-08-0197 has been updated.
+Please review the details below.
+
+------=_boundary_002
+Content-Type: text/html; charset="utf-8"
+
+<html>
+<body style="font-family: Arial, sans-serif;">
+<h2>Purchase Order Update</h2>
+<p><strong>PO Number:</strong> PO-2026-08-0197</p>
+<p><strong>Order Date:</strong> 2026-08-20</p>
+<p><strong>Delivery Date:</strong> 2026-10-01</p>
+<p><strong>Supplier:</strong> FabricIndia Textiles (SUP-FAB003)</p>
+<p><strong>Ship To:</strong> Sirio Plant C - Katunayake</p>
+
+<h3>Order Lines</h3>
+<table border="1" cellpadding="5" cellspacing="0" width="100%">
+<tr style="background-color: #f0f0f0;">
+  <th>Style</th>
+  <th>Description</th>
+  <th>Color</th>
+  <th>Size</th>
+  <th>Quantity</th>
+  <th>Unit Price</th>
+</tr>
+<tr>
+  <td>ST-3010</td>
+  <td>Cotton Polo Shirt</td>
+  <td>Forest Green</td>
+  <td>M</td>
+  <td>400</td>
+  <td>15.00</td>
+</tr>
+<tr>
+  <td>ST-3010</td>
+  <td>Cotton Polo Shirt</td>
+  <td>Forest Green</td>
+  <td>L</td>
+  <td>600</td>
+  <td>15.00</td>
+</tr>
+<tr>
+  <td>ST-3010</td>
+  <td>Cotton Polo Shirt</td>
+  <td>Forest Green</td>
+  <td>XL</td>
+  <td>350</td>
+  <td>15.50</td>
+</tr>
+<tr>
+  <td>ST-4022</td>
+  <td>Linen Casual Trouser</td>
+  <td>Khaki</td>
+  <td>32</td>
+  <td>250</td>
+  <td>22.00</td>
+</tr>
+</table>
+
+<p><em>Please confirm receipt of this order.</em></p>
+</body>
+</html>
+
+------=_boundary_002--

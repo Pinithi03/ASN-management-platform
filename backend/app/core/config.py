@@ -34,6 +34,18 @@ class Settings(BaseSettings):
     # RabbitMQ
     RABBITMQ_URL: str = "amqp://ans_rabbit:ans_rabbit_pass@localhost:5672/"
 
+    # IMAP (Email Polling)
+    IMAP_HOST: str = "imap.gmail.com"
+    IMAP_PORT: int = 993
+    IMAP_USERNAME: str = ""
+    IMAP_PASSWORD: str = ""
+    IMAP_MAILBOX: str = "INBOX"
+    IMAP_USE_SSL: bool = True
+
+    # Email Processing
+    DEFAULT_COMPANY_ID: str = ""
+    EMAIL_POLL_INTERVAL_SECONDS: int = 120
+
     # MinIO
     MINIO_ENDPOINT: str = "localhost:9000"
     MINIO_ACCESS_KEY: str = "ans_minio"

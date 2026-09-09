@@ -1,0 +1,55 @@
+MIME-Version: 1.0
+From: purchasing@oniverse-group.com
+To: sirio.asn.dev@gmail.com
+Subject: Purchase Order PO-2026-09-0042 - TextCorp Apparel
+Date: Mon, 08 Sep 2026 10:30:00 +0530
+Message-ID: <test-001@oniverse-group.com>
+Content-Type: multipart/mixed; boundary="----=_boundary_001"
+
+------=_boundary_001
+Content-Type: text/plain; charset="utf-8"
+
+Dear Supplier,
+
+Please find attached Purchase Order PO-2026-09-0042.
+Kindly confirm receipt and expected delivery date.
+
+Regards,
+Purchasing Team
+Oniverse Group
+
+------=_boundary_001
+Content-Type: application/xml; name="PO-2026-09-0042.xml"
+Content-Disposition: attachment; filename="PO-2026-09-0042.xml"
+Content-Transfer-Encoding: base64
+
+PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPFB1cmNo
+YXNlT3JkZXI+CiAgPFBPTnVtYmVyPlBPLTIwMjYtMDktMDA0MjwvUE9OdW1i
+ZXI+CiAgPE9yZGVyRGF0ZT4yMDI2LTA5LTA4PC9PcmRlckRhdGU+CiAgPERl
+bGl2ZXJ5RGF0ZT4yMDI2LTEwLTE1PC9EZWxpdmVyeURhdGU+CiAgPFN1cHBs
+aWVyQ29kZT5TVVAtVFhUMDAxPC9TdXBwbGllckNvZGU+CiAgPFN1cHBsaWVy
+TmFtZT5UZXh0Q29ycCBBcHBhcmVsPC9TdXBwbGllck5hbWU+CiAgPEJ1eWVy
+TmFtZT5TaXJpbyBQbGFudCBBPC9CdXllck5hbWU+CiAgPERlc3RpbmF0aW9u
+PlNpcmlvIFBsYW50IEEgLSBDb2xvbWJvPC9EZXN0aW5hdGlvbj4KICA8Q3Vy
+cmVuY3k+VVNEPC9DdXJyZW5jeT4KICA8TGluZUl0ZW1zPgogICAgPExpbmVJ
+dGVtPgogICAgICA8TGluZU51bWJlcj4xPC9MaW5lTnVtYmVyPgogICAgICA8
+U3R5bGU+U1QtMTAwMTwvU3R5bGU+CiAgICAgIDxEZXNjcmlwdGlvbj5NZW5z
+IENyZXcgTmVjayBULVNoaXJ0PC9EZXNjcmlwdGlvbj4KICAgICAgPENvbG9y
+Pk5hdnkgQmx1ZTwvQ29sb3I+CiAgICAgIDxTaXplPk08L1NpemU+CiAgICAg
+IDxRdWFudGl0eT41MDA8L1F1YW50aXR5PgogICAgICA8VW5pdFByaWNlPjEy
+LjUwPC9Vbml0UHJpY2U+CiAgICA8L0xpbmVJdGVtPgogICAgPExpbmVJdGVt
+PgogICAgICA8TGluZU51bWJlcj4yPC9MaW5lTnVtYmVyPgogICAgICA8U3R5
+bGU+U1QtMTAwMTwvU3R5bGU+CiAgICAgIDxEZXNjcmlwdGlvbj5NZW5zIENy
+ZXcgTmVjayBULVNoaXJ0PC9EZXNjcmlwdGlvbj4KICAgICAgPENvbG9yPk5h
+dnkgQmx1ZTwvQ29sb3I+CiAgICAgIDxTaXplPkw8L1NpemU+CiAgICAgIDxR
+dWFudGl0eT43NTA8L1F1YW50aXR5PgogICAgICA8VW5pdFByaWNlPjEyLjUw
+PC9Vbml0UHJpY2U+CiAgICA8L0xpbmVJdGVtPgogICAgPExpbmVJdGVtPgog
+ICAgICA8TGluZU51bWJlcj4zPC9MaW5lTnVtYmVyPgogICAgICA8U3R5bGU+
+U1QtMjAwNTwvU3R5bGU+CiAgICAgIDxEZXNjcmlwdGlvbj5Xb21lbnMgVi1O
+ZWNrIEJsb3VzZTwvRGVzY3JpcHRpb24+CiAgICAgIDxDb2xvcj5JdmVyeTwv
+Q29sb3I+CiAgICAgIDxTaXplPlM8L1NpemU+CiAgICAgIDxRdWFudGl0eT4z
+MDA8L1F1YW50aXR5PgogICAgICA8VW5pdFByaWNlPjE4Ljc1PC9Vbml0UHJp
+Y2U+CiAgICA8L0xpbmVJdGVtPgogIDwvTGluZUl0ZW1zPgo8L1B1cmNoYXNl
+T3JkZXI+Cg==
+
+------=_boundary_001--
