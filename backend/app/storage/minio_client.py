@@ -1,0 +1,126 @@
+# backend/app/storage/minio_client.py
+"""
+MinIO client — upload and retrieve email attachments.
+
+Env vars:
+    MINIO_ENDPOINT    (default: localhost:9000)
+    MINIO_ACCESS_KEY  (default: minioadmin)
+    MINIO_SECRET_KEY  (default: minioadmin)
+    MINIO_BUCKET      (default: email-attachments)
+    MINIO_USE_SSL     (default: false)
+"""
+
+from __future__ import annotations
+
+import hashlib
+import io
+import logging
+import os
+from typing import Optional
+
+from minio import Minio
+from minio.error import S3Error
+
+logger = logging.getLogger(__name__)
+
+# Singleton client
+_client: Optional[Minio] = None
+
+
+def get_minio_client() -> Minio:
+    """Get or create the MinIO client singleton."""
+    global _client
+    if _client is None:
+        _client = Minio(
+            endpoint=os.getenv("MINIO_ENDPOINT", "localhost:9000"),
+            access_key=os.getenv("MINIO_ACCESS_KEY", "minioadmin"),
+            secret_key=os.getenv("MINIO_SECRET_KEY", "minioadmin"),
+            secure=os.getenv("MINIO_USE_SSL", "false").lower() == "true",
+        )
+    return _client
+
+
+def get_bucket_name() -> str:
+    """Return the configured bucket name."""
+    return os.getenv("MINIO_BUCKET", "email-attachments")
+
+
+def ensure_bucket_exists() -> None:
+    """Create the bucket if it doesn't exist."""
+    client = get_minio_client()
+    bucket = get_bucket_name()
+    try:
+        if not client.bucket_exists(bucket):
+            client.make_bucket(bucket)
+            logger.info("Created MinIO bucket: %s", bucket)
+    except S3Error as e:
+        logger.error("MinIO bucket check failed: %s", e)
+        raise
+
+
+def upload_attachment(
+    content: bytes,
+    object_key: str,
+    content_type: str = "application/octet-stream",
+) -> dict:
+    """
+    Upload a file to MinIO.
+
+    Parameters
+    ----------
+    content : bytes
+        File content.
+    object_key : str
+        Object key (path) in the bucket.
+        e.g. "company-id/email-record-id/filename.xml"
+    content_type : str
+        MIME type of the file.
+
+    Returns
+    -------
+    dict
+        Upload result with bucket, key, size, and checksum.
+    """
+    client = get_minio_client()
+    bucket = get_bucket_name()
+
+    ensure_bucket_exists()
+
+    # Calculate SHA-256 checksum
+    checksum = hashlib.sha256(content).hexdigest()
+
+    # Upload
+    data = io.BytesIO(content)
+    result = client.put_object(
+        bucket_name=bucket,
+        object_name=object_key,
+        data=data,
+        length=len(content),
+        content_type=content_type,
+    )
+
+    logger.info(
+        "Uploaded to MinIO: bucket=%s, key=%s, size=%d",
+        bucket, object_key, len(content),
+    )
+
+    return {
+        "bucket": bucket,
+        "key": object_key,
+        "size": len(content),
+        "checksum_sha256": checksum,
+        "etag": result.etag,
+    }
+
+
+def download_attachment(object_key: str) -> bytes:
+    """Download a file from MinIO by its object key."""
+    client = get_minio_client()
+    bucket = get_bucket_name()
+
+    try:
+        response = client.get_object(bucket, object_key)
+        return response.read()
+    finally:
+        response.close()
+        response.release_conn()
