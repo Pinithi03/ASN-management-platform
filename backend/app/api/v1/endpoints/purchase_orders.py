@@ -1,14 +1,302 @@
 """
-Purchase_orders API endpoints (Presentation Layer).
+Purchase Orders API endpoints (Presentation Layer).
 
-Router for /purchase_orders endpoints.
-Calls purchase_orders_service for business logic — never accesses
-repositories or database directly.
+Provides:
+  - GET    /              — List POs with filters & pagination
+  - GET    /{po_id}       — PO detail with linked email/parsed data
+  - PATCH  /{po_id}       — Update PO fields
+  - GET    /stats         — PO statistics by status
 """
 
-# TODO: Implement in appropriate sprint
-# from fastapi import APIRouter, Depends
-# from app.api.v1.deps import get_current_user, get_db
-# from app.services.purchase_orders_service import Purchase_ordersService
-#
-# router = APIRouter()
+from __future__ import annotations
+
+import logging
+from datetime import datetime, timezone
+from typing import Optional
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
+from sqlalchemy import func, select, desc
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db.session import get_db
+from app.models.purchase_order import PurchaseOrder
+from app.models.email_message import EmailRecord
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
+
+
+# ─── Pydantic Schemas ───────────────────────────────────────────
+
+class POListItem(BaseModel):
+    id: str
+    company_id: str
+    po_number: Optional[str] = None
+    client_code: Optional[str] = None
+    style_number: Optional[str] = None
+    description: Optional[str] = None
+    quantity: Optional[int] = None
+    unit_price: Optional[float] = None
+    total_value: Optional[float] = None
+    currency: Optional[str] = None
+    delivery_date: Optional[str] = None
+    ship_date: Optional[str] = None
+    destination: Optional[str] = None
+    status: Optional[str] = None
+    version: Optional[int] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
+class PODetailResponse(BaseModel):
+    id: str
+    company_id: str
+    po_number: Optional[str] = None
+    client_code: Optional[str] = None
+    style_number: Optional[str] = None
+    description: Optional[str] = None
+    quantity: Optional[int] = None
+    unit_price: Optional[float] = None
+    total_value: Optional[float] = None
+    currency: Optional[str] = None
+    delivery_date: Optional[str] = None
+    ship_date: Optional[str] = None
+    destination: Optional[str] = None
+    status: Optional[str] = None
+    version: Optional[int] = None
+    extra_data: Optional[dict] = None
+    source_email_id: Optional[str] = None
+    source_email_subject: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
+class POUpdateRequest(BaseModel):
+    status: Optional[str] = None
+    quantity: Optional[int] = None
+    delivery_date: Optional[str] = None
+    ship_date: Optional[str] = None
+    destination: Optional[str] = None
+    description: Optional[str] = None
+    style_number: Optional[str] = None
+    currency: Optional[str] = None
+
+
+class PaginatedPOResponse(BaseModel):
+    items: list[POListItem]
+    total: int
+    page: int
+    per_page: int
+    pages: int
+
+
+class POStatsResponse(BaseModel):
+    total: int = 0
+    active: int = 0
+    updated: int = 0
+    shipped: int = 0
+    cancelled: int = 0
+    completed: int = 0
+
+
+# ─── GET / — List Purchase Orders ───────────────────────────────
+
+@router.get("/", response_model=PaginatedPOResponse)
+async def list_purchase_orders(
+    db: AsyncSession = Depends(get_db),
+    status: Optional[str] = Query(None, description="Filter by status"),
+    search: Optional[str] = Query(None, description="Search PO#, client, style"),
+    company_id: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+):
+    """List purchase orders with optional filters and pagination."""
+    query = select(PurchaseOrder)
+
+    # Apply filters
+    if company_id:
+        query = query.where(PurchaseOrder.company_id == company_id)
+    if status:
+        query = query.where(PurchaseOrder.status == status.upper())
+    if search:
+        search_filter = f"%{search}%"
+        query = query.where(
+            PurchaseOrder.po_number.ilike(search_filter)
+            | PurchaseOrder.client_code.ilike(search_filter)
+            | PurchaseOrder.style_number.ilike(search_filter)
+            | PurchaseOrder.description.ilike(search_filter)
+        )
+
+    # Count total
+    count_query = select(func.count()).select_from(query.subquery())
+    total = (await db.execute(count_query)).scalar() or 0
+
+    # Paginate & sort
+    query = query.order_by(desc(PurchaseOrder.created_at))
+    query = query.offset((page - 1) * per_page).limit(per_page)
+
+    result = await db.execute(query)
+    records = result.scalars().all()
+
+    pages = max(1, (total + per_page - 1) // per_page)
+
+    return PaginatedPOResponse(
+        items=[
+            POListItem(
+                id=str(r.id),
+                company_id=str(r.company_id),
+                po_number=r.po_number,
+                client_code=r.client_code,
+                style_number=r.style_number,
+                description=r.description,
+                quantity=r.quantity,
+                unit_price=float(r.unit_price) if r.unit_price else None,
+                total_value=float(r.total_value) if r.total_value else None,
+                currency=r.currency,
+                delivery_date=str(r.delivery_date) if r.delivery_date else None,
+                ship_date=str(r.ship_date) if r.ship_date else None,
+                destination=r.destination,
+                status=r.status,
+                version=r.version,
+                created_at=r.created_at,
+                updated_at=r.updated_at,
+            )
+            for r in records
+        ],
+        total=total,
+        page=page,
+        per_page=per_page,
+        pages=pages,
+    )
+
+
+# ─── GET /stats — PO Statistics ─────────────────────────────────
+
+@router.get("/stats", response_model=POStatsResponse)
+async def po_stats(
+    db: AsyncSession = Depends(get_db),
+    company_id: Optional[str] = Query(None),
+):
+    """Get PO count breakdown by status."""
+    query = select(
+        func.count().label("total"),
+        func.count().filter(PurchaseOrder.status == "ACTIVE").label("active"),
+        func.count().filter(PurchaseOrder.status == "UPDATED").label("updated"),
+        func.count().filter(PurchaseOrder.status == "SHIPPED").label("shipped"),
+        func.count().filter(PurchaseOrder.status == "CANCELLED").label("cancelled"),
+        func.count().filter(PurchaseOrder.status == "COMPLETED").label("completed"),
+    )
+
+    if company_id:
+        query = query.where(PurchaseOrder.company_id == company_id)
+
+    result = await db.execute(query)
+    row = result.one()
+
+    return POStatsResponse(
+        total=row.total,
+        active=row.active,
+        updated=row.updated,
+        shipped=row.shipped,
+        cancelled=row.cancelled,
+        completed=row.completed,
+    )
+
+
+# ─── GET /{po_id} — PO Detail ───────────────────────────────────
+
+@router.get("/{po_id}", response_model=PODetailResponse)
+async def get_purchase_order(
+    po_id: UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get purchase order detail with linked source email info."""
+    result = await db.execute(
+        select(PurchaseOrder).where(PurchaseOrder.id == po_id)
+    )
+    po = result.scalar_one_or_none()
+    if not po:
+        raise HTTPException(status_code=404, detail="Purchase order not found")
+
+    # Get source email subject if linked
+    source_email_subject = None
+    if po.source_email_id:
+        email_result = await db.execute(
+            select(EmailRecord.subject).where(
+                EmailRecord.id == po.source_email_id
+            )
+        )
+        source_email_subject = email_result.scalar_one_or_none()
+
+    return PODetailResponse(
+        id=str(po.id),
+        company_id=str(po.company_id),
+        po_number=po.po_number,
+        client_code=po.client_code,
+        style_number=po.style_number,
+        description=po.description,
+        quantity=po.quantity,
+        unit_price=float(po.unit_price) if po.unit_price else None,
+        total_value=float(po.total_value) if po.total_value else None,
+        currency=po.currency,
+        delivery_date=str(po.delivery_date) if po.delivery_date else None,
+        ship_date=str(po.ship_date) if po.ship_date else None,
+        destination=po.destination,
+        status=po.status,
+        version=po.version,
+        extra_data=po.extra_data,
+        source_email_id=str(po.source_email_id) if po.source_email_id else None,
+        source_email_subject=source_email_subject,
+        created_at=po.created_at,
+        updated_at=po.updated_at,
+    )
+
+
+# ─── PATCH /{po_id} — Update PO ─────────────────────────────────
+
+@router.patch("/{po_id}")
+async def update_purchase_order(
+    po_id: UUID,
+    body: POUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Update purchase order fields."""
+    from app.services.email_service import _parse_date
+
+    result = await db.execute(
+        select(PurchaseOrder).where(PurchaseOrder.id == po_id)
+    )
+    po = result.scalar_one_or_none()
+    if not po:
+        raise HTTPException(status_code=404, detail="Purchase order not found")
+
+    if body.status is not None:
+        po.status = body.status.upper()
+    if body.quantity is not None:
+        po.quantity = body.quantity
+    if body.delivery_date is not None:
+        po.delivery_date = _parse_date(body.delivery_date)
+    if body.ship_date is not None:
+        po.ship_date = _parse_date(body.ship_date)
+    if body.destination is not None:
+        po.destination = body.destination
+    if body.description is not None:
+        po.description = body.description
+    if body.style_number is not None:
+        po.style_number = body.style_number
+    if body.currency is not None:
+        po.currency = body.currency
+
+    po.updated_at = datetime.now(timezone.utc)
+    po.version = (po.version or 1) + 1
+    await db.commit()
+
+    logger.info("Updated PO %s (v%d)", po.po_number, po.version)
+    return {"status": "updated", "po_id": str(po_id), "version": po.version}
