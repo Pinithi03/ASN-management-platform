@@ -55,6 +55,9 @@ Thumbs.db
 logs/
 *.log
 
+# ── Celery ─────────────────────────────────────────────────
+backend/celerybeat-schedule*
+
 # ── Alembic ─────────────────────────────────────────────────
 # Don't ignore migrations/versions — they're version controlled
 # Only ignore auto-generated __pycache__ inside
