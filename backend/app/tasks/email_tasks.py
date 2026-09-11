@@ -2,7 +2,7 @@
 """
 Celery tasks for the inbound email pipeline.
 
-- poll_mailboxes: Beat task (every 2 min) — connects to IMAP, fetches
+- poll_mailboxes: Beat task (every 10 s) — connects to IMAP, fetches
   unread emails, dispatches process_inbound_email for each.
 - process_inbound_email: Worker task — decodes, classifies, parses,
   validates, and saves PO data to the database.
@@ -11,6 +11,7 @@ Celery tasks for the inbound email pipeline.
 from __future__ import annotations
 
 import asyncio
+import base64
 import logging
 import os
 import uuid
@@ -106,7 +107,7 @@ def poll_mailboxes(self) -> dict:
     Beat task — poll IMAP mailbox for unread emails.
 
     Fetches up to 20 unread messages per run and dispatches
-    process_inbound_email for each. Runs every 2 minutes via
+    process_inbound_email for each. Runs every 10 seconds via
     Celery Beat.
 
     Returns
@@ -132,9 +133,11 @@ def poll_mailboxes(self) -> dict:
             for raw_email in raw_emails:
                 email_tracking_id = str(uuid.uuid4())
 
+                # Base64-encode bytes → string so JSON serializer can
+                # pass them through the RabbitMQ message queue safely.
                 process_inbound_email.delay(
-                    raw_bytes=raw_email.raw,
-                    uid=raw_email.uid.decode("utf-8", errors="replace"),
+                    raw_bytes=base64.b64encode(raw_email.raw).decode("ascii"),
+                    uid=base64.b64encode(raw_email.uid).decode("ascii"),
                     tracking_id=email_tracking_id,
                     company_id=company_id,
                 )
@@ -165,7 +168,7 @@ def poll_mailboxes(self) -> dict:
 @shared_task(name="email.process_inbound", bind=True, max_retries=2)
 def process_inbound_email(
     self,
-    raw_bytes: bytes,
+    raw_bytes: bytes | str,
     uid: str = "",
     tracking_id: str = "",
     company_id: str = "",
@@ -181,10 +184,11 @@ def process_inbound_email(
 
     Parameters
     ----------
-    raw_bytes : bytes
-        Full RFC-5322 email message.
+    raw_bytes : bytes | str
+        Full RFC-5322 email message. Arrives as a base64-encoded string
+        from the JSON-serialized Celery message; decoded back to bytes here.
     uid : str
-        IMAP UID for reference.
+        IMAP UID (base64-encoded) for reference.
     tracking_id : str
         UUID for tracking this email through the pipeline.
     company_id : str
@@ -196,6 +200,19 @@ def process_inbound_email(
         Processing result with status and parsed data summary.
     """
     logger.info("Processing email: tracking_id=%s, uid=%s", tracking_id, uid)
+
+    # ── Decode base64 back to raw bytes ─────────────────────────
+    # Celery's JSON serializer can't handle bytes, so poll_mailboxes
+    # base64-encodes them before dispatch. Undo that here.
+    if isinstance(raw_bytes, str):
+        raw_bytes = base64.b64decode(raw_bytes)
+    if isinstance(uid, str) and uid:
+        try:
+            uid_display = base64.b64decode(uid).decode("utf-8", errors="replace")
+        except Exception:
+            uid_display = uid
+    else:
+        uid_display = str(uid)
 
     try:
         # Stage 1: MIME decode

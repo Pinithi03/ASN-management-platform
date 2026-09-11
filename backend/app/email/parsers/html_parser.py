@@ -18,11 +18,18 @@ from app.email.parsers import ParsedPO, POLineItem
 
 logger = logging.getLogger(__name__)
 
-# Regex patterns for extracting PO metadata from free text
-_PO_NUMBER_RE = re.compile(
-    r"(PO[-‑][\w\-/]{2,20})",
-    re.IGNORECASE,
-)
+# ── PO Number Patterns (tried in order of specificity) ───────────
+_PO_PATTERNS = [
+    # Oniverse format: ZA6A-2001605039, ZA6A - 2001605039, IT01-2001606115
+    re.compile(r"\b([A-Z0-9]{2,6}\s*[-–—]\s*\d{7,15})\b"),
+    # Standard: PO-12345, PO#12345, PO 12345, P.O. 12345
+    re.compile(r"\b(?:PO|P\.O\.)\s*[-#:\s]*([\w\-/]{3,20})\b", re.IGNORECASE),
+    # "Purchase Order" followed by number
+    re.compile(r"Purchase\s*Order\s*[-#:\s]*([\w\-/]{3,20})", re.IGNORECASE),
+    # "Order No" / "Order Number" / "Order #" followed by value
+    re.compile(r"Order\s*(?:No\.?|Number|#)\s*[-:\s]*([\w\-/]{3,20})", re.IGNORECASE),
+]
+
 _DATE_RE = re.compile(
     r"\d{4}[-/]\d{2}[-/]\d{2}|\d{2}[-/]\d{2}[-/]\d{4}",
 )
@@ -33,6 +40,12 @@ _HEADER_MAP: dict[str, str] = {
     "style no": "style",
     "style number": "style",
     "article": "style",
+    "item": "style",
+    "item code": "style",
+    "itemcode": "style",
+    "product": "style",
+    "product code": "style",
+    "material": "style",
     "color": "color",
     "colour": "color",
     "size": "size",
@@ -44,12 +57,26 @@ _HEADER_MAP: dict[str, str] = {
     "unit price": "unit_price",
     "unit cost": "unit_price",
     "description": "description",
-    "item": "description",
     "item description": "description",
 }
 
 
-def parse_html(html: str) -> list[ParsedPO]:
+def _find_po_number(text: str) -> str:
+    """
+    Try each PO pattern against the text, return first match.
+    Normalizes whitespace around dashes (e.g. "ZA6A - 123" → "ZA6A-123").
+    """
+    for pattern in _PO_PATTERNS:
+        match = pattern.search(text)
+        if match:
+            raw = match.group(1).strip()
+            # Normalize: "ZA6A - 2001605039" → "ZA6A-2001605039"
+            normalized = re.sub(r"\s*[-–—]\s*", "-", raw)
+            return normalized
+    return ""
+
+
+def parse_html(html: str, subject: str = "") -> list[ParsedPO]:
     """
     Parse PO data from an HTML email body.
 
@@ -57,6 +84,9 @@ def parse_html(html: str) -> list[ParsedPO]:
     ----------
     html : str
         Raw HTML body string.
+    subject : str, optional
+        Email subject line — checked first for PO number since
+        Oniverse emails include it in the subject.
 
     Returns
     -------
@@ -67,20 +97,35 @@ def parse_html(html: str) -> list[ParsedPO]:
     soup = BeautifulSoup(html, "html.parser")
     full_text = soup.get_text(" ", strip=True)
 
-    # --- Extract PO number from text ---
+    # --- Extract PO number: try subject first, then body ---
     po_number = ""
-    po_match = _PO_NUMBER_RE.search(full_text)
-    if po_match:
-        po_number = po_match.group(1).strip()
+    if subject:
+        po_number = _find_po_number(subject)
+        if po_number:
+            logger.info("PO number found in subject: %s", po_number)
 
     if not po_number:
-        logger.warning("No PO number found in HTML body")
+        po_number = _find_po_number(full_text)
+        if po_number:
+            logger.info("PO number found in HTML body: %s", po_number)
+
+    if not po_number:
+        logger.warning("No PO number found in HTML body or subject")
         return []
 
     po = ParsedPO(
         po_number=po_number,
         raw_source="html",
     )
+
+    # Try to extract supplier info from text
+    supplier_match = re.search(
+        r"(?:supplier|vendor|from)\s*[:]\s*(.+?)(?:\n|<|$)",
+        full_text,
+        re.IGNORECASE,
+    )
+    if supplier_match:
+        po.supplier_name = supplier_match.group(1).strip()
 
     # Try to extract dates
     dates = _DATE_RE.findall(full_text)

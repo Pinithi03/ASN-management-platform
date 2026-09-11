@@ -1,179 +1,292 @@
-# backend/app/api/v1/endpoints/emails.py
 """
-Emails API endpoints.
+Emails API endpoints (Presentation Layer).
 
-- POST /upload        — upload a .eml file and run full pipeline + DB save
-- GET  /test-pipeline — IMAP fetch + parse + DB save (no Celery needed)
-- GET  /test-poll     — trigger one IMAP poll via Celery task
+Provides:
+  - GET    /              — List emails with filters & pagination
+  - GET    /stats         — Email processing statistics
+  - POST   /upload        — Upload .eml file for parsing
+  - GET    /test-pipeline — Test IMAP→parse→DB pipeline
+  - GET    /test-poll     — Trigger Celery poll task
+  - GET    /{email_id}    — Email detail + parsed data
+  - PATCH  /{email_id}    — Update email status/fields
+  - POST   /{email_id}/approve   — Approve a reviewed email
+  - POST   /{email_id}/reject    — Reject with reason
+  - POST   /{email_id}/reprocess — Re-run through pipeline
 """
 
 from __future__ import annotations
-from app.core.config import get_settings
+
 import logging
 import os
-import uuid
 from datetime import datetime, timezone
+from typing import Optional
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Query, UploadFile, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from pydantic import BaseModel, Field
+from sqlalchemy import func, select, case, desc
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.db.session import get_db
-from app.email.mime_decoder import decode
-from app.email.classifier import classify
-from app.email.parsers import parse
-from app.services.email_service import process_and_save
-
+from app.models.email_message import EmailRecord
+from app.models.parsed_data import ParsedData
+from app.models.purchase_order import PurchaseOrder
+from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
-@router.post("/upload")
-async def upload_eml(
-    file: UploadFile = File(...),
-    company_id: str = Query(
-        default=None,
-        description="Company UUID. Defaults to DEFAULT_COMPANY_ID env var.",
-    ),
+# ─── Pydantic Schemas ───────────────────────────────────────────
+
+class EmailListItem(BaseModel):
+    id: str
+    company_id: str
+    from_address: Optional[str] = None
+    to_address: Optional[str] = None
+    subject: Optional[str] = None
+    status: Optional[str] = None
+    email_type: Optional[str] = None
+    direction: Optional[str] = None
+    received_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+    error_message: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class ParsedDataResponse(BaseModel):
+    id: str
+    parser_used: Optional[str] = None
+    raw_extracted: Optional[dict] = None
+    normalized: Optional[dict] = None
+    validation_errors: Optional[list] = None
+    po_number_extracted: Optional[str] = None
+    supplier_id_extracted: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
+class EmailDetailResponse(BaseModel):
+    id: str
+    company_id: str
+    from_address: Optional[str] = None
+    to_address: Optional[str] = None
+    subject: Optional[str] = None
+    body_text: Optional[str] = None
+    message_id: Optional[str] = None
+    status: Optional[str] = None
+    email_type: Optional[str] = None
+    direction: Optional[str] = None
+    received_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+    error_message: Optional[str] = None
+    parsed_data: list[ParsedDataResponse] = []
+
+    model_config = {"from_attributes": True}
+
+
+class EmailUpdateRequest(BaseModel):
+    status: Optional[str] = None
+    email_type: Optional[str] = None
+    error_message: Optional[str] = None
+
+
+class RejectRequest(BaseModel):
+    reason: str = Field(..., min_length=1, max_length=1000)
+
+
+class PaginatedEmailResponse(BaseModel):
+    items: list[EmailListItem]
+    total: int
+    page: int
+    per_page: int
+    pages: int
+
+
+class EmailStatsResponse(BaseModel):
+    total: int = 0
+    queued: int = 0
+    processing: int = 0
+    parsed: int = 0
+    review: int = 0
+    committed: int = 0
+    rejected: int = 0
+    error: int = 0
+
+
+# ─── GET / — List Emails ────────────────────────────────────────
+
+@router.get("/", response_model=PaginatedEmailResponse)
+async def list_emails(
     db: AsyncSession = Depends(get_db),
-) -> dict:
-    """
-    Upload a .eml file and process it through the inbound pipeline.
+    status: Optional[str] = Query(None, description="Filter by status"),
+    email_type: Optional[str] = Query(None, description="Filter by type"),
+    search: Optional[str] = Query(None, description="Search subject/from"),
+    company_id: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+):
+    """List emails with optional filters and pagination."""
+    query = select(EmailRecord)
 
-    Runs the full pipeline inline (decode → classify → parse → save to DB)
-    and returns the result immediately, without Celery.
-    """
-    if not file.filename or not file.filename.endswith(".eml"):
-        raise HTTPException(
-            status_code=400,
-            detail="Only .eml files are accepted",
+    if company_id:
+        query = query.where(EmailRecord.company_id == company_id)
+    if status:
+        query = query.where(EmailRecord.status == status.upper())
+    if email_type:
+        query = query.where(EmailRecord.email_type == email_type)
+    if search:
+        search_filter = f"%{search}%"
+        query = query.where(
+            EmailRecord.subject.ilike(search_filter)
+            | EmailRecord.from_address.ilike(search_filter)
         )
 
-    raw_bytes = await file.read()
-    if not raw_bytes:
-        raise HTTPException(status_code=400, detail="Empty file")
+    count_query = select(func.count()).select_from(query.subquery())
+    total = (await db.execute(count_query)).scalar() or 0
 
-    # Resolve company_id
-    resolved_company_id = company_id or os.getenv("DEFAULT_COMPANY_ID", "")
-    if not resolved_company_id:
-        raise HTTPException(
-            status_code=400,
-            detail="company_id is required (pass as query param or set DEFAULT_COMPANY_ID env var)",
-        )
+    query = query.order_by(desc(EmailRecord.created_at))
+    query = query.offset((page - 1) * per_page).limit(per_page)
 
-    tracking_id = str(uuid.uuid4())
-    logger.info(
-        "Upload received: %s (%d bytes), tracking=%s",
-        file.filename, len(raw_bytes), tracking_id,
+    result = await db.execute(query)
+    records = result.scalars().all()
+
+    pages = max(1, (total + per_page - 1) // per_page)
+
+    return PaginatedEmailResponse(
+        items=[
+            EmailListItem(
+                id=str(r.id),
+                company_id=str(r.company_id),
+                from_address=r.from_address,
+                to_address=r.to_address,
+                subject=r.subject,
+                status=r.status,
+                email_type=r.email_type,
+                direction=r.direction,
+                received_at=r.received_at,
+                created_at=r.created_at,
+                error_message=r.error_message,
+            )
+            for r in records
+        ],
+        total=total,
+        page=page,
+        per_page=per_page,
+        pages=pages,
     )
 
-    # Stage 1: Decode
+
+# ─── GET /stats — Email Statistics ──────────────────────────────
+
+@router.get("/stats", response_model=EmailStatsResponse)
+async def email_stats(
+    db: AsyncSession = Depends(get_db),
+    company_id: Optional[str] = Query(None),
+):
+    """Get email processing statistics broken down by status."""
+    query = select(
+        func.count().label("total"),
+        func.count().filter(EmailRecord.status == "QUEUED").label("queued"),
+        func.count().filter(EmailRecord.status == "PROCESSING").label("processing"),
+        func.count().filter(EmailRecord.status == "PARSED").label("parsed"),
+        func.count().filter(EmailRecord.status == "REVIEW").label("review"),
+        func.count().filter(EmailRecord.status == "COMMITTED").label("committed"),
+        func.count().filter(EmailRecord.status == "REJECTED").label("rejected"),
+        func.count().filter(EmailRecord.status == "ERROR").label("error"),
+    )
+
+    if company_id:
+        query = query.where(EmailRecord.company_id == company_id)
+
+    result = await db.execute(query)
+    row = result.one()
+
+    return EmailStatsResponse(
+        total=row.total,
+        queued=row.queued,
+        processing=row.processing,
+        parsed=row.parsed,
+        review=row.review,
+        committed=row.committed,
+        rejected=row.rejected,
+        error=row.error,
+    )
+
+
+# ─── POST /upload — Upload .eml File ────────────────────────────
+
+@router.post("/upload")
+async def upload_email(
+    file: UploadFile = File(...),
+    company_id: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Upload a .eml file, parse it, and save results to DB."""
+    from app.email.mime_decoder import decode
+    from app.email.classifier import classify
+    from app.email.parsers import parse
+    from app.services.email_service import process_and_save
+
+    settings = get_settings()
+    resolved_company_id = (
+        company_id
+        or settings.DEFAULT_COMPANY_ID
+        or os.getenv("DEFAULT_COMPANY_ID")
+    )
+    if not resolved_company_id:
+        raise HTTPException(status_code=400, detail="company_id is required")
+
+    raw_bytes = await file.read()
     decoded = decode(raw_bytes)
-
-    # Stage 2: Classify
     classification = classify(decoded)
-
-    # Stage 3: Parse
     parsed_pos = parse(decoded, classification)
 
-    # Stage 4: Save to DB
-    db_result = None
-    try:
-        db_result = await process_and_save(
-            db=db,
-            decoded=decoded,
-            classification=classification,
-            parsed_pos=parsed_pos,
-            company_id=resolved_company_id,
-        )
-        logger.info("Saved to DB: %s", db_result)
-    except Exception as e:
-        logger.exception("DB save failed for uploaded .eml")
-        db_result = {"error": str(e)}
-
-    # Build response
-    po_data = []
-    for po in parsed_pos:
-        items = []
-        for li in po.line_items:
-            items.append({
-                "line_number": li.line_number,
-                "style": li.style,
-                "color": li.color,
-                "size": li.size,
-                "quantity": li.quantity,
-                "unit_price": li.unit_price,
-                "description": li.description,
-            })
-        po_data.append({
-            "po_number": po.po_number,
-            "supplier_code": po.supplier_code,
-            "supplier_name": po.supplier_name,
-            "order_date": po.order_date,
-            "delivery_date": po.delivery_date,
-            "destination": po.destination,
-            "currency": po.currency,
-            "total_quantity": po.total_quantity,
-            "total_value": po.total_value,
-            "line_items": items,
-            "source": po.raw_source,
-            "source_filename": po.source_filename,
-        })
+    result = await process_and_save(
+        db, decoded, classification, parsed_pos, resolved_company_id
+    )
 
     return {
-        "tracking_id": tracking_id,
+        "status": "ok",
         "filename": file.filename,
-        "email": {
-            "subject": decoded.subject,
-            "from": decoded.from_address,
-            "to": decoded.to_address,
-            "date": decoded.date,
-            "body_text_length": len(decoded.body_text or ""),
-            "body_html_length": len(decoded.body_html or ""),
-            "attachments": [
-                {"filename": a.filename, "content_type": a.content_type, "size": len(a.payload)}
-                for a in decoded.attachments
-            ],
-        },
-        "classification": {
-            "format": classification.format.value,
-            "confidence": classification.confidence,
-            "reason": classification.reason,
-        },
-        "purchase_orders": po_data,
-        "po_count": len(po_data),
-        "db": db_result,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "subject": decoded.subject,
+        "format": classification.format.value,
+        "po_count": len(parsed_pos),
+        "db": result,
     }
 
 
+# ─── GET /test-pipeline — Test Full Pipeline ────────────────────
+
 @router.get("/test-pipeline")
 async def test_pipeline(
-    limit: int = Query(default=5, description="Max emails to fetch"),
-    company_id: str = Query(
-        default=None,
-        description="Company UUID. Defaults to DEFAULT_COMPANY_ID env var.",
-    ),
+    company_id: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
-) -> dict:
-    """
-    Dev endpoint — full end-to-end test without Celery.
-
-    Connects to IMAP, fetches unread emails, runs parse pipeline,
-    and saves results to DB. All in one synchronous call.
-    """
+):
+    """Test the full IMAP → parse → DB pipeline (no Celery)."""
     from app.email.imap_client import IMAPClient, IMAPConfig
+    from app.email.mime_decoder import decode
+    from app.email.classifier import classify
+    from app.email.parsers import parse
+    from app.services.email_service import process_and_save
 
-    resolved_company_id = company_id or os.getenv("DEFAULT_COMPANY_ID", "")
-    if not resolved_company_id:
-        raise HTTPException(
-            status_code=400,
-            detail="company_id is required (pass as query param or set DEFAULT_COMPANY_ID env var)",
-        )
-
-    
     settings = get_settings()
+
+    resolved_company_id = (
+        company_id
+        or settings.DEFAULT_COMPANY_ID
+        or os.getenv("DEFAULT_COMPANY_ID")
+    )
+    if not resolved_company_id:
+        raise HTTPException(status_code=400, detail="company_id is required")
+
+    if not settings.IMAP_USERNAME or not settings.IMAP_PASSWORD:
+        raise HTTPException(status_code=400, detail="IMAP credentials not configured")
+
     config = IMAPConfig(
         host=settings.IMAP_HOST,
         port=settings.IMAP_PORT,
@@ -182,68 +295,215 @@ async def test_pipeline(
         mailbox=settings.IMAP_MAILBOX,
         use_ssl=settings.IMAP_USE_SSL,
     )
-    
-    if not config.username or not config.password:
-        raise HTTPException(status_code=400, detail="IMAP credentials not configured")
+
+    with IMAPClient(config) as client:
+        raw_emails = client.fetch_unread()
 
     results = []
-    try:
-        with IMAPClient(config) as client:
-            raw_emails = client.fetch_unread(limit=limit)
+    for raw in raw_emails:
+        decoded = decode(raw.raw)
+        classification = classify(decoded)
+        parsed_pos = parse(decoded, classification)
 
-            for raw in raw_emails:
-                decoded = decode(raw.raw)
-                classification = classify(decoded)
-                parsed_pos = parse(decoded, classification)
+        try:
+            db_result = await process_and_save(
+                db, decoded, classification, parsed_pos, resolved_company_id
+            )
+        except Exception as e:
+            db_result = {"error": str(e)}
 
-                # Save to DB
-                try:
-                    db_result = await process_and_save(
-                        db=db,
-                        decoded=decoded,
-                        classification=classification,
-                        parsed_pos=parsed_pos,
-                        company_id=resolved_company_id,
-                    )
-                except Exception as e:
-                    db_result = {"error": str(e)}
-
-                results.append({
-                    "subject": decoded.subject,
-                    "from": decoded.from_address,
-                    "format": classification.format.value,
-                    "po_count": len(parsed_pos),
-                    "pos": [
-                        {"po_number": po.po_number, "items": len(po.line_items), "qty": po.total_quantity}
-                        for po in parsed_pos
-                    ],
-                    "db": db_result,
-                })
-
-                client.mark_as_read(raw.uid)
-
-    except ConnectionError as e:
-        raise HTTPException(status_code=502, detail=f"IMAP connection failed: {e}")
+        results.append({
+            "subject": decoded.subject,
+            "from": decoded.from_address,
+            "format": classification.format.value,
+            "po_count": len(parsed_pos),
+            "pos": [
+                {
+                    "po_number": po.po_number,
+                    "items": len(po.line_items),
+                    "qty": po.total_quantity,
+                }
+                for po in parsed_pos
+            ],
+            "db": db_result,
+        })
 
     return {
         "status": "ok",
-        "emails_processed": len(results),
+        "emails_processed": len(raw_emails),
         "results": results,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
 
-@router.get("/test-poll")
-async def test_poll() -> dict:
-    """
-    Dev endpoint — trigger one IMAP poll via Celery task.
-    Requires Celery worker + RabbitMQ to be running.
-    """
-    from app.tasks.email_tasks import poll_mailboxes
+# ─── GET /test-poll — Trigger Celery Task ────────────────────────
 
+@router.get("/test-poll")
+async def test_poll():
+    """Trigger the Celery email polling task."""
     try:
-        result = poll_mailboxes()
-        return {"status": "ok", "poll_result": result}
+        from app.tasks.email_tasks import poll_mailboxes
+        task = poll_mailboxes.delay()
+        return {"status": "queued", "task_id": str(task.id)}
     except Exception as e:
-        logger.exception("Test poll failed")
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"status": "error", "detail": str(e)}
+
+
+# ─── GET /{email_id} — Email Detail ─────────────────────────────
+
+@router.get("/{email_id}", response_model=EmailDetailResponse)
+async def get_email(
+    email_id: UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get email detail with associated parsed data."""
+    result = await db.execute(
+        select(EmailRecord).where(EmailRecord.id == email_id)
+    )
+    record = result.scalar_one_or_none()
+    if not record:
+        raise HTTPException(status_code=404, detail="Email not found")
+
+    pd_result = await db.execute(
+        select(ParsedData).where(ParsedData.email_record_id == str(email_id))
+    )
+    parsed_items = pd_result.scalars().all()
+
+    return EmailDetailResponse(
+        id=str(record.id),
+        company_id=str(record.company_id),
+        from_address=record.from_address,
+        to_address=record.to_address,
+        subject=record.subject,
+        body_text=record.body_text,
+        message_id=record.message_id,
+        status=record.status,
+        email_type=record.email_type,
+        direction=record.direction,
+        received_at=record.received_at,
+        created_at=record.created_at,
+        error_message=record.error_message,
+        parsed_data=[
+            ParsedDataResponse(
+                id=str(pd.id),
+                parser_used=pd.parser_used,
+                raw_extracted=pd.raw_extracted,
+                normalized=pd.normalized,
+                validation_errors=pd.validation_errors,
+                po_number_extracted=pd.po_number_extracted,
+                supplier_id_extracted=pd.supplier_id_extracted,
+                created_at=pd.created_at,
+            )
+            for pd in parsed_items
+        ],
+    )
+
+
+# ─── PATCH /{email_id} — Update Email ───────────────────────────
+
+@router.patch("/{email_id}")
+async def update_email(
+    email_id: UUID,
+    body: EmailUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Update email status or fields."""
+    result = await db.execute(
+        select(EmailRecord).where(EmailRecord.id == email_id)
+    )
+    record = result.scalar_one_or_none()
+    if not record:
+        raise HTTPException(status_code=404, detail="Email not found")
+
+    if body.status is not None:
+        record.status = body.status.upper()
+    if body.email_type is not None:
+        record.email_type = body.email_type
+    if body.error_message is not None:
+        record.error_message = body.error_message
+
+    record.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+
+    return {"status": "updated", "email_id": str(email_id)}
+
+
+# ─── POST /{email_id}/approve — Approve Email ───────────────────
+
+@router.post("/{email_id}/approve")
+async def approve_email(
+    email_id: UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Approve an email in REVIEW or PARSED status → COMMITTED."""
+    result = await db.execute(
+        select(EmailRecord).where(EmailRecord.id == email_id)
+    )
+    record = result.scalar_one_or_none()
+    if not record:
+        raise HTTPException(status_code=404, detail="Email not found")
+
+    if record.status not in ("REVIEW", "PARSED"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot approve email with status '{record.status}'. Must be REVIEW or PARSED.",
+        )
+
+    record.status = "COMMITTED"
+    record.processed_at = datetime.now(timezone.utc)
+    record.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+
+    logger.info("Approved email %s", email_id)
+    return {"status": "approved", "email_id": str(email_id)}
+
+
+# ─── POST /{email_id}/reject — Reject Email ─────────────────────
+
+@router.post("/{email_id}/reject")
+async def reject_email(
+    email_id: UUID,
+    body: RejectRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Reject an email with a reason."""
+    result = await db.execute(
+        select(EmailRecord).where(EmailRecord.id == email_id)
+    )
+    record = result.scalar_one_or_none()
+    if not record:
+        raise HTTPException(status_code=404, detail="Email not found")
+
+    record.status = "REJECTED"
+    record.error_message = f"Rejected: {body.reason}"
+    record.processed_at = datetime.now(timezone.utc)
+    record.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+
+    logger.info("Rejected email %s: %s", email_id, body.reason)
+    return {"status": "rejected", "email_id": str(email_id), "reason": body.reason}
+
+
+# ─── POST /{email_id}/reprocess — Re-run Pipeline ───────────────
+
+@router.post("/{email_id}/reprocess")
+async def reprocess_email(
+    email_id: UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Re-queue an email for reprocessing through the parsing pipeline."""
+    result = await db.execute(
+        select(EmailRecord).where(EmailRecord.id == email_id)
+    )
+    record = result.scalar_one_or_none()
+    if not record:
+        raise HTTPException(status_code=404, detail="Email not found")
+
+    record.status = "QUEUED"
+    record.error_message = None
+    record.retry_count = (record.retry_count or 0) + 1
+    record.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+
+    logger.info("Re-queued email %s for reprocessing", email_id)
+    return {"status": "requeued", "email_id": str(email_id)}

@@ -51,6 +51,9 @@ class Settings(BaseSettings):
     MINIO_ACCESS_KEY: str = "ans_minio"
     MINIO_SECRET_KEY: str = "ans_minio_password"
     MINIO_SECURE: bool = False
+    # Add alongside the other MINIO fields:
+    MINIO_BUCKET: str = "email-attachments"
+    MINIO_USE_SSL: bool = False
 
     # Keycloak
     KEYCLOAK_URL: str = "http://localhost:8080"
