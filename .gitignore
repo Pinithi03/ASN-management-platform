@@ -57,6 +57,7 @@ logs/
 
 # ── Celery ─────────────────────────────────────────────────
 backend/celerybeat-schedule*
+automation/celerybeat-schedule*
 
 # ── Alembic ─────────────────────────────────────────────────
 # Don't ignore migrations/versions — they're version controlled

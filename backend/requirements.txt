@@ -16,3 +16,6 @@ python-multipart>=0.0.9
 structlog>=24.0.0
 lxml>=5.0
 beautifulsoup4>=4.12
+openpyxl>=3.1.0
+reportlab>=4.0.0
+python-barcode>=0.15.0

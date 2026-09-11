@@ -261,9 +261,34 @@ async def save_purchase_order(
         existing.currency = parsed_po.currency
         existing.source_email_id = email_record_id
 
+        items_data = [
+            {
+                "line_number": li.line_number,
+                "material_code": li.style,
+                "description": li.description,
+                "color": li.color,
+                "size": li.size,
+                "quantity": li.quantity,
+                "unit_price": li.unit_price,
+            }
+            for li in parsed_po.line_items
+        ]
+        existing.extra_data = {"items": items_data}
         po = existing
         logger.info("Updated PO: %s (v%d)", po.po_number, po.version)
     else:
+        items_data = [
+            {
+                "line_number": li.line_number,
+                "material_code": li.style,
+                "description": li.description,
+                "color": li.color,
+                "size": li.size,
+                "quantity": li.quantity,
+                "unit_price": li.unit_price,
+            }
+            for li in parsed_po.line_items
+        ]
         # Create new PO
         po = PurchaseOrder(
             company_id=company_id,
@@ -277,6 +302,7 @@ async def save_purchase_order(
             currency=parsed_po.currency,
             version=1,
             source_email_id=email_record_id,
+            extra_data={"items": items_data},
         )
         db.add(po)
         logger.info("Created PO: %s", po.po_number)

@@ -34,6 +34,8 @@ services:
       - "8080:8080"
 
   backend:
+    env_file:
+      - .env
     ports:
       - "8000:8000"
     volumes:
@@ -45,11 +47,15 @@ services:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   celery-worker:
+    env_file:
+      - .env
     volumes:
       - ./automation:/app
     command: celery -A app.celery_app:celery_app worker --loglevel=debug --concurrency=2
 
   celery-beat:
+    env_file:
+      - .env
     volumes:
       - ./automation:/app
 
