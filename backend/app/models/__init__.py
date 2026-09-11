@@ -37,6 +37,7 @@ from app.models.packing_slip import PackingSlip
 from app.models.asn import ASNRecord
 from app.models.parser_template import ParserTemplate
 from app.models.audit_log import AuditLog
+from app.models.hu_sequence import HUSequence
 
 __all__ = [
     # Base
@@ -73,4 +74,5 @@ __all__ = [
     "ASNRecord",
     "ParserTemplate",
     "AuditLog",
+    "HUSequence",
 ]

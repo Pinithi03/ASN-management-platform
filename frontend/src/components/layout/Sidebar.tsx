@@ -11,7 +11,6 @@ import {
   Mail,
   FileText,
   Truck,
-  ClipboardCheck,
   Settings,
   Building2,
   Users,

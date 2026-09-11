@@ -5,7 +5,6 @@
 import { useState } from "react";
 import { Search, CheckCircle2, XCircle } from "lucide-react";
 import { mockSuppliers } from "@/data/mockData";
-import { cn } from "@/utils/cn";
 
 export default function Suppliers(){
   const [search,setSearch]=useState("");

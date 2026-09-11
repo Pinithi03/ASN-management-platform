@@ -4,18 +4,22 @@ Mounts all endpoint routers under /api/v1.
 """
 
 from fastapi import APIRouter
-from app.api.v1.endpoints import health, emails
+from app.api.v1.endpoints import health, emails, shipments, asn, purchase_orders
 
 api_router = APIRouter()
 
-# Health endpoints (no prefix — mounted at /api/v1/health)
+# Health endpoints
 api_router.include_router(health.router)
 
-# Future Sprint routers will be added here:
-# api_router.include_router(auth.router, prefix="/auth", tags=["Authentication"])
-# api_router.include_router(companies.router, prefix="/companies", tags=["Companies"])
-# api_router.include_router(purchase_orders.router, prefix="/purchase-orders", tags=["Purchase Orders"])
+# Email ingestion & processing
 api_router.include_router(emails.router, prefix="/emails", tags=["Emails"])
-# api_router.include_router(asn.router, prefix="/asn", tags=["ASN"])
-# api_router.include_router(dashboard.router, prefix="/dashboard", tags=["Dashboard"])
-# api_router.include_router(users.router, prefix="/users", tags=["Users"])
+
+# Purchase Orders
+api_router.include_router(purchase_orders.router, prefix="/purchase-orders", tags=["Purchase Orders"])
+
+# Shipments (Excel upload, HU allocation, Label generation)
+api_router.include_router(shipments.router, prefix="/shipments", tags=["Shipments"])
+
+# Advanced Shipping Notifications (XML generation, validation, dispatch)
+api_router.include_router(asn.router, prefix="/asn", tags=["ASN"])
+

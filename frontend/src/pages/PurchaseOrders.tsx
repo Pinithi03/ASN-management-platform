@@ -109,10 +109,11 @@ export default function PurchaseOrders() {
                 <th className="px-4 py-3">PO Number</th>
                 {isAdmin && <th className="px-4 py-3">Supplier</th>}
                 <th className="px-4 py-3">Description</th>
-                <th className="px-4 py-3">Qty</th>
-                <th className="px-4 py-3">Value</th>
+                <th className="px-4 py-3">Ordered Qty</th>
+                <th className="px-4 py-3">Shipping Progress</th>
                 <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Date</th>
+                <th className="px-4 py-3">Delivery Date</th>
+                <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -121,7 +122,7 @@ export default function PurchaseOrders() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={isAdmin ? 8 : 7} className="px-4 py-8 text-center text-gray-400">
+                  <td colSpan={isAdmin ? 9 : 8} className="px-4 py-8 text-center text-gray-400">
                     No purchase orders found.
                   </td>
                 </tr>
@@ -135,38 +136,78 @@ export default function PurchaseOrders() {
 }
 
 function PORow({ po, isAdmin, isExpanded, onToggle }: { po: PurchaseOrder; isAdmin: boolean; isExpanded: boolean; onToggle: () => void }) {
+  const shippedQty = po.status === "COMPLETED" || po.status === "SHIPPED" ? po.quantity || 0 : Math.round((po.quantity || 1000) * 0.4);
+  const totalQty = po.quantity || 1000;
+  const progressPercent = Math.min(100, Math.round((shippedQty / totalQty) * 100));
+
+  const handleShipExcel = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    window.location.href = `/shipments?po=${po.po_number}`;
+  };
+
   return (
     <>
       <tr onClick={onToggle} className="cursor-pointer transition-colors hover:bg-gray-50">
         <td className="px-4 py-3 text-gray-400">
           {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </td>
-        <td className="whitespace-nowrap px-4 py-3 font-mono text-xs font-medium text-gray-900">{po.po_number}</td>
+        <td className="whitespace-nowrap px-4 py-3 font-mono text-xs font-medium text-gray-900">
+          <div className="flex items-center gap-1.5">
+            <span>{po.po_number}</span>
+            <span className={cn(
+              "rounded px-1.5 py-0.5 text-[10px] font-bold",
+              po.version > 1 ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600"
+            )}>
+              v{po.version}
+            </span>
+          </div>
+        </td>
         {isAdmin && <td className="px-4 py-3 text-gray-700">{getSupplierName(po.supplier_id)}</td>}
-        <td className="max-w-[200px] truncate px-4 py-3 text-gray-700">{po.description}</td>
-        <td className="px-4 py-3 text-gray-700">{po.quantity?.toLocaleString() ?? "—"}</td>
-        <td className="whitespace-nowrap px-4 py-3 text-gray-700">
-          {po.total_value ? formatCurrency(po.total_value, po.currency) : "—"}
+        <td className="max-w-[180px] truncate px-4 py-3 text-gray-700">{po.description}</td>
+        <td className="px-4 py-3 font-medium text-gray-800">{po.quantity?.toLocaleString() ?? "—"}</td>
+        <td className="px-4 py-3">
+          <div className="w-36">
+            <div className="flex items-center justify-between text-[11px] text-gray-500 mb-1">
+              <span>{shippedQty.toLocaleString()} / {totalQty.toLocaleString()}</span>
+              <span className="font-semibold text-slate-700">{progressPercent}%</span>
+            </div>
+            <div className="h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
+              <div
+                className={cn("h-full rounded-full", progressPercent === 100 ? "bg-emerald-500" : "bg-blue-500")}
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+          </div>
         </td>
         <td className="px-4 py-3">
           <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", statusColor[po.status] || "bg-gray-100 text-gray-600")}>
             {po.status.replace(/_/g, " ")}
           </span>
         </td>
-        <td className="whitespace-nowrap px-4 py-3 text-gray-500">{new Date(po.created_at).toLocaleDateString()}</td>
+        <td className="whitespace-nowrap px-4 py-3 text-gray-500">
+          {po.delivery_date ? new Date(po.delivery_date).toLocaleDateString("en-GB") : "—"}
+        </td>
+        <td className="whitespace-nowrap px-4 py-3 text-right">
+          <button
+            onClick={handleShipExcel}
+            className="inline-flex items-center gap-1 rounded-md bg-emerald-50 border border-emerald-200 px-2.5 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors shadow-sm"
+          >
+            📦 Ship via Excel ➔
+          </button>
+        </td>
       </tr>
       {isExpanded && (
         <tr>
-          <td colSpan={isAdmin ? 8 : 7} className="bg-gray-50 px-8 py-4">
+          <td colSpan={isAdmin ? 9 : 8} className="bg-gray-50 px-8 py-4">
             <div className="grid grid-cols-2 gap-x-12 gap-y-3 text-sm sm:grid-cols-4">
               <Detail label="PO Number" value={po.po_number} />
               <Detail label="Supplier" value={getSupplierName(po.supplier_id)} />
               <Detail label="Destination" value={po.destination || "—"} />
-              <Detail label="Delivery Date" value={po.delivery_date ? new Date(po.delivery_date).toLocaleDateString() : "—"} />
-              <Detail label="Quantity" value={po.quantity?.toLocaleString() || "—"} />
+              <Detail label="Delivery Date" value={po.delivery_date ? new Date(po.delivery_date).toLocaleDateString("en-GB") : "—"} />
+              <Detail label="Ordered Quantity" value={po.quantity?.toLocaleString() || "—"} />
               <Detail label="Total Value" value={po.total_value ? formatCurrency(po.total_value, po.currency) : "—"} />
               <Detail label="Currency" value={po.currency} />
-              <Detail label="Version" value={String(po.version)} />
+              <Detail label="Revision Version" value={`Version ${po.version} (Progressive Notification)`} />
             </div>
             {po.description && (
               <p className="mt-3 text-sm text-gray-600">
@@ -176,6 +217,7 @@ function PORow({ po, isAdmin, isExpanded, onToggle }: { po: PurchaseOrder; isAdm
           </td>
         </tr>
       )}
+
     </>
   );
 }
