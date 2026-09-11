@@ -5,6 +5,7 @@
  */
 
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import type { User, UserRole } from "@/types";
 import { mockAdminUser, mockSupplierUser } from "@/data/mockData";
 
@@ -21,26 +22,33 @@ interface AuthState {
   switchRole: () => void;
 }
 
-export const useAuthStore = create<AuthState>((set, get) => ({
-  isAuthenticated: false,
-  user: null,
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set, get) => ({
+      isAuthenticated: true,
+      user: mockAdminUser,
 
-  login: (role: UserRole) => {
-    const user = role === "COMPANY_ADMIN" ? mockAdminUser : mockSupplierUser;
-    set({ isAuthenticated: true, user });
-  },
+      login: (role: UserRole) => {
+        const user = role === "COMPANY_ADMIN" ? mockAdminUser : mockSupplierUser;
+        set({ isAuthenticated: true, user });
+      },
 
-  logout: () => {
-    set({ isAuthenticated: false, user: null });
-  },
+      logout: () => {
+        set({ isAuthenticated: false, user: null });
+      },
 
-  switchRole: () => {
-    const current = get().user;
-    if (!current) return;
-    const newRole: UserRole =
-      current.role === "COMPANY_ADMIN" ? "SUPPLIER" : "COMPANY_ADMIN";
-    const newUser =
-      newRole === "COMPANY_ADMIN" ? mockAdminUser : mockSupplierUser;
-    set({ user: newUser });
-  },
-}));
+      switchRole: () => {
+        const current = get().user;
+        if (!current) return;
+        const newRole: UserRole =
+          current.role === "COMPANY_ADMIN" ? "SUPPLIER" : "COMPANY_ADMIN";
+        const newUser =
+          newRole === "COMPANY_ADMIN" ? mockAdminUser : mockSupplierUser;
+        set({ user: newUser });
+      },
+    }),
+    {
+      name: "ans-auth-storage",
+    }
+  )
+);
