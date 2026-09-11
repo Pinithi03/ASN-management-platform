@@ -251,7 +251,7 @@ export default function PurchaseOrders() {
                         </td>
                         <td className="px-4 py-3 text-right whitespace-nowrap">
                           <button
-                            onClick={(e) => handleShipExcel(e, po.po_number)}
+                            onClick={(e) => handleShipExcel(e, po.po_number || undefined)}
                             className="inline-flex items-center gap-1 rounded bg-emerald-50 border border-emerald-200 px-2 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 shadow-sm transition-colors"
                           >
                             📦 Ship ➔
@@ -323,7 +323,7 @@ export default function PurchaseOrders() {
 
               {/* Action */}
               <button
-                onClick={(e) => handleShipExcel(e, poDetail?.po_number || selectedPO.po_number)}
+                onClick={(e) => handleShipExcel(e, poDetail?.po_number || selectedPO.po_number || undefined)}
                 className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 py-2 text-xs font-semibold text-white hover:bg-emerald-700 shadow-sm transition-colors"
               >
                 <PackagePlus className="w-4 h-4" />

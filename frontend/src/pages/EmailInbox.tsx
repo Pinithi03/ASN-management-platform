@@ -3,9 +3,8 @@
 
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Mail, Search, RefreshCw, Eye, CheckCircle, XCircle, RotateCcw, ChevronLeft, ChevronRight, Clock, AlertCircle, Inbox, Filter } from "lucide-react";
+import { Mail, Search, RefreshCw, Eye, CheckCircle, XCircle, RotateCcw, ChevronLeft, ChevronRight, Clock, AlertCircle, Inbox } from "lucide-react";
 import { emailApi } from "@/services/emailApi";
-import type { EmailRecord, EmailDetail, EmailStatus } from "@/types/email";
 import { format } from "date-fns";
 
 type TabKey = "ALL" | "REVIEW" | "PARSED" | "COMMITTED" | "ERROR";
