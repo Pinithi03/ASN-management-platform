@@ -193,6 +193,7 @@ def _parse_generic(root: etree._Element, filename: str) -> ParsedPO:
         or ""
 
     po.order_date = _xpath_text(root, ".//OrderDate") \
+        or _xpath_text(root, ".//PODate") \
         or _xpath_text(root, ".//order_date") \
         or _xpath_text(root, ".//Date") \
         or ""
@@ -211,34 +212,71 @@ def _parse_generic(root: etree._Element, filename: str) -> ParsedPO:
         or _xpath_text(root, ".//currency") \
         or "USD"
 
+    # ── Extract line items ───────────────────────────────
+    # Search for all common line element tag names
     line_tags = root.xpath(
-        ".//LineItem | .//Item | .//OrderLine | .//line_item"
+        ".//LineItem | .//Item | .//OrderLine | .//line_item | .//Line"
     )
+
+    # If no lines found with those tags, try inside POLines/Items wrapper
+    if not line_tags:
+        line_tags = root.xpath(
+            ".//POLines/* | .//Items/* | .//OrderLines/* | .//Lines/*"
+        )
+
     for i, elem in enumerate(line_tags, start=1):
         li = POLineItem(
             line_number=_xpath_int(elem, ".//LineNumber") or i,
             style=_xpath_text(elem, ".//Style")
                 or _xpath_text(elem, ".//StyleNumber")
                 or _xpath_text(elem, ".//ArticleNumber")
+                or _xpath_text(elem, ".//ItemCode")
+                or _xpath_text(elem, ".//ProductCode")
+                or _xpath_text(elem, ".//SKU")
                 or "",
             color=_xpath_text(elem, ".//Color")
                 or _xpath_text(elem, ".//Colour")
                 or "",
-            size=_xpath_text(elem, ".//Size") or "",
+            size=_xpath_text(elem, ".//Size")
+                or _xpath_text(elem, ".//UOM")
+                or "",
             quantity=_xpath_int(elem, ".//Quantity")
                 or _xpath_int(elem, ".//Qty")
+                or _xpath_int(elem, ".//OrderQty")
                 or 0,
             unit_price=_xpath_float(elem, ".//UnitPrice")
                 or _xpath_float(elem, ".//Price")
+                or _xpath_float(elem, ".//Cost")
                 or 0.0,
             description=_xpath_text(elem, ".//Description")
                 or _xpath_text(elem, ".//ItemDescription")
+                or _xpath_text(elem, ".//ProductName")
                 or "",
         )
         po.line_items.append(li)
 
+    # ── Try to get total from XML, otherwise compute ─────
+    xml_total = _xpath_float(root, ".//POTotal") \
+        or _xpath_float(root, ".//TotalValue") \
+        or _xpath_float(root, ".//OrderTotal") \
+        or _xpath_float(root, ".//GrandTotal")
+    if xml_total:
+        po.total_value = xml_total
+
+    xml_qty = _xpath_int(root, ".//TotalQuantity") \
+        or _xpath_int(root, ".//TotalQty")
+    if xml_qty:
+        po.total_quantity = xml_qty
+
     if not po.po_number:
         raise ValueError(f"No PO number found in XML: {filename}")
+
+    logger.info(
+        "Generic XML parsed: PO=%s, supplier=%s, %d lines, total_qty=%d, total_value=%.2f",
+        po.po_number, po.supplier_code, len(po.line_items),
+        po.total_quantity or sum(li.quantity for li in po.line_items),
+        po.total_value or sum(li.quantity * li.unit_price for li in po.line_items),
+    )
 
     return po
 

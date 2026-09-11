@@ -87,10 +87,10 @@ def parse(
         # If all XML parsing failed, try HTML fallback
         if not results and decoded.body_html:
             logger.info("All XML parsing failed — falling back to HTML body")
-            results = parse_html(decoded.body_html)
+            results = parse_html(decoded.body_html, subject=decoded.subject)
 
     elif classification.format == EmailFormat.HTML_BODY:
-        results = parse_html(decoded.body_html)
+        results = parse_html(decoded.body_html, subject=decoded.subject)
 
     else:
         logger.warning("UNKNOWN format — no parser applicable")

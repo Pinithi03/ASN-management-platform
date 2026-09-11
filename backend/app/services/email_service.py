@@ -18,6 +18,7 @@ from sqlalchemy import select
 from app.models.email_message import EmailRecord
 from app.models.purchase_order import PurchaseOrder
 from app.models.parsed_data import ParsedData
+from app.models.email_attachment import EmailAttachment
 from app.email.mime_decoder import DecodedEmail
 from app.email.classifier import ClassificationResult
 from app.email.parsers import ParsedPO
@@ -89,6 +90,80 @@ async def save_email_record(
     await db.flush()
     logger.info("Saved email record: id=%s, subject=%r", record.id, record.subject)
     return record
+
+
+async def save_attachments(
+    db: AsyncSession,
+    decoded: DecodedEmail,
+    email_record_id: str,
+    company_id: str,
+) -> list[str]:
+    """
+    Upload email attachments to MinIO and save metadata to DB.
+
+    Parameters
+    ----------
+    db : AsyncSession
+    decoded : DecodedEmail
+    email_record_id : str
+    company_id : str
+
+    Returns
+    -------
+    list[str]
+        List of saved attachment IDs.
+    """
+    if not decoded.attachments:
+        return []
+
+    attachment_ids = []
+
+    try:
+        from app.storage.minio_client import upload_attachment
+    except ImportError:
+        logger.warning("MinIO client not available — skipping attachment storage")
+        return []
+
+    for att in decoded.attachments:
+        try:
+            # Build object key: company_id/email_record_id/filename
+            safe_filename = att.filename.replace("/", "_").replace("\\", "_")
+            object_key = f"{company_id}/{email_record_id}/{safe_filename}"
+
+            # Upload to MinIO
+            upload_result = upload_attachment(
+                content=att.payload,
+                object_key=object_key,
+                content_type=att.content_type,
+            )
+
+            # Save metadata to DB
+            attachment_record = EmailAttachment(
+                email_record_id=email_record_id,
+                filename=att.filename,
+                content_type=att.content_type,
+                file_size=len(att.payload),
+                minio_bucket=upload_result["bucket"],
+                minio_key=upload_result["key"],
+                checksum_sha256=upload_result["checksum_sha256"],
+                company_id=company_id,
+            )
+            db.add(attachment_record)
+            await db.flush()
+
+            attachment_ids.append(str(attachment_record.id))
+            logger.info(
+                "Saved attachment: %s (%s, %d bytes) → MinIO %s",
+                att.filename, att.content_type, len(att.payload),
+                object_key,
+            )
+        except Exception as e:
+            logger.error(
+                "Failed to save attachment %s: %s", att.filename, e
+            )
+            # Continue with other attachments — don't fail the whole email
+
+    return attachment_ids
 
 
 async def save_parsed_data(
@@ -218,7 +293,7 @@ async def process_and_save(
     company_id: str,
 ) -> dict:
     """
-    Full persistence — save email record + parsed data + POs.
+    Full persistence — save email record + attachments + parsed data + POs.
 
     Parameters
     ----------
@@ -231,7 +306,7 @@ async def process_and_save(
     Returns
     -------
     dict
-        Summary with email_record_id, parsed_data_ids, and PO ids.
+        Summary with email_record_id, attachment_ids, parsed_data_ids, and PO ids.
     """
     try:
         # 1. Save the email record
@@ -240,7 +315,14 @@ async def process_and_save(
             db, decoded, classification, company_id, status=status,
         )
 
-        # 2. Save each parsed PO → parsed_data + purchase_orders
+        # 2. Save attachments to MinIO + DB
+        attachment_ids = await save_attachments(
+            db, decoded,
+            email_record_id=str(email_record.id),
+            company_id=company_id,
+        )
+
+        # 3. Save each parsed PO → parsed_data + purchase_orders
         po_ids = []
         parsed_data_ids = []
         for parsed_po in parsed_pos:
@@ -266,6 +348,7 @@ async def process_and_save(
 
         return {
             "email_record_id": str(email_record.id),
+            "attachment_ids": attachment_ids,
             "parsed_data_ids": parsed_data_ids,
             "purchase_order_ids": po_ids,
             "po_count": len(po_ids),
