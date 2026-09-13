@@ -40,7 +40,7 @@ export default function EmailInbox() {
   const currentTab = TABS.find((t) => t.key === activeTab)!;
 
   // ─── Queries ────────────────────────────────────────────────
-  const { data: emailsData, isLoading, refetch } = useQuery({
+  const { data: emailsData, isLoading } = useQuery({
     queryKey: ["emails", activeTab, search, page],
     queryFn: () =>
       emailApi.list({
@@ -141,13 +141,6 @@ export default function EmailInbox() {
           >
             <RefreshCw className={`w-4 h-4 ${isSyncing ? "animate-spin" : ""}`} />
             {isSyncing ? "Fetching Mailbox..." : "Fetch & Sync Emails"}
-          </button>
-          <button
-            onClick={() => refetch()}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Refresh
           </button>
         </div>
       </div>

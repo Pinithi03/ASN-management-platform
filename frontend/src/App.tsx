@@ -9,8 +9,6 @@ import LoginPage from "@/pages/LoginPage";
 import Dashboard from "@/pages/Dashboard";
 import EmailInbox from "@/pages/EmailInbox";
 import PurchaseOrders from "@/pages/PurchaseOrders";
-import ASNManagement from "@/pages/ASNManagement";
-import ReviewQueue from "@/pages/ReviewQueue";
 import Settings from "@/pages/Settings";
 import CompanySettings from "@/pages/CompanySettings";
 import UserManagement from "@/pages/UserManagement";
@@ -40,10 +38,10 @@ export default function App() {
       <Route element={<RequireAuth><MainLayout /></RequireAuth>}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/purchase-orders" element={<PurchaseOrders />} />
-        <Route path="/asn" element={<ASNManagement />} />
+        <Route path="/asn" element={<Navigate to="/shipments" replace />} />
+        <Route path="/review" element={<Navigate to="/shipments" replace />} />
 
         <Route path="/emails" element={<RequireRole role="COMPANY_ADMIN"><EmailInbox /></RequireRole>} />
-        <Route path="/review" element={<RequireRole role="COMPANY_ADMIN"><ReviewQueue /></RequireRole>} />
         <Route path="/suppliers" element={<RequireRole role="COMPANY_ADMIN"><Suppliers /></RequireRole>} />
         <Route path="/settings" element={<RequireRole role="COMPANY_ADMIN"><Settings /></RequireRole>} />
         <Route path="/settings/company" element={<RequireRole role="COMPANY_ADMIN"><CompanySettings /></RequireRole>} />

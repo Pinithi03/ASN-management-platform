@@ -52,7 +52,7 @@ export default function PurchaseOrders() {
   const [selectedPO, setSelectedPO] = useState<PurchaseOrder | null>(null);
 
   // ─── Queries ────────────────────────────────────────────────
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["purchaseOrders", search, statusFilter, page, supplierId],
     queryFn: () =>
       poApi.list({
@@ -113,13 +113,6 @@ export default function PurchaseOrders() {
           >
             <PackagePlus className="w-4 h-4" />
             Ship via Excel Drop
-          </button>
-          <button
-            onClick={() => refetch()}
-            className="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Refresh
           </button>
         </div>
       </div>

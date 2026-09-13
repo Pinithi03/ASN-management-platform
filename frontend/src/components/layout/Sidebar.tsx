@@ -18,7 +18,6 @@ import {
   ChevronRight,
   Package,
   PackagePlus,
-  Send,
   UserCircle,
 } from "lucide-react";
 
@@ -39,7 +38,6 @@ const adminMainNav: NavItem[] = [
   { to: "/emails", icon: Mail, label: "Email Inbox" },
   { to: "/purchase-orders", icon: FileText, label: "Purchase Orders" },
   { to: "/shipments", icon: PackagePlus, label: "Shipments" },
-  { to: "/asn", icon: Send, label: "ASN Review" },
   { to: "/suppliers", icon: Truck, label: "Suppliers" },
 ];
 
@@ -54,7 +52,6 @@ const supplierMainNav: NavItem[] = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/purchase-orders", icon: FileText, label: "Purchase Orders" },
   { to: "/shipments", icon: PackagePlus, label: "Shipments" },
-  { to: "/asn", icon: Send, label: "ASN Management" },
 ];
 
 const supplierSettingsNav: NavItem[] = [
