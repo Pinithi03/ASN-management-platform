@@ -106,11 +106,14 @@ def _parse_sd_data_slice(root: etree._Element, filename: str) -> ParsedPO:
 
             po.line_items.append(li)
 
+        po.total_quantity = sum(li.quantity for li in po.line_items)
+        po.total_value = round(sum(li.quantity * li.unit_price for li in po.line_items), 2)
+
         if po.po_number:
             logger.info(
-                "SdOrder parsed: PO=%s, supplier=%s, %d lines, total_qty=%d",
+                "SdOrder parsed: PO=%s, supplier=%s, %d lines, total_qty=%d, total_value=%.2f",
                 po.po_number, po.supplier_code, len(po.line_items),
-                sum(li.quantity for li in po.line_items),
+                po.total_quantity, po.total_value,
             )
             return po
 
@@ -146,6 +149,9 @@ def _parse_sd_data_slice(root: etree._Element, filename: str) -> ParsedPO:
             )
             po.line_items.append(li)
 
+        po.total_quantity = sum(li.quantity for li in po.line_items)
+        po.total_value = round(sum(li.quantity * li.unit_price for li in po.line_items), 2)
+
         if not po.po_number:
             for s in root.xpath(".//SdPackingSlip"):
                 psn = _xpath_text(s, ".//PackingSlipNumber")
@@ -157,9 +163,9 @@ def _parse_sd_data_slice(root: etree._Element, filename: str) -> ParsedPO:
         raise ValueError(f"No PO/order number found in SdDataSlice: {filename}")
 
     logger.info(
-        "SdPackingSlip parsed: PO=%s, supplier=%s, %d lines, total_qty=%d",
+        "SdPackingSlip parsed: PO=%s, supplier=%s, %d lines, total_qty=%d, total_value=%.2f",
         po.po_number, po.supplier_code, len(po.line_items),
-        sum(li.quantity for li in po.line_items),
+        po.total_quantity, po.total_value,
     )
     return po
 

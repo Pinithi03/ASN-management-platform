@@ -97,6 +97,29 @@ export default function EmailInbox() {
     }
   };
 
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+
+  const handleSyncMailbox = async () => {
+    setIsSyncing(true);
+    setSyncMessage(null);
+    try {
+      const res = (await emailApi.testPipeline("00000000-0000-0000-0000-000000000001")) as {
+        emails_processed?: number;
+      };
+      const count = res?.emails_processed ?? 0;
+      setSyncMessage(`Successfully fetched & processed ${count} unread email(s) from mailbox!`);
+      queryClient.invalidateQueries({ queryKey: ["emails"] });
+      queryClient.invalidateQueries({ queryKey: ["emailStats"] });
+      setTimeout(() => setSyncMessage(null), 6000);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setSyncMessage(`Failed to sync from mailbox: ${msg}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const emails = emailsData?.items ?? [];
   const totalPages = emailsData?.pages ?? 1;
 
@@ -107,17 +130,36 @@ export default function EmailInbox() {
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Email Processing</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Monitor and manage inbound email processing
+            Monitor and manage inbound email processing from IUNGO & suppliers
           </p>
         </div>
-        <button
-          onClick={() => refetch()}
-          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-        >
-          <RefreshCw className="w-4 h-4" />
-          Refresh
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleSyncMailbox}
+            disabled={isSyncing}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-60 transition-colors shadow-sm"
+          >
+            <RefreshCw className={`w-4 h-4 ${isSyncing ? "animate-spin" : ""}`} />
+            {isSyncing ? "Fetching Mailbox..." : "Fetch & Sync Emails"}
+          </button>
+          <button
+            onClick={() => refetch()}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Refresh
+          </button>
+        </div>
       </div>
+
+      {syncMessage && (
+        <div className="p-3 bg-blue-50 border border-blue-200 text-blue-800 text-sm rounded-lg flex items-center justify-between shadow-sm">
+          <span>{syncMessage}</span>
+          <button onClick={() => setSyncMessage(null)} className="text-blue-500 hover:text-blue-700 font-bold ml-4">
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Stats Cards */}
       {stats && (
