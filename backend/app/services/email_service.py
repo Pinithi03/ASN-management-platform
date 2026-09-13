@@ -72,6 +72,26 @@ async def save_email_record(
     -------
     EmailRecord
     """
+    if decoded.message_id:
+        existing = await db.execute(
+            select(EmailRecord).where(
+                EmailRecord.company_id == company_id,
+                EmailRecord.message_id == decoded.message_id,
+            )
+        )
+        record = existing.scalar_one_or_none()
+        if record:
+            record.status = status
+            record.email_type = classification.format.value
+            record.error_message = error_message
+            if decoded.body_text:
+                record.body_text = decoded.body_text[:5000]
+            if decoded.body_html:
+                record.body_html = decoded.body_html[:50000]
+            await db.flush()
+            logger.info("Updated existing email record: id=%s, subject=%r", record.id, record.subject)
+            return record
+
     record = EmailRecord(
         company_id=company_id,
         direction="INBOUND",

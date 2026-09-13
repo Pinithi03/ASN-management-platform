@@ -72,7 +72,7 @@ def generate_asn_xml(
     Generate complete Calzedonia ASN XML matching the m2Data_Partner.dtd specification.
 
     Args:
-        company_name: e.g. "Sirio Ltd" or "Benjio Ltd"
+        company_name: e.g. "Sirio Ltd", "Benji Ltd", "Omega Line Ltd", or "Alpha Apparels Ltd"
         group_code: e.g. "SIRIONEW" or "BENJIO"
         supplier_code: Supplier vendor code (e.g. "0000058376" or "58376")
         packing_slip_number: 8-digit or alphanumeric packing slip / shipment number

@@ -87,6 +87,24 @@ export const shipmentService = {
   },
 
   /**
+   * Download tailored Excel packing template based on supplier packing setup (Box vs Roll & units count).
+   */
+  async downloadConfiguredTemplate(payload: {
+    po_number: string;
+    lines: Array<{
+      po_item: string;
+      pack_type: "BOX" | "ROLL";
+      units_count: number;
+      quantity?: number;
+    }>;
+  }): Promise<Blob> {
+    const res = await api.post("/shipments/template/configured", payload, {
+      responseType: "blob",
+    });
+    return res.data;
+  },
+
+  /**
    * Validate uploaded Excel packing list file.
    */
   async validateExcel(file: File, supplierId?: string): Promise<ExcelValidationResult> {
@@ -108,6 +126,7 @@ export const shipmentService = {
     plant_code: string;
     supplier_code?: string;
     supplier_name?: string;
+    supplier_id?: string;
     carrier?: string;
     tracking_number?: string;
     estimated_arrival?: string;
@@ -118,6 +137,7 @@ export const shipmentService = {
     formData.append("plant_code", params.plant_code);
     if (params.supplier_code) formData.append("supplier_code", params.supplier_code);
     if (params.supplier_name) formData.append("supplier_name", params.supplier_name);
+    if (params.supplier_id) formData.append("supplier_id", params.supplier_id);
     if (params.carrier) formData.append("carrier", params.carrier);
     if (params.tracking_number) formData.append("tracking_number", params.tracking_number);
     if (params.estimated_arrival) formData.append("estimated_arrival", params.estimated_arrival);
@@ -132,10 +152,11 @@ export const shipmentService = {
   /**
    * List shipments.
    */
-  async getShipments(status?: string, search?: string) {
+  async getShipments(status?: string, search?: string, supplierId?: string) {
     const params = new URLSearchParams();
     if (status && status !== "ALL") params.append("status", status);
     if (search) params.append("search", search);
+    if (supplierId) params.append("supplier_id", supplierId);
     const res = await api.get(`/shipments?${params.toString()}`);
     return res.data;
   },

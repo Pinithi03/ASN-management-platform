@@ -32,6 +32,7 @@ yarn-error.log*
 # Build output
 frontend/dist/
 frontend/build/
+*.tsbuildinfo
 
 # ── Docker ──────────────────────────────────────────────────
 # Docker volumes are managed by Compose, but don't track local data

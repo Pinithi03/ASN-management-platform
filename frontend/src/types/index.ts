@@ -89,8 +89,20 @@ export interface User {
   company_name?: string;   // Denormalized for display
   company_code?: string;
   supplier_id?: string;    // Set for SUPPLIER role
+  supplier_code?: string;  // e.g. "0000018194"
+  supplier_name?: string;  // e.g. "COATS THREAD EXPORTS (PRIVATE) LIMITED"
   is_active: boolean;
   last_login_at?: string;
+}
+
+export interface SupplierSummary {
+  id: string;
+  supplier_code: string;
+  name: string;
+  email: string;
+  contact_name?: string;
+  country?: string;
+  total_orders: number;
 }
 
 export interface Supplier {

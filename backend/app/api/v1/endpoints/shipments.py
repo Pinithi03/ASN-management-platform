@@ -22,6 +22,7 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import Response, StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -69,13 +70,20 @@ async def download_packing_template(
             po = res.scalar_one_or_none()
             if po and po.extra_data and "items" in po.extra_data:
                 sample_lines = []
-                for item in po.extra_data["items"]:
+                for idx, item in enumerate(po.extra_data["items"], start=1):
                     sample_lines.append({
                         "po_number": po.po_number,
                         "po_item": str(item.get("line_number", "00100")).split("-")[0].zfill(5),
+                        "pack_number": "PACK-01",
+                        "carton_number": idx,
+                        "supplier_carton_ref": f"CTN-{str(idx).zfill(2)}",
                         "product_code": item.get("material_code", "ELST1K 000615"),
-                        "uom": item.get("uom", "M"),
-                        "open_balance": float(item.get("quantity", 100)),
+                        "lot_number": "LOT-01",
+                        "width": "",
+                        "gw": "",
+                        "nw": "",
+                        "quantity": float(item.get("quantity", 0)),
+                        "uom": item.get("uom") or item.get("size") or "M",
                     })
         except Exception as e:
             logger.warning("Could not pre-fetch PO for template: %s", e)
@@ -87,6 +95,105 @@ async def download_packing_template(
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={
             "Content-Disposition": "attachment; filename=Packing_List_Template.xlsx",
+            "Access-Control-Expose-Headers": "Content-Disposition",
+        },
+    )
+
+
+class PackingLineConfig(BaseModel):
+    po_item: str
+    pack_type: str = "BOX"  # "BOX" or "ROLL"
+    units_count: int = 1
+    quantity: Optional[float] = None
+
+
+class ConfigureTemplateRequest(BaseModel):
+    po_number: str
+    lines: list[PackingLineConfig]
+
+
+@router.post("/template/configured")
+async def download_configured_packing_template(
+    payload: ConfigureTemplateRequest,
+    db: AsyncSession = Depends(get_db),
+) -> StreamingResponse:
+    """
+    Generate a tailored Calzedonia packing list Excel template based on supplier's
+    packaging setup (Box vs Roll and units count per PO item).
+    """
+    stmt = select(PurchaseOrder).where(PurchaseOrder.po_number == payload.po_number)
+    res = await db.execute(stmt)
+    po = res.scalar_one_or_none()
+    if not po:
+        raise HTTPException(status_code=404, detail=f"PO #{payload.po_number} not found")
+
+    raw_items = po.extra_data.get("items") if (po.extra_data and isinstance(po.extra_data, dict)) else None
+    if not raw_items:
+        raw_items = [{
+            "line_number": "00100",
+            "material_code": po.style_number or "ELST1K 000615",
+            "description": po.description or "PO Line Item",
+            "quantity": float(po.quantity or 500),
+            "uom": "M",
+        }]
+
+    po_items_map = {}
+    for it in raw_items:
+        norm_key = str(it.get("line_number", "00100")).split("-")[0].zfill(5)
+        po_items_map[norm_key] = it
+
+    sample_lines = []
+    running_carton_idx = 1
+
+    configured_items = {l.po_item.split("-")[0].zfill(5): l for l in payload.lines}
+
+    for norm_key, it in po_items_map.items():
+        cfg = configured_items.get(norm_key)
+        pack_type = cfg.pack_type.upper() if cfg and cfg.pack_type else "BOX"
+        units_count = max(1, cfg.units_count if cfg and cfg.units_count else 1)
+        total_qty = cfg.quantity if (cfg and cfg.quantity is not None and cfg.quantity > 0) else float(it.get("quantity", 0))
+
+        # Distribute quantity across units
+        if units_count <= 1:
+            unit_quantities = [total_qty]
+        else:
+            if total_qty == int(total_qty):
+                base = int(total_qty) // units_count
+                rem = int(total_qty) % units_count
+                unit_quantities = [base + 1 if i < rem else base for i in range(units_count)]
+            else:
+                base = round(total_qty / units_count, 2)
+                unit_quantities = [base] * units_count
+                diff = round(total_qty - sum(unit_quantities), 2)
+                unit_quantities[-1] = round(unit_quantities[-1] + diff, 2)
+
+        ref_prefix = "RL" if pack_type == "ROLL" else "CTN"
+        for unit_qty in unit_quantities:
+            carton_ref = f"{ref_prefix}-{str(running_carton_idx).zfill(2)}"
+            sample_lines.append({
+                "po_number": po.po_number,
+                "po_item": norm_key,
+                "pack_number": "PACK-01",
+                "carton_number": running_carton_idx,
+                "supplier_carton_ref": carton_ref,
+                "product_code": it.get("material_code", "ELST1K 000615"),
+                "lot_number": "LOT-01",
+                "width": 1.5 if pack_type == "ROLL" else "",
+                "gw": "",
+                "nw": "",
+                "quantity": unit_qty,
+                "uom": it.get("uom") or it.get("size") or "M",
+            })
+            running_carton_idx += 1
+
+    excel_bytes = generate_packing_template(sample_lines)
+    filename = f"Packing_List_{po.po_number}_Tailored.xlsx"
+
+    return StreamingResponse(
+        io.BytesIO(excel_bytes),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}",
             "Access-Control-Expose-Headers": "Content-Disposition",
         },
     )
@@ -133,6 +240,7 @@ async def create_shipment_from_excel(
     file: UploadFile = File(...),
     supplier_code: str = Form("0000058376"),
     supplier_name: str = Form("Sirio Ltd"),
+    supplier_id: Optional[str] = Form(None),
     plant_code: str = Form("PPC1"),
     storage_location: Optional[str] = Form("0101"),
     carrier: Optional[str] = Form(None),
@@ -156,8 +264,19 @@ async def create_shipment_from_excel(
     if not file_bytes:
         raise HTTPException(status_code=400, detail="File is empty")
 
+    supplier_uuid = None
+    if supplier_id:
+        try:
+            supplier_uuid = uuid.UUID(supplier_id)
+        except ValueError:
+            pass
+
     # ─── 1. Live Validation ─────────────────────────────────────────
-    validation_res = await validate_packing_excel(file_bytes=file_bytes, db=db)
+    validation_res = await validate_packing_excel(
+        file_bytes=file_bytes,
+        db=db,
+        supplier_id=supplier_uuid,
+    )
     if not validation_res.is_valid:
         raise HTTPException(
             status_code=422,
@@ -174,7 +293,7 @@ async def create_shipment_from_excel(
     # ─── 2. Resolve or Fallback Supplier & Company ──────────────────
     supp_code_clean = supplier_code.lstrip("0").zfill(10)
     
-    # Try fetching supplier from DB
+    # Try fetching supplier from DB by code
     supp = None
     try:
         stmt = select(Supplier).where(Supplier.supplier_code == supp_code_clean)
@@ -183,24 +302,57 @@ async def create_shipment_from_excel(
     except Exception as e:
         logger.warning("Could not query supplier: %s", e)
 
-    supplier_id = supp.id if supp else uuid.uuid4()
-    company_id = supp.company_id if supp else uuid.uuid4()
+    # Fetch PO from DB to get actual company_id and supplier_id
+    po_obj = None
+    try:
+        po_stmt = select(PurchaseOrder).where(PurchaseOrder.po_number == validation_res.rows[0].po_number)
+        po_res = await db.execute(po_stmt)
+        po_obj = po_res.scalar_one_or_none()
+    except Exception as e:
+        logger.warning("Could not query PO for shipment: %s", e)
+
+    company_id = po_obj.company_id if (po_obj and po_obj.company_id) else None
+    if not company_id:
+        comp_stmt = select(Company.id).limit(1)
+        comp_res = await db.execute(comp_stmt)
+        company_id = comp_res.scalar_one_or_none() or uuid.UUID("00000000-0000-0000-0000-000000000001")
+
+    # If supp not found yet, try finding by po_obj.supplier_id
+    if not supp and po_obj and po_obj.supplier_id:
+        supp_res = await db.execute(select(Supplier).where(Supplier.id == po_obj.supplier_id))
+        supp = supp_res.scalar_one_or_none()
+
+    # If supp not found yet, try finding by supplier_uuid
+    if not supp and supplier_uuid:
+        supp_res = await db.execute(select(Supplier).where(Supplier.id == supplier_uuid))
+        supp = supp_res.scalar_one_or_none()
+
+    # Fallback to first supplier in DB
+    if not supp:
+        supp_res = await db.execute(select(Supplier).limit(1))
+        supp = supp_res.scalar_one_or_none()
+
+    supplier_id = supp.id if supp else uuid.UUID("074830fc-dc21-42bb-9877-e6b6a45790a5")
     actual_supp_name = supp.name if supp else supplier_name
     actual_supp_code = supp.supplier_code if supp else supp_code_clean
 
-    # Try fetching company info for XML header
-    company_name = "Sirio Ltd"
-    group_code = "SIRIONEW"
-    try:
-        if supp:
-            comp_stmt = select(Company).where(Company.id == company_id)
-            comp_res = await db.execute(comp_stmt)
-            comp = comp_res.scalar_one_or_none()
-            if comp:
-                company_name = comp.legal_name or comp.name
-                group_code = comp.code or "SIRIONEW"
-    except Exception as e:
-        logger.warning("Could not query company: %s", e)
+    # Resolve company name and group code based on plant (PPA1, PPB1, PPC1, PPD1)
+    plant_upper = (plant_code or "PPA1").upper()
+    if "PPA" in plant_upper or "OMEGA" in plant_upper:
+        company_name = "Omega Line Ltd"
+        group_code = "OMEGA"
+    elif "PPB" in plant_upper or "ALPHA" in plant_upper:
+        company_name = "Alpha Apparels Ltd"
+        group_code = "ALPHA"
+    elif "PPC" in plant_upper or "BENJI" in plant_upper:
+        company_name = "Benji Ltd"
+        group_code = "BENJI"
+    elif "PPD" in plant_upper or "SIRIO" in plant_upper:
+        company_name = "Sirio Ltd"
+        group_code = "SIRIONEW"
+    else:
+        company_name = "Omega Line Ltd"
+        group_code = "OMEGA"
 
     # ─── 3. Generate 20-digit Handling Units (HUs) ──────────────────
     total_cartons = len(validation_res.rows)
@@ -210,9 +362,11 @@ async def create_shipment_from_excel(
             supplier_code=actual_supp_code,
             count=total_cartons,
             company_id=company_id,
+            supplier_id=supplier_id,
         )
     except Exception as e:
         logger.error("HU generation error: %s", e)
+        await db.rollback()
         # Safe fallback sequence if DB lock failed
         prefix = "1" + actual_supp_code.lstrip("0").zfill(9)
         base_num = int(datetime.utcnow().timestamp()) % 1000000000
@@ -228,7 +382,8 @@ async def create_shipment_from_excel(
             pass
 
     # Generate sequential shipment / packing slip number (8 digits)
-    random_suffix = str(int(datetime.utcnow().timestamp()) % 1000000).zfill(6)
+    import random
+    random_suffix = str(random.randint(100000, 999999))
     shipment_number = f"01{random_suffix}"
 
     shipment = Shipment(
@@ -316,6 +471,7 @@ async def create_shipment_from_excel(
             id=uuid.uuid4(),
             company_id=company_id,
             shipment_id=shipment.id,
+            po_id=po_obj.id if po_obj else None,
             po_number=po_num,
             po_line_number=line_int,
             material_number=validation_res.rows[0].product_code,
@@ -367,7 +523,10 @@ async def create_shipment_from_excel(
     except Exception as e:
         logger.error("DB commit failed for shipment: %s", e)
         await db.rollback()
-        # Even if DB table does not exist or fails, return full generated payload for UI
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to save shipment to database: {str(e)}",
+        )
 
     return {
         "success": True,
@@ -399,19 +558,30 @@ async def create_shipment_from_excel(
 async def list_shipments(
     status: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
+    supplier_id: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """List all shipments with carton and status details."""
     try:
-        stmt = select(Shipment).order_by(desc(Shipment.created_at)).limit(limit)
+        stmt = (
+            select(Shipment, ASNRecord.id.label("asn_id"))
+            .outerjoin(ASNRecord, ASNRecord.shipment_id == Shipment.id)
+            .order_by(desc(Shipment.created_at))
+            .limit(limit)
+        )
+        if supplier_id:
+            try:
+                stmt = stmt.where(Shipment.supplier_id == uuid.UUID(supplier_id))
+            except (ValueError, TypeError):
+                pass
         if status and status != "ALL":
             stmt = stmt.where(Shipment.status == status)
         if search:
             stmt = stmt.where(Shipment.shipment_number.ilike(f"%{search}%"))
 
         res = await db.execute(stmt)
-        shipments = res.scalars().all()
+        rows = res.all()
 
         return [
             {
@@ -426,8 +596,9 @@ async def list_shipments(
                 "carrier": s.carrier,
                 "tracking_number": s.tracking_number,
                 "created_at": s.created_at.isoformat() if s.created_at else None,
+                "asn_id": str(asn_id) if asn_id else None,
             }
-            for s in shipments
+            for s, asn_id in rows
         ]
     except Exception as e:
         logger.warning("DB query for shipments failed: %s", e)

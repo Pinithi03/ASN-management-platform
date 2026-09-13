@@ -50,14 +50,15 @@ services:
     env_file:
       - .env
     volumes:
-      - ./automation:/app
-    command: celery -A app.celery_app:celery_app worker --loglevel=debug --concurrency=2
+      - ./backend:/app
+    command: celery -A app.core.celery_app:celery worker --loglevel=debug --concurrency=2 -Q celery,email
 
   celery-beat:
     env_file:
       - .env
     volumes:
-      - ./automation:/app
+      - ./backend:/app
+    command: celery -A app.core.celery_app:celery beat --loglevel=info
 
   flower:
     ports:

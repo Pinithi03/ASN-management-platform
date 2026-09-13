@@ -359,6 +359,8 @@ async def parse_and_validate_packing_excel(
             if po_obj is None:
                 group_errors.append(f"PO #{po_num} not found in database or belongs to another company")
             else:
+                if supplier_id and po_obj.supplier_id and po_obj.supplier_id != supplier_id:
+                    group_errors.append(f"PO #{po_num} does not belong to your supplier account")
                 po_ordered_qty = float(po_obj.quantity or 0)
                 po_open_balance = po_ordered_qty
                 if total_line_qty > po_ordered_qty > 0:

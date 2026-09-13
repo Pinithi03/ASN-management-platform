@@ -10,6 +10,7 @@
  */
 
 import { useState, useEffect, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Search,
   PackagePlus,
@@ -28,13 +29,13 @@ import {
   Check,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
-import { mockShipments } from "@/data/mockData";
 import { cn } from "@/utils/cn";
 import {
   shipmentService,
   ExcelValidationResult,
   CreateShipmentResponse,
 } from "@/services/shipmentService";
+import { poApi } from "@/services/poApi";
 
 const statusColor: Record<string, string> = {
   DRAFT: "bg-gray-100 text-gray-700",
@@ -62,6 +63,9 @@ interface ShipmentDisplayItem {
 
 export default function Shipments() {
   const user = useAuthStore((s) => s.user);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const poParam = searchParams.get("po");
+
   const [search, setSearch] = useState("");
   const [shipments, setShipments] = useState<ShipmentDisplayItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -84,11 +88,19 @@ export default function Shipments() {
   // Action loading states
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
+  // Auto-open modal if PO param is present in URL
+  useEffect(() => {
+    if (poParam) {
+      setIsUploadModalOpen(true);
+    }
+  }, [poParam]);
+
   // Load shipments
   const loadShipments = async () => {
     setLoading(true);
     try {
-      const data = await shipmentService.getShipments();
+      const supplierId = user?.role === "SUPPLIER" ? user.supplier_id : undefined;
+      const data = await shipmentService.getShipments(undefined, undefined, supplierId);
       if (Array.isArray(data) && data.length > 0) {
         setShipments(
           data.map((d: any) => ({
@@ -100,42 +112,15 @@ export default function Shipments() {
             carrier: d.carrier,
             status: d.status,
             ship_date: d.ship_date,
-            asn_id: d.asn?.id,
+            asn_id: d.asn_id,
           }))
         );
       } else {
-        // Fallback to mock data with supplier filter
-        const base = mockShipments.filter((s) => !user?.supplier_id || s.supplier_id === user?.supplier_id);
-        setShipments(
-          base.map((s) => ({
-            id: s.id,
-            shipment_number: s.shipment_number,
-            plant_code: s.plant_code,
-            total_boxes: s.total_boxes,
-            total_pieces: s.total_pieces,
-            carrier: s.carrier,
-            status: s.status,
-            ship_date: s.ship_date,
-            asn_id: `asn-${s.id}`,
-          }))
-        );
+        setShipments([]);
       }
-    } catch (e) {
-      // Graceful fallback to mock data
-      const base = mockShipments.filter((s) => !user?.supplier_id || s.supplier_id === user?.supplier_id);
-      setShipments(
-        base.map((s) => ({
-          id: s.id,
-          shipment_number: s.shipment_number,
-          plant_code: s.plant_code,
-          total_boxes: s.total_boxes,
-          total_pieces: s.total_pieces,
-          carrier: s.carrier,
-          status: s.status,
-          ship_date: s.ship_date,
-          asn_id: `asn-${s.id}`,
-        }))
-      );
+    } catch (err) {
+      console.error("Failed to load shipments:", err);
+      setShipments([]);
     } finally {
       setLoading(false);
     }
@@ -146,13 +131,14 @@ export default function Shipments() {
   }, [user]);
 
   // Download template
-  const handleDownloadTemplate = async () => {
+  const handleDownloadTemplate = async (poNumber?: string) => {
+    const targetPo = poNumber || poParam || undefined;
     try {
-      const blob = await shipmentService.downloadTemplate();
+      const blob = await shipmentService.downloadTemplate(targetPo);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "Calzedonia_Packing_List_Template.xlsx";
+      a.download = targetPo ? `Packing_List_${targetPo}.xlsx` : "Standard_Packing_List_Template.xlsx";
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -175,9 +161,8 @@ export default function Shipments() {
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
-    } catch (e) {
-      // Fallback alert for demo
-      alert(`Labels for Shipment ${shipmentNumber} are ready! In test mode, labels PDF is compiled on the server.`);
+    } catch (e: any) {
+      alert(`Failed to download labels: ${e?.response?.data?.detail || e.message || e}`);
     } finally {
       setActionLoadingId(null);
     }
@@ -191,7 +176,7 @@ export default function Shipments() {
         const data = await shipmentService.getASNXmlPreview(shipment.asn_id);
         setXmlModalData({
           open: true,
-          title: `Calzedonia ASN XML — Shipment ${shipment.shipment_number}`,
+          title: `ASN XML — Shipment ${shipment.shipment_number}`,
           xmlContent: data.xml_content,
           asnId: shipment.asn_id,
           validated: data.xml_validated,
@@ -251,7 +236,7 @@ export default function Shipments() {
 </SdDataSlice>`;
       setXmlModalData({
         open: true,
-        title: `Calzedonia ASN XML — Shipment ${shipment.shipment_number}`,
+        title: `ASN XML — Shipment ${shipment.shipment_number}`,
         xmlContent: sampleXml,
         asnId: shipment.asn_id || `asn-${shipment.id}`,
         validated: true,
@@ -278,12 +263,12 @@ export default function Shipments() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Shipments & Packing Lists</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Create Calzedonia-compliant shipments via direct 12-column Excel drop or template export.
+            Create EDI-compliant shipments via direct 12-column Excel drop or template export.
           </p>
         </div>
         <div className="flex items-center gap-3">
           <button
-            onClick={handleDownloadTemplate}
+            onClick={() => handleDownloadTemplate()}
             className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 transition-colors"
           >
             <Download className="h-4 w-4 text-gray-500" />
@@ -377,7 +362,7 @@ export default function Shipments() {
                       <button
                         onClick={() => handlePreviewXml(s)}
                         disabled={actionLoadingId === `xml-${s.id}`}
-                        title="View Calzedonia SdDataSlice EDI XML"
+                        title="View SdDataSlice EDI XML"
                         className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 hover:text-purple-700 shadow-sm transition-colors disabled:opacity-50"
                       >
                         {actionLoadingId === `xml-${s.id}` ? (
@@ -415,9 +400,14 @@ export default function Shipments() {
       {/* ───────────────────────────────────────────────────────────── */}
       {isUploadModalOpen && (
         <ExcelUploadModal
-          onClose={() => setIsUploadModalOpen(false)}
+          targetPo={poParam || undefined}
+          onClose={() => {
+            setIsUploadModalOpen(false);
+            if (poParam) setSearchParams({});
+          }}
           onSuccess={() => {
             setIsUploadModalOpen(false);
+            if (poParam) setSearchParams({});
             loadShipments();
           }}
           onDownloadTemplate={handleDownloadTemplate}
@@ -441,14 +431,17 @@ export default function Shipments() {
 // SUBCOMPONENT: Excel Upload & Shipment Creation Modal
 // ───────────────────────────────────────────────────────────────────
 function ExcelUploadModal({
+  targetPo,
   onClose,
   onSuccess,
   onDownloadTemplate,
 }: {
+  targetPo?: string;
   onClose: () => void;
   onSuccess: (res: CreateShipmentResponse) => void;
-  onDownloadTemplate: () => void;
+  onDownloadTemplate: (po?: string) => void;
 }) {
+  const user = useAuthStore((s) => s.user);
   const [dragActive, setDragActive] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [validating, setValidating] = useState(false);
@@ -456,11 +449,165 @@ function ExcelUploadModal({
   const [showCartonDetails, setShowCartonDetails] = useState(false);
 
   // Shipment metadata fields
-  const [plantCode, setPlantCode] = useState("PPC1");
-  const [carrier, setCarrier] = useState("");
-  const [trackingNumber, setTrackingNumber] = useState("");
+  const [selectedPoNumber, setSelectedPoNumber] = useState<string>(targetPo || "");
+  const [availablePOs, setAvailablePOs] = useState<any[]>([]);
+  const [loadingPOs, setLoadingPOs] = useState(false);
+
+  const [plantCode, setPlantCode] = useState("PPA1");
   const [estimatedArrival, setEstimatedArrival] = useState("");
-  const [note, setNote] = useState("");
+
+  interface PackingLineItemState {
+    line_number: number | string;
+    po_item: string;
+    material_code: string;
+    description: string;
+    quantity: number;
+    uom: string;
+    pack_type: "BOX" | "ROLL";
+    units_count: number;
+  }
+
+  const [packingLines, setPackingLines] = useState<PackingLineItemState[]>([]);
+  const [downloadingTailored, setDownloadingTailored] = useState(false);
+
+  // Sync targetPo prop
+  useEffect(() => {
+    if (targetPo) {
+      setSelectedPoNumber(targetPo);
+    }
+  }, [targetPo]);
+
+  // Load available POs for dropdown
+  useEffect(() => {
+    setLoadingPOs(true);
+    const supplierId = user?.role === "SUPPLIER" ? user.supplier_id : undefined;
+    poApi
+      .list({ supplier_id: supplierId, per_page: 50 })
+      .then((res) => {
+        const items = res.items || [];
+        setAvailablePOs(items);
+        if (!targetPo && items.length > 0 && !selectedPoNumber && items[0].po_number) {
+          setSelectedPoNumber(items[0].po_number);
+        }
+      })
+      .catch((err) => console.warn("Failed to load POs:", err))
+      .finally(() => setLoadingPOs(false));
+  }, [user, targetPo]);
+
+  // Helper to accurately match plant code from client_code or destination
+  const matchPlant = (clientOrDest?: string | null): string => {
+    if (!clientOrDest) return "PPA1";
+    const s = clientOrDest.toLowerCase();
+    if (s.includes("omega") || s.includes("ppa1")) return "PPA1";
+    if (s.includes("alpha") || s.includes("ppb1")) return "PPB1";
+    if (s.includes("benji") || s.includes("ppc1")) return "PPC1";
+    if (s.includes("sirio") || s.includes("ppd1")) return "PPD1";
+    return "PPA1";
+  };
+
+  // When selectedPoNumber changes (or targetPo provided), auto-select Plant, auto-pick Delivery Date, and load Line Items
+  useEffect(() => {
+    if (!selectedPoNumber) return;
+
+    // Immediate synchronous match from availablePOs in memory
+    const foundInAvailable = availablePOs.find((p) => p.po_number === selectedPoNumber);
+    if (foundInAvailable) {
+      setPlantCode(matchPlant(foundInAvailable.client_code || foundInAvailable.destination));
+      if (foundInAvailable.delivery_date) {
+        setEstimatedArrival(foundInAvailable.delivery_date.split("T")[0]);
+      } else {
+        setEstimatedArrival(new Date(Date.now() + 86400000).toISOString().split("T")[0]);
+      }
+    }
+
+    poApi
+      .list({ search: selectedPoNumber })
+      .then(async (res) => {
+        const found = res.items?.find((p) => p.po_number === selectedPoNumber) || foundInAvailable || res.items?.[0];
+        if (found) {
+          setPlantCode(matchPlant(found.client_code || found.destination));
+
+          if (found.delivery_date) {
+            const dStr = found.delivery_date.split("T")[0];
+            setEstimatedArrival(dStr);
+          } else {
+            setEstimatedArrival(new Date(Date.now() + 86400000).toISOString().split("T")[0]);
+          }
+
+          // Fetch full PO to get line items
+          try {
+            const fullPo = await poApi.getById(found.id);
+            if (fullPo && fullPo.extra_data && Array.isArray((fullPo.extra_data as any).items) && (fullPo.extra_data as any).items.length > 0) {
+              const lines: PackingLineItemState[] = (fullPo.extra_data as any).items.map((it: any) => ({
+                line_number: it.line_number || 1,
+                po_item: String(it.line_number || 1).split("-")[0].padStart(5, "0"),
+                material_code: it.material_code || "",
+                description: it.description || "",
+                quantity: Number(it.quantity || 0),
+                uom: it.size || it.uom || "CON",
+                pack_type: "BOX" as const,
+                units_count: 1,
+              }));
+              setPackingLines(lines);
+            } else {
+              setPackingLines([
+                {
+                  line_number: 1,
+                  po_item: "00100",
+                  material_code: found.style_number || "ELST1K 000615",
+                  description: found.description || "PO Line Item",
+                  quantity: found.quantity || 500,
+                  uom: "M",
+                  pack_type: "BOX",
+                  units_count: 1,
+                },
+              ]);
+            }
+          } catch (detailErr) {
+            console.warn("Could not fetch full PO items:", detailErr);
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn("Could not fetch PO details for shipment modal:", err);
+      });
+  }, [selectedPoNumber]);
+
+  const updateLine = (index: number, patch: Partial<PackingLineItemState>) => {
+    setPackingLines((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, ...patch } : item))
+    );
+  };
+
+  const handleDownloadTailoredTemplate = async () => {
+    const poNum = selectedPoNumber || targetPo;
+    if (!poNum) return;
+    setDownloadingTailored(true);
+    try {
+      const payload = {
+        po_number: poNum,
+        lines: packingLines.map((l) => ({
+          po_item: l.po_item,
+          pack_type: l.pack_type,
+          units_count: l.units_count,
+          quantity: l.quantity,
+        })),
+      };
+      const blob = await shipmentService.downloadConfiguredTemplate(payload);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Packing_List_${poNum}_Tailored.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert("Failed to download tailored template: " + (err.message || err));
+    } finally {
+      setDownloadingTailored(false);
+    }
+  };
 
   // Submission state
   const [submitting, setSubmitting] = useState(false);
@@ -488,7 +635,8 @@ function ExcelUploadModal({
     setValidationResult(null);
 
     try {
-      const res = await shipmentService.validateExcel(file);
+      const supplierId = user?.role === "SUPPLIER" ? user.supplier_id : undefined;
+      const res = await shipmentService.validateExcel(file, supplierId);
       setValidationResult(res);
     } catch (e: any) {
       // Demo simulated response if server is offline
@@ -565,6 +713,65 @@ function ExcelUploadModal({
     }
   };
 
+  // Action states for success screen
+  const [downloadingLabels, setDownloadingLabels] = useState(false);
+  const [downloadingXml, setDownloadingXml] = useState(false);
+  const [dispatchingAsn, setDispatchingAsn] = useState(false);
+  const [dispatchedSuccess, setDispatchedSuccess] = useState(false);
+
+  const handleDownloadLabelsPdf = async () => {
+    if (!createdResponse) return;
+    setDownloadingLabels(true);
+    try {
+      const blob = await shipmentService.downloadLabelsPdf(createdResponse.shipment.id);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Labels_${createdResponse.shipment.shipment_number}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert(`Failed to download labels PDF: ${err?.response?.data?.detail || err.message || err}`);
+    } finally {
+      setDownloadingLabels(false);
+    }
+  };
+
+  const handleDownloadAsnXml = async () => {
+    if (!createdResponse) return;
+    setDownloadingXml(true);
+    try {
+      const blob = await shipmentService.downloadASNXml(createdResponse.asn.id);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = createdResponse.asn.xml_filename || `PL_${createdResponse.shipment.shipment_number}.xml`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert(`Failed to download ASN XML: ${err?.response?.data?.detail || err.message || err}`);
+    } finally {
+      setDownloadingXml(false);
+    }
+  };
+
+  const handleDispatchAsn = async () => {
+    if (!createdResponse) return;
+    setDispatchingAsn(true);
+    try {
+      await shipmentService.sendASN(createdResponse.asn.id);
+      setDispatchedSuccess(true);
+    } catch (err: any) {
+      alert(`Failed to dispatch ASN: ${err?.response?.data?.detail || err.message || err}`);
+    } finally {
+      setDispatchingAsn(false);
+    }
+  };
+
   const handleCreateShipment = async () => {
     if (!selectedFile) return;
     setSubmitting(true);
@@ -572,39 +779,20 @@ function ExcelUploadModal({
       const res = await shipmentService.createFromExcel({
         file: selectedFile,
         plant_code: plantCode,
-        carrier,
-        tracking_number: trackingNumber,
-        estimated_arrival: estimatedArrival,
-        note,
+        supplier_code: user?.supplier_code || undefined,
+        supplier_name: user?.supplier_name || undefined,
+        supplier_id: user?.supplier_id || undefined,
+        estimated_arrival: estimatedArrival || undefined,
       });
       setCreatedResponse(res);
     } catch (e: any) {
-      // Demo simulated creation if server DB is offline
-      const mockCreated: CreateShipmentResponse = {
-        success: true,
-        message: "Shipment 01007770 created successfully with 2 cartons",
-        shipment: {
-          id: "shp-new-1",
-          shipment_number: "01007770",
-          plant_code: plantCode,
-          status: "PACKED",
-          total_boxes: validationResult?.total_cartons || 2,
-          total_pieces: validationResult?.total_quantity || 500,
-          ship_date: new Date().toISOString(),
-          carrier: carrier || "DHL Express",
-        },
-        asn: {
-          id: "asn-new-1",
-          asn_number: "ASN-01007770",
-          status: "VALIDATED",
-          xml_validated: true,
-          xml_filename: "PL_01007770_0000058376.xml",
-          email_subject: `Packing List 01007770 of ${new Date().toLocaleDateString("en-GB")} - 0000058376`,
-        },
-        handling_units: ["10000583760000000001", "10000583760000000002"],
-        xml_validation: { valid: true, errors: [] },
-      };
-      setCreatedResponse(mockCreated);
+      console.error("Create shipment error:", e);
+      const msg =
+        e?.response?.data?.detail?.message ||
+        e?.response?.data?.detail ||
+        e?.message ||
+        "Failed to create shipment";
+      alert(`Error creating shipment: ${msg}`);
     } finally {
       setSubmitting(false);
     }
@@ -621,12 +809,18 @@ function ExcelUploadModal({
             </div>
             <div>
               <h2 className="text-lg font-bold text-gray-900">
-                {createdResponse ? "Shipment Created Successfully!" : "New Shipment via Excel Drop"}
+                {createdResponse
+                  ? "Shipment Created Successfully!"
+                  : selectedPoNumber
+                  ? `New Shipment for PO #${selectedPoNumber}`
+                  : "New Shipment & Smart Packing Wizard"}
               </h2>
               <p className="text-xs text-gray-500">
                 {createdResponse
-                  ? "20-digit Handling Units & Calzedonia ASN XML generated"
-                  : "Drag & drop your 12-column packing list (.xlsx) for live verification"}
+                  ? "20-digit Handling Units & ASN XML generated"
+                  : selectedPoNumber
+                  ? `Configure packing units, download template, or drop completed sheet (.xlsx) for PO #${selectedPoNumber}`
+                  : "Step-by-step: Select PO, configure Box/Roll units, download pre-filled sheet, and drop completed file"}
               </p>
             </div>
           </div>
@@ -642,117 +836,324 @@ function ExcelUploadModal({
         <div className="mt-4 space-y-4">
           {!createdResponse ? (
             <>
-              {/* Dropzone */}
-              <div
-                onDragEnter={handleDrag}
-                onDragLeave={handleDrag}
-                onDragOver={handleDrag}
-                onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
-                className={cn(
-                  "flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 text-center transition-all",
-                  dragActive
-                    ? "border-emerald-500 bg-emerald-50/50"
-                    : selectedFile
-                    ? "border-emerald-300 bg-emerald-50/20"
-                    : "border-gray-200 bg-gray-50/50 hover:bg-gray-50"
+              {/* ── STEP 1: PO & DELIVERY DETAILS ── */}
+              <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-white text-xs font-bold shadow-xs">
+                    1
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">
+                      Step 1: Order & Delivery Details
+                    </h3>
+                    <p className="text-[11px] text-gray-500">
+                      Select your PO. Destination Plant and Delivery Date are automatically matched from the order.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                  {/* PO Selector */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Purchase Order (PO #)
+                    </label>
+                    {availablePOs.length > 0 ? (
+                      <select
+                        value={selectedPoNumber}
+                        onChange={(e) => {
+                          const poNum = e.target.value;
+                          setSelectedPoNumber(poNum);
+                          const poObj = availablePOs.find((p) => p.po_number === poNum);
+                          if (poObj) {
+                            setPlantCode(matchPlant(poObj.client_code || poObj.destination));
+                            if (poObj.delivery_date) {
+                              setEstimatedArrival(poObj.delivery_date.split("T")[0]);
+                            }
+                          }
+                        }}
+                        className="h-9 w-full rounded-lg border border-gray-300 bg-white px-2.5 text-xs font-mono font-bold text-gray-900 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                      >
+                        {availablePOs.map((p) => (
+                          <option key={p.id || p.po_number} value={p.po_number}>
+                            PO #{p.po_number} {p.client_code ? `(${p.client_code})` : ""} - {p.quantity?.toLocaleString() || ""} pcs
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        value={selectedPoNumber}
+                        onChange={(e) => setSelectedPoNumber(e.target.value)}
+                        placeholder="e.g. 2001606986"
+                        className="h-9 w-full rounded-lg border border-gray-300 bg-white px-2.5 text-xs font-mono font-bold text-gray-900 focus:border-emerald-500 focus:outline-none"
+                      />
+                    )}
+                  </div>
+
+                  {/* Destination Plant */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Destination Plant
+                    </label>
+                    <select
+                      value={plantCode}
+                      onChange={(e) => setPlantCode(e.target.value)}
+                      className="h-9 w-full rounded-lg border border-gray-300 bg-white px-2.5 text-xs font-semibold text-gray-900 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                    >
+                      <option value="PPA1">PPA1 - Omega Line Ltd</option>
+                      <option value="PPB1">PPB1 - Alpha Apparels Ltd</option>
+                      <option value="PPC1">PPC1 - Benji Ltd</option>
+                      <option value="PPD1">PPD1 - Sirio Ltd</option>
+                    </select>
+                  </div>
+
+                  {/* Est. Delivery Date */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Est. Delivery Date
+                    </label>
+                    <input
+                      type="date"
+                      value={estimatedArrival}
+                      onChange={(e) => setEstimatedArrival(e.target.value)}
+                      className="h-9 w-full rounded-lg border border-gray-300 bg-white px-2.5 text-xs font-semibold text-gray-900 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* ── STEP 2: SMART PACKING SETUP & TEMPLATE DOWNLOAD ── */}
+              <div className="rounded-xl border border-emerald-200/90 bg-gradient-to-br from-emerald-50/80 via-white to-slate-50 p-4 shadow-xs space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-100 pb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-white text-xs font-bold shadow-xs">
+                      2
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-950">
+                        Step 2: Smart Packing Setup (Choose Box / Roll & Units)
+                      </h3>
+                      <p className="text-[11px] text-gray-500">
+                        Select packaging type and unit count. The tailored sheet will automatically pre-generate locked columns and carton numbers!
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={downloadingTailored || packingLines.length === 0}
+                      onClick={handleDownloadTailoredTemplate}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 transition-all disabled:opacity-50 cursor-pointer"
+                    >
+                      {downloadingTailored ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Download className="w-4 h-4" />
+                      )}
+                      ⚡ Download Tailored Sheet ({packingLines.reduce((acc, l) => acc + l.units_count, 0)} Rows)
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => onDownloadTemplate(selectedPoNumber || targetPo)}
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 hover:text-emerald-700 underline px-1 cursor-pointer"
+                      title="Download 1-row blank template"
+                    >
+                      Standard 1-Row
+                    </button>
+                  </div>
+                </div>
+
+                {/* Line items list */}
+                {packingLines.length > 0 ? (
+                  <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                    {packingLines.map((line, idx) => {
+                      const perUnit = line.units_count > 0 ? (line.quantity / line.units_count) : line.quantity;
+                      const perUnitFormatted = Number.isInteger(perUnit) ? perUnit : perUnit.toFixed(1);
+
+                      return (
+                        <div
+                          key={idx}
+                          className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white p-2.5 text-xs transition-all hover:border-emerald-300 shadow-xs"
+                        >
+                          {/* Item details */}
+                          <div className="min-w-[190px] flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-bold text-slate-700">
+                                Line #{line.po_item}
+                              </span>
+                              <span className="font-mono font-semibold text-gray-900 text-[11px]">
+                                {line.material_code}
+                              </span>
+                            </div>
+                            <p className="mt-0.5 truncate text-[11px] text-gray-500 max-w-[280px]">
+                              {line.description}
+                            </p>
+                            <p className="mt-0.5 text-[11px] font-medium text-emerald-800">
+                              Ordered: <strong>{line.quantity.toLocaleString()} {line.uom}</strong>
+                            </p>
+                          </div>
+
+                          {/* Packaging Type Toggle */}
+                          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
+                            <button
+                              type="button"
+                              onClick={() => updateLine(idx, { pack_type: "BOX" })}
+                              className={cn(
+                                "flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold transition-all",
+                                line.pack_type === "BOX"
+                                  ? "bg-white text-emerald-700 shadow-sm"
+                                  : "text-slate-600 hover:text-gray-900"
+                              )}
+                            >
+                              📦 Box
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => updateLine(idx, { pack_type: "ROLL" })}
+                              className={cn(
+                                "flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold transition-all",
+                                line.pack_type === "ROLL"
+                                  ? "bg-white text-emerald-700 shadow-sm"
+                                  : "text-slate-600 hover:text-gray-900"
+                              )}
+                            >
+                              📜 Roll
+                            </button>
+                          </div>
+
+                          {/* Units Count Counter */}
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] text-gray-500 font-medium">
+                              {line.pack_type === "BOX" ? "Boxes:" : "Rolls:"}
+                            </span>
+                            <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden bg-white">
+                              <button
+                                type="button"
+                                onClick={() => updateLine(idx, { units_count: Math.max(1, line.units_count - 1) })}
+                                className="px-2.5 py-1 bg-gray-50 hover:bg-gray-100 text-gray-600 font-bold cursor-pointer"
+                              >
+                                -
+                              </button>
+                              <input
+                                type="number"
+                                min="1"
+                                max="500"
+                                value={line.units_count}
+                                onChange={(e) => updateLine(idx, { units_count: Math.max(1, parseInt(e.target.value) || 1) })}
+                                className="w-12 text-center text-xs font-bold text-gray-800 focus:outline-none"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => updateLine(idx, { units_count: line.units_count + 1 })}
+                                className="px-2.5 py-1 bg-gray-50 hover:bg-gray-100 text-gray-600 font-bold cursor-pointer"
+                              >
+                                +
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Split Preview */}
+                          <div className="text-right min-w-[120px]">
+                            <span className="inline-block rounded-md bg-emerald-50 border border-emerald-200 px-2 py-1 text-[11px] font-semibold text-emerald-800">
+                              {line.units_count} {line.pack_type === "BOX" ? "box(es)" : "roll(s)"} <br />
+                              <span className="text-[10px] font-normal text-emerald-600">
+                                (~{perUnitFormatted} {line.uom} each)
+                              </span>
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="py-4 text-center text-xs text-gray-400">
+                    {loadingPOs ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+                        Loading PO line items…
+                      </div>
+                    ) : (
+                      "Please select a Purchase Order above to configure packaging."
+                    )}
+                  </div>
                 )}
-              >
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".xlsx,.xls"
-                  className="hidden"
-                  onChange={(e) => {
-                    if (e.target.files?.[0]) processFile(e.target.files[0]);
-                  }}
-                />
 
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-sm">
-                  {selectedFile ? (
-                    <CheckCircle2 className="h-6 w-6 text-emerald-600" />
-                  ) : (
-                    <UploadCloud className="h-6 w-6 text-emerald-600" />
+                <div className="flex items-center justify-between text-[11px] text-gray-500 pt-1 border-t border-emerald-100">
+                  <span>
+                    Total to Pack: <strong>{packingLines.reduce((acc, l) => acc + l.units_count, 0)} Units</strong> (
+                    {packingLines.reduce((acc, l) => acc + (l.pack_type === "BOX" ? l.units_count : 0), 0)} Boxes,{" "}
+                    {packingLines.reduce((acc, l) => acc + (l.pack_type === "ROLL" ? l.units_count : 0), 0)} Rolls)
+                  </span>
+                  <span className="text-emerald-700 font-medium">
+                    ✓ Pre-configures Cart No, Supplier Carton Ref, and locked PO columns
+                  </span>
+                </div>
+              </div>
+
+              {/* ── STEP 3: DROP COMPLETED EXCEL & VERIFY ── */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-white text-xs font-bold shadow-xs">
+                    3
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">
+                      Step 3: Drop Completed Packing List (.xlsx)
+                    </h3>
+                    <p className="text-[11px] text-gray-500">
+                      Fill the scale weights (GW & NW) into the downloaded sheet and drop it here for live verification.
+                    </p>
+                  </div>
+                </div>
+
+                <div
+                  onDragEnter={handleDrag}
+                  onDragLeave={handleDrag}
+                  onDragOver={handleDrag}
+                  onDrop={handleDrop}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={cn(
+                    "flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-5 text-center transition-all",
+                    dragActive
+                      ? "border-emerald-500 bg-emerald-50/50"
+                      : selectedFile
+                      ? "border-emerald-300 bg-emerald-50/20"
+                      : "border-gray-200 bg-gray-50/50 hover:bg-gray-50"
                   )}
-                </div>
-
-                <div className="mt-3">
-                  <p className="text-sm font-semibold text-gray-800">
-                    {selectedFile ? selectedFile.name : "Drop factory packing list (.xlsx) here"}
-                  </p>
-                  <p className="mt-1 text-xs text-gray-500">
-                    {selectedFile
-                      ? `${(selectedFile.size / 1024).toFixed(1)} KB — Click or drop another to replace`
-                      : "or browse file from your computer (Standard 12-column Calzedonia layout)"}
-                  </p>
-                </div>
-              </div>
-
-              {/* Template Download Shortcut */}
-              <div className="flex items-center justify-between rounded-lg bg-slate-50 px-4 py-2.5 text-xs text-slate-600">
-                <span>Need the 12-column format? Download sample template with pre-styled headers:</span>
-                <button
-                  onClick={onDownloadTemplate}
-                  className="font-semibold text-emerald-600 hover:text-emerald-700 underline"
                 >
-                  Download Template
-                </button>
-              </div>
-
-              {/* Metadata inputs */}
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700">Destination Plant</label>
-                  <select
-                    value={plantCode}
-                    onChange={(e) => setPlantCode(e.target.value)}
-                    className="mt-1 h-9 w-full rounded-lg border border-gray-200 bg-white px-2.5 text-xs focus:border-emerald-500 focus:outline-none"
-                  >
-                    <option value="PPC1">PPC1 - Benjio Ltd</option>
-                    <option value="PPD1">PPD1 - Sirio Ltd</option>
-                    <option value="PPA1">PPA1 - Omega Line</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700">Carrier / Forwarder</label>
                   <input
-                    value={carrier}
-                    onChange={(e) => setCarrier(e.target.value)}
-                    placeholder="e.g. DHL Express, Expo"
-                    className="mt-1 h-9 w-full rounded-lg border border-gray-200 bg-white px-2.5 text-xs focus:border-emerald-500 focus:outline-none"
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".xlsx,.xls"
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files?.[0]) processFile(e.target.files[0]);
+                    }}
                   />
-                </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700">Tracking Number</label>
-                  <input
-                    value={trackingNumber}
-                    onChange={(e) => setTrackingNumber(e.target.value)}
-                    placeholder="e.g. AWB-9948271"
-                    className="mt-1 h-9 w-full rounded-lg border border-gray-200 bg-white px-2.5 text-xs focus:border-emerald-500 focus:outline-none"
-                  />
-                </div>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm">
+                    {selectedFile ? (
+                      <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                    ) : (
+                      <UploadCloud className="h-5 w-5 text-emerald-600" />
+                    )}
+                  </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700">Est. Delivery Date</label>
-                  <input
-                    type="date"
-                    value={estimatedArrival}
-                    onChange={(e) => setEstimatedArrival(e.target.value)}
-                    className="mt-1 h-9 w-full rounded-lg border border-gray-200 bg-white px-2.5 text-xs focus:border-emerald-500 focus:outline-none"
-                  />
+                  <div className="mt-2">
+                    <p className="text-xs font-semibold text-gray-800">
+                      {selectedFile
+                        ? selectedFile.name
+                        : "Drop factory packing list (.xlsx) here"}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-gray-500">
+                      {selectedFile
+                        ? `${(selectedFile.size / 1024).toFixed(1)} KB — Click or drop another to replace`
+                        : "or browse file from your computer (Standard 12-column layout)"}
+                    </p>
+                  </div>
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700">Shipment / EDI Note (Optional)</label>
-                <input
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  placeholder="e.g. Urgent shipment for production batch #44"
-                  className="mt-1 h-8 w-full rounded-lg border border-gray-200 bg-white px-2.5 text-xs focus:border-emerald-500 focus:outline-none"
-                />
               </div>
 
               {/* Validation Result Box */}
@@ -905,7 +1306,7 @@ function ExcelUploadModal({
               {/* Handling Units generated preview */}
               <div className="rounded-xl border border-gray-200 bg-slate-900 p-4 text-left text-white">
                 <p className="text-xs font-semibold text-slate-400">
-                  Allocated 20-digit Calzedonia Handling Units ({createdResponse.handling_units.length}):
+                  Allocated 20-digit Handling Units ({createdResponse.handling_units.length}):
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {createdResponse.handling_units.map((hu, i) => (
@@ -917,20 +1318,61 @@ function ExcelUploadModal({
               </div>
 
               {/* Action Buttons */}
-              <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:justify-center">
+              <div className="flex flex-wrap items-center justify-center gap-3 pt-3">
                 <button
-                  onClick={() => {
-                    shipmentService.downloadLabelsPdf(createdResponse.shipment.id);
-                  }}
-                  className="flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700"
+                  type="button"
+                  disabled={downloadingLabels}
+                  onClick={handleDownloadLabelsPdf}
+                  className="flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50 transition-colors"
                 >
-                  <Printer className="h-4 w-4" /> Download 6x4 Labels PDF
+                  {downloadingLabels ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Printer className="h-4 w-4" />
+                  )}
+                  Download 6x4 Labels PDF
                 </button>
+
                 <button
+                  type="button"
+                  disabled={downloadingXml}
+                  onClick={handleDownloadAsnXml}
+                  className="flex items-center justify-center gap-2 rounded-lg border border-purple-200 bg-purple-50 px-4 py-2.5 text-sm font-semibold text-purple-700 shadow-sm hover:bg-purple-100 disabled:opacity-50 transition-colors"
+                >
+                  {downloadingXml ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4" />
+                  )}
+                  Download ASN XML (.xml)
+                </button>
+
+                {dispatchedSuccess ? (
+                  <span className="flex items-center justify-center gap-1.5 rounded-lg bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700 border border-emerald-200">
+                    <Check className="h-4 w-4" /> Dispatched to EDI
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={dispatchingAsn}
+                    onClick={handleDispatchAsn}
+                    className="flex items-center justify-center gap-2 rounded-lg bg-purple-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-purple-700 disabled:opacity-50 transition-colors"
+                  >
+                    {dispatchingAsn ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
+                    Dispatch to EDI
+                  </button>
+                )}
+
+                <button
+                  type="button"
                   onClick={() => {
                     onSuccess(createdResponse);
                   }}
-                  className="flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                  className="flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
                 >
                   Close & View in List
                 </button>
@@ -1003,7 +1445,7 @@ function XmlPreviewModal({
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "Calzedonia_ASN_SdDataSlice.xml";
+    a.download = "ASN_SdDataSlice.xml";
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -1034,7 +1476,7 @@ function XmlPreviewModal({
               <div className="flex items-center gap-2 text-xs text-gray-500">
                 <span className="font-mono">DOCTYPE: SdDataSlice SYSTEM "m2Data_Partner.dtd"</span>
                 <span>•</span>
-                <span className="text-emerald-600 font-semibold">✓ Calzedonia EDI Validated</span>
+                <span className="text-emerald-600 font-semibold">✓ EDI Validated</span>
               </div>
             </div>
           </div>
@@ -1080,7 +1522,7 @@ function XmlPreviewModal({
                 className="flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-purple-700 disabled:opacity-50"
               >
                 {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                Dispatch to Calzedonia / IUNGO
+                Dispatch to IUNGO EDI
               </button>
             )}
           </div>

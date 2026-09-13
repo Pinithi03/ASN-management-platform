@@ -49,7 +49,7 @@ export default function App() {
         <Route path="/settings/company" element={<RequireRole role="COMPANY_ADMIN"><CompanySettings /></RequireRole>} />
         <Route path="/settings/users" element={<RequireRole role="COMPANY_ADMIN"><UserManagement /></RequireRole>} />
 
-        <Route path="/shipments" element={<RequireRole role="SUPPLIER"><Shipments /></RequireRole>} />
+        <Route path="/shipments" element={<Shipments />} />
         <Route path="/profile" element={<RequireRole role="SUPPLIER"><Profile /></RequireRole>} />
       </Route>
 

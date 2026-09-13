@@ -2,6 +2,7 @@
 // frontend/src/pages/PurchaseOrders.tsx
 
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   FileText,
@@ -18,6 +19,7 @@ import {
 import { poApi } from "@/services/poApi";
 import type { PurchaseOrder } from "@/types/email";
 import { format } from "date-fns";
+import { useAuthStore } from "@/store/authStore";
 
 const STATUS_COLORS: Record<string, string> = {
   ACTIVE: "bg-green-100 text-green-700",
@@ -39,6 +41,11 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
 ];
 
 export default function PurchaseOrders() {
+  const navigate = useNavigate();
+  const user = useAuthStore((s) => s.user);
+  const isSupplier = user?.role === "SUPPLIER";
+  const supplierId = isSupplier ? user.supplier_id : undefined;
+
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [page, setPage] = useState(1);
@@ -46,19 +53,20 @@ export default function PurchaseOrders() {
 
   // ─── Queries ────────────────────────────────────────────────
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ["purchaseOrders", search, statusFilter, page],
+    queryKey: ["purchaseOrders", search, statusFilter, page, supplierId],
     queryFn: () =>
       poApi.list({
         search: search || undefined,
         status: statusFilter || undefined,
+        supplier_id: supplierId || undefined,
         page,
         per_page: 15,
       }),
   });
 
   const { data: stats } = useQuery({
-    queryKey: ["poStats"],
-    queryFn: () => poApi.getStats(),
+    queryKey: ["poStats", supplierId],
+    queryFn: () => poApi.getStats(supplierId),
   });
 
   // Detail query when a PO is selected
@@ -74,9 +82,9 @@ export default function PurchaseOrders() {
   const handleShipExcel = (e: React.MouseEvent, poNumber?: string) => {
     e.stopPropagation();
     if (poNumber) {
-      window.location.href = `/shipments?po=${encodeURIComponent(poNumber)}`;
+      navigate(`/shipments?po=${encodeURIComponent(poNumber)}`);
     } else {
-      window.location.href = "/shipments";
+      navigate("/shipments");
     }
   };
 
@@ -92,7 +100,15 @@ export default function PurchaseOrders() {
         </div>
         <div className="flex items-center gap-3">
           <button
-            onClick={() => (window.location.href = "/shipments")}
+            onClick={() => {
+              if (selectedPO?.po_number) {
+                navigate(`/shipments?po=${encodeURIComponent(selectedPO.po_number)}`);
+              } else if (orders.length > 0 && orders[0].po_number) {
+                navigate(`/shipments?po=${encodeURIComponent(orders[0].po_number)}`);
+              } else {
+                navigate("/shipments");
+              }
+            }}
             className="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors shadow-sm"
           >
             <PackagePlus className="w-4 h-4" />

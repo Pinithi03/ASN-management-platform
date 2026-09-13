@@ -12,6 +12,7 @@ Provides:
 from __future__ import annotations
 
 import logging
+import uuid
 from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import UUID
@@ -36,6 +37,7 @@ router = APIRouter()
 class POListItem(BaseModel):
     id: str
     company_id: str
+    supplier_id: Optional[str] = None
     po_number: Optional[str] = None
     client_code: Optional[str] = None
     style_number: Optional[str] = None
@@ -116,6 +118,7 @@ async def list_purchase_orders(
     db: AsyncSession = Depends(get_db),
     status: Optional[str] = Query(None, description="Filter by status"),
     search: Optional[str] = Query(None, description="Search PO#, client, style"),
+    supplier_id: Optional[str] = Query(None, description="Filter by supplier UUID"),
     company_id: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
@@ -126,6 +129,11 @@ async def list_purchase_orders(
     # Apply filters
     if company_id:
         query = query.where(PurchaseOrder.company_id == company_id)
+    if supplier_id:
+        try:
+            query = query.where(PurchaseOrder.supplier_id == uuid.UUID(supplier_id))
+        except (ValueError, TypeError):
+            pass
     if status and status != "ALL":
         query = query.where(PurchaseOrder.status == status.upper())
     if search:
@@ -155,6 +163,7 @@ async def list_purchase_orders(
             POListItem(
                 id=str(r.id),
                 company_id=str(r.company_id),
+                supplier_id=str(r.supplier_id) if r.supplier_id else None,
                 po_number=r.po_number,
                 client_code=r.client_code,
                 style_number=r.style_number,
@@ -185,6 +194,7 @@ async def list_purchase_orders(
 @router.get("/stats", response_model=POStatsResponse)
 async def po_stats(
     db: AsyncSession = Depends(get_db),
+    supplier_id: Optional[str] = Query(None),
     company_id: Optional[str] = Query(None),
 ):
     """Get PO count breakdown by status."""
@@ -199,6 +209,11 @@ async def po_stats(
 
     if company_id:
         query = query.where(PurchaseOrder.company_id == company_id)
+    if supplier_id:
+        try:
+            query = query.where(PurchaseOrder.supplier_id == uuid.UUID(supplier_id))
+        except (ValueError, TypeError):
+            pass
 
     result = await db.execute(query)
     row = result.one()

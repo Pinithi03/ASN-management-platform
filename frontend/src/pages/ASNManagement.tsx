@@ -211,7 +211,7 @@ export default function ASNManagement(){
                   className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 shadow-sm"
                 >
                   <FileCode className="h-4 w-4 text-purple-600" />
-                  Download Calzedonia XML
+                  Download ASN XML
                 </button>
 
                 {!isAdmin && sel.status !== "XML_SENT" && (
@@ -224,7 +224,7 @@ export default function ASNManagement(){
                     className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 py-2 text-xs font-semibold text-white hover:bg-emerald-700 shadow-sm"
                   >
                     <CheckCircle2 className="h-4 w-4" />
-                    Dispatch to Calzedonia / IUNGO
+                    Dispatch to IUNGO EDI
                   </button>
                 )}
               </div>

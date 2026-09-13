@@ -9,3 +9,4 @@ pydantic>=2.0.0
 pydantic-settings>=2.0.0
 structlog>=24.0.0
 python-dateutil>=2.9.0
+flower>=2.0.0

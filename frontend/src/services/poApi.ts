@@ -14,6 +14,7 @@ export interface POListParams {
   status?: string;
   search?: string;
   company_id?: string;
+  supplier_id?: string;
 }
 
 export interface POUpdateBody {
@@ -43,10 +44,11 @@ export const poApi = {
   },
 
   /** Get PO statistics */
-  getStats: async (companyId?: string): Promise<POStats> => {
-    const { data } = await api.get("/purchase-orders/stats", {
-      params: companyId ? { company_id: companyId } : {},
-    });
+  getStats: async (companyId?: string, supplierId?: string): Promise<POStats> => {
+    const params: Record<string, string> = {};
+    if (companyId) params.company_id = companyId;
+    if (supplierId) params.supplier_id = supplierId;
+    const { data } = await api.get("/purchase-orders/stats", { params });
     return data;
   },
 

@@ -43,12 +43,18 @@ router = APIRouter()
 async def list_asns(
     status: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
+    supplier_id: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """List ASN records with filtering."""
     try:
         stmt = select(ASNRecord).order_by(desc(ASNRecord.created_at)).limit(limit)
+        if supplier_id:
+            try:
+                stmt = stmt.where(ASNRecord.supplier_id == uuid.UUID(supplier_id))
+            except (ValueError, TypeError):
+                pass
         if status and status != "ALL":
             stmt = stmt.where(ASNRecord.status == status)
         if search:
@@ -275,7 +281,7 @@ async def send_asn_xml(
     email_subject = get_asn_email_subject(shipment_num, r.created_at or datetime.now(), supp_code)
     to_email = recipient_email or "iungo@calzedonia.com"
 
-    now_utc = datetime.now(timezone.utc)
+    now_utc = datetime.utcnow()
     r.status = ASNStatus.XML_SENT.value
     r.sent_at = now_utc
 
@@ -283,6 +289,8 @@ async def send_asn_xml(
         await db.commit()
     except Exception as e:
         logger.warning("Failed to update status on send: %s", e)
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
     return {
         "success": True,

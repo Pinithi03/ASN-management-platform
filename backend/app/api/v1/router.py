@@ -6,6 +6,7 @@ from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
     asn,
+    auth,
     emails,
     health,
     purchase_orders,
@@ -15,6 +16,11 @@ from app.api.v1.endpoints import (
 api_router = APIRouter()
 
 # ─── Active Routers ─────────────────────────────────────────────
+api_router.include_router(
+    auth.router,
+    prefix="/auth",
+    tags=["Authentication"],
+)
 api_router.include_router(
     health.router,
     tags=["Health"],
