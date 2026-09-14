@@ -19,6 +19,7 @@ from app.models.email_message import EmailRecord
 from app.models.purchase_order import PurchaseOrder
 from app.models.parsed_data import ParsedData
 from app.models.email_attachment import EmailAttachment
+from app.models.supplier import Supplier
 from app.email.mime_decoder import DecodedEmail
 from app.email.classifier import ClassificationResult
 from app.email.parsers import ParsedPO
@@ -71,6 +72,26 @@ async def save_email_record(
     -------
     EmailRecord
     """
+    if decoded.message_id:
+        existing = await db.execute(
+            select(EmailRecord).where(
+                EmailRecord.company_id == company_id,
+                EmailRecord.message_id == decoded.message_id,
+            )
+        )
+        record = existing.scalar_one_or_none()
+        if record:
+            record.status = status
+            record.email_type = classification.format.value
+            record.error_message = error_message
+            if decoded.body_text:
+                record.body_text = decoded.body_text[:5000]
+            if decoded.body_html:
+                record.body_html = decoded.body_html[:50000]
+            await db.flush()
+            logger.info("Updated existing email record: id=%s, subject=%r", record.id, record.subject)
+            return record
+
     record = EmailRecord(
         company_id=company_id,
         direction="INBOUND",
@@ -242,6 +263,33 @@ async def save_purchase_order(
     -------
     PurchaseOrder
     """
+    # Resolve supplier if not explicitly passed
+    resolved_supplier_id = supplier_id
+    if not resolved_supplier_id and parsed_po.supplier_code:
+        supp_clean = str(parsed_po.supplier_code).lstrip("0")
+        supp_stmt = select(Supplier).where(
+            (Supplier.supplier_code == parsed_po.supplier_code) |
+            (Supplier.supplier_code == supp_clean)
+        )
+        supp_res = await db.execute(supp_stmt)
+        supp = supp_res.scalar_one_or_none()
+        if supp:
+            resolved_supplier_id = supp.id
+        else:
+            new_supp = Supplier(
+                supplier_code=parsed_po.supplier_code,
+                name=parsed_po.supplier_name or f"Supplier {parsed_po.supplier_code}",
+                email=f"supplier_{supp_clean or 'unknown'}@oniverse.local",
+            )
+            db.add(new_supp)
+            await db.flush()
+            resolved_supplier_id = new_supp.id
+
+    first_item = parsed_po.line_items[0] if parsed_po.line_items else None
+    primary_style = first_item.style[:50] if first_item and first_item.style else None
+    primary_desc = first_item.description if first_item and first_item.description else None
+    buyer_code = (parsed_po.buyer_name or "CALZ")[:50]
+
     # Check if PO already exists
     stmt = select(PurchaseOrder).where(
         PurchaseOrder.company_id == company_id,
@@ -260,14 +308,50 @@ async def save_purchase_order(
         existing.delivery_date = _parse_date(parsed_po.delivery_date) or existing.delivery_date
         existing.currency = parsed_po.currency
         existing.source_email_id = email_record_id
+        if not existing.supplier_id and resolved_supplier_id:
+            existing.supplier_id = resolved_supplier_id
+        if not existing.client_code:
+            existing.client_code = buyer_code
+        if not existing.style_number and primary_style:
+            existing.style_number = primary_style
+        if not existing.description and primary_desc:
+            existing.description = primary_desc
 
+        items_data = [
+            {
+                "line_number": li.line_number,
+                "material_code": li.style,
+                "description": li.description,
+                "color": li.color,
+                "size": li.size,
+                "quantity": li.quantity,
+                "unit_price": li.unit_price,
+            }
+            for li in parsed_po.line_items
+        ]
+        existing.extra_data = {"items": items_data}
         po = existing
         logger.info("Updated PO: %s (v%d)", po.po_number, po.version)
     else:
+        items_data = [
+            {
+                "line_number": li.line_number,
+                "material_code": li.style,
+                "description": li.description,
+                "color": li.color,
+                "size": li.size,
+                "quantity": li.quantity,
+                "unit_price": li.unit_price,
+            }
+            for li in parsed_po.line_items
+        ]
         # Create new PO
         po = PurchaseOrder(
             company_id=company_id,
-            supplier_id=supplier_id,
+            supplier_id=resolved_supplier_id,
+            client_code=buyer_code,
+            style_number=primary_style,
+            description=primary_desc,
             po_number=parsed_po.po_number,
             status="ACTIVE",
             quantity=parsed_po.total_quantity,
@@ -277,6 +361,7 @@ async def save_purchase_order(
             currency=parsed_po.currency,
             version=1,
             source_email_id=email_record_id,
+            extra_data={"items": items_data},
         )
         db.add(po)
         logger.info("Created PO: %s", po.po_number)

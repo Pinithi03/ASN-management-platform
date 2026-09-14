@@ -32,6 +32,7 @@ yarn-error.log*
 # Build output
 frontend/dist/
 frontend/build/
+*.tsbuildinfo
 
 # ── Docker ──────────────────────────────────────────────────
 # Docker volumes are managed by Compose, but don't track local data
@@ -57,6 +58,7 @@ logs/
 
 # ── Celery ─────────────────────────────────────────────────
 backend/celerybeat-schedule*
+automation/celerybeat-schedule*
 
 # ── Alembic ─────────────────────────────────────────────────
 # Don't ignore migrations/versions — they're version controlled

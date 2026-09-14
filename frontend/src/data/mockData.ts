@@ -49,24 +49,52 @@ export const mockAdminUser: User = {
 
 export const mockSupplierUser: User = {
   id: "u2",
-  email: "maria@textcorp.com",
-  full_name: "Maria Santos",
+  email: "coats.exports@supplier.com",
+  full_name: "COATS THREAD EXPORTS (PRIVATE) LIMITED",
   role: "SUPPLIER",
   company_id: "c1",
-  company_name: "Sirio S.r.l.",
+  company_name: "Sirio Ltd",
   company_code: "SIRIO",
-  supplier_id: "s1",
+  supplier_id: "074830fc-dc21-42bb-9877-e6b6a45790a5",
+  supplier_code: "0000018194",
+  supplier_name: "COATS THREAD EXPORTS (PRIVATE) LIMITED",
   is_active: true,
   last_login_at: "2026-09-07T09:00:00Z",
 };
 
-// ── Suppliers ──────────────────────────────────────────────
+// ── Suppliers (Real Calzedonia EDI Partners from XMLs) ─────────────────────────
 
 export const mockSuppliers: Supplier[] = [
-  { id: "s1", supplier_code: "TXCORP", name: "TextCorp Ltd", email: "ops@textcorp.com", contact_name: "Maria Santos", country: "Portugal", is_active: true, created_at: "2024-01-15T00:00:00Z" },
-  { id: "s2", supplier_code: "STITCH", name: "StitchWorks", email: "info@stitchworks.com", contact_name: "Luca Rossi", country: "Italy", is_active: true, created_at: "2024-02-10T00:00:00Z" },
-  { id: "s3", supplier_code: "FABIND", name: "Fabric India", email: "export@fabricindia.in", contact_name: "Priya Sharma", country: "India", is_active: true, created_at: "2024-03-01T00:00:00Z" },
-  { id: "s4", supplier_code: "SILKTX", name: "SilkTex Bangladesh", email: "ops@silktex.bd", contact_name: "Rahman Ali", country: "Bangladesh", is_active: false, created_at: "2024-04-01T00:00:00Z" },
+  {
+    id: "074830fc-dc21-42bb-9877-e6b6a45790a5",
+    supplier_code: "0000018194",
+    name: "COATS THREAD EXPORTS (PRIVATE) LIMITED",
+    email: "coats.exports@supplier.com",
+    contact_name: "Duminda Silva",
+    country: "Sri Lanka",
+    is_active: true,
+    created_at: "2024-01-15T00:00:00Z",
+  },
+  {
+    id: "00000000-0000-0000-0000-000000001122",
+    supplier_code: "0000001122",
+    name: "HAYLEYS FABRIC PLC",
+    email: "hayleys.fabric@supplier.com",
+    contact_name: "Rohan Fernando",
+    country: "Sri Lanka",
+    is_active: true,
+    created_at: "2024-02-10T00:00:00Z",
+  },
+  {
+    id: "00000000-0000-0000-0000-000000080589",
+    supplier_code: "0000080589",
+    name: "SOUTH ASIA TEXTILES (PRIVATE) LIMITED",
+    email: "southasia.textiles@supplier.com",
+    contact_name: "Pradeep Kumara",
+    country: "Sri Lanka",
+    is_active: true,
+    created_at: "2024-03-01T00:00:00Z",
+  },
 ];
 
 // ── Email Records ──────────────────────────────────────────

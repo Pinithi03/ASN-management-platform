@@ -1,0 +1,51 @@
+<!-- 
+  Calzedonia ASN DTD — m2Data_Partner.dtd
+  
+  Updated to match the real Calzedonia/IUNGO SdPackingSlip structure
+  including BackOrder, Acceptance, Price, and Note fields.
+-->
+
+<!ELEMENT SdDataSlice (SdCompanyHeader, SdPackingSlip+)>
+
+<!ELEMENT SdCompanyHeader (LegalName, Group, TransmissionDate)>
+<!ELEMENT LegalName (#PCDATA)>
+<!ELEMENT Group (#PCDATA)>
+<!ELEMENT TransmissionDate (#PCDATA)>
+
+<!ELEMENT SdPackingSlip (PartnerId, PackingSlipNumber, FgOutbound, PackingSlipDate, DeliveryDate, Note, SdPackingSlipLine+)>
+<!ELEMENT PartnerId (#PCDATA)>
+<!ELEMENT PackingSlipNumber (#PCDATA)>
+<!ELEMENT FgOutbound (#PCDATA)>
+<!ELEMENT PackingSlipDate (#PCDATA)>
+<!ELEMENT DeliveryDate (#PCDATA)>
+
+<!ELEMENT SdPackingSlipLine (PackingSlipLineNumber, OrderTypeName, OrderNumber, OrderDate, OrderLineNumber, Qty, BackOrder, AcceptanceDate, AcceptanceQty, AcceptanceBackOrder, ProductCode, ProductCodePartner, ProductDescription, PartnerItemDescription, ProductUnitOfMeasure, ProductBatchCode, ProductBatchCodePartner, Price, PriceUnit, Note, AuxRow1, AuxRow2, AuxRow3, AuxRow4, AuxRow5, AuxRowNum1, AuxRowNum2, AuxRowNum3, AuxRowNum4)>
+<!ELEMENT PackingSlipLineNumber (#PCDATA)>
+<!ELEMENT OrderTypeName (#PCDATA)>
+<!ELEMENT OrderNumber (#PCDATA)>
+<!ELEMENT OrderDate (#PCDATA)>
+<!ELEMENT OrderLineNumber (#PCDATA)>
+<!ELEMENT Qty (#PCDATA)>
+<!ELEMENT BackOrder (#PCDATA)>
+<!ELEMENT AcceptanceDate (#PCDATA)>
+<!ELEMENT AcceptanceQty (#PCDATA)>
+<!ELEMENT AcceptanceBackOrder (#PCDATA)>
+<!ELEMENT ProductCode (#PCDATA)>
+<!ELEMENT ProductCodePartner (#PCDATA)>
+<!ELEMENT ProductDescription (#PCDATA)>
+<!ELEMENT PartnerItemDescription (#PCDATA)>
+<!ELEMENT ProductUnitOfMeasure (#PCDATA)>
+<!ELEMENT ProductBatchCode (#PCDATA)>
+<!ELEMENT ProductBatchCodePartner (#PCDATA)>
+<!ELEMENT Price (#PCDATA)>
+<!ELEMENT PriceUnit (#PCDATA)>
+<!ELEMENT Note (#PCDATA)>
+<!ELEMENT AuxRow1 (#PCDATA)>
+<!ELEMENT AuxRow2 (#PCDATA)>
+<!ELEMENT AuxRow3 (#PCDATA)>
+<!ELEMENT AuxRow4 (#PCDATA)>
+<!ELEMENT AuxRow5 (#PCDATA)>
+<!ELEMENT AuxRowNum1 (#PCDATA)>
+<!ELEMENT AuxRowNum2 (#PCDATA)>
+<!ELEMENT AuxRowNum3 (#PCDATA)>
+<!ELEMENT AuxRowNum4 (#PCDATA)>

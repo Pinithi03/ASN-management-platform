@@ -4,6 +4,8 @@ Loads from environment variables / .env file.
 """
 
 from functools import lru_cache
+from typing import Any
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -12,6 +14,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=True,
+        extra="ignore",
     )
 
     # App
@@ -62,10 +65,21 @@ class Settings(BaseSettings):
     KEYCLOAK_CLIENT_SECRET: str = ""
 
     # CORS
-    CORS_ORIGINS: list[str] = [
+    CORS_ORIGINS: list[str] | str = [
         "http://localhost:3000",
         "http://localhost:80",
     ]
+
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def assemble_cors_origins(cls, v: Any) -> list[str]:
+        if isinstance(v, str):
+            v_clean = v.strip()
+            if v_clean.startswith("["):
+                import json
+                return json.loads(v_clean)
+            return [i.strip() for i in v_clean.split(",") if i.strip()]
+        return v
 
     # Logging
     LOG_LEVEL: str = "INFO"

@@ -3,9 +3,8 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle, XCircle, Eye, RefreshCw, AlertTriangle, Inbox } from "lucide-react";
+import { CheckCircle, XCircle, RefreshCw, AlertTriangle, Inbox } from "lucide-react";
 import { emailApi } from "@/services/emailApi";
-import type { EmailDetail } from "@/types/email";
 import { format } from "date-fns";
 
 export default function ReviewQueue() {
@@ -32,7 +31,7 @@ export default function ReviewQueue() {
       }),
   });
 
-  const { data: emailDetail, isLoading: detailLoading } = useQuery({
+  const { data: emailDetail } = useQuery({
     queryKey: ["emailDetail", selectedEmailId],
     queryFn: () => emailApi.getById(selectedEmailId!),
     enabled: !!selectedEmailId,

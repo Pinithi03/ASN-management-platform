@@ -3,7 +3,7 @@
  */
 
 import { useState } from "react";
-import { Search, CheckCircle2, XCircle, Clock, AlertTriangle, FileCode } from "lucide-react";
+import { Search, CheckCircle2, XCircle, FileCode } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { mockASNs, mockSuppliers, mockShipments } from "@/data/mockData";
 import { cn } from "@/utils/cn";
@@ -16,11 +16,6 @@ const statusColor: Record<string,string> = {
   SUBMITTED:"bg-amber-100 text-amber-700", RECEIVED:"bg-blue-100 text-blue-700", ACCEPTED:"bg-emerald-100 text-emerald-700",
   REJECTED:"bg-red-100 text-red-700", FAILED:"bg-red-100 text-red-700", COMPLETED:"bg-emerald-100 text-emerald-700",
   CANCELLED:"bg-gray-100 text-gray-500",
-};
-
-const statusIcon: Record<string, React.ComponentType<{className?:string}>> = {
-  ACCEPTED: CheckCircle2, COMPLETED: CheckCircle2, REJECTED: XCircle, FAILED: AlertTriangle,
-  DRAFT: Clock, VALIDATED: Clock, SUBMITTED: Clock, XML_SENT: FileCode,
 };
 
 function supplierName(id:string){const s=mockSuppliers.find(x=>x.id===id);return s?s.name:id;}
@@ -56,68 +51,183 @@ export default function ASNManagement(){
         <select value={sf} onChange={e=>setSf(e.target.value)} className="h-9 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 focus:outline-none">
           {STATUS_OPTIONS.map(s=><option key={s} value={s}>{s==="ALL"?"All Statuses":s.replace(/_/g," ")}</option>)}
         </select>
-        {!isAdmin&&<button className="ml-auto rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">+ New ASN</button>}
+        {!isAdmin && (
+          <button
+            onClick={() => (window.location.href = "/shipments")}
+            className="ml-auto rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 shadow-sm transition-colors"
+          >
+            + New ASN via Excel Drop
+          </button>
+        )}
       </div>
 
       <div className="flex gap-4">
-        <div className={cn("rounded-xl border border-gray-200 bg-white",sel?"flex-1":"w-full")}>
+        <div className={cn("rounded-xl border border-gray-200 bg-white", sel ? "flex-1" : "w-full")}>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 text-left text-xs font-medium uppercase tracking-wider text-gray-400">
                   <th className="px-4 py-3">ASN #</th>
                   <th className="px-4 py-3">Shipment</th>
-                  {isAdmin&&<th className="px-4 py-3">Supplier</th>}
+                  {isAdmin && <th className="px-4 py-3">Supplier</th>}
                   <th className="px-4 py-3">XML Valid</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Created</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {filtered.map(a=>{
-                  const SIcon=statusIcon[a.status]||Clock;
-                  return(
-                  <tr key={a.id} onClick={()=>setSel(a)} className={cn("cursor-pointer hover:bg-gray-50",sel?.id===a.id&&"bg-brand-50")}>
-                    <td className="whitespace-nowrap px-4 py-3 font-mono text-xs font-medium text-gray-900">{a.asn_number}</td>
-                    <td className="px-4 py-3 text-gray-700">{shipmentNum(a.shipment_id)}</td>
-                    {isAdmin&&<td className="px-4 py-3 text-gray-700">{supplierName(a.supplier_id)}</td>}
-                    <td className="px-4 py-3">{a.xml_validated?<CheckCircle2 className="h-4 w-4 text-emerald-500"/>:<XCircle className="h-4 w-4 text-red-400"/>}</td>
-                    <td className="px-4 py-3"><span className={cn("rounded-full px-2 py-0.5 text-xs font-medium",statusColor[a.status])}>{a.status.replace(/_/g," ")}</span></td>
-                    <td className="whitespace-nowrap px-4 py-3 text-gray-500">{new Date(a.created_at).toLocaleDateString()}</td>
-                  </tr>);
+                {filtered.map((a) => {
+                  return (
+                    <tr
+                      key={a.id}
+                      onClick={() => setSel(a)}
+                      className={cn("cursor-pointer hover:bg-gray-50", sel?.id === a.id && "bg-brand-50/50")}
+                    >
+                      <td className="whitespace-nowrap px-4 py-3 font-mono text-xs font-medium text-gray-900">
+                        {a.asn_number}
+                      </td>
+                      <td className="px-4 py-3 text-gray-700">{shipmentNum(a.shipment_id)}</td>
+                      {isAdmin && <td className="px-4 py-3 text-gray-700">{supplierName(a.supplier_id)}</td>}
+                      <td className="px-4 py-3">
+                        {a.xml_validated ? (
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600">
+                            <CheckCircle2 className="h-4 w-4 text-emerald-500" /> DTD Valid
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-500">
+                            <XCircle className="h-4 w-4 text-red-400" /> Pending
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", statusColor[a.status])}>
+                          {a.status.replace(/_/g, " ")}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-gray-500">
+                        {new Date(a.created_at).toLocaleDateString("en-GB")}
+                      </td>
+                    </tr>
+                  );
                 })}
-                {filtered.length===0&&<tr><td colSpan={isAdmin?6:5} className="px-4 py-8 text-center text-gray-400">No ASNs found.</td></tr>}
+                {filtered.length === 0 && (
+                  <tr>
+                    <td colSpan={isAdmin ? 6 : 5} className="px-4 py-8 text-center text-gray-400">
+                      No ASNs found.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
         </div>
 
-        {sel&&(
-          <div className="w-96 shrink-0 rounded-xl border border-gray-200 bg-white">
+        {sel && (
+          <div className="w-96 shrink-0 rounded-xl border border-gray-200 bg-white shadow-sm">
             <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
               <h3 className="text-sm font-semibold text-gray-900">ASN Detail</h3>
-              <button onClick={()=>setSel(null)} className="text-gray-400 hover:text-gray-600">✕</button>
+              <button onClick={() => setSel(null)} className="text-gray-400 hover:text-gray-600">
+                ✕
+              </button>
             </div>
             <div className="space-y-3 p-5 text-sm">
-              <D label="ASN Number" value={sel.asn_number}/>
-              <D label="Shipment" value={shipmentNum(sel.shipment_id)}/>
-              <D label="Supplier" value={supplierName(sel.supplier_id)}/>
-              <D label="XML Validated" value={sel.xml_validated?"Yes":"No"}/>
-              <D label="Status" value={sel.status.replace(/_/g," ")}/>
-              {sel.sent_at&&<D label="Sent At" value={new Date(sel.sent_at).toLocaleString()}/>}
-              {sel.accepted_at&&<D label="Accepted At" value={new Date(sel.accepted_at).toLocaleString()}/>}
-              {sel.rejection_reason&&(
+              <D label="ASN Number" value={sel.asn_number} />
+              <D label="Shipment" value={shipmentNum(sel.shipment_id)} />
+              <D label="Supplier" value={supplierName(sel.supplier_id)} />
+              <D label="DTD Validation" value={sel.xml_validated ? "✓ m2Data_Partner.dtd Compliant" : "Pending"} />
+              <D label="Status" value={sel.status.replace(/_/g, " ")} />
+              <D label="Dispatch Recipient" value="iungo@calzedonia.com" />
+              {sel.sent_at && <D label="Sent At" value={new Date(sel.sent_at).toLocaleString("en-GB")} />}
+              {sel.accepted_at && <D label="Accepted At" value={new Date(sel.accepted_at).toLocaleString("en-GB")} />}
+              {sel.rejection_reason && (
                 <div className="rounded-lg bg-red-50 px-3 py-2">
                   <p className="text-xs font-medium text-red-600">Rejection / Error</p>
                   <p className="text-xs text-red-500">{sel.rejection_reason}</p>
                 </div>
               )}
-              {isAdmin&&sel.status==="SUBMITTED"&&(
-                <div className="flex gap-2 pt-2">
-                  <button className="flex-1 rounded-lg bg-emerald-600 py-2 text-sm font-medium text-white hover:bg-emerald-700">Accept</button>
-                  <button className="flex-1 rounded-lg bg-red-600 py-2 text-sm font-medium text-white hover:bg-red-700">Reject</button>
-                </div>
-              )}
+
+              {/* Action Buttons */}
+              <div className="space-y-2 pt-3 border-t border-gray-100">
+                <button
+                  onClick={() => {
+                    const sampleXml = `<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE SdDataSlice SYSTEM "m2Data_Partner.dtd">
+<SdDataSlice>
+  <SdCompanyHeader>
+    <LegalName>Sirio Ltd</LegalName>
+    <Group>SIRIONEW</Group>
+    <TransmissionDate>${new Date().toLocaleDateString("en-GB")} 14:30</TransmissionDate>
+  </SdCompanyHeader>
+  <SdPackingSlip>
+    <PartnerId>0000058376</PartnerId>
+    <PackingSlipNumber>${shipmentNum(sel.shipment_id)}</PackingSlipNumber>
+    <FgOutbound>false</FgOutbound>
+    <PackingSlipDate>${new Date().toLocaleDateString("en-GB")}</PackingSlipDate>
+    <DeliveryDate>${new Date(Date.now() + 86400000 * 3).toLocaleDateString("en-GB")}</DeliveryDate>
+    <Note/>
+    <SdPackingSlipLine>
+      <PackingSlipLineNumber>1-1</PackingSlipLineNumber>
+      <OrderTypeName>ZA6A</OrderTypeName>
+      <OrderNumber>2001297727</OrderNumber>
+      <OrderDate>10-02-2025</OrderDate>
+      <OrderLineNumber>00100-0001</OrderLineNumber>
+      <Qty>245</Qty>
+      <BackOrder/>
+      <AcceptanceDate/>
+      <AcceptanceQty/>
+      <AcceptanceBackOrder>false</AcceptanceBackOrder>
+      <ProductCode>ELST1K 000615</ProductCode>
+      <ProductCodePartner>SK104546-015.0-61851</ProductCodePartner>
+      <ProductDescription>Elastic tape 15mm</ProductDescription>
+      <PartnerItemDescription/>
+      <ProductUnitOfMeasure>M</ProductUnitOfMeasure>
+      <ProductBatchCode>LOT-2025-01</ProductBatchCode>
+      <ProductBatchCodePartner/>
+      <Price/>
+      <PriceUnit/>
+      <Note/>
+      <AuxRow1>1</AuxRow1>
+      <AuxRow2>10000583760000000001</AuxRow2>
+      <AuxRow3>BOX</AuxRow3>
+      <AuxRow4>SK104546-015.0-61851</AuxRow4>
+      <AuxRow5>M</AuxRow5>
+      <AuxRowNum1>1</AuxRowNum1>
+      <AuxRowNum2>25.50</AuxRowNum2>
+      <AuxRowNum3>24.00</AuxRowNum3>
+      <AuxRowNum4>245</AuxRowNum4>
+    </SdPackingSlipLine>
+  </SdPackingSlip>
+</SdDataSlice>`;
+                    const blob = new Blob([sampleXml], { type: "application/xml" });
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `PL_${shipmentNum(sel.shipment_id)}_0000058376.xml`;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    window.URL.revokeObjectURL(url);
+                  }}
+                  className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 shadow-sm"
+                >
+                  <FileCode className="h-4 w-4 text-purple-600" />
+                  Download ASN XML
+                </button>
+
+                {!isAdmin && sel.status !== "XML_SENT" && (
+                  <button
+                    onClick={() => {
+                      alert(`ASN ${sel.asn_number} dispatched to iungo@calzedonia.com!`);
+                      sel.status = "XML_SENT";
+                      sel.sent_at = new Date().toISOString();
+                    }}
+                    className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 py-2 text-xs font-semibold text-white hover:bg-emerald-700 shadow-sm"
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    Dispatch to IUNGO EDI
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -126,6 +236,11 @@ export default function ASNManagement(){
   );
 }
 
-function D({label,value}:{label:string;value:string}){
-  return <div><p className="text-xs font-medium text-gray-400">{label}</p><p className="text-sm text-gray-900">{value}</p></div>;
-}
+function D({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs font-medium text-gray-400">{label}</p>
+      <p className="text-sm text-gray-900 font-medium">{value}</p>
+    </div>
+  );
+}

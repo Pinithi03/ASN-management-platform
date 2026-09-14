@@ -2,7 +2,7 @@
 // frontend/src/pages/Dashboard.tsx
 
 import { useQuery } from "@tanstack/react-query";
-import { Mail, FileText, AlertCircle, CheckCircle, Clock, Package, TrendingUp, RefreshCw } from "lucide-react";
+import { Mail, FileText, AlertCircle, Clock, RefreshCw } from "lucide-react";
 import { emailApi } from "@/services/emailApi";
 import { poApi } from "@/services/poApi";
 import { useNavigate } from "react-router-dom";

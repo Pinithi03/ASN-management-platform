@@ -3,26 +3,29 @@ Purchase Orders API endpoints (Presentation Layer).
 
 Provides:
   - GET    /              — List POs with filters & pagination
-  - GET    /{po_id}       — PO detail with linked email/parsed data
-  - PATCH  /{po_id}       — Update PO fields
   - GET    /stats         — PO statistics by status
+  - GET    /open-lines    — List open PO lines for template export and shipment creation
+  - GET    /{po_id}       — PO detail with linked email/parsed data and revision history
+  - PATCH  /{po_id}       — Update PO fields
 """
 
 from __future__ import annotations
 
 import logging
+import uuid
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import func, select, desc
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
-from app.models.purchase_order import PurchaseOrder
 from app.models.email_message import EmailRecord
+from app.models.po_history import POHistory
+from app.models.purchase_order import PurchaseOrder
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +37,7 @@ router = APIRouter()
 class POListItem(BaseModel):
     id: str
     company_id: str
+    supplier_id: Optional[str] = None
     po_number: Optional[str] = None
     client_code: Optional[str] = None
     style_number: Optional[str] = None
@@ -72,6 +76,7 @@ class PODetailResponse(BaseModel):
     extra_data: Optional[dict] = None
     source_email_id: Optional[str] = None
     source_email_subject: Optional[str] = None
+    history: Optional[list[dict[str, Any]]] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -113,6 +118,7 @@ async def list_purchase_orders(
     db: AsyncSession = Depends(get_db),
     status: Optional[str] = Query(None, description="Filter by status"),
     search: Optional[str] = Query(None, description="Search PO#, client, style"),
+    supplier_id: Optional[str] = Query(None, description="Filter by supplier UUID"),
     company_id: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
@@ -123,7 +129,12 @@ async def list_purchase_orders(
     # Apply filters
     if company_id:
         query = query.where(PurchaseOrder.company_id == company_id)
-    if status:
+    if supplier_id:
+        try:
+            query = query.where(PurchaseOrder.supplier_id == uuid.UUID(supplier_id))
+        except (ValueError, TypeError):
+            pass
+    if status and status != "ALL":
         query = query.where(PurchaseOrder.status == status.upper())
     if search:
         search_filter = f"%{search}%"
@@ -152,6 +163,7 @@ async def list_purchase_orders(
             POListItem(
                 id=str(r.id),
                 company_id=str(r.company_id),
+                supplier_id=str(r.supplier_id) if r.supplier_id else None,
                 po_number=r.po_number,
                 client_code=r.client_code,
                 style_number=r.style_number,
@@ -182,6 +194,7 @@ async def list_purchase_orders(
 @router.get("/stats", response_model=POStatsResponse)
 async def po_stats(
     db: AsyncSession = Depends(get_db),
+    supplier_id: Optional[str] = Query(None),
     company_id: Optional[str] = Query(None),
 ):
     """Get PO count breakdown by status."""
@@ -196,6 +209,11 @@ async def po_stats(
 
     if company_id:
         query = query.where(PurchaseOrder.company_id == company_id)
+    if supplier_id:
+        try:
+            query = query.where(PurchaseOrder.supplier_id == uuid.UUID(supplier_id))
+        except (ValueError, TypeError):
+            pass
 
     result = await db.execute(query)
     row = result.one()
@@ -210,6 +228,53 @@ async def po_stats(
     )
 
 
+# ─── GET /open-lines — Open PO Lines for Shipping ───────────────
+
+@router.get("/open-lines")
+async def list_open_po_lines(
+    supplier_id: Optional[str] = Query(None),
+    company_id: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+) -> list[dict[str, Any]]:
+    """Return open PO lines across active purchase orders for shipping dropdowns or Excel generation."""
+    try:
+        stmt = select(PurchaseOrder).where(
+            PurchaseOrder.status.in_(["ACTIVE", "UPDATED", "XML_SENT"])
+        )
+        if company_id:
+            stmt = stmt.where(PurchaseOrder.company_id == company_id)
+        if supplier_id:
+            try:
+                stmt = stmt.where(PurchaseOrder.supplier_id == UUID(supplier_id))
+            except ValueError:
+                pass
+
+        res = await db.execute(stmt)
+        pos = res.scalars().all()
+
+        open_lines = []
+        for po in pos:
+            items = (po.extra_data or {}).get("items", [])
+            for item in items:
+                line_num = str(item.get("line_number", "00100")).split("-")[0].zfill(5)
+                ordered = float(item.get("quantity", 0))
+                open_lines.append({
+                    "po_id": str(po.id),
+                    "po_number": po.po_number,
+                    "po_item": line_num,
+                    "material_code": item.get("material_code", ""),
+                    "material_description": item.get("description", po.description or ""),
+                    "ordered_qty": ordered,
+                    "uom": item.get("uom", "M"),
+                    "destination": po.destination,
+                    "delivery_date": str(po.delivery_date) if po.delivery_date else None,
+                })
+        return open_lines
+    except Exception as e:
+        logger.warning("Failed to query open PO lines: %s", e)
+        return []
+
+
 # ─── GET /{po_id} — PO Detail ───────────────────────────────────
 
 @router.get("/{po_id}", response_model=PODetailResponse)
@@ -217,7 +282,7 @@ async def get_purchase_order(
     po_id: UUID,
     db: AsyncSession = Depends(get_db),
 ):
-    """Get purchase order detail with linked source email info."""
+    """Get purchase order detail with linked source email info and revision history."""
     result = await db.execute(
         select(PurchaseOrder).where(PurchaseOrder.id == po_id)
     )
@@ -234,6 +299,26 @@ async def get_purchase_order(
             )
         )
         source_email_subject = email_result.scalar_one_or_none()
+
+    # Fetch revision history
+    history_list: list[dict[str, Any]] = []
+    try:
+        hist_stmt = (
+            select(POHistory)
+            .where(POHistory.po_id == po_id)
+            .order_by(desc(POHistory.created_at))
+        )
+        hist_res = await db.execute(hist_stmt)
+        for h in hist_res.scalars().all():
+            history_list.append({
+                "version": h.version,
+                "change_source": h.change_source,
+                "change_summary": h.change_summary,
+                "diff": h.diff,
+                "created_at": h.created_at.isoformat() if h.created_at else None,
+            })
+    except Exception as e:
+        logger.warning("Could not fetch PO history: %s", e)
 
     return PODetailResponse(
         id=str(po.id),
@@ -254,6 +339,7 @@ async def get_purchase_order(
         extra_data=po.extra_data,
         source_email_id=str(po.source_email_id) if po.source_email_id else None,
         source_email_subject=source_email_subject,
+        history=history_list,
         created_at=po.created_at,
         updated_at=po.updated_at,
     )

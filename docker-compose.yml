@@ -48,7 +48,6 @@ services:
         --maxmemory 256mb
         --maxmemory-policy allkeys-lru
         --appendonly yes
-        --requirepass ${REDIS_PASSWORD:-}
     volumes:
       - redis_data:/data
     healthcheck:
@@ -130,6 +129,8 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-ans_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ans_platform}
       REDIS_URL: redis://redis:6379/0
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-ans_rabbit}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      CELERY_BROKER_URL: amqp://${RABBITMQ_USER:-ans_rabbit}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-ans_minio}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
@@ -151,11 +152,11 @@ services:
   # ── Celery Worker ─────────────────────────────────────────
   celery-worker:
     build:
-      context: ./automation
+      context: ./backend
       dockerfile: Dockerfile
     container_name: ans-celery-worker
     restart: unless-stopped
-    command: celery -A app.celery_app:celery_app worker --loglevel=info --concurrency=4
+    command: celery -A app.core.celery_app:celery worker --loglevel=info --concurrency=4 -Q celery,email
     environment:
       CELERY_BROKER_URL: amqp://${RABBITMQ_USER:-ans_rabbit}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
       CELERY_RESULT_BACKEND: redis://redis:6379/1
@@ -163,6 +164,16 @@ services:
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-ans_minio}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      IMAP_HOST: ${IMAP_HOST:-imap.gmail.com}
+      IMAP_PORT: ${IMAP_PORT:-993}
+      IMAP_USERNAME: ${IMAP_USERNAME:-}
+      IMAP_PASSWORD: ${IMAP_PASSWORD:-}
+      IMAP_MAILBOX: ${IMAP_MAILBOX:-INBOX}
+      IMAP_USE_SSL: ${IMAP_USE_SSL:-true}
+      DEFAULT_COMPANY_ID: ${DEFAULT_COMPANY_ID:-}
+      EMAIL_POLL_INTERVAL: ${EMAIL_POLL_INTERVAL_SECONDS:-120}
+    healthcheck:
+      disable: true
     depends_on:
       postgres:
         condition: service_healthy
@@ -176,14 +187,17 @@ services:
   # ── Celery Beat (Scheduler) ───────────────────────────────
   celery-beat:
     build:
-      context: ./automation
+      context: ./backend
       dockerfile: Dockerfile
     container_name: ans-celery-beat
     restart: unless-stopped
-    command: celery -A app.celery_app:celery_app beat --loglevel=info
+    command: celery -A app.core.celery_app:celery beat --loglevel=info
     environment:
       CELERY_BROKER_URL: amqp://${RABBITMQ_USER:-ans_rabbit}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
       CELERY_RESULT_BACKEND: redis://redis:6379/1
+      EMAIL_POLL_INTERVAL: ${EMAIL_POLL_INTERVAL_SECONDS:-120}
+    healthcheck:
+      disable: true
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -193,14 +207,16 @@ services:
   # ── Celery Flower (Monitoring) ────────────────────────────
   flower:
     build:
-      context: ./automation
+      context: ./backend
       dockerfile: Dockerfile
     container_name: ans-flower
     restart: unless-stopped
-    command: celery -A app.celery_app:celery_app flower --port=5555
+    command: celery -A app.core.celery_app:celery flower --port=5555
     environment:
       CELERY_BROKER_URL: amqp://${RABBITMQ_USER:-ans_rabbit}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
       CELERY_RESULT_BACKEND: redis://redis:6379/1
+    healthcheck:
+      disable: true
     depends_on:
       rabbitmq:
         condition: service_healthy

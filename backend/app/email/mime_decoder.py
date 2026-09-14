@@ -105,6 +105,9 @@ def decode(raw: bytes) -> DecodedEmail:
                 charset = part.get_content_charset() or "utf-8"
                 result.body_html = html.decode(charset, errors="replace")
 
+    # Check for linked XML attachments in HTML body if no direct XML attachments exist
+    _extract_linked_attachments(result)
+
     logger.info(
         "Decoded email: subject=%r, from=%s, attachments=%d",
         result.subject,
@@ -112,6 +115,107 @@ def decode(raw: bytes) -> DecodedEmail:
         len(result.attachments),
     )
     return result
+
+
+def _extract_linked_attachments(result: DecodedEmail) -> None:
+    """
+    Scan HTML body (and attached HTML files) for hyperlinks pointing to XML files
+    (common in IUNGO / Calzedonia order notifications and Proofpoint URLDefense wrapped links).
+    Downloads any found XML files and appends them as attachments.
+    """
+    has_xml = any(att.filename.lower().endswith(".xml") for att in result.attachments)
+    if has_xml:
+        return
+
+    html_sources: list[str] = []
+    if result.body_html:
+        html_sources.append(result.body_html)
+
+    for att in result.attachments:
+        if att.content_type == "text/html" or att.filename.lower().endswith((".htm", ".html")):
+            try:
+                html_sources.append(att.payload.decode("utf-8", errors="ignore"))
+            except Exception:
+                pass
+
+    if not html_sources:
+        return
+
+    import re
+    import httpx
+    from bs4 import BeautifulSoup
+
+    existing_filenames = {att.filename.lower() for att in result.attachments}
+
+    for html in html_sources:
+        try:
+            soup = BeautifulSoup(html, "html.parser")
+            for a in soup.find_all("a"):
+                href = a.get("href", "").strip()
+                text = a.get_text(strip=True)
+
+                if not href or not href.startswith(("http://", "https://")):
+                    continue
+
+                is_xml = (
+                    text.lower().endswith(".xml")
+                    or bool(re.search(r"\.xml(?:\?|$)", href, re.IGNORECASE))
+                )
+
+                if not is_xml:
+                    continue
+
+                filename = text if text.lower().endswith(".xml") else ""
+                if not filename:
+                    match = re.search(r"/([^/?#]+\.xml)(?:\?|$)", href, re.IGNORECASE)
+                    filename = match.group(1) if match else "order.xml"
+
+                # Sanitize filename
+                filename = re.sub(r'[\\/*?:"<>|]', "_", filename)
+
+                if filename.lower() in existing_filenames:
+                    continue
+
+                logger.info("Found linked XML attachment %r at %s", filename, href[:120])
+
+                try:
+                    with httpx.Client(follow_redirects=True, timeout=30.0) as client:
+                        resp = client.get(href)
+                        if resp.status_code == 200:
+                            content = resp.content
+                            if (
+                                b"<?xml" in content[:200]
+                                or b"<Sd" in content[:200]
+                                or b"<" in content[:50]
+                            ):
+                                result.attachments.append(
+                                    Attachment(
+                                        filename=filename,
+                                        content_type="application/xml",
+                                        payload=content,
+                                    )
+                                )
+                                existing_filenames.add(filename.lower())
+                                logger.info(
+                                    "Successfully downloaded linked XML attachment: %s (%d bytes)",
+                                    filename,
+                                    len(content),
+                                )
+                        else:
+                            logger.warning(
+                                "Failed to download linked XML from %s: HTTP %s",
+                                href[:100],
+                                resp.status_code,
+                            )
+                except Exception as e:
+                    logger.warning(
+                        "Error fetching linked attachment %s from %s: %s",
+                        filename,
+                        href[:100],
+                        e,
+                    )
+        except Exception as e:
+            logger.warning("Error parsing HTML for linked attachments: %s", e)
 
 
 def decode_from_file(file_path: str) -> DecodedEmail:

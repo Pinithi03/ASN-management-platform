@@ -1,20 +1,31 @@
 /**
  * Authentication service.
- * Will integrate with Keycloak in Sprint 3-4.
+ * Connects to /api/v1/auth/login and /api/v1/auth/suppliers.
  */
 
+import { api } from "./api";
+import type { User, SupplierSummary } from "@/types";
+
+export interface LoginResponse {
+  success: boolean;
+  message: string;
+  token: string;
+  user: User;
+}
+
 export const authService = {
-  isAuthenticated: () => {
-    // Placeholder — always returns true until Keycloak is integrated
-    return true;
+  /** Authenticate with Partner ID or Admin username */
+  login: async (username: string, password: string = "Abc123@#"): Promise<LoginResponse> => {
+    const res = await api.post<LoginResponse>("/auth/login", {
+      username,
+      password,
+    });
+    return res.data;
   },
 
-  getToken: () => {
-    return null;
-  },
-
-  logout: () => {
-    // Will redirect to Keycloak logout in Sprint 4
-    console.log("Logout not yet implemented");
+  /** Get list of available registered supplier portals */
+  getSuppliers: async (): Promise<SupplierSummary[]> => {
+    const res = await api.get<SupplierSummary[]>("/auth/suppliers");
+    return res.data;
   },
 };

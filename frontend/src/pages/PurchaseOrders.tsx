@@ -2,11 +2,24 @@
 // frontend/src/pages/PurchaseOrders.tsx
 
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { FileText, Search, RefreshCw, ChevronLeft, ChevronRight, Package, Calendar, DollarSign, X } from "lucide-react";
+import {
+  FileText,
+  Search,
+  RefreshCw,
+  ChevronLeft,
+  ChevronRight,
+  Package,
+  Calendar,
+  DollarSign,
+  X,
+  PackagePlus,
+} from "lucide-react";
 import { poApi } from "@/services/poApi";
-import type { PurchaseOrder, POStatus } from "@/types/email";
+import type { PurchaseOrder } from "@/types/email";
 import { format } from "date-fns";
+import { useAuthStore } from "@/store/authStore";
 
 const STATUS_COLORS: Record<string, string> = {
   ACTIVE: "bg-green-100 text-green-700",
@@ -28,26 +41,32 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
 ];
 
 export default function PurchaseOrders() {
+  const navigate = useNavigate();
+  const user = useAuthStore((s) => s.user);
+  const isSupplier = user?.role === "SUPPLIER";
+  const supplierId = isSupplier ? user.supplier_id : undefined;
+
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [page, setPage] = useState(1);
   const [selectedPO, setSelectedPO] = useState<PurchaseOrder | null>(null);
 
   // ─── Queries ────────────────────────────────────────────────
-  const { data, isLoading, refetch } = useQuery({
-    queryKey: ["purchaseOrders", search, statusFilter, page],
+  const { data, isLoading } = useQuery({
+    queryKey: ["purchaseOrders", search, statusFilter, page, supplierId],
     queryFn: () =>
       poApi.list({
         search: search || undefined,
         status: statusFilter || undefined,
+        supplier_id: supplierId || undefined,
         page,
         per_page: 15,
       }),
   });
 
   const { data: stats } = useQuery({
-    queryKey: ["poStats"],
-    queryFn: () => poApi.getStats(),
+    queryKey: ["poStats", supplierId],
+    queryFn: () => poApi.getStats(supplierId),
   });
 
   // Detail query when a PO is selected
@@ -60,6 +79,15 @@ export default function PurchaseOrders() {
   const orders = data?.items ?? [];
   const totalPages = data?.pages ?? 1;
 
+  const handleShipExcel = (e: React.MouseEvent, poNumber?: string) => {
+    e.stopPropagation();
+    if (poNumber) {
+      navigate(`/shipments?po=${encodeURIComponent(poNumber)}`);
+    } else {
+      navigate("/shipments");
+    }
+  };
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -67,16 +95,26 @@ export default function PurchaseOrders() {
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Purchase Orders</h1>
           <p className="text-sm text-gray-500 mt-1">
-            View and manage purchase orders parsed from emails
+            View and manage purchase orders parsed from IUNGO emails with progressive revisions
           </p>
         </div>
-        <button
-          onClick={() => refetch()}
-          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-        >
-          <RefreshCw className="w-4 h-4" />
-          Refresh
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => {
+              if (selectedPO?.po_number) {
+                navigate(`/shipments?po=${encodeURIComponent(selectedPO.po_number)}`);
+              } else if (orders.length > 0 && orders[0].po_number) {
+                navigate(`/shipments?po=${encodeURIComponent(orders[0].po_number)}`);
+              } else {
+                navigate("/shipments");
+              }
+            }}
+            className="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors shadow-sm"
+          >
+            <PackagePlus className="w-4 h-4" />
+            Ship via Excel Drop
+          </button>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -145,9 +183,10 @@ export default function PurchaseOrders() {
               Loading purchase orders...
             </div>
           ) : orders.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-              <FileText className="w-12 h-12 mb-3" />
-              <p className="text-lg">No purchase orders found</p>
+            <div className="flex flex-col items-center justify-center py-20 text-gray-400 bg-white rounded-lg border border-gray-200">
+              <FileText className="w-12 h-12 mb-3 text-gray-300" />
+              <p className="text-base font-medium text-gray-600">No purchase orders found</p>
+              <p className="text-xs text-gray-400 mt-1">Inbound PO emails from IUNGO will populate here automatically</p>
             </div>
           ) : (
             <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
@@ -163,6 +202,7 @@ export default function PurchaseOrders() {
                       <th className="text-left px-4 py-3 font-medium text-gray-500">Delivery</th>
                       <th className="text-left px-4 py-3 font-medium text-gray-500">Status</th>
                       <th className="text-center px-4 py-3 font-medium text-gray-500">Ver</th>
+                      <th className="text-right px-4 py-3 font-medium text-gray-500">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -170,12 +210,14 @@ export default function PurchaseOrders() {
                       <tr
                         key={po.id}
                         onClick={() => setSelectedPO(po)}
-                        className={`cursor-pointer hover:bg-blue-50 transition-colors ${
+                        className={`cursor-pointer hover:bg-blue-50/70 transition-colors ${
                           selectedPO?.id === po.id ? "bg-blue-50" : ""
                         }`}
                       >
                         <td className="px-4 py-3 font-medium text-gray-900">
-                          {po.po_number || "—"}
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono text-xs">{po.po_number || "—"}</span>
+                          </div>
                         </td>
                         <td className="px-4 py-3 text-gray-700">
                           {po.client_code || "—"}
@@ -206,9 +248,23 @@ export default function PurchaseOrders() {
                           </span>
                         </td>
                         <td className="px-4 py-3 text-center">
-                          <span className="px-1.5 py-0.5 text-xs bg-gray-100 text-gray-600 rounded">
+                          <span
+                            className={`px-1.5 py-0.5 text-[11px] font-bold rounded ${
+                              (po.version || 1) > 1
+                                ? "bg-amber-100 text-amber-800"
+                                : "bg-gray-100 text-gray-600"
+                            }`}
+                          >
                             v{po.version || 1}
                           </span>
+                        </td>
+                        <td className="px-4 py-3 text-right whitespace-nowrap">
+                          <button
+                            onClick={(e) => handleShipExcel(e, po.po_number || undefined)}
+                            className="inline-flex items-center gap-1 rounded bg-emerald-50 border border-emerald-200 px-2 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 shadow-sm transition-colors"
+                          >
+                            📦 Ship ➔
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -273,6 +329,15 @@ export default function PurchaseOrders() {
                   Version {poDetail?.version || selectedPO.version || 1}
                 </span>
               </div>
+
+              {/* Action */}
+              <button
+                onClick={(e) => handleShipExcel(e, poDetail?.po_number || selectedPO.po_number || undefined)}
+                className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 py-2 text-xs font-semibold text-white hover:bg-emerald-700 shadow-sm transition-colors"
+              >
+                <PackagePlus className="w-4 h-4" />
+                Create Shipment for PO #{poDetail?.po_number || selectedPO.po_number}
+              </button>
 
               {/* Fields */}
               <div className="space-y-3">

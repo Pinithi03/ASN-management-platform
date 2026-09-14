@@ -24,13 +24,13 @@ celery = Celery("ans_backend")
 # ── Broker (RabbitMQ) ────────────────────────────────────────────
 celery.conf.broker_url = os.getenv(
     "CELERY_BROKER_URL",
-    "amqp://ans_rabbit:ans_rabbit_pass@localhost:5672/",
+    os.getenv("RABBITMQ_URL", "amqp://ans_rabbit:ans_rabbit_pass@localhost:5672/"),
 )
 
 # ── Result Backend (Redis) ───────────────────────────────────────
 celery.conf.result_backend = os.getenv(
     "CELERY_RESULT_BACKEND",
-    "redis://localhost:6379/1",
+    os.getenv("REDIS_URL", "redis://localhost:6379/1"),
 )
 
 # ── Serialization ────────────────────────────────────────────────
