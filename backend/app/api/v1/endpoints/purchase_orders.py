@@ -113,7 +113,8 @@ class POStatsResponse(BaseModel):
 
 # ─── GET / — List Purchase Orders ───────────────────────────────
 
-@router.get("/", response_model=PaginatedPOResponse)
+@router.get("", response_model=PaginatedPOResponse)
+@router.get("/", response_model=PaginatedPOResponse, include_in_schema=False)
 async def list_purchase_orders(
     db: AsyncSession = Depends(get_db),
     status: Optional[str] = Query(None, description="Filter by status"),
