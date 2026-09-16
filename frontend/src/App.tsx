@@ -8,6 +8,7 @@ import MainLayout from "@/components/layout/MainLayout";
 import LoginPage from "@/pages/LoginPage";
 import Dashboard from "@/pages/Dashboard";
 import EmailInbox from "@/pages/EmailInbox";
+import EmailDetailPage from "@/pages/EmailDetail";
 import PurchaseOrders from "@/pages/PurchaseOrders";
 import Settings from "@/pages/Settings";
 import CompanySettings from "@/pages/CompanySettings";
@@ -42,6 +43,7 @@ export default function App() {
         <Route path="/review" element={<Navigate to="/shipments" replace />} />
 
         <Route path="/emails" element={<RequireRole role="COMPANY_ADMIN"><EmailInbox /></RequireRole>} />
+        <Route path="/emails/:emailId" element={<RequireRole role="COMPANY_ADMIN"><EmailDetailPage /></RequireRole>} />
         <Route path="/suppliers" element={<RequireRole role="COMPANY_ADMIN"><Suppliers /></RequireRole>} />
         <Route path="/settings" element={<RequireRole role="COMPANY_ADMIN"><Settings /></RequireRole>} />
         <Route path="/settings/company" element={<RequireRole role="COMPANY_ADMIN"><CompanySettings /></RequireRole>} />
