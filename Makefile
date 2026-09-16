@@ -34,10 +34,10 @@ setup: ## First-time setup (install all dependencies)
 
 # ── Backend (System A) ─────────────────────────────────────
 backend-install: ## Install backend Python dependencies
-	cd backend && pip install -e ".[dev]"
+	cd backend && .venv/Scripts/python.exe -m pip install -e ".[dev]"
 
 backend-dev: ## Run backend dev server (port 8000)
-	cd backend && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+	cd backend && .venv/Scripts/python.exe -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 backend-test: ## Run backend tests
 	cd backend && pytest tests/ -v --tb=short
@@ -73,19 +73,19 @@ flower-start: ## Start Flower monitoring UI (port 5555)
 
 # ── Docker ──────────────────────────────────────────────────
 docker-up: ## Start all services via Docker Compose
-	cd docker && docker compose up -d
+	docker compose up -d
 
 docker-down: ## Stop all Docker services
-	cd docker && docker compose down
+	docker compose down
 
 docker-logs: ## Tail Docker service logs
-	cd docker && docker compose logs -f
+	docker compose logs -f
 
 docker-build: ## Rebuild all Docker images
-	cd docker && docker compose build --no-cache
+	docker compose build --no-cache
 
 infra-up: ## Start only infrastructure (DB, Redis, RabbitMQ, MinIO, Keycloak)
-	cd docker && docker compose up -d postgres redis rabbitmq minio keycloak
+	docker compose up -d postgres redis rabbitmq minio keycloak
 
 # ── Database ────────────────────────────────────────────────
 db-migrate: ## Create new Alembic migration (MSG="description")

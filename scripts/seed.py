@@ -1,23 +1,30 @@
 #!/usr/bin/env python3
 """
-Database seed script.
-
-Creates initial data for development:
-    - 5 company records (Sirio, Benjio, Omega Line, Alpha Apparels, Aqua Dynamics)
-    - Demo users (one per role per company)
-    - Sample PO data
-    - Parser templates for known email formats
+Database seed script for development.
+Executes database seeding inside backend container or locally.
 
 Usage:
     python scripts/seed.py
     # or
-    make db-seed
+    docker compose exec backend python -m app.db.seed
 """
 
-# TODO: Sprint 1 — Implement seed data
-# import asyncio
-# from app.db.session import async_engine
-# ...
+import subprocess
+import sys
+
+
+def main():
+    print("🌱 Running database seed...")
+    # Try running via docker compose first
+    cmd = ["docker", "exec", "ans-backend", "python", "-m", "app.db.seed"]
+    result = subprocess.run(cmd)
+    if result.returncode == 0:
+        print("✅ Database seeding completed successfully!")
+    else:
+        print("⚠️ Failed to execute in container, trying local python module...")
+        cmd_local = [sys.executable, "-m", "app.db.seed"]
+        subprocess.run(cmd_local, cwd="backend")
+
 
 if __name__ == "__main__":
-    print("🌱 Seed script not yet implemented. Coming in Sprint 1.")
+    main()

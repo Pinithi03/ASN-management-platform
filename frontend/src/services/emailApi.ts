@@ -33,6 +33,14 @@ export const emailApi = {
     return data;
   },
 
+  /** Download a stored attachment (or the original .eml) as a Blob */
+  getAttachment: async (emailId: string, attachmentId: string): Promise<Blob> => {
+    const { data } = await api.get(`/emails/${emailId}/attachments/${attachmentId}`, {
+      responseType: "blob",
+    });
+    return data;
+  },
+
   /** Get email processing statistics */
   getStats: async (companyId?: string): Promise<EmailStats> => {
     const { data } = await api.get("/emails/stats", {
