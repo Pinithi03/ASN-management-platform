@@ -2,98 +2,61 @@
 // frontend/src/pages/EmailInbox.tsx
 
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Mail, Search, RefreshCw, Eye, CheckCircle, XCircle, RotateCcw, ChevronLeft, ChevronRight, Clock, AlertCircle, Inbox } from "lucide-react";
+import { Link } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Mail,
+  Search,
+  RefreshCw,
+  Eye,
+  ChevronLeft,
+  ChevronRight,
+  X,
+  ExternalLink,
+  Paperclip,
+  Download,
+  FileCheck2,
+  Filter,
+  FileText,
+  Building2,
+} from "lucide-react";
 import { emailApi } from "@/services/emailApi";
 import { format } from "date-fns";
 
-type TabKey = "ALL" | "REVIEW" | "PARSED" | "COMMITTED" | "ERROR";
-
-const TABS: { key: TabKey; label: string; status?: string; icon: typeof Mail }[] = [
-  { key: "ALL", label: "All Emails", icon: Inbox },
-  { key: "PARSED", label: "Parsed", status: "PARSED", icon: CheckCircle },
-  { key: "REVIEW", label: "In Review", status: "REVIEW", icon: Clock },
-  { key: "COMMITTED", label: "Committed", status: "COMMITTED", icon: CheckCircle },
-  { key: "ERROR", label: "Errors", status: "ERROR", icon: AlertCircle },
-];
-
-const STATUS_COLORS: Record<string, string> = {
-  QUEUED: "bg-gray-100 text-gray-700",
-  PROCESSING: "bg-blue-100 text-blue-700",
-  PARSED: "bg-green-100 text-green-700",
-  REVIEW: "bg-yellow-100 text-yellow-700",
-  COMMITTED: "bg-emerald-100 text-emerald-700",
-  REJECTED: "bg-red-100 text-red-700",
-  ERROR: "bg-red-100 text-red-700",
-};
-
 export default function EmailInbox() {
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<TabKey>("ALL");
   const [search, setSearch] = useState("");
+  const [poNumberFilter, setPoNumberFilter] = useState("");
+  const [vendorCodeFilter, setVendorCodeFilter] = useState("");
   const [page, setPage] = useState(1);
+  const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null);
+  const [previewTab, setPreviewTab] = useState<"html" | "parsed" | "attachments">("html");
 
-  // Reset page when tab changes
-  useEffect(() => { setPage(1); }, [activeTab]);
-
-  const currentTab = TABS.find((t) => t.key === activeTab)!;
-
-  const openEmail = (id: string) => navigate(`/emails/${id}`);
+  // Reset pagination on filter change
+  useEffect(() => {
+    setPage(1);
+  }, [search, poNumberFilter, vendorCodeFilter]);
 
   // ─── Queries ────────────────────────────────────────────────
   const { data: emailsData, isLoading } = useQuery({
-    queryKey: ["emails", activeTab, search, page],
+    queryKey: ["emails", search, poNumberFilter, vendorCodeFilter, page],
     queryFn: () =>
       emailApi.list({
-        status: currentTab.status,
         search: search || undefined,
+        po_number: poNumberFilter || undefined,
+        vendor_code: vendorCodeFilter || undefined,
         page,
         per_page: 15,
       }),
   });
 
-  const { data: stats } = useQuery({
-    queryKey: ["emailStats"],
-    queryFn: () => emailApi.getStats(),
+  const { data: selectedEmail, isLoading: isDetailLoading } = useQuery({
+    queryKey: ["emailDetail", selectedEmailId],
+    queryFn: () => emailApi.getById(selectedEmailId!),
+    enabled: !!selectedEmailId,
   });
 
-  // ─── Mutations ──────────────────────────────────────────────
-  const approveMutation = useMutation({
-    mutationFn: (id: string) => emailApi.approve(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["emails"] });
-      queryClient.invalidateQueries({ queryKey: ["emailStats"] });
-      queryClient.invalidateQueries({ queryKey: ["emailDetail"] });
-    },
-  });
-
-  const rejectMutation = useMutation({
-    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
-      emailApi.reject(id, reason),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["emails"] });
-      queryClient.invalidateQueries({ queryKey: ["emailStats"] });
-      queryClient.invalidateQueries({ queryKey: ["emailDetail"] });
-    },
-  });
-
-  const reprocessMutation = useMutation({
-    mutationFn: (id: string) => emailApi.reprocess(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["emails"] });
-      queryClient.invalidateQueries({ queryKey: ["emailStats"] });
-    },
-  });
-
-  const handleReject = (id: string) => {
-    const reason = window.prompt("Enter rejection reason:");
-    if (reason) {
-      rejectMutation.mutate({ id, reason });
-    }
-  };
-
+  // ─── Instant Mailbox Sync ────────────────────────────────────
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
@@ -105,16 +68,26 @@ export default function EmailInbox() {
         emails_processed?: number;
       };
       const count = res?.emails_processed ?? 0;
-      setSyncMessage(`Successfully fetched & processed ${count} unread email(s) from mailbox!`);
+      setSyncMessage(`Fetched & processed ${count} new email(s) from mailbox.`);
       queryClient.invalidateQueries({ queryKey: ["emails"] });
       queryClient.invalidateQueries({ queryKey: ["emailStats"] });
+      queryClient.invalidateQueries({ queryKey: ["poStats"] });
       setTimeout(() => setSyncMessage(null), 6000);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      setSyncMessage(`Failed to sync from mailbox: ${msg}`);
+      setSyncMessage(`Failed to fetch from mailbox: ${msg}`);
     } finally {
       setIsSyncing(false);
     }
+  };
+
+  const hasActiveFilters = Boolean(search || poNumberFilter || vendorCodeFilter);
+
+  const clearFilters = () => {
+    setSearch("");
+    setPoNumberFilter("");
+    setVendorCodeFilter("");
+    setPage(1);
   };
 
   const emails = emailsData?.items ?? [];
@@ -122,19 +95,20 @@ export default function EmailInbox() {
 
   return (
     <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      {/* Header with Fetch & Sync Emails Button */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Email Processing</h1>
+          <h1 className="text-2xl font-semibold text-gray-900">Email Processing Queue</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Monitor and manage inbound email processing from IUNGO & suppliers
+            Autonomous inbound PO email ingestion from IUNGO & suppliers
           </p>
         </div>
         <div className="flex items-center gap-3">
           <button
             onClick={handleSyncMailbox}
             disabled={isSyncing}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-60 transition-colors shadow-sm"
+            className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 active:bg-blue-800 disabled:opacity-60 transition-all shadow-sm"
+            title="Immediately check mailbox for new unread order emails"
           >
             <RefreshCw className={`w-4 h-4 ${isSyncing ? "animate-spin" : ""}`} />
             {isSyncing ? "Fetching Mailbox..." : "Fetch & Sync Emails"}
@@ -143,215 +117,408 @@ export default function EmailInbox() {
       </div>
 
       {syncMessage && (
-        <div className="p-3 bg-blue-50 border border-blue-200 text-blue-800 text-sm rounded-lg flex items-center justify-between shadow-sm">
-          <span>{syncMessage}</span>
-          <button onClick={() => setSyncMessage(null)} className="text-blue-500 hover:text-blue-700 font-bold ml-4">
-            ✕
+        <div className="p-3.5 bg-blue-50 border border-blue-200 text-blue-900 text-sm rounded-xl flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-2">
+            <FileCheck2 className="w-4 h-4 text-blue-600" />
+            <span>{syncMessage}</span>
+          </div>
+          <button onClick={() => setSyncMessage(null)} className="text-blue-500 hover:text-blue-700 font-bold ml-4 text-xs">
+            ✕ Dismiss
           </button>
         </div>
       )}
 
-      {/* Stats Cards */}
-      {stats && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-          {[
-            { label: "Total", value: stats.total, color: "border-gray-300" },
-            { label: "Queued", value: stats.queued, color: "border-gray-400" },
-            { label: "Parsed", value: stats.parsed, color: "border-green-400" },
-            { label: "Review", value: stats.review, color: "border-yellow-400" },
-            { label: "Committed", value: stats.committed, color: "border-emerald-400" },
-            { label: "Rejected", value: stats.rejected, color: "border-red-400" },
-            { label: "Errors", value: stats.error, color: "border-red-500" },
-          ].map((stat) => (
-            <div
-              key={stat.label}
-              className={`bg-white rounded-lg border-l-4 ${stat.color} p-3 shadow-sm`}
+      {/* Advanced Search & Filtering Controls */}
+      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+            <Filter className="w-3.5 h-3.5 text-blue-600" />
+            Filter & Search Email Queue
+          </div>
+          {hasActiveFilters && (
+            <button
+              onClick={clearFilters}
+              className="text-xs text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1"
             >
-              <p className="text-xs text-gray-500 uppercase tracking-wide">{stat.label}</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{stat.value}</p>
-            </div>
-          ))}
+              ✕ Clear All Filters
+            </button>
+          )}
         </div>
-      )}
 
-      {/* Tabs */}
-      <div className="border-b border-gray-200">
-        <nav className="flex gap-1">
-          {TABS.map((tab) => {
-            const count =
-              tab.key === "ALL"
-                ? stats?.total
-                : stats?.[tab.status?.toLowerCase() as keyof typeof stats];
-            return (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === tab.key
-                    ? "border-blue-500 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                }`}
-              >
-                <tab.icon className="w-4 h-4 inline mr-1.5 -mt-0.5" />
-                {tab.label}
-                {count !== undefined && (
-                  <span className="ml-1.5 px-1.5 py-0.5 text-xs bg-gray-100 rounded-full">
-                    {count}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </nav>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {/* General Search Input */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search by keywords, POs, vendors, subject, sender..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+            />
+          </div>
+
+          {/* Filter by PO Number */}
+          <div className="relative">
+            <FileText className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-500" />
+            <input
+              type="text"
+              placeholder="Filter by PO Number (e.g. ZA6A-2001605039)..."
+              value={poNumberFilter}
+              onChange={(e) => setPoNumberFilter(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all"
+            />
+          </div>
+
+          {/* Filter by Vendor / Supplier Code */}
+          <div className="relative">
+            <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-500" />
+            <input
+              type="text"
+              placeholder="Filter by Vendor Code (e.g. SUPP-9901)..."
+              value={vendorCodeFilter}
+              onChange={(e) => setVendorCodeFilter(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
+            />
+          </div>
+        </div>
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-        <input
-          type="text"
-          placeholder="Search by subject, sender..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-        />
-      </div>
-
-      {/* Email Table — click a row to open the full email view */}
-      <div>
-        {isLoading ? (
-          <div className="flex items-center justify-center py-20 text-gray-400">
-            <RefreshCw className="w-6 h-6 animate-spin mr-2" />
-            Loading emails...
-          </div>
-        ) : emails.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-            <Mail className="w-12 h-12 mb-3" />
-            <p className="text-lg">No emails found</p>
-          </div>
-        ) : (
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-200">
-                  <th className="text-left px-4 py-3 font-medium text-gray-500">Sender</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-500">Subject</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-500">Type</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-500">Status</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-500">Received</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-500">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {emails.map((email) => (
-                  <tr
-                    key={email.id}
-                    onClick={() => openEmail(email.id)}
-                    className="cursor-pointer hover:bg-blue-50 transition-colors"
-                  >
-                    <td className="px-4 py-3 max-w-[160px] truncate text-gray-900">
-                      {email.from_address || "—"}
-                    </td>
-                    <td className="px-4 py-3 max-w-[200px] truncate text-gray-700">
-                      {email.subject || "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="px-2 py-0.5 text-xs font-medium bg-blue-50 text-blue-700 rounded">
-                        {email.email_type || "—"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`px-2 py-0.5 text-xs font-medium rounded ${
-                          STATUS_COLORS[email.status] || "bg-gray-100 text-gray-700"
-                        }`}
-                      >
-                        {email.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
-                      {email.received_at
-                        ? format(new Date(email.received_at), "MMM d, HH:mm")
-                        : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openEmail(email.id);
-                          }}
-                          className="p-1.5 text-gray-400 hover:text-blue-600 rounded"
-                          title="Open full email"
+      {/* Main Content Split Layout */}
+      <div className="flex flex-col lg:flex-row gap-6">
+        {/* Email List Table */}
+        <div className={`transition-all duration-200 ${selectedEmailId ? "w-full lg:w-1/2" : "w-full"}`}>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-20 text-gray-400 bg-white rounded-xl border border-gray-200">
+              <RefreshCw className="w-6 h-6 animate-spin mr-2 text-blue-500" />
+              Loading email queue...
+            </div>
+          ) : emails.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-gray-400 bg-white rounded-xl border border-gray-200">
+              <Mail className="w-12 h-12 mb-3 text-gray-300" />
+              <p className="text-lg font-medium text-gray-700">No emails matching filters</p>
+              <p className="text-xs text-gray-400 mt-1">Try clearing filters or click "Fetch & Sync Emails" to check mailbox</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50/80 border-b border-gray-200">
+                      <th className="text-left px-4 py-3 font-medium text-gray-500">Sender</th>
+                      <th className="text-left px-4 py-3 font-medium text-gray-500">Subject</th>
+                      {!selectedEmailId && <th className="text-left px-4 py-3 font-medium text-gray-500">Format</th>}
+                      {!selectedEmailId && <th className="text-left px-4 py-3 font-medium text-gray-500">Received</th>}
+                      <th className="text-right px-4 py-3 font-medium text-gray-500">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {emails.map((email) => {
+                      const isSelected = email.id === selectedEmailId;
+                      return (
+                        <tr
+                          key={email.id}
+                          onClick={() => setSelectedEmailId(email.id)}
+                          className={`cursor-pointer transition-colors ${
+                            isSelected
+                              ? "bg-blue-50 border-l-4 border-blue-600 font-medium"
+                              : "hover:bg-gray-50"
+                          }`}
                         >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        {(email.status === "PARSED" || email.status === "REVIEW") && (
-                          <>
+                          <td className="px-4 py-3 max-w-[140px] truncate text-gray-900 font-medium">
+                            {email.from_address || "—"}
+                          </td>
+                          <td className="px-4 py-3 max-w-[200px] truncate text-gray-700">
+                            {email.subject || "—"}
+                          </td>
+                          {!selectedEmailId && (
+                            <td className="px-4 py-3">
+                              <span className="px-2 py-0.5 text-xs font-semibold bg-blue-50 text-blue-700 rounded-md border border-blue-100">
+                                {email.email_type || "PO Email"}
+                              </span>
+                            </td>
+                          )}
+                          {!selectedEmailId && (
+                            <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
+                              {email.received_at
+                                ? format(new Date(email.received_at), "MMM d, HH:mm")
+                                : "—"}
+                            </td>
+                          )}
+                          <td className="px-4 py-3 text-right">
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                approveMutation.mutate(email.id);
+                                setSelectedEmailId(email.id);
                               }}
-                              className="p-1.5 text-gray-400 hover:text-green-600 rounded"
-                              title="Approve"
+                              className={`p-1.5 rounded-lg transition-colors ${
+                                isSelected ? "text-blue-700 bg-blue-200" : "text-gray-400 hover:text-blue-600 hover:bg-gray-100"
+                              }`}
+                              title="Preview Email"
                             >
-                              <CheckCircle className="w-4 h-4" />
+                              <Eye className="w-4 h-4" />
                             </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleReject(email.id);
-                              }}
-                              className="p-1.5 text-gray-400 hover:text-red-600 rounded"
-                              title="Reject"
-                            >
-                              <XCircle className="w-4 h-4" />
-                            </button>
-                          </>
-                        )}
-                        {email.status === "ERROR" && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              reprocessMutation.mutate(email.id);
-                            }}
-                            className="p-1.5 text-gray-400 hover:text-orange-600 rounded"
-                            title="Reprocess"
-                          >
-                            <RotateCcw className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
-                <p className="text-sm text-gray-500">
-                  Page {page} of {totalPages} ({emailsData?.total} total)
-                </p>
-                <div className="flex gap-1">
-                  <button
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={page <= 1}
-                    className="p-1.5 rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-100"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={page >= totalPages}
-                    className="p-1.5 rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-100"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
+
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
+                  <p className="text-xs text-gray-500">
+                    Page {page} of {totalPages} ({emailsData?.total} total emails)
+                  </p>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={page <= 1}
+                      className="p-1.5 rounded-lg border border-gray-300 disabled:opacity-40 hover:bg-gray-100 transition-colors"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={page >= totalPages}
+                      className="p-1.5 rounded-lg border border-gray-300 disabled:opacity-40 hover:bg-gray-100 transition-colors"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Email Preview Panel (Side Drawer) */}
+        {selectedEmailId && (
+          <div className="w-full lg:w-1/2 bg-white rounded-xl border border-gray-200 shadow-lg flex flex-col h-[75vh] sticky top-6 overflow-hidden">
+            {isDetailLoading || !selectedEmail ? (
+              <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                <RefreshCw className="w-6 h-6 animate-spin mb-2 text-blue-500" />
+                <span>Loading email details...</span>
+              </div>
+            ) : (
+              <>
+                {/* Preview Header */}
+                <div className="p-4 border-b border-gray-200 bg-gray-50 flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="px-2 py-0.5 text-xs font-semibold rounded bg-emerald-100 text-emerald-800">
+                        AUTO-PARSED
+                      </span>
+                      <span className="text-xs text-gray-500 truncate font-mono">
+                        {selectedEmail.from_address}
+                      </span>
+                    </div>
+                    <h2 className="text-base font-bold text-gray-900 truncate">
+                      {selectedEmail.subject || "No Subject"}
+                    </h2>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      Received: {selectedEmail.received_at ? format(new Date(selectedEmail.received_at), "MMM d, yyyy HH:mm") : "—"}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <Link
+                      to={`/emails/${selectedEmail.id}`}
+                      className="p-1.5 text-gray-500 hover:text-blue-600 rounded-lg hover:bg-gray-200 transition-colors"
+                      title="Open full page view"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </Link>
+                    <button
+                      onClick={() => setSelectedEmailId(null)}
+                      className="p-1.5 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                      title="Close Preview"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Sub-tabs bar */}
+                <div className="px-4 py-2 border-b border-gray-200 bg-white flex items-center justify-between">
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    Email Content & Data
+                  </span>
+                  <div className="flex bg-gray-100 p-1 rounded-lg text-xs font-medium">
+                    <button
+                      onClick={() => setPreviewTab("html")}
+                      className={`px-3 py-1 rounded-md transition-colors ${
+                        previewTab === "html" ? "bg-white text-blue-600 shadow-sm" : "text-gray-600 hover:text-gray-900"
+                      }`}
+                    >
+                      HTML Body
+                    </button>
+                    <button
+                      onClick={() => setPreviewTab("parsed")}
+                      className={`px-3 py-1 rounded-md transition-colors ${
+                        previewTab === "parsed" ? "bg-white text-blue-600 shadow-sm" : "text-gray-600 hover:text-gray-900"
+                      }`}
+                    >
+                      Parsed PO ({selectedEmail.parsed_data?.length ?? 0})
+                    </button>
+                    <button
+                      onClick={() => setPreviewTab("attachments")}
+                      className={`px-3 py-1 rounded-md transition-colors ${
+                        previewTab === "attachments" ? "bg-white text-blue-600 shadow-sm" : "text-gray-600 hover:text-gray-900"
+                      }`}
+                    >
+                      Files ({selectedEmail.attachments?.length ?? 0})
+                    </button>
+                  </div>
+                </div>
+
+                {/* Tab Content Area */}
+                <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
+                  {previewTab === "html" && (
+                    selectedEmail.body_html ? (
+                      <iframe
+                        title="Email Body Preview"
+                        srcDoc={`<base target="_blank">${selectedEmail.body_html}`}
+                        sandbox="allow-popups allow-popups-to-escape-sandbox"
+                        className="w-full h-full min-h-[420px] bg-white border border-gray-200 rounded-xl shadow-inner"
+                      />
+                    ) : (
+                      <div className="p-4 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 whitespace-pre-wrap font-sans">
+                        {selectedEmail.body_text || "No email body content available."}
+                      </div>
+                    )
+                  )}
+
+                  {previewTab === "parsed" && (
+                    <div className="space-y-4">
+                      {selectedEmail.parsed_data?.length === 0 ? (
+                        <div className="p-6 bg-white border border-gray-200 rounded-xl text-center text-sm text-gray-500">
+                          No parsed purchase order data extracted for this email.
+                        </div>
+                      ) : (
+                        selectedEmail.parsed_data?.map((data) => (
+                          <div key={data.id} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
+                            <div className="flex items-center justify-between border-b pb-2">
+                              <span className="font-bold text-gray-900 text-sm">
+                                PO#: {data.po_number_extracted || "Unknown"}
+                              </span>
+                              <span className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded font-medium">
+                                Parser: {data.parser_used}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              <div>
+                                <span className="text-gray-400">Supplier:</span>{" "}
+                                <span className="text-gray-800 font-medium">
+                                  {String(data.raw_extracted?.supplier_code || "—")}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-400">Buyer:</span>{" "}
+                                <span className="text-gray-800 font-medium">
+                                  {String(data.raw_extracted?.buyer_name || "—")}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-400">Delivery Date:</span>{" "}
+                                <span className="text-gray-800 font-medium">
+                                  {String(data.raw_extracted?.delivery_date || "—")}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-400">Total Qty:</span>{" "}
+                                <span className="text-gray-800 font-medium">
+                                  {String(data.raw_extracted?.total_quantity || 0)}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Line items snippet */}
+                            {Array.isArray(data.raw_extracted?.line_items) &&
+                              (data.raw_extracted?.line_items as Record<string, unknown>[]).length > 0 && (
+                                <div className="mt-2">
+                                  <p className="text-xs font-semibold text-gray-500 mb-1">
+                                    Line Items ({(data.raw_extracted?.line_items as Record<string, unknown>[]).length}):
+                                  </p>
+                                  <div className="max-h-40 overflow-y-auto border border-gray-100 rounded-lg">
+                                    <table className="w-full text-xs text-left">
+                                      <thead className="bg-gray-50 text-gray-500">
+                                        <tr>
+                                          <th className="p-1.5">#</th>
+                                          <th className="p-1.5">Style</th>
+                                          <th className="p-1.5">Qty</th>
+                                          <th className="p-1.5">Price</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-gray-100">
+                                        {(data.raw_extracted?.line_items as Record<string, unknown>[]).map((item, idx) => (
+                                          <tr key={idx}>
+                                            <td className="p-1.5">{String(item.line_number || idx + 1)}</td>
+                                            <td className="p-1.5 font-medium">{String(item.style || "—")}</td>
+                                            <td className="p-1.5">{String(item.quantity || 0)}</td>
+                                            <td className="p-1.5">{String(item.unit_price || 0)}</td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+
+                  {previewTab === "attachments" && (
+                    <div className="space-y-2">
+                      {selectedEmail.attachments?.length === 0 ? (
+                        <div className="p-6 bg-white border border-gray-200 rounded-xl text-center text-sm text-gray-500">
+                          No attachments found in this email.
+                        </div>
+                      ) : (
+                        selectedEmail.attachments?.map((att) => (
+                          <div
+                            key={att.id}
+                            className="bg-white border border-gray-200 rounded-xl p-3 flex items-center justify-between text-xs shadow-sm"
+                          >
+                            <div className="flex items-center gap-2 truncate">
+                              <Paperclip className="w-4 h-4 text-blue-500 shrink-0" />
+                              <span className="font-medium text-gray-800 truncate">
+                                {att.filename || "Attachment"}
+                              </span>
+                              {att.is_original && (
+                                <span className="px-1.5 py-0.5 text-[10px] bg-purple-100 text-purple-700 rounded font-semibold">
+                                  Original .eml
+                                </span>
+                              )}
+                            </div>
+                            <button
+                              onClick={async () => {
+                                const blob = await emailApi.getAttachment(selectedEmail.id, att.id);
+                                const url = URL.createObjectURL(blob);
+                                const link = document.createElement("a");
+                                link.href = url;
+                                link.download = att.filename || "attachment";
+                                link.click();
+                                URL.revokeObjectURL(url);
+                              }}
+                              className="p-1.5 text-gray-600 hover:text-blue-600 rounded-lg hover:bg-gray-100 flex items-center gap-1 font-medium transition-colors"
+                              title="Download Attachment"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              <span>Download</span>
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+              </>
             )}
           </div>
         )}

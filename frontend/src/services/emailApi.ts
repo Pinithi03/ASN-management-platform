@@ -15,6 +15,8 @@ export interface EmailListParams {
   status?: string;
   email_type?: string;
   search?: string;
+  po_number?: string;
+  vendor_code?: string;
   company_id?: string;
 }
 
