@@ -52,9 +52,24 @@ export interface ParsedData {
   created_at: string | null;
 }
 
+export interface EmailAttachment {
+  id: string;
+  filename: string | null;
+  content_type: string | null;
+  file_size: number | null;
+  /** The complete original message (.eml), stored alongside real attachments */
+  is_original: boolean;
+  created_at: string | null;
+}
+
 export interface EmailDetail extends EmailRecord {
   body_text: string | null;
+  body_html: string | null;
   message_id: string | null;
+  fetched_at: string | null;
+  processed_at: string | null;
+  retry_count: number;
+  attachments: EmailAttachment[];
   parsed_data: ParsedData[];
 }
 
