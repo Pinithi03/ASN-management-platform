@@ -7,7 +7,8 @@ Provides:
   - POST   /upload        — Upload .eml file for parsing
   - GET    /test-pipeline — Test IMAP→parse→DB pipeline
   - GET    /test-poll     — Trigger Celery poll task
-  - GET    /{email_id}    — Email detail + parsed data
+  - GET    /{email_id}    — Email detail + bodies, attachments, parsed data
+  - GET    /{email_id}/attachments/{attachment_id} — Download stored file
   - PATCH  /{email_id}    — Update email status/fields
   - POST   /{email_id}/approve   — Approve a reviewed email
   - POST   /{email_id}/reject    — Reject with reason
@@ -20,15 +21,18 @@ import logging
 import os
 from datetime import datetime, timezone
 from typing import Optional
+from urllib.parse import quote
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFile, File
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select, case, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.db.session import get_db
+from app.models.email_attachment import EmailAttachment
 from app.models.email_message import EmailRecord
 from app.models.parsed_data import ParsedData
 from app.models.purchase_order import PurchaseOrder
@@ -70,6 +74,15 @@ class ParsedDataResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class EmailAttachmentResponse(BaseModel):
+    id: str
+    filename: Optional[str] = None
+    content_type: Optional[str] = None
+    file_size: Optional[int] = None
+    is_original: bool = False
+    created_at: Optional[datetime] = None
+
+
 class EmailDetailResponse(BaseModel):
     id: str
     company_id: str
@@ -77,13 +90,18 @@ class EmailDetailResponse(BaseModel):
     to_address: Optional[str] = None
     subject: Optional[str] = None
     body_text: Optional[str] = None
+    body_html: Optional[str] = None
     message_id: Optional[str] = None
     status: Optional[str] = None
     email_type: Optional[str] = None
     direction: Optional[str] = None
     received_at: Optional[datetime] = None
+    fetched_at: Optional[datetime] = None
+    processed_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
     error_message: Optional[str] = None
+    retry_count: int = 0
+    attachments: list[EmailAttachmentResponse] = []
     parsed_data: list[ParsedDataResponse] = []
 
     model_config = {"from_attributes": True}
@@ -120,7 +138,8 @@ class EmailStatsResponse(BaseModel):
 
 # ─── GET / — List Emails ────────────────────────────────────────
 
-@router.get("/", response_model=PaginatedEmailResponse)
+@router.get("", response_model=PaginatedEmailResponse)
+@router.get("/", response_model=PaginatedEmailResponse, include_in_schema=False)
 async def list_emails(
     db: AsyncSession = Depends(get_db),
     status: Optional[str] = Query(None, description="Filter by status"),
@@ -356,7 +375,12 @@ async def get_email(
     email_id: UUID,
     db: AsyncSession = Depends(get_db),
 ):
-    """Get email detail with associated parsed data."""
+    """Get full email detail: bodies, stored attachments, and parsed data."""
+    from app.services.email_service import (
+        ORIGINAL_EML_CONTENT_TYPE,
+        ORIGINAL_EML_FILENAME,
+    )
+
     result = await db.execute(
         select(EmailRecord).where(EmailRecord.id == email_id)
     )
@@ -369,6 +393,13 @@ async def get_email(
     )
     parsed_items = pd_result.scalars().all()
 
+    att_result = await db.execute(
+        select(EmailAttachment)
+        .where(EmailAttachment.email_record_id == email_id)
+        .order_by(EmailAttachment.created_at)
+    )
+    attachments = att_result.scalars().all()
+
     return EmailDetailResponse(
         id=str(record.id),
         company_id=str(record.company_id),
@@ -376,13 +407,31 @@ async def get_email(
         to_address=record.to_address,
         subject=record.subject,
         body_text=record.body_text,
+        body_html=record.body_html,
         message_id=record.message_id,
         status=record.status,
         email_type=record.email_type,
         direction=record.direction,
         received_at=record.received_at,
+        fetched_at=record.fetched_at,
+        processed_at=record.processed_at,
         created_at=record.created_at,
         error_message=record.error_message,
+        retry_count=record.retry_count or 0,
+        attachments=[
+            EmailAttachmentResponse(
+                id=str(att.id),
+                filename=att.filename,
+                content_type=att.content_type,
+                file_size=att.file_size,
+                is_original=(
+                    att.filename == ORIGINAL_EML_FILENAME
+                    and att.content_type == ORIGINAL_EML_CONTENT_TYPE
+                ),
+                created_at=att.created_at,
+            )
+            for att in attachments
+        ],
         parsed_data=[
             ParsedDataResponse(
                 id=str(pd.id),
@@ -396,6 +445,50 @@ async def get_email(
             )
             for pd in parsed_items
         ],
+    )
+
+
+# ─── GET /{email_id}/attachments/{attachment_id} — Download File ─
+
+@router.get("/{email_id}/attachments/{attachment_id}")
+async def download_email_attachment(
+    email_id: UUID,
+    attachment_id: UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return a stored attachment (or the original .eml) from MinIO."""
+    from app.storage.minio_client import download_attachment
+
+    result = await db.execute(
+        select(EmailAttachment).where(
+            EmailAttachment.id == attachment_id,
+            EmailAttachment.email_record_id == email_id,
+        )
+    )
+    attachment = result.scalar_one_or_none()
+    if not attachment or not attachment.minio_key:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+
+    try:
+        content = await run_in_threadpool(
+            download_attachment, attachment.minio_key, attachment.minio_bucket
+        )
+    except Exception as e:
+        logger.error("Failed to read attachment %s from MinIO: %s", attachment_id, e)
+        raise HTTPException(
+            status_code=502, detail="Could not read attachment from storage"
+        )
+
+    filename = attachment.filename or "attachment"
+    return Response(
+        content=content,
+        media_type=attachment.content_type or "application/octet-stream",
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}",
+            # Email content is untrusted — never let it run as a page on our origin
+            "Content-Security-Policy": "sandbox",
+            "X-Content-Type-Options": "nosniff",
+        },
     )
 
 

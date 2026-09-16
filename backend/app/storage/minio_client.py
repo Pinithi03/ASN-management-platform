@@ -113,13 +113,11 @@ def upload_attachment(
     }
 
 
-def download_attachment(object_key: str) -> bytes:
-    """Download a file from MinIO by its object key."""
+def download_attachment(object_key: str, bucket: Optional[str] = None) -> bytes:
+    """Download a file from MinIO by its object key (default bucket if not given)."""
     client = get_minio_client()
-    bucket = get_bucket_name()
-
+    response = client.get_object(bucket or get_bucket_name(), object_key)
     try:
-        response = client.get_object(bucket, object_key)
         return response.read()
     finally:
         response.close()
