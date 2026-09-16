@@ -39,6 +39,7 @@ class DecodedEmail:
     body_html: str = ""
     attachments: list[Attachment] = field(default_factory=list)
     raw_headers: dict[str, str] = field(default_factory=dict)
+    raw: bytes = field(default=b"", repr=False)  # original RFC-5322 message
 
 
 def decode(raw: bytes) -> DecodedEmail:
@@ -66,6 +67,7 @@ def decode(raw: bytes) -> DecodedEmail:
         to_address=msg.get("To", ""),
         date=msg.get("Date", ""),
         raw_headers={k: v for k, v in msg.items()},
+        raw=raw,
     )
 
     # Walk all MIME parts

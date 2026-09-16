@@ -7,6 +7,7 @@ parsing. Maps ParsedPO dataclasses → SQLAlchemy model inserts.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from dataclasses import asdict
 from datetime import datetime, timezone, date as date_type
@@ -25,6 +26,12 @@ from app.email.classifier import ClassificationResult
 from app.email.parsers import ParsedPO
 
 logger = logging.getLogger(__name__)
+
+# The complete original message is stored next to the extracted attachments so
+# the dashboard can always show exactly what was received, including any parts
+# the MIME decoder does not pull out as attachments.
+ORIGINAL_EML_FILENAME = "original_message.eml"
+ORIGINAL_EML_CONTENT_TYPE = "message/rfc822"
 
 
 def _parse_date(value) -> Optional[date_type]:
@@ -84,10 +91,11 @@ async def save_email_record(
             record.status = status
             record.email_type = classification.format.value
             record.error_message = error_message
+            # Bodies are stored in full so the dashboard can show the complete email
             if decoded.body_text:
-                record.body_text = decoded.body_text[:5000]
+                record.body_text = decoded.body_text
             if decoded.body_html:
-                record.body_html = decoded.body_html[:50000]
+                record.body_html = decoded.body_html
             await db.flush()
             logger.info("Updated existing email record: id=%s, subject=%r", record.id, record.subject)
             return record
@@ -98,8 +106,8 @@ async def save_email_record(
         from_address=decoded.from_address,
         to_address=decoded.to_address,
         subject=decoded.subject,
-        body_text=decoded.body_text[:5000] if decoded.body_text else None,
-        body_html=decoded.body_html[:50000] if decoded.body_html else None,
+        body_text=decoded.body_text or None,
+        body_html=decoded.body_html or None,
         message_id=decoded.message_id,
         status=status,
         email_type=classification.format.value,
@@ -134,7 +142,16 @@ async def save_attachments(
     list[str]
         List of saved attachment IDs.
     """
-    if not decoded.attachments:
+    files = [
+        (att.filename, att.content_type, att.payload)
+        for att in decoded.attachments
+    ]
+    if decoded.raw:
+        files.append(
+            (ORIGINAL_EML_FILENAME, ORIGINAL_EML_CONTENT_TYPE, decoded.raw)
+        )
+
+    if not files:
         return []
 
     attachment_ids = []
@@ -145,25 +162,37 @@ async def save_attachments(
         logger.warning("MinIO client not available — skipping attachment storage")
         return []
 
-    for att in decoded.attachments:
+    # Reprocessing an email re-saves the same files — skip ones already stored
+    existing = await db.execute(
+        select(EmailAttachment.filename, EmailAttachment.checksum_sha256).where(
+            EmailAttachment.email_record_id == email_record_id
+        )
+    )
+    already_saved = {(row.filename, row.checksum_sha256) for row in existing}
+
+    for filename, content_type, payload in files:
         try:
+            if (filename, hashlib.sha256(payload).hexdigest()) in already_saved:
+                logger.info("Attachment already stored, skipping: %s", filename)
+                continue
+
             # Build object key: company_id/email_record_id/filename
-            safe_filename = att.filename.replace("/", "_").replace("\\", "_")
+            safe_filename = filename.replace("/", "_").replace("\\", "_")
             object_key = f"{company_id}/{email_record_id}/{safe_filename}"
 
             # Upload to MinIO
             upload_result = upload_attachment(
-                content=att.payload,
+                content=payload,
                 object_key=object_key,
-                content_type=att.content_type,
+                content_type=content_type,
             )
 
             # Save metadata to DB
             attachment_record = EmailAttachment(
                 email_record_id=email_record_id,
-                filename=att.filename,
-                content_type=att.content_type,
-                file_size=len(att.payload),
+                filename=filename,
+                content_type=content_type,
+                file_size=len(payload),
                 minio_bucket=upload_result["bucket"],
                 minio_key=upload_result["key"],
                 checksum_sha256=upload_result["checksum_sha256"],
@@ -175,12 +204,12 @@ async def save_attachments(
             attachment_ids.append(str(attachment_record.id))
             logger.info(
                 "Saved attachment: %s (%s, %d bytes) → MinIO %s",
-                att.filename, att.content_type, len(att.payload),
+                filename, content_type, len(payload),
                 object_key,
             )
         except Exception as e:
             logger.error(
-                "Failed to save attachment %s: %s", att.filename, e
+                "Failed to save attachment %s: %s", filename, e
             )
             # Continue with other attachments — don't fail the whole email
 
