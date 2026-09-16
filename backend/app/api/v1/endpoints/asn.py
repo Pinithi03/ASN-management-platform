@@ -40,6 +40,7 @@ router = APIRouter()
 
 
 @router.get("")
+@router.get("/", include_in_schema=False)
 async def list_asns(
     status: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
