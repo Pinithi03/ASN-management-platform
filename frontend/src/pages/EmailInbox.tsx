@@ -2,6 +2,7 @@
 // frontend/src/pages/EmailInbox.tsx
 
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Mail, Search, RefreshCw, Eye, CheckCircle, XCircle, RotateCcw, ChevronLeft, ChevronRight, Clock, AlertCircle, Inbox } from "lucide-react";
 import { emailApi } from "@/services/emailApi";
@@ -29,15 +30,17 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function EmailInbox() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabKey>("ALL");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null);
 
   // Reset page when tab changes
   useEffect(() => { setPage(1); }, [activeTab]);
 
   const currentTab = TABS.find((t) => t.key === activeTab)!;
+
+  const openEmail = (id: string) => navigate(`/emails/${id}`);
 
   // ─── Queries ────────────────────────────────────────────────
   const { data: emailsData, isLoading } = useQuery({
@@ -54,12 +57,6 @@ export default function EmailInbox() {
   const { data: stats } = useQuery({
     queryKey: ["emailStats"],
     queryFn: () => emailApi.getStats(),
-  });
-
-  const { data: emailDetail, isLoading: detailLoading } = useQuery({
-    queryKey: ["emailDetail", selectedEmailId],
-    queryFn: () => emailApi.getById(selectedEmailId!),
-    enabled: !!selectedEmailId,
   });
 
   // ─── Mutations ──────────────────────────────────────────────
@@ -220,315 +217,142 @@ export default function EmailInbox() {
         />
       </div>
 
-      {/* Main Content: Table + Detail Panel */}
-      <div className="flex gap-6">
-        {/* Email Table */}
-        <div className={`${selectedEmailId ? "w-1/2" : "w-full"} transition-all`}>
-          {isLoading ? (
-            <div className="flex items-center justify-center py-20 text-gray-400">
-              <RefreshCw className="w-6 h-6 animate-spin mr-2" />
-              Loading emails...
-            </div>
-          ) : emails.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-              <Mail className="w-12 h-12 mb-3" />
-              <p className="text-lg">No emails found</p>
-            </div>
-          ) : (
-            <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200">
-                    <th className="text-left px-4 py-3 font-medium text-gray-500">Sender</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-500">Subject</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-500">Type</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-500">Status</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-500">Received</th>
-                    <th className="text-right px-4 py-3 font-medium text-gray-500">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {emails.map((email) => (
-                    <tr
-                      key={email.id}
-                      onClick={() => setSelectedEmailId(email.id)}
-                      className={`cursor-pointer hover:bg-blue-50 transition-colors ${
-                        selectedEmailId === email.id ? "bg-blue-50" : ""
-                      }`}
-                    >
-                      <td className="px-4 py-3 max-w-[160px] truncate text-gray-900">
-                        {email.from_address || "—"}
-                      </td>
-                      <td className="px-4 py-3 max-w-[200px] truncate text-gray-700">
-                        {email.subject || "—"}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="px-2 py-0.5 text-xs font-medium bg-blue-50 text-blue-700 rounded">
-                          {email.email_type || "—"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`px-2 py-0.5 text-xs font-medium rounded ${
-                            STATUS_COLORS[email.status] || "bg-gray-100 text-gray-700"
-                          }`}
+      {/* Email Table — click a row to open the full email view */}
+      <div>
+        {isLoading ? (
+          <div className="flex items-center justify-center py-20 text-gray-400">
+            <RefreshCw className="w-6 h-6 animate-spin mr-2" />
+            Loading emails...
+          </div>
+        ) : emails.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+            <Mail className="w-12 h-12 mb-3" />
+            <p className="text-lg">No emails found</p>
+          </div>
+        ) : (
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-200">
+                  <th className="text-left px-4 py-3 font-medium text-gray-500">Sender</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-500">Subject</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-500">Type</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-500">Status</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-500">Received</th>
+                  <th className="text-right px-4 py-3 font-medium text-gray-500">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {emails.map((email) => (
+                  <tr
+                    key={email.id}
+                    onClick={() => openEmail(email.id)}
+                    className="cursor-pointer hover:bg-blue-50 transition-colors"
+                  >
+                    <td className="px-4 py-3 max-w-[160px] truncate text-gray-900">
+                      {email.from_address || "—"}
+                    </td>
+                    <td className="px-4 py-3 max-w-[200px] truncate text-gray-700">
+                      {email.subject || "—"}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="px-2 py-0.5 text-xs font-medium bg-blue-50 text-blue-700 rounded">
+                        {email.email_type || "—"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={`px-2 py-0.5 text-xs font-medium rounded ${
+                          STATUS_COLORS[email.status] || "bg-gray-100 text-gray-700"
+                        }`}
+                      >
+                        {email.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
+                      {email.received_at
+                        ? format(new Date(email.received_at), "MMM d, HH:mm")
+                        : "—"}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEmail(email.id);
+                          }}
+                          className="p-1.5 text-gray-400 hover:text-blue-600 rounded"
+                          title="Open full email"
                         >
-                          {email.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
-                        {email.received_at
-                          ? format(new Date(email.received_at), "MMM d, HH:mm")
-                          : "—"}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedEmailId(email.id);
-                            }}
-                            className="p-1.5 text-gray-400 hover:text-blue-600 rounded"
-                            title="View details"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          {(email.status === "PARSED" || email.status === "REVIEW") && (
-                            <>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  approveMutation.mutate(email.id);
-                                }}
-                                className="p-1.5 text-gray-400 hover:text-green-600 rounded"
-                                title="Approve"
-                              >
-                                <CheckCircle className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleReject(email.id);
-                                }}
-                                className="p-1.5 text-gray-400 hover:text-red-600 rounded"
-                                title="Reject"
-                              >
-                                <XCircle className="w-4 h-4" />
-                              </button>
-                            </>
-                          )}
-                          {email.status === "ERROR" && (
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        {(email.status === "PARSED" || email.status === "REVIEW") && (
+                          <>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                reprocessMutation.mutate(email.id);
+                                approveMutation.mutate(email.id);
                               }}
-                              className="p-1.5 text-gray-400 hover:text-orange-600 rounded"
-                              title="Reprocess"
+                              className="p-1.5 text-gray-400 hover:text-green-600 rounded"
+                              title="Approve"
                             >
-                              <RotateCcw className="w-4 h-4" />
+                              <CheckCircle className="w-4 h-4" />
                             </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
-                  <p className="text-sm text-gray-500">
-                    Page {page} of {totalPages} ({emailsData?.total} total)
-                  </p>
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
-                      disabled={page <= 1}
-                      className="p-1.5 rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-100"
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                      disabled={page >= totalPages}
-                      className="p-1.5 rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-100"
-                    >
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Detail Panel */}
-        {selectedEmailId && (
-          <div className="w-1/2 bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-gray-50">
-              <h3 className="font-medium text-gray-900">Email Detail</h3>
-              <button
-                onClick={() => setSelectedEmailId(null)}
-                className="text-gray-400 hover:text-gray-600 text-sm"
-              >
-                ✕ Close
-              </button>
-            </div>
-
-            {detailLoading ? (
-              <div className="flex items-center justify-center py-12 text-gray-400">
-                <RefreshCw className="w-5 h-5 animate-spin mr-2" />
-                Loading...
-              </div>
-            ) : emailDetail ? (
-              <div className="p-4 space-y-4 max-h-[calc(100vh-300px)] overflow-y-auto">
-                {/* Email Meta */}
-                <div className="space-y-2">
-                  <div className="flex justify-between items-start">
-                    <h4 className="font-medium text-gray-900 text-lg leading-tight">
-                      {emailDetail.subject || "No subject"}
-                    </h4>
-                    <span
-                      className={`px-2 py-0.5 text-xs font-medium rounded shrink-0 ml-2 ${
-                        STATUS_COLORS[emailDetail.status] || ""
-                      }`}
-                    >
-                      {emailDetail.status}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div>
-                      <span className="text-gray-500">From:</span>{" "}
-                      <span className="text-gray-900">{emailDetail.from_address || "—"}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">To:</span>{" "}
-                      <span className="text-gray-900">{emailDetail.to_address || "—"}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Type:</span>{" "}
-                      <span className="text-gray-900">{emailDetail.email_type || "—"}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Received:</span>{" "}
-                      <span className="text-gray-900">
-                        {emailDetail.received_at
-                          ? format(new Date(emailDetail.received_at), "MMM d yyyy, HH:mm")
-                          : "—"}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Error message */}
-                {emailDetail.error_message && (
-                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-                    <AlertCircle className="w-4 h-4 inline mr-1 -mt-0.5" />
-                    {emailDetail.error_message}
-                  </div>
-                )}
-
-                {/* Body preview */}
-                {emailDetail.body_text && (
-                  <div>
-                    <h5 className="text-sm font-medium text-gray-500 mb-1">Body Preview</h5>
-                    <div className="p-3 bg-gray-50 rounded-lg text-sm text-gray-700 max-h-40 overflow-y-auto whitespace-pre-wrap font-mono text-xs">
-                      {emailDetail.body_text.substring(0, 1000)}
-                    </div>
-                  </div>
-                )}
-
-                {/* Parsed Data */}
-                {emailDetail.parsed_data.length > 0 && (
-                  <div>
-                    <h5 className="text-sm font-medium text-gray-500 mb-2">
-                      Parsed Data ({emailDetail.parsed_data.length})
-                    </h5>
-                    {emailDetail.parsed_data.map((pd) => (
-                      <div
-                        key={pd.id}
-                        className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg space-y-2 mb-2"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="px-2 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-700 rounded">
-                            {pd.parser_used}
-                          </span>
-                          {pd.po_number_extracted && (
-                            <span className="text-sm font-medium text-gray-900">
-                              PO# {pd.po_number_extracted}
-                            </span>
-                          )}
-                        </div>
-                        {pd.normalized && (
-                          <div className="grid grid-cols-2 gap-1 text-xs">
-                            {pd.normalized.supplier_name && (
-                              <div>
-                                <span className="text-gray-500">Supplier:</span>{" "}
-                                {pd.normalized.supplier_name}
-                              </div>
-                            )}
-                            {pd.normalized.total_quantity !== undefined && (
-                              <div>
-                                <span className="text-gray-500">Qty:</span>{" "}
-                                {pd.normalized.total_quantity?.toLocaleString()}
-                              </div>
-                            )}
-                            {pd.normalized.currency && (
-                              <div>
-                                <span className="text-gray-500">Currency:</span>{" "}
-                                {pd.normalized.currency}
-                              </div>
-                            )}
-                            {pd.normalized.line_count !== undefined && (
-                              <div>
-                                <span className="text-gray-500">Lines:</span>{" "}
-                                {pd.normalized.line_count}
-                              </div>
-                            )}
-                          </div>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleReject(email.id);
+                              }}
+                              className="p-1.5 text-gray-400 hover:text-red-600 rounded"
+                              title="Reject"
+                            >
+                              <XCircle className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
+                        {email.status === "ERROR" && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              reprocessMutation.mutate(email.id);
+                            }}
+                            className="p-1.5 text-gray-400 hover:text-orange-600 rounded"
+                            title="Reprocess"
+                          >
+                            <RotateCcw className="w-4 h-4" />
+                          </button>
                         )}
                       </div>
-                    ))}
-                  </div>
-                )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
 
-                {/* Action Buttons */}
-                {(emailDetail.status === "PARSED" || emailDetail.status === "REVIEW") && (
-                  <div className="flex gap-2 pt-2 border-t border-gray-200">
-                    <button
-                      onClick={() => approveMutation.mutate(emailDetail.id)}
-                      disabled={approveMutation.isPending}
-                      className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50"
-                    >
-                      <CheckCircle className="w-4 h-4" />
-                      Approve
-                    </button>
-                    <button
-                      onClick={() => handleReject(emailDetail.id)}
-                      disabled={rejectMutation.isPending}
-                      className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50"
-                    >
-                      <XCircle className="w-4 h-4" />
-                      Reject
-                    </button>
-                  </div>
-                )}
-                {emailDetail.status === "ERROR" && (
-                  <div className="pt-2 border-t border-gray-200">
-                    <button
-                      onClick={() => reprocessMutation.mutate(emailDetail.id)}
-                      disabled={reprocessMutation.isPending}
-                      className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700 disabled:opacity-50"
-                    >
-                      <RotateCcw className="w-4 h-4" />
-                      Reprocess
-                    </button>
-                  </div>
-                )}
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
+                <p className="text-sm text-gray-500">
+                  Page {page} of {totalPages} ({emailsData?.total} total)
+                </p>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page <= 1}
+                    className="p-1.5 rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-100"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={page >= totalPages}
+                    className="p-1.5 rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-100"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
-            ) : null}
+            )}
           </div>
         )}
       </div>

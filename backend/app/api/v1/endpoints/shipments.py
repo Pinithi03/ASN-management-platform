@@ -555,6 +555,7 @@ async def create_shipment_from_excel(
 
 
 @router.get("")
+@router.get("/", include_in_schema=False)
 async def list_shipments(
     status: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
