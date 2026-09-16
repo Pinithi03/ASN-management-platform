@@ -27,7 +27,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFile, File
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select, case, desc
+from sqlalchemy import func, select, case, desc, cast, String
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -36,6 +36,7 @@ from app.models.email_attachment import EmailAttachment
 from app.models.email_message import EmailRecord
 from app.models.parsed_data import ParsedData
 from app.models.purchase_order import PurchaseOrder
+from app.models.supplier import Supplier
 from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -44,7 +45,6 @@ router = APIRouter()
 
 
 # ─── Pydantic Schemas ───────────────────────────────────────────
-
 class EmailListItem(BaseModel):
     id: str
     company_id: str
@@ -144,12 +144,14 @@ async def list_emails(
     db: AsyncSession = Depends(get_db),
     status: Optional[str] = Query(None, description="Filter by status"),
     email_type: Optional[str] = Query(None, description="Filter by type"),
-    search: Optional[str] = Query(None, description="Search subject/from"),
+    search: Optional[str] = Query(None, description="Search subject, sender, PO number, or vendor code"),
+    po_number: Optional[str] = Query(None, description="Filter explicitly by PO number"),
+    vendor_code: Optional[str] = Query(None, description="Filter explicitly by vendor/supplier code"),
     company_id: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
 ):
-    """List emails with optional filters and pagination."""
+    """List emails with optional filters (including PO number and vendor code search) and pagination."""
     query = select(EmailRecord)
 
     if company_id:
@@ -158,11 +160,70 @@ async def list_emails(
         query = query.where(EmailRecord.status == status.upper())
     if email_type:
         query = query.where(EmailRecord.email_type == email_type)
+
+    if po_number:
+        po_filter = f"%{po_number}%"
+        parsed_po_subq = select(ParsedData.email_record_id).where(
+            ParsedData.po_number_extracted.ilike(po_filter)
+            | cast(ParsedData.raw_extracted, String).ilike(po_filter)
+        )
+        po_subq = select(PurchaseOrder.source_email_id).where(
+            PurchaseOrder.po_number.ilike(po_filter)
+        )
+        query = query.where(
+            EmailRecord.subject.ilike(po_filter)
+            | EmailRecord.body_html.ilike(po_filter)
+            | EmailRecord.body_text.ilike(po_filter)
+            | EmailRecord.id.in_(parsed_po_subq)
+            | EmailRecord.id.in_(po_subq)
+        )
+
+    if vendor_code:
+        v_filter = f"%{vendor_code}%"
+        supp_ids_subq = select(Supplier.id).where(
+            Supplier.supplier_code.ilike(v_filter)
+            | Supplier.name.ilike(v_filter)
+        )
+        parsed_v_subq = select(ParsedData.email_record_id).where(
+            ParsedData.supplier_id_extracted.ilike(v_filter)
+            | cast(ParsedData.raw_extracted, String).ilike(v_filter)
+        )
+        query = query.where(
+            EmailRecord.from_address.ilike(v_filter)
+            | EmailRecord.body_html.ilike(v_filter)
+            | EmailRecord.body_text.ilike(v_filter)
+            | EmailRecord.supplier_id.in_(supp_ids_subq)
+            | EmailRecord.id.in_(parsed_v_subq)
+        )
+
     if search:
         search_filter = f"%{search}%"
+        supp_ids_subq = select(Supplier.id).where(
+            Supplier.supplier_code.ilike(search_filter)
+            | Supplier.name.ilike(search_filter)
+        )
+        parsed_subq = select(ParsedData.email_record_id).where(
+            ParsedData.po_number_extracted.ilike(search_filter)
+            | ParsedData.supplier_id_extracted.ilike(search_filter)
+            | cast(ParsedData.raw_extracted, String).ilike(search_filter)
+        )
+        po_subq = select(PurchaseOrder.source_email_id).where(
+            PurchaseOrder.po_number.ilike(search_filter)
+            | PurchaseOrder.client_code.ilike(search_filter)
+            | PurchaseOrder.style_number.ilike(search_filter)
+            | PurchaseOrder.description.ilike(search_filter)
+            | cast(PurchaseOrder.extra_data, String).ilike(search_filter)
+        )
+
         query = query.where(
             EmailRecord.subject.ilike(search_filter)
             | EmailRecord.from_address.ilike(search_filter)
+            | EmailRecord.to_address.ilike(search_filter)
+            | EmailRecord.body_html.ilike(search_filter)
+            | EmailRecord.body_text.ilike(search_filter)
+            | EmailRecord.supplier_id.in_(supp_ids_subq)
+            | EmailRecord.id.in_(parsed_subq)
+            | EmailRecord.id.in_(po_subq)
         )
 
     count_query = select(func.count()).select_from(query.subquery())

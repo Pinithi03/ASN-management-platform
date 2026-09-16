@@ -40,6 +40,7 @@ docker/volumes/
 
 # ── Environment ─────────────────────────────────────────────
 .env
+.env.example
 .env.local
 .env.*.local
 
@@ -66,6 +67,10 @@ automation/celerybeat-schedule*
 
 # ── MinIO local data ────────────────────────────────────────
 minio_data/
+
+# ── Antigravity / AI Context ────────────────────────────────
+GEMINI.md
+.agents/
 
 # ── Misc ────────────────────────────────────────────────────
 *.bak

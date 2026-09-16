@@ -193,6 +193,25 @@ def parse_html_document(
         if field_name:
             _apply_field(po, field_name, value)
 
+    # Check for IUNGO specific company/supplier article header tags
+    company_tag = soup.find("article", class_="company")
+    if company_tag and not po.buyer_name:
+        h1 = company_tag.find("h1")
+        po.buyer_name = _text(h1) if h1 else _text(company_tag).splitlines()[0]
+
+    supplier_tag = soup.find("article", class_="supplier")
+    if supplier_tag and not po.supplier_name:
+        h1 = supplier_tag.find("h1")
+        po.supplier_name = _text(h1) if h1 else _text(supplier_tag).splitlines()[0]
+
+    # Combine Order Type + Order Number if present (e.g. ZA6A + 2001607798 -> ZA6A-2001607798)
+    order_type = details["fields"].get("Order Type", "")
+    order_num = details["fields"].get("Order Number", "")
+    if order_type and order_num:
+        combined_po = f"{order_type.strip()}-{order_num.strip()}"
+        if not po.po_number or len(po.po_number) < len(combined_po):
+            po.po_number = combined_po
+
     full_text = soup.get_text(" ", strip=True)
     if not po.po_number:
         po.po_number = (
