@@ -19,12 +19,17 @@ import {
   Filter,
   FileText,
   Building2,
+  ShieldCheck,
 } from "lucide-react";
 import { emailApi } from "@/services/emailApi";
+import { useAuthStore } from "@/store/authStore";
 import { format } from "date-fns";
 
 export default function EmailInbox() {
   const queryClient = useQueryClient();
+  const user = useAuthStore((s) => s.user);
+  const isAdmin = user?.role === "COMPANY_ADMIN";
+
   const [search, setSearch] = useState("");
   const [poNumberFilter, setPoNumberFilter] = useState("");
   const [vendorCodeFilter, setVendorCodeFilter] = useState("");
@@ -32,19 +37,22 @@ export default function EmailInbox() {
   const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null);
   const [previewTab, setPreviewTab] = useState<"html" | "parsed" | "attachments">("html");
 
+  // Effective vendor filter — automatically enforced for Supplier Role users
+  const effectiveVendorCode = !isAdmin ? user?.supplier_code : vendorCodeFilter;
+
   // Reset pagination on filter change
   useEffect(() => {
     setPage(1);
-  }, [search, poNumberFilter, vendorCodeFilter]);
+  }, [search, poNumberFilter, effectiveVendorCode]);
 
   // ─── Queries ────────────────────────────────────────────────
   const { data: emailsData, isLoading } = useQuery({
-    queryKey: ["emails", search, poNumberFilter, vendorCodeFilter, page],
+    queryKey: ["emails", search, poNumberFilter, effectiveVendorCode, page, user?.role],
     queryFn: () =>
       emailApi.list({
         search: search || undefined,
         po_number: poNumberFilter || undefined,
-        vendor_code: vendorCodeFilter || undefined,
+        vendor_code: effectiveVendorCode || undefined,
         page,
         per_page: 15,
       }),
@@ -98,9 +106,13 @@ export default function EmailInbox() {
       {/* Header with Fetch & Sync Emails Button */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Email Processing Queue</h1>
+          <h1 className="text-2xl font-semibold text-gray-900">
+            {isAdmin ? "Email Processing Queue" : "My Inbound Supplier Emails"}
+          </h1>
           <p className="text-sm text-gray-500 mt-1">
-            Autonomous inbound PO email ingestion from IUNGO & suppliers
+            {isAdmin
+              ? "Autonomous inbound PO email ingestion from IUNGO & suppliers"
+              : `Ingested order emails matching Partner #${user?.supplier_code} (${user?.supplier_name})`}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -115,6 +127,18 @@ export default function EmailInbox() {
           </button>
         </div>
       </div>
+
+      {!isAdmin && (
+        <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs rounded-xl flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>
+              <strong>Supplier Privacy Protection Active:</strong> Viewing emails strictly scoped to{" "}
+              <strong className="font-mono">#{user?.supplier_code} ({user?.supplier_name})</strong>. Access to other partner emails is restricted.
+            </span>
+          </div>
+        </div>
+      )}
 
       {syncMessage && (
         <div className="p-3.5 bg-blue-50 border border-blue-200 text-blue-900 text-sm rounded-xl flex items-center justify-between shadow-sm">

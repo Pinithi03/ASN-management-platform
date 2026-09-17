@@ -19,13 +19,15 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import desc, func, select
+from sqlalchemy import cast, String, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.models.email_message import EmailRecord
+from app.models.parsed_data import ParsedData
 from app.models.po_history import POHistory
 from app.models.purchase_order import PurchaseOrder
+from app.models.supplier import Supplier
 
 logger = logging.getLogger(__name__)
 
@@ -131,10 +133,29 @@ async def list_purchase_orders(
     if company_id:
         query = query.where(PurchaseOrder.company_id == company_id)
     if supplier_id:
+        v_filter = f"%{supplier_id}%"
+        parsed_po_subq = select(ParsedData.po_number_extracted).where(
+            ParsedData.supplier_id_extracted.ilike(v_filter)
+            | cast(ParsedData.raw_extracted, String).ilike(v_filter)
+        )
+        supp_ids_subq = select(Supplier.id).where(
+            Supplier.supplier_code.ilike(v_filter)
+            | Supplier.name.ilike(v_filter)
+        )
         try:
-            query = query.where(PurchaseOrder.supplier_id == uuid.UUID(supplier_id))
+            supp_uuid = uuid.UUID(supplier_id)
+            query = query.where(
+                PurchaseOrder.supplier_id == supp_uuid
+                | PurchaseOrder.supplier_id.in_(supp_ids_subq)
+                | PurchaseOrder.po_number.in_(parsed_po_subq)
+                | PurchaseOrder.client_code.ilike(v_filter)
+            )
         except (ValueError, TypeError):
-            pass
+            query = query.where(
+                PurchaseOrder.supplier_id.in_(supp_ids_subq)
+                | PurchaseOrder.po_number.in_(parsed_po_subq)
+                | PurchaseOrder.client_code.ilike(v_filter)
+            )
     if status and status != "ALL":
         query = query.where(PurchaseOrder.status == status.upper())
     if search:
@@ -211,10 +232,29 @@ async def po_stats(
     if company_id:
         query = query.where(PurchaseOrder.company_id == company_id)
     if supplier_id:
+        v_filter = f"%{supplier_id}%"
+        parsed_po_subq = select(ParsedData.po_number_extracted).where(
+            ParsedData.supplier_id_extracted.ilike(v_filter)
+            | cast(ParsedData.raw_extracted, String).ilike(v_filter)
+        )
+        supp_ids_subq = select(Supplier.id).where(
+            Supplier.supplier_code.ilike(v_filter)
+            | Supplier.name.ilike(v_filter)
+        )
         try:
-            query = query.where(PurchaseOrder.supplier_id == uuid.UUID(supplier_id))
+            supp_uuid = uuid.UUID(supplier_id)
+            query = query.where(
+                PurchaseOrder.supplier_id == supp_uuid
+                | PurchaseOrder.supplier_id.in_(supp_ids_subq)
+                | PurchaseOrder.po_number.in_(parsed_po_subq)
+                | PurchaseOrder.client_code.ilike(v_filter)
+            )
         except (ValueError, TypeError):
-            pass
+            query = query.where(
+                PurchaseOrder.supplier_id.in_(supp_ids_subq)
+                | PurchaseOrder.po_number.in_(parsed_po_subq)
+                | PurchaseOrder.client_code.ilike(v_filter)
+            )
 
     result = await db.execute(query)
     row = result.one()
