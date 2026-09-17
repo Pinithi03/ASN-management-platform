@@ -7,7 +7,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
   ArrowLeft,
-  CheckCircle,
   Download,
   Eye,
   EyeOff,
@@ -17,21 +16,10 @@ import {
   Paperclip,
   RefreshCw,
   RotateCcw,
-  XCircle,
 } from "lucide-react";
 import { format } from "date-fns";
 import { emailApi } from "@/services/emailApi";
 import type { EmailAttachment, ParsedData } from "@/types/email";
-
-const STATUS_COLORS: Record<string, string> = {
-  QUEUED: "bg-gray-100 text-gray-700",
-  PROCESSING: "bg-blue-100 text-blue-700",
-  PARSED: "bg-green-100 text-green-700",
-  REVIEW: "bg-yellow-100 text-yellow-700",
-  COMMITTED: "bg-emerald-100 text-emerald-700",
-  REJECTED: "bg-red-100 text-red-700",
-  ERROR: "bg-red-100 text-red-700",
-};
 
 const PO_FIELDS: { key: string; label: string }[] = [
   { key: "po_number", label: "PO Number" },
@@ -333,27 +321,10 @@ export default function EmailDetailPage() {
     queryClient.invalidateQueries({ queryKey: ["emailDetail", emailId] });
   };
 
-  const approveMutation = useMutation({
-    mutationFn: () => emailApi.approve(emailId),
-    onSuccess: invalidate,
-  });
-
-  const rejectMutation = useMutation({
-    mutationFn: (reason: string) => emailApi.reject(emailId, reason),
-    onSuccess: invalidate,
-  });
-
   const reprocessMutation = useMutation({
     mutationFn: () => emailApi.reprocess(emailId),
     onSuccess: invalidate,
   });
-
-  const handleReject = () => {
-    const reason = window.prompt("Enter rejection reason:");
-    if (reason) {
-      rejectMutation.mutate(reason);
-    }
-  };
 
   const handleDownload = async (attachment: EmailAttachment) => {
     setDownloadError(null);
@@ -431,13 +402,6 @@ export default function EmailDetailPage() {
               {email.subject || "No subject"}
             </h1>
             <div className="flex flex-wrap items-center gap-2">
-              <span
-                className={`px-2 py-0.5 text-xs font-medium rounded ${
-                  STATUS_COLORS[email.status] || "bg-gray-100 text-gray-700"
-                }`}
-              >
-                {email.status}
-              </span>
               {email.email_type && (
                 <span className="px-2 py-0.5 text-xs font-medium bg-blue-50 text-blue-700 rounded">
                   {email.email_type}
@@ -455,26 +419,6 @@ export default function EmailDetailPage() {
                 <Download className="w-4 h-4" />
                 Download .eml
               </button>
-            )}
-            {(email.status === "PARSED" || email.status === "REVIEW") && (
-              <>
-                <button
-                  onClick={() => approveMutation.mutate()}
-                  disabled={approveMutation.isPending}
-                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50"
-                >
-                  <CheckCircle className="w-4 h-4" />
-                  Approve
-                </button>
-                <button
-                  onClick={handleReject}
-                  disabled={rejectMutation.isPending}
-                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50"
-                >
-                  <XCircle className="w-4 h-4" />
-                  Reject
-                </button>
-              </>
             )}
             {email.status === "ERROR" && (
               <button
