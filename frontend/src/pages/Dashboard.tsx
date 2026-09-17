@@ -2,9 +2,10 @@
 // frontend/src/pages/Dashboard.tsx
 
 import { useQuery } from "@tanstack/react-query";
-import { Mail, FileText, Package, Truck, RefreshCw, Building2, MapPin, ArrowRight } from "lucide-react";
+import { Mail, FileText, Package, Truck, RefreshCw, Building2, MapPin, ArrowRight, ShieldCheck, UserCheck } from "lucide-react";
 import { emailApi } from "@/services/emailApi";
 import { poApi } from "@/services/poApi";
+import { useAuthStore } from "@/store/authStore";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 
@@ -18,20 +19,26 @@ const SRI_LANKA_PLANTS = [
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const user = useAuthStore((s) => s.user);
+  const isAdmin = user?.role === "COMPANY_ADMIN";
 
   const { data: emailStats, isLoading: emailLoading } = useQuery({
-    queryKey: ["emailStats"],
+    queryKey: ["emailStats", user?.supplier_code],
     queryFn: () => emailApi.getStats(),
   });
 
   const { data: poStats, isLoading: poLoading } = useQuery({
-    queryKey: ["poStats"],
-    queryFn: () => poApi.getStats(),
+    queryKey: ["poStats", user?.supplier_code],
+    queryFn: () => poApi.getStats(!isAdmin ? user?.supplier_code : undefined),
   });
 
   const { data: recentEmails } = useQuery({
-    queryKey: ["recentEmails"],
-    queryFn: () => emailApi.list({ per_page: 5 }),
+    queryKey: ["recentEmails", user?.supplier_code],
+    queryFn: () =>
+      emailApi.list({
+        vendor_code: !isAdmin ? user?.supplier_code : undefined,
+        per_page: 5,
+      }),
   });
 
   const isLoading = emailLoading || poLoading;
@@ -71,7 +78,7 @@ export default function Dashboard() {
                 <div>
                   <p className="text-sm font-medium text-gray-500">Emails Processed</p>
                   <p className="text-3xl font-bold text-gray-900 mt-1">
-                    {emailStats?.total ?? 0}
+                    {!isAdmin ? (recentEmails?.total ?? 0) : (emailStats?.total ?? 0)}
                   </p>
                 </div>
                 <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center">
@@ -79,7 +86,9 @@ export default function Dashboard() {
                 </div>
               </div>
               <div className="mt-3 flex items-center gap-1.5 text-xs">
-                <span className="text-green-600 font-semibold">{successRate}% auto-parsed</span>
+                <span className="text-green-600 font-semibold">
+                  {!isAdmin ? `Scoped to #${user?.supplier_code}` : `${successRate}% auto-parsed`}
+                </span>
               </div>
             </div>
 
@@ -100,7 +109,9 @@ export default function Dashboard() {
                 </div>
               </div>
               <div className="mt-3 text-xs text-gray-500">
-                {poStats?.total ?? 0} total POs in system
+                {!isAdmin
+                  ? `${poStats?.total ?? 0} assigned POs`
+                  : `${poStats?.total ?? 0} total POs in system`}
               </div>
             </div>
 
@@ -121,7 +132,7 @@ export default function Dashboard() {
                 </div>
               </div>
               <div className="mt-3 text-xs text-gray-500">
-                Ready for packing list generation
+                {!isAdmin ? "Your ready packing lists" : "Ready for packing list generation"}
               </div>
             </div>
 
@@ -142,7 +153,7 @@ export default function Dashboard() {
                 </div>
               </div>
               <div className="mt-3 text-xs text-gray-500">
-                Calzedonia XML generated & sent
+                {!isAdmin ? "Your dispatched XML ASNs" : "Calzedonia XML generated & sent"}
               </div>
             </div>
           </div>
@@ -210,63 +221,113 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Plant Operations Overview — 5 Sri Lanka Plants */}
-            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm flex flex-col justify-between h-full">
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <Building2 className="w-5 h-5 text-blue-600" />
-                    <h2 className="text-lg font-semibold text-gray-900">
-                      Plant Operations Overview
-                    </h2>
+            {/* Plant Operations Overview (Admin only) vs Supplier Partner Overview (Supplier Portal) */}
+            {isAdmin ? (
+              <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm flex flex-col justify-between h-full">
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Building2 className="w-5 h-5 text-blue-600" />
+                      <h2 className="text-lg font-semibold text-gray-900">
+                        Plant Operations Overview
+                      </h2>
+                    </div>
+                    <span className="text-xs font-semibold px-2 py-0.5 bg-blue-50 text-blue-700 rounded-md border border-blue-100">
+                      5 Plants
+                    </span>
                   </div>
-                  <span className="text-xs font-semibold px-2 py-0.5 bg-blue-50 text-blue-700 rounded-md border border-blue-100">
-                    5 Plants
-                  </span>
-                </div>
-                <p className="text-xs text-gray-500 mb-4">
-                  Manufacturing plant status & ASN dispatch centers across Sri Lanka:
-                </p>
+                  <p className="text-xs text-gray-500 mb-4">
+                    Manufacturing plant status & ASN dispatch centers across Sri Lanka:
+                  </p>
 
-                <div className="space-y-2">
-                  {SRI_LANKA_PLANTS.map((plant) => (
-                    <div
-                      key={plant.name}
-                      onClick={() => navigate("/shipments")}
-                      className="p-2.5 rounded-lg border border-gray-100 hover:border-gray-200 hover:bg-gray-50 flex items-center justify-between transition-all cursor-pointer"
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <MapPin className="w-4 h-4 text-gray-400 shrink-0" />
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-gray-900 truncate">
-                            {plant.name}{" "}
-                            <span className="font-normal text-gray-400">({plant.location})</span>
-                          </p>
-                          <p className="text-[11px] text-gray-500 font-mono">{plant.code}</p>
+                  <div className="space-y-2">
+                    {SRI_LANKA_PLANTS.map((plant) => (
+                      <div
+                        key={plant.name}
+                        onClick={() => navigate("/shipments")}
+                        className="p-2.5 rounded-lg border border-gray-100 hover:border-gray-200 hover:bg-gray-50 flex items-center justify-between transition-all cursor-pointer"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <MapPin className="w-4 h-4 text-gray-400 shrink-0" />
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-gray-900 truncate">
+                              {plant.name}{" "}
+                              <span className="font-normal text-gray-400">({plant.location})</span>
+                            </p>
+                            <p className="text-[11px] text-gray-500 font-mono">{plant.code}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className={`px-2 py-0.5 text-[10px] font-semibold rounded border ${plant.bg}`}>
+                            {plant.status}
+                          </span>
+                          <ArrowRight className="w-3.5 h-3.5 text-gray-400" />
                         </div>
                       </div>
+                    ))}
+                  </div>
+                </div>
 
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className={`px-2 py-0.5 text-[10px] font-semibold rounded border ${plant.bg}`}>
-                          {plant.status}
-                        </span>
-                        <ArrowRight className="w-3.5 h-3.5 text-gray-400" />
-                      </div>
-                    </div>
-                  ))}
+                <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+                  <span>Oniverse Group (Calzedonia) Sri Lanka</span>
+                  <button
+                    onClick={() => navigate("/shipments")}
+                    className="text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1"
+                  >
+                    Manage Shipments →
+                  </button>
                 </div>
               </div>
+            ) : (
+              <div className="bg-white rounded-xl border border-emerald-200 p-5 shadow-sm flex flex-col justify-between h-full bg-gradient-to-br from-white to-emerald-50/30">
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <UserCheck className="w-5 h-5 text-emerald-600" />
+                      <h2 className="text-lg font-semibold text-gray-900">
+                        Supplier Partner Profile
+                      </h2>
+                    </div>
+                    <span className="text-xs font-semibold px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-md border border-emerald-200 font-mono">
+                      #{user?.supplier_code}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 mb-4">
+                    Authenticated supplier portal context — scoped strictly to your assigned POs & ASNs:
+                  </p>
 
-              <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
-                <span>Oniverse Group (Calzedonia) Sri Lanka</span>
-                <button
-                  onClick={() => navigate("/shipments")}
-                  className="text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1"
-                >
-                  Manage Shipments →
-                </button>
+                  <div className="space-y-3 bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                    <div>
+                      <span className="text-xs text-gray-400 font-medium">Partner Name</span>
+                      <p className="text-sm font-bold text-gray-900">{user?.supplier_name || user?.full_name}</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <span className="text-gray-400">Supplier Code:</span>
+                        <p className="font-mono font-bold text-emerald-700">{user?.supplier_code}</p>
+                      </div>
+                      <div>
+                        <span className="text-gray-400">Portal Security:</span>
+                        <p className="font-semibold text-green-600 flex items-center gap-1">
+                          <ShieldCheck className="w-3.5 h-3.5" /> Scoped Access
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+                  <span>Authorized Calzedonia Partner</span>
+                  <button
+                    onClick={() => navigate("/shipments")}
+                    className="text-emerald-700 hover:text-emerald-800 font-semibold flex items-center gap-1"
+                  >
+                    Dispatch New ASN →
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Recent Emails Section */}
