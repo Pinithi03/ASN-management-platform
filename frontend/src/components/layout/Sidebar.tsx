@@ -50,6 +50,7 @@ const adminSettingsNav: NavItem[] = [
 // Supplier portal navigation
 const supplierMainNav: NavItem[] = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
+  { to: "/emails", icon: Mail, label: "My Emails" },
   { to: "/purchase-orders", icon: FileText, label: "Purchase Orders" },
   { to: "/shipments", icon: PackagePlus, label: "Shipments" },
 ];

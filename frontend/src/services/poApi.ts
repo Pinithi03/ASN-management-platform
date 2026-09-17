@@ -44,10 +44,14 @@ export const poApi = {
   },
 
   /** Get PO statistics */
-  getStats: async (companyId?: string, supplierId?: string): Promise<POStats> => {
+  getStats: async (companyIdOrSupplierId?: string, supplierId?: string): Promise<POStats> => {
     const params: Record<string, string> = {};
-    if (companyId) params.company_id = companyId;
-    if (supplierId) params.supplier_id = supplierId;
+    if (companyIdOrSupplierId && !supplierId) {
+      params.supplier_id = companyIdOrSupplierId;
+    } else {
+      if (companyIdOrSupplierId) params.company_id = companyIdOrSupplierId;
+      if (supplierId) params.supplier_id = supplierId;
+    }
     const { data } = await api.get("/purchase-orders/stats", { params });
     return data;
   },
