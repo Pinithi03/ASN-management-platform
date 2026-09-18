@@ -1,10 +1,7 @@
-/**
- * Header — shows search, notifications, active account info, and Calzedonia partner badge.
- * Includes an instant account switcher between Plant Admin & Calzedonia Supplier Partners.
- */
+// ─── Header Component ────────────────────────────────────────────────
 
 import { useState, useRef, useEffect } from "react";
-import { Bell, Search, Menu, LogOut, ChevronDown, Check, Building2, ShieldCheck } from "lucide-react";
+import { Bell, Menu, LogOut, ChevronDown, Check, Building2, ShieldCheck } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/store/authStore";
@@ -94,7 +91,7 @@ export default function Header({ onMenuToggle }: HeaderProps) {
 
   return (
     <header className="flex h-16 items-center justify-between border-b border-gray-200 bg-white px-6">
-      {/* Left side — mobile menu + search */}
+      {/* Left side — mobile menu toggle */}
       <div className="flex items-center gap-4">
         <button
           onClick={onMenuToggle}
@@ -102,23 +99,6 @@ export default function Header({ onMenuToggle }: HeaderProps) {
         >
           <Menu className="h-5 w-5" />
         </button>
-        <div className="relative hidden sm:block">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            placeholder={
-              isAdmin
-                ? "Search POs, emails, ASNs..."
-                : `Search POs for ${user?.supplier_name?.slice(0, 15) || "Supplier"}...`
-            }
-            className={cn(
-              "h-9 w-64 rounded-lg border border-gray-200 bg-gray-50 pl-10 pr-4 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1",
-              isAdmin
-                ? "focus:border-brand-500 focus:ring-brand-500"
-                : "focus:border-emerald-500 focus:ring-emerald-500"
-            )}
-          />
-        </div>
       </div>
 
       {/* Right side */}
