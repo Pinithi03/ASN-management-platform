@@ -23,4 +23,4 @@ Includes:
 # QUEUE_EMAIL_NOTIFICATIONS = "email.notifications"
 
 # Companies
-# COMPANY_CODES = ["SIRIO", "BENJIO", "OMEGA", "ALPHA", "AQUA"]
+# COMPANY_CODES = ["SIRIO", "Benji", "OMEGA", "ALPHA", "VAVUNIYA"]

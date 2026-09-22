@@ -4,7 +4,7 @@
 
 ## Overview
 
-This platform serves **5 apparel manufacturing plants** (Sirio, Benjio, Omega Line, Alpha Apparels, Aqua Dynamics), automating email-based PO data ingestion and managing the full ASN lifecycle from purchase order to SAP submission.
+This platform serves **5 apparel manufacturing plants** (Sirio, Benji, Omega Line, Alpha Apparels, Vavuniya Apparels), automating email-based PO data ingestion and managing the full ASN lifecycle from purchase order to SAP submission.
 
 ### Key Capabilities
 

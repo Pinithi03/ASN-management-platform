@@ -10,10 +10,10 @@ import { format } from "date-fns";
 
 const SRI_LANKA_PLANTS = [
   { name: "Sirio Ltd", code: "SIRIO (PPA1)", location: "Badalgama", status: "Active", bg: "bg-blue-50 text-blue-700 border-blue-200" },
-  { name: "Benjio Ltd", code: "BENJIO (PPC1)", location: "Bingiriya", status: "Active", bg: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  { name: "Benji Ltd", code: "Benji (PPC1)", location: "Bingiriya", status: "Active", bg: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   { name: "Omega Line Ltd", code: "OMEGA (PPA2)", location: "Sandalankawa", status: "Active", bg: "bg-purple-50 text-purple-700 border-purple-200" },
   { name: "Alpha Apparels Ltd", code: "ALPHA (PPA3)", location: "Polgahawela", status: "Active", bg: "bg-amber-50 text-amber-700 border-amber-200" },
-  { name: "Aqua Dynamics Ltd", code: "AQUA (PPA4)", location: "Negombo", status: "Active", bg: "bg-indigo-50 text-indigo-700 border-indigo-200" },
+  { name: "Vavuniya Apparels Ltd", code: "VAVUNIYA (PPA4)", location: "Vavuniya", status: "Active", bg: "bg-indigo-50 text-indigo-700 border-indigo-200" },
 ];
 
 export default function AdminDashboard() {

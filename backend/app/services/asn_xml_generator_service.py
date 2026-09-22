@@ -3,7 +3,7 @@ ASN XML Generator & Validator service for Calzedonia EDI integration.
 
 Constructs Calzedonia-compliant SdDataSlice XML documents according to
 the Calzedonia m2Data_Partner.dtd specification, verified against 15 real
-production samples from Sirio Ltd / Benjio / Omega Line / Calzedonia Group.
+production samples from Sirio Ltd / Benji / Omega Line / Calzedonia Group.
 
 Includes two-phase validation:
 1. DTD structural schema validation using lxml.etree.DTD
@@ -73,7 +73,7 @@ def generate_asn_xml(
 
     Args:
         company_name: e.g. "Sirio Ltd", "Benji Ltd", "Omega Line Ltd", or "Alpha Apparels Ltd"
-        group_code: e.g. "SIRIONEW" or "BENJIO"
+        group_code: e.g. "SIRIONEW" or "Benji"
         supplier_code: Supplier vendor code (e.g. "0000058376" or "58376")
         packing_slip_number: 8-digit or alphanumeric packing slip / shipment number
         packing_slip_date: Date of packing slip (datetime or 'DD-MM-YYYY')

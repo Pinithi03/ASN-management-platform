@@ -26,10 +26,10 @@ type TabType = "company" | "email" | "asn" | "security" | "health";
 
 const SRI_LANKA_PLANTS = [
   { name: "Sirio Ltd", code: "SIRIO (PPA1)", location: "Badalgama", isDefault: true },
-  { name: "Benjio Ltd", code: "BENJIO (PPC1)", location: "Bingiriya", isDefault: false },
+  { name: "Benji Ltd", code: "Benji (PPC1)", location: "Bingiriya", isDefault: false },
   { name: "Omega Line Ltd", code: "OMEGA (PPA2)", location: "Sandalankawa", isDefault: false },
   { name: "Alpha Apparels Ltd", code: "ALPHA (PPA3)", location: "Polgahawela", isDefault: false },
-  { name: "Aqua Dynamics Ltd", code: "AQUA (PPA4)", location: "Negombo", isDefault: false },
+  { name: "Vavuniya Apparels Ltd", code: "VAVUNIYA (PPA4)", location: "Vavuniya", isDefault: false },
 ];
 
 export default function Settings() {
