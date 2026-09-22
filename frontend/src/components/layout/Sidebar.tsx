@@ -12,7 +12,6 @@ import {
   FileText,
   Truck,
   Settings,
-  Building2,
   Users,
   ChevronLeft,
   ChevronRight,
@@ -43,7 +42,6 @@ const adminMainNav: NavItem[] = [
 
 const adminSettingsNav: NavItem[] = [
   { to: "/settings", icon: Settings, label: "Settings" },
-  { to: "/settings/company", icon: Building2, label: "Company" },
   { to: "/settings/users", icon: Users, label: "Users" },
 ];
 

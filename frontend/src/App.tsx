@@ -11,7 +11,6 @@ import EmailInbox from "@/pages/EmailInbox";
 import EmailDetailPage from "@/pages/EmailDetail";
 import PurchaseOrders from "@/pages/PurchaseOrders";
 import Settings from "@/pages/Settings";
-import CompanySettings from "@/pages/CompanySettings";
 import UserManagement from "@/pages/UserManagement";
 import Suppliers from "@/pages/Suppliers";
 import Shipments from "@/pages/Shipments";
@@ -46,7 +45,7 @@ export default function App() {
         <Route path="/emails/:emailId" element={<EmailDetailPage />} />
         <Route path="/suppliers" element={<RequireRole role="COMPANY_ADMIN"><Suppliers /></RequireRole>} />
         <Route path="/settings" element={<RequireRole role="COMPANY_ADMIN"><Settings /></RequireRole>} />
-        <Route path="/settings/company" element={<RequireRole role="COMPANY_ADMIN"><CompanySettings /></RequireRole>} />
+        <Route path="/settings/company" element={<Navigate to="/settings" replace />} />
         <Route path="/settings/users" element={<RequireRole role="COMPANY_ADMIN"><UserManagement /></RequireRole>} />
 
         <Route path="/shipments" element={<Shipments />} />

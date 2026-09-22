@@ -76,3 +76,6 @@ GEMINI.md
 *.bak
 *.tmp
 *.temp
+
+# Local agent knowledge base (not committed)
+.agents/skills/project-architecture/references/
