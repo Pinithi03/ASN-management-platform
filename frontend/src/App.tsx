@@ -15,6 +15,7 @@ import UserManagement from "@/pages/UserManagement";
 import Suppliers from "@/pages/Suppliers";
 import Shipments from "@/pages/Shipments";
 import Profile from "@/pages/Profile";
+import AuditLogs from "@/pages/AuditLogs";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -47,6 +48,7 @@ export default function App() {
         <Route path="/settings" element={<RequireRole role="COMPANY_ADMIN"><Settings /></RequireRole>} />
         <Route path="/settings/company" element={<Navigate to="/settings" replace />} />
         <Route path="/settings/users" element={<RequireRole role="COMPANY_ADMIN"><UserManagement /></RequireRole>} />
+        <Route path="/audit-logs" element={<RequireRole role="COMPANY_ADMIN"><AuditLogs /></RequireRole>} />
 
         <Route path="/shipments" element={<Shipments />} />
         <Route path="/profile" element={<RequireRole role="SUPPLIER"><Profile /></RequireRole>} />

@@ -597,10 +597,26 @@ async def reprocess_email(
     if not record:
         raise HTTPException(status_code=404, detail="Email not found")
 
+    from app.services.audit_service import create_audit_log
+
     record.status = "QUEUED"
     record.error_message = None
     record.retry_count = (record.retry_count or 0) + 1
     record.updated_at = datetime.now(timezone.utc)
+
+    await create_audit_log(
+        db=db,
+        company_id=str(record.company_id),
+        action="EMAIL_REPROCESSED",
+        entity_type="EMAIL",
+        entity_id=str(record.id),
+        metadata={
+            "subject": record.subject,
+            "retry_count": record.retry_count,
+            "from_address": record.from_address,
+        },
+    )
+
     await db.commit()
 
     logger.info("Re-queued email %s for reprocessing", email_id)

@@ -21,6 +21,7 @@ import {
   AlertTriangle,
   Power,
 } from "lucide-react";
+import { auditApi } from "@/services/auditApi";
 
 export interface SupplierItem {
   id: string;
@@ -149,6 +150,12 @@ export default function Suppliers() {
 
     setSuppliers((prev) => prev.filter((s) => s.id !== deletingSupplier.id));
     showToast(`Verified Admin Action: Deleted supplier ${name} (#${code})`);
+    auditApi.create({
+      action: "SUPPLIER_DELETED",
+      entity_type: "SUPPLIER",
+      entity_id: code,
+      metadata: { name, supplier_code: code },
+    }).catch(() => {});
     setDeletingSupplier(null);
     setAdminPasswordInput("");
     setAdminAuthError(null);
@@ -199,6 +206,17 @@ export default function Suppliers() {
 
     setSuppliers((prev) => [newSupplier, ...prev]);
     showToast(`Successfully onboarded ${newSupplier.name} (#${newSupplier.supplier_code})!`);
+    auditApi.create({
+      action: "SUPPLIER_ONBOARDED",
+      entity_type: "SUPPLIER",
+      entity_id: newSupplier.supplier_code,
+      metadata: {
+        name: newSupplier.name,
+        supplier_code: newSupplier.supplier_code,
+        email: newSupplier.email,
+        category: newSupplier.category,
+      },
+    }).catch(() => {});
     setIsAddModalOpen(false);
     resetForm();
   };
@@ -241,6 +259,17 @@ export default function Suppliers() {
     );
 
     showToast(`Updated details for ${formData.name} (#${formData.supplier_code})`);
+    auditApi.create({
+      action: "SUPPLIER_UPDATED",
+      entity_type: "SUPPLIER",
+      entity_id: formData.supplier_code,
+      metadata: {
+        name: formData.name,
+        supplier_code: formData.supplier_code,
+        email: formData.email,
+        is_active: formData.is_active,
+      },
+    }).catch(() => {});
     setEditingSupplier(null);
     resetForm();
   };
@@ -254,6 +283,16 @@ export default function Suppliers() {
     showToast(
       `${supplier.name} is now marked as ${nextStatus ? "ACTIVE PARTNER" : "INACTIVE / SUSPENDED"}`
     );
+    auditApi.create({
+      action: nextStatus ? "SUPPLIER_ACTIVATED" : "SUPPLIER_DEACTIVATED",
+      entity_type: "SUPPLIER",
+      entity_id: supplier.supplier_code,
+      metadata: {
+        name: supplier.name,
+        supplier_code: supplier.supplier_code,
+        is_active: nextStatus,
+      },
+    }).catch(() => {});
   };
 
   const resetForm = () => {

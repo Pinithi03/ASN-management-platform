@@ -2,9 +2,10 @@
 // frontend/src/pages/AdminDashboard.tsx
 
 import { useQuery } from "@tanstack/react-query";
-import { Mail, FileText, Package, Truck, RefreshCw, Building2, MapPin, ArrowRight } from "lucide-react";
+import { Mail, FileText, Package, Truck, RefreshCw, Building2, MapPin, ArrowRight, ScrollText, ShieldAlert } from "lucide-react";
 import { emailApi } from "@/services/emailApi";
 import { poApi } from "@/services/poApi";
+import { auditApi } from "@/services/auditApi";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 
@@ -32,6 +33,11 @@ export default function AdminDashboard() {
   const { data: recentEmails } = useQuery({
     queryKey: ["recentEmails"],
     queryFn: () => emailApi.list({ per_page: 5 }),
+  });
+
+  const { data: recentAuditLogs } = useQuery({
+    queryKey: ["recentAuditLogs"],
+    queryFn: () => auditApi.list({ per_page: 5 }),
   });
 
   const isLoading = emailLoading || poLoading;
@@ -267,53 +273,108 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {/* Recent System Inbound Emails */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-900">Recent Inbound System Emails</h2>
-              <button
-                onClick={() => navigate("/emails")}
-                className="text-sm text-blue-600 hover:text-blue-700 font-semibold"
-              >
-                View all system emails →
-              </button>
+          {/* Recent Activity Grid: Inbound Emails & Audit Trail */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Recent System Inbound Emails */}
+            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-gray-900">Recent Inbound System Emails</h2>
+                <button
+                  onClick={() => navigate("/emails")}
+                  className="text-sm text-blue-600 hover:text-blue-700 font-semibold"
+                >
+                  View all emails →
+                </button>
+              </div>
+
+              {recentEmails?.items.length ? (
+                <div className="space-y-2">
+                  {recentEmails.items.map((email) => (
+                    <div
+                      key={email.id}
+                      onClick={() => navigate("/emails")}
+                      className="flex items-center justify-between p-3 rounded-lg hover:bg-blue-50/50 cursor-pointer transition-colors border border-transparent hover:border-gray-200"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+                          <Mail className="w-4 h-4 text-blue-600" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {email.subject || "No subject"}
+                          </p>
+                          <p className="text-xs text-gray-500 truncate">
+                            {email.from_address || "Unknown sender"}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0 ml-3">
+                        <span className="text-xs text-gray-400">
+                          {email.received_at ? format(new Date(email.received_at), "MMM d, HH:mm") : "—"}
+                        </span>
+                        <span className="px-2 py-0.5 text-xs font-semibold rounded bg-emerald-100 text-emerald-800">
+                          AUTO-PARSED
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-400 text-center py-6">No emails ingested yet</p>
+              )}
             </div>
 
-            {recentEmails?.items.length ? (
-              <div className="space-y-2">
-                {recentEmails.items.map((email) => (
-                  <div
-                    key={email.id}
-                    onClick={() => navigate("/emails")}
-                    className="flex items-center justify-between p-3 rounded-lg hover:bg-blue-50/50 cursor-pointer transition-colors border border-transparent hover:border-gray-200"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
-                        <Mail className="w-4 h-4 text-blue-600" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">
-                          {email.subject || "No subject"}
-                        </p>
-                        <p className="text-xs text-gray-500 truncate">
-                          {email.from_address || "Unknown sender"}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 shrink-0 ml-3">
-                      <span className="text-xs text-gray-400">
-                        {email.received_at ? format(new Date(email.received_at), "MMM d, HH:mm") : "—"}
-                      </span>
-                      <span className="px-2.5 py-0.5 text-xs font-semibold rounded bg-emerald-100 text-emerald-800">
-                        AUTO-PARSED
-                      </span>
-                    </div>
-                  </div>
-                ))}
+            {/* Audit Trail & System Activity Stream */}
+            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <ScrollText className="w-5 h-5 text-indigo-600" />
+                  <h2 className="text-lg font-semibold text-gray-900">System Audit Stream</h2>
+                </div>
+                <button
+                  onClick={() => navigate("/audit-logs")}
+                  className="text-sm text-blue-600 hover:text-blue-700 font-semibold"
+                >
+                  View full audit log →
+                </button>
               </div>
-            ) : (
-              <p className="text-sm text-gray-400 text-center py-6">No emails ingested yet</p>
-            )}
+
+              {recentAuditLogs?.items.length ? (
+                <div className="space-y-2">
+                  {recentAuditLogs.items.map((log) => (
+                    <div
+                      key={log.id}
+                      onClick={() => navigate("/audit-logs")}
+                      className="flex items-center justify-between p-3 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors border border-transparent hover:border-gray-200"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
+                          <ShieldAlert className="w-4 h-4 text-indigo-600" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {log.action}
+                          </p>
+                          <p className="text-xs text-gray-500 truncate">
+                            {log.user?.email || log.user?.full_name || log.user_id || "System"} • {log.entity_type}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0 ml-3">
+                        <span className="text-xs text-gray-400">
+                          {log.created_at ? format(new Date(log.created_at), "MMM d, HH:mm") : "—"}
+                        </span>
+                        <span className="px-2 py-0.5 text-[11px] font-semibold rounded bg-slate-100 text-slate-700 border border-slate-200">
+                          {log.entity_type}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-400 text-center py-6">No administrative audit records logged yet</p>
+              )}
+            </div>
           </div>
         </>
       )}

@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { useAuthStore } from "@/store/authStore";
+import { auditApi } from "@/services/auditApi";
 
 type TabType = "company" | "email" | "asn" | "security" | "health";
 
@@ -66,6 +67,18 @@ export default function Settings() {
   const handleSave = () => {
     setSaving(true);
     setSavedSuccess(false);
+    auditApi.create({
+      action: "SETTINGS_UPDATED",
+      entity_type: "SETTINGS",
+      entity_id: activeTab,
+      metadata: {
+        tab: activeTab,
+        company_name: companyName,
+        imap_host: imapHost,
+        default_parser: defaultParser,
+        xml_schema_version: xmlSchemaVersion,
+      },
+    }).catch(() => {});
     setTimeout(() => {
       setSaving(false);
       setSavedSuccess(true);
