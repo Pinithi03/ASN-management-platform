@@ -423,10 +423,11 @@ async def process_and_save(
         Summary with email_record_id, attachment_ids, parsed_data_ids, and PO ids.
     """
     try:
-        # 1. Save the email record
-        status = "PARSED" if parsed_pos else "REVIEW"
+        # 1. Save the email record — fully automated: COMMITTED if POs extracted, ERROR if none
+        status = "COMMITTED" if parsed_pos else "ERROR"
+        err_msg = None if parsed_pos else "No purchase orders extracted from email body or attachments"
         email_record = await save_email_record(
-            db, decoded, classification, company_id, status=status,
+            db, decoded, classification, company_id, status=status, error_message=err_msg
         )
 
         # 2. Save attachments to MinIO + DB

@@ -582,62 +582,6 @@ async def update_email(
     return {"status": "updated", "email_id": str(email_id)}
 
 
-# ─── POST /{email_id}/approve — Approve Email ───────────────────
-
-@router.post("/{email_id}/approve")
-async def approve_email(
-    email_id: UUID,
-    db: AsyncSession = Depends(get_db),
-):
-    """Approve an email in REVIEW or PARSED status → COMMITTED."""
-    result = await db.execute(
-        select(EmailRecord).where(EmailRecord.id == email_id)
-    )
-    record = result.scalar_one_or_none()
-    if not record:
-        raise HTTPException(status_code=404, detail="Email not found")
-
-    if record.status not in ("REVIEW", "PARSED"):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot approve email with status '{record.status}'. Must be REVIEW or PARSED.",
-        )
-
-    record.status = "COMMITTED"
-    record.processed_at = datetime.now(timezone.utc)
-    record.updated_at = datetime.now(timezone.utc)
-    await db.commit()
-
-    logger.info("Approved email %s", email_id)
-    return {"status": "approved", "email_id": str(email_id)}
-
-
-# ─── POST /{email_id}/reject — Reject Email ─────────────────────
-
-@router.post("/{email_id}/reject")
-async def reject_email(
-    email_id: UUID,
-    body: RejectRequest,
-    db: AsyncSession = Depends(get_db),
-):
-    """Reject an email with a reason."""
-    result = await db.execute(
-        select(EmailRecord).where(EmailRecord.id == email_id)
-    )
-    record = result.scalar_one_or_none()
-    if not record:
-        raise HTTPException(status_code=404, detail="Email not found")
-
-    record.status = "REJECTED"
-    record.error_message = f"Rejected: {body.reason}"
-    record.processed_at = datetime.now(timezone.utc)
-    record.updated_at = datetime.now(timezone.utc)
-    await db.commit()
-
-    logger.info("Rejected email %s: %s", email_id, body.reason)
-    return {"status": "rejected", "email_id": str(email_id), "reason": body.reason}
-
-
 # ─── POST /{email_id}/reprocess — Re-run Pipeline ───────────────
 
 @router.post("/{email_id}/reprocess")

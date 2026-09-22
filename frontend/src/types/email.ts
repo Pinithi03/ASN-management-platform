@@ -5,9 +5,7 @@ export type EmailStatus =
   | "QUEUED"
   | "PROCESSING"
   | "PARSED"
-  | "REVIEW"
   | "COMMITTED"
-  | "REJECTED"
   | "ERROR";
 
 export type POStatus =

@@ -51,18 +51,6 @@ export const emailApi = {
     return data;
   },
 
-  /** Approve an email (REVIEW/PARSED → COMMITTED) */
-  approve: async (emailId: string): Promise<{ status: string }> => {
-    const { data } = await api.post(`/emails/${emailId}/approve`);
-    return data;
-  },
-
-  /** Reject an email with a reason */
-  reject: async (emailId: string, reason: string): Promise<{ status: string }> => {
-    const { data } = await api.post(`/emails/${emailId}/reject`, { reason });
-    return data;
-  },
-
   /** Re-queue an email for reprocessing */
   reprocess: async (emailId: string): Promise<{ status: string }> => {
     const { data } = await api.post(`/emails/${emailId}/reprocess`);

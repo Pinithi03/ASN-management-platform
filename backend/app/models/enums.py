@@ -25,9 +25,7 @@ class EmailStatus(str, enum.Enum):
     QUEUED = "QUEUED"
     PROCESSING = "PROCESSING"
     PARSED = "PARSED"
-    REVIEW = "REVIEW"
     COMMITTED = "COMMITTED"
-    REJECTED = "REJECTED"
     SENT = "SENT"          # Used for outbound emails
     ERROR = "ERROR"
 
@@ -88,7 +86,6 @@ class ASNStatus(str, enum.Enum):
 class ChangeSource(str, enum.Enum):
     """Source of a PO change for po_history."""
     EMAIL_AUTO = "EMAIL_AUTO"
-    EMAIL_REVIEW = "EMAIL_REVIEW"
     MANUAL = "MANUAL"
     SYSTEM = "SYSTEM"
     XML_SEND = "XML_SEND"
