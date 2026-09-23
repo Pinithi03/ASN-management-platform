@@ -239,25 +239,46 @@ export default function EmailInbox() {
                   <tbody className="divide-y divide-gray-100">
                     {emails.map((email) => {
                       const isSelected = email.id === selectedEmailId;
+                      const isUnread = email.status === "QUEUED" || email.status === "PROCESSING" || email.status === "PARSED";
+
                       return (
                         <tr
                           key={email.id}
                           onClick={() => setSelectedEmailId(email.id)}
-                          className={`cursor-pointer transition-colors ${
+                          className={`cursor-pointer transition-all ${
                             isSelected
-                              ? "bg-blue-50 border-l-4 border-blue-600 font-medium"
-                              : "hover:bg-gray-50"
+                              ? "bg-blue-100/90 border-l-4 border-blue-800 font-extrabold text-blue-950 shadow-xs"
+                              : isUnread
+                              ? "bg-blue-50/90 border-l-4 border-blue-600 font-semibold text-blue-950 hover:bg-blue-100/70"
+                              : "hover:bg-gray-50/80"
                           }`}
                         >
-                          <td className="px-4 py-3 max-w-[140px] truncate text-gray-900 font-medium">
+                          <td className="px-4 py-3 max-w-[140px] truncate text-gray-900 font-bold">
+                            {isUnread ? (
+                              <span
+                                className="w-2.5 h-2.5 rounded-full bg-blue-700 inline-block mr-2 shrink-0 animate-pulse shadow-xs"
+                                title="Unread Inbound Email"
+                              />
+                            ) : (
+                              <span
+                                className="w-2 h-2 rounded-full bg-emerald-600 inline-block mr-2 shrink-0"
+                                title="Processed Email"
+                              />
+                            )}
                             {email.from_address || "—"}
                           </td>
-                          <td className="px-4 py-3 max-w-[200px] truncate text-gray-700">
+                          <td className="px-4 py-3 max-w-[200px] truncate text-gray-800 font-medium">
                             {email.subject || "—"}
                           </td>
                           {!selectedEmailId && (
                             <td className="px-4 py-3">
-                              <span className="px-2 py-0.5 text-xs font-semibold bg-blue-50 text-blue-700 rounded-md border border-blue-100">
+                              <span
+                                className={`px-2.5 py-0.5 text-xs font-bold rounded-md border shadow-xs ${
+                                  isUnread
+                                    ? "bg-blue-700 text-white border-blue-800"
+                                    : "bg-emerald-700 text-white border-emerald-800"
+                                }`}
+                              >
                                 {email.email_type || "PO Email"}
                               </span>
                             </td>
@@ -276,7 +297,9 @@ export default function EmailInbox() {
                                 setSelectedEmailId(email.id);
                               }}
                               className={`p-1.5 rounded-lg transition-colors ${
-                                isSelected ? "text-blue-700 bg-blue-200" : "text-gray-400 hover:text-blue-600 hover:bg-gray-100"
+                                isSelected
+                                  ? "text-blue-800 bg-blue-200/90 font-bold"
+                                  : "text-gray-400 hover:text-blue-700 hover:bg-blue-100/50"
                               }`}
                               title="Preview Email"
                             >
