@@ -20,7 +20,9 @@ import {
   Trash2,
   AlertTriangle,
   Power,
+  BellRing,
 } from "lucide-react";
+import { auditApi } from "@/services/auditApi";
 
 export interface SupplierItem {
   id: string;
@@ -33,6 +35,8 @@ export interface SupplierItem {
   category?: string;
   is_active: boolean;
   onboarded_at: string;
+  recently_updated_by_supplier?: boolean;
+  last_profile_updated_at?: string;
 }
 
 const INITIAL_SUPPLIERS: SupplierItem[] = [
@@ -149,6 +153,12 @@ export default function Suppliers() {
 
     setSuppliers((prev) => prev.filter((s) => s.id !== deletingSupplier.id));
     showToast(`Verified Admin Action: Deleted supplier ${name} (#${code})`);
+    auditApi.create({
+      action: "SUPPLIER_DELETED",
+      entity_type: "SUPPLIER",
+      entity_id: code,
+      metadata: { name, supplier_code: code },
+    }).catch(() => {});
     setDeletingSupplier(null);
     setAdminPasswordInput("");
     setAdminAuthError(null);
@@ -170,6 +180,31 @@ export default function Suppliers() {
   useEffect(() => {
     localStorage.setItem("asn_onboarded_suppliers", JSON.stringify(suppliers));
   }, [suppliers]);
+
+  // Sync with localStorage on window focus / storage events (when supplier updates in another tab)
+  useEffect(() => {
+    const handleSync = () => {
+      const saved = localStorage.getItem("asn_onboarded_suppliers");
+      if (saved) {
+        try {
+          setSuppliers(JSON.parse(saved));
+        } catch {}
+      }
+    };
+    window.addEventListener("focus", handleSync);
+    window.addEventListener("storage", handleSync);
+    return () => {
+      window.removeEventListener("focus", handleSync);
+      window.removeEventListener("storage", handleSync);
+    };
+  }, []);
+
+  const handleAcknowledgeSupplierUpdate = (supplier: SupplierItem) => {
+    setSuppliers((prev) =>
+      prev.map((s) => (s.id === supplier.id ? { ...s, recently_updated_by_supplier: false } : s))
+    );
+    showToast(`Acknowledged profile updates for ${supplier.name} (#${supplier.supplier_code})`);
+  };
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -199,12 +234,28 @@ export default function Suppliers() {
 
     setSuppliers((prev) => [newSupplier, ...prev]);
     showToast(`Successfully onboarded ${newSupplier.name} (#${newSupplier.supplier_code})!`);
+    auditApi.create({
+      action: "SUPPLIER_ONBOARDED",
+      entity_type: "SUPPLIER",
+      entity_id: newSupplier.supplier_code,
+      metadata: {
+        name: newSupplier.name,
+        supplier_code: newSupplier.supplier_code,
+        email: newSupplier.email,
+        category: newSupplier.category,
+      },
+    }).catch(() => {});
     setIsAddModalOpen(false);
     resetForm();
   };
 
   // ─── UPDATE ───────────────────────────────────────────────────
   const handleOpenEdit = (supplier: SupplierItem) => {
+    if (supplier.recently_updated_by_supplier) {
+      setSuppliers((prev) =>
+        prev.map((s) => (s.id === supplier.id ? { ...s, recently_updated_by_supplier: false } : s))
+      );
+    }
     setEditingSupplier(supplier);
     setFormData({
       name: supplier.name,
@@ -241,6 +292,17 @@ export default function Suppliers() {
     );
 
     showToast(`Updated details for ${formData.name} (#${formData.supplier_code})`);
+    auditApi.create({
+      action: "SUPPLIER_UPDATED",
+      entity_type: "SUPPLIER",
+      entity_id: formData.supplier_code,
+      metadata: {
+        name: formData.name,
+        supplier_code: formData.supplier_code,
+        email: formData.email,
+        is_active: formData.is_active,
+      },
+    }).catch(() => {});
     setEditingSupplier(null);
     resetForm();
   };
@@ -254,6 +316,16 @@ export default function Suppliers() {
     showToast(
       `${supplier.name} is now marked as ${nextStatus ? "ACTIVE PARTNER" : "INACTIVE / SUSPENDED"}`
     );
+    auditApi.create({
+      action: nextStatus ? "SUPPLIER_ACTIVATED" : "SUPPLIER_DEACTIVATED",
+      entity_type: "SUPPLIER",
+      entity_id: supplier.supplier_code,
+      metadata: {
+        name: supplier.name,
+        supplier_code: supplier.supplier_code,
+        is_active: nextStatus,
+      },
+    }).catch(() => {});
   };
 
   const resetForm = () => {
@@ -320,6 +392,26 @@ export default function Suppliers() {
           <button onClick={() => setToastMessage(null)} className="text-emerald-700 hover:text-emerald-900">
             <X className="w-4 h-4" />
           </button>
+        </div>
+      )}
+
+      {/* Supplier Profile Updates Alert Banner */}
+      {suppliers.some((s) => s.recently_updated_by_supplier) && (
+        <div className="p-4 bg-amber-50 border border-amber-200 text-amber-900 text-sm rounded-xl flex items-center justify-between shadow-sm animate-in fade-in">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-amber-100 rounded-lg flex items-center justify-center shrink-0">
+              <BellRing className="w-5 h-5 text-amber-600 animate-bounce" />
+            </div>
+            <div>
+              <p className="font-bold text-amber-900">
+                Supplier Profile Updates Received!
+              </p>
+              <p className="text-xs text-amber-800">
+                {suppliers.filter((s) => s.recently_updated_by_supplier).map((s) => s.name).join(", ")}{" "}
+                recently updated contact details from the Supplier Portal. Review updated cards below.
+              </p>
+            </div>
+          </div>
         </div>
       )}
 
@@ -399,10 +491,31 @@ export default function Suppliers() {
           <div
             key={s.id}
             className={`rounded-2xl border bg-white p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between ${
-              s.is_active ? "border-gray-200" : "border-red-200 bg-red-50/20"
+              s.recently_updated_by_supplier
+                ? "border-amber-300 ring-2 ring-amber-400/20 bg-amber-50/10"
+                : s.is_active
+                ? "border-gray-200"
+                : "border-red-200 bg-red-50/20"
             }`}
           >
             <div>
+              {/* Profile Update Notice Badge */}
+              {s.recently_updated_by_supplier && (
+                <div className="mb-3 p-2 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between shadow-sm animate-in fade-in">
+                  <span className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                    <BellRing className="w-3.5 h-3.5 text-amber-600 animate-pulse shrink-0" />
+                    New Profile Changes
+                  </span>
+                  <button
+                    onClick={() => handleAcknowledgeSupplierUpdate(s)}
+                    className="px-2 py-0.5 text-[11px] font-bold text-amber-900 bg-white hover:bg-amber-100 border border-amber-300 rounded-lg transition-colors shadow-xs"
+                    title="Clear notification and acknowledge update"
+                  >
+                    Acknowledge
+                  </button>
+                </div>
+              )}
+
               {/* Card Header */}
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">

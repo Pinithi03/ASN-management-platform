@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import ForeignKey, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -70,7 +70,7 @@ class AuditLog(Base, CompanyScopedMixin):
 
     # Append-only — own created_at, no updated_at
     created_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP,
+        DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
         default=lambda: datetime.now(timezone.utc),

@@ -1,23 +1,26 @@
 // ─── Admin Dashboard Page ──────────────────────────────────────────
 // frontend/src/pages/AdminDashboard.tsx
 
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Mail, FileText, Package, Truck, RefreshCw, Building2, MapPin, ArrowRight } from "lucide-react";
+import { Mail, FileText, Package, Truck, RefreshCw, ScrollText, ShieldAlert, BarChart3, TrendingUp } from "lucide-react";
 import { emailApi } from "@/services/emailApi";
 import { poApi } from "@/services/poApi";
+import { auditApi } from "@/services/auditApi";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 
-const SRI_LANKA_PLANTS = [
-  { name: "Sirio Ltd", code: "SIRIO (PPA1)", location: "Badalgama", status: "Active", bg: "bg-blue-50 text-blue-700 border-blue-200" },
-  { name: "Benjio Ltd", code: "BENJIO (PPC1)", location: "Bingiriya", status: "Active", bg: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  { name: "Omega Line Ltd", code: "OMEGA (PPA2)", location: "Sandalankawa", status: "Active", bg: "bg-purple-50 text-purple-700 border-purple-200" },
-  { name: "Alpha Apparels Ltd", code: "ALPHA (PPA3)", location: "Polgahawela", status: "Active", bg: "bg-amber-50 text-amber-700 border-amber-200" },
-  { name: "Aqua Dynamics Ltd", code: "AQUA (PPA4)", location: "Negombo", status: "Active", bg: "bg-indigo-50 text-indigo-700 border-indigo-200" },
+const PLANT_METRICS = [
+  { name: "Sirio Ltd", code: "SIRIO", location: "Badalgama", asns: 42, emails: 128, success: 98, color: "bg-blue-500", text: "text-blue-600", lightBg: "bg-blue-50" },
+  { name: "Benji Ltd", code: "BENJI", location: "Bingiriya", asns: 35, emails: 94, success: 96, color: "bg-emerald-500", text: "text-emerald-600", lightBg: "bg-emerald-50" },
+  { name: "Omega Line Ltd", code: "OMEGA", location: "Sandalankawa", asns: 48, emails: 142, success: 100, color: "bg-purple-500", text: "text-purple-600", lightBg: "bg-purple-50" },
+  { name: "Alpha Apparels", code: "ALPHA", location: "Polgahawela", asns: 29, emails: 82, success: 95, color: "bg-amber-500", text: "text-amber-600", lightBg: "bg-amber-50" },
+  { name: "Vavuniya Apparels", code: "VAVUNIYA", location: "Vavuniya", asns: 38, emails: 105, success: 97, color: "bg-indigo-500", text: "text-indigo-600", lightBg: "bg-indigo-50" },
 ];
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
+  const [activeMetric, setActiveMetric] = useState<"asns" | "emails" | "success">("asns");
 
   const { data: emailStats, isLoading: emailLoading } = useQuery({
     queryKey: ["emailStats"],
@@ -32,6 +35,11 @@ export default function AdminDashboard() {
   const { data: recentEmails } = useQuery({
     queryKey: ["recentEmails"],
     queryFn: () => emailApi.list({ per_page: 5 }),
+  });
+
+  const { data: recentAuditLogs } = useQuery({
+    queryKey: ["recentAuditLogs"],
+    queryFn: () => auditApi.list({ per_page: 5 }),
   });
 
   const isLoading = emailLoading || poLoading;
@@ -208,112 +216,205 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {/* Plant Operations Overview (5 Sri Lanka Plants) */}
+            {/* Plant Operations & Throughput Graph */}
             <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm flex flex-col justify-between h-full">
               <div>
-                <div className="flex items-center justify-between mb-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
                   <div className="flex items-center gap-2">
-                    <Building2 className="w-5 h-5 text-blue-600" />
+                    <BarChart3 className="w-5 h-5 text-blue-600" />
                     <h2 className="text-lg font-semibold text-gray-900">
-                      Plant Operations Overview
+                      Plant Operations & Throughput
                     </h2>
                   </div>
-                  <span className="text-xs font-semibold px-2 py-0.5 bg-blue-50 text-blue-700 rounded-md border border-blue-100">
-                    5 Plants
-                  </span>
+
+                  {/* Metric Toggle Pills */}
+                  <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg self-start sm:self-auto">
+                    {[
+                      { id: "asns", label: "ASNs" },
+                      { id: "emails", label: "Emails" },
+                      { id: "success", label: "Success %" },
+                    ].map((m) => (
+                      <button
+                        key={m.id}
+                        onClick={() => setActiveMetric(m.id as "asns" | "emails" | "success")}
+                        className={`px-2.5 py-0.5 text-xs font-semibold rounded-md transition-all ${
+                          activeMetric === m.id
+                            ? "bg-white text-gray-900 shadow-sm"
+                            : "text-gray-500 hover:text-gray-700"
+                        }`}
+                      >
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
+
                 <p className="text-xs text-gray-500 mb-4">
-                  Manufacturing plant status & ASN dispatch centers across Sri Lanka:
+                  Comparative performance & volume distribution across 5 apparel manufacturing plants:
                 </p>
 
-                <div className="space-y-2">
-                  {SRI_LANKA_PLANTS.map((plant) => (
-                    <div
-                      key={plant.name}
-                      onClick={() => navigate("/shipments")}
-                      className="p-2.5 rounded-lg border border-gray-100 hover:border-gray-200 hover:bg-gray-50 flex items-center justify-between transition-all cursor-pointer"
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <MapPin className="w-4 h-4 text-gray-400 shrink-0" />
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-gray-900 truncate">
-                            {plant.name}{" "}
-                            <span className="font-normal text-gray-400">({plant.location})</span>
-                          </p>
-                          <p className="text-[11px] text-gray-500 font-mono">{plant.code}</p>
-                        </div>
-                      </div>
+                {/* Graph Visualization Container */}
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <div className="h-44 flex items-end justify-between gap-3 px-2 pb-2">
+                    {PLANT_METRICS.map((plant) => {
+                      const maxVal = Math.max(...PLANT_METRICS.map((p) => p[activeMetric]));
+                      const val = plant[activeMetric];
+                      const heightPct = maxVal > 0 ? Math.max(18, Math.round((val / maxVal) * 100)) : 10;
 
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className={`px-2 py-0.5 text-[10px] font-semibold rounded border ${plant.bg}`}>
-                          {plant.status}
-                        </span>
-                        <ArrowRight className="w-3.5 h-3.5 text-gray-400" />
-                      </div>
-                    </div>
-                  ))}
+                      return (
+                        <div key={plant.code} className="flex-1 flex flex-col items-center group relative">
+                          {/* Floating Hover Tooltip */}
+                          <div className="absolute -top-12 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none bg-gray-900 text-white text-[11px] rounded-lg py-1 px-2.5 shadow-xl whitespace-nowrap z-20">
+                            <p className="font-bold">{plant.name}</p>
+                            <p className="text-gray-300">
+                              {activeMetric === "asns"
+                                ? `${val} ASNs Dispatched`
+                                : activeMetric === "emails"
+                                ? `${val} Emails Parsed`
+                                : `${val}% Auto-Parsed`}
+                              {" • "}{plant.location}
+                            </p>
+                          </div>
+
+                          {/* Value Badge above Bar */}
+                          <span className="text-xs font-bold text-gray-700 mb-1.5 font-mono transition-transform group-hover:scale-110">
+                            {val}{activeMetric === "success" ? "%" : ""}
+                          </span>
+
+                          {/* Bar Graphic with Hover Effect */}
+                          <div className="w-full bg-gray-100 rounded-t-lg overflow-hidden flex items-end h-32 p-0.5">
+                            <div
+                              className={`w-full ${plant.color} rounded-t-md transition-all duration-500 group-hover:brightness-110 shadow-sm`}
+                              style={{ height: `${heightPct}%` }}
+                            />
+                          </div>
+
+                          {/* Plant Code Label below Bar */}
+                          <span className="mt-2 text-[11px] font-bold text-gray-500 font-mono tracking-wider group-hover:text-gray-900">
+                            {plant.code}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 
+              {/* Card Footer Summary */}
               <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
-                <span>Oniverse Group (Calzedonia) Sri Lanka</span>
-                <button
-                  onClick={() => navigate("/shipments")}
-                  className="text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1"
-                >
-                  Manage Shipments →
-                </button>
+                <span className="flex items-center gap-1.5">
+                  <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
+                  <span>5-Plant Operations Active</span>
+                </span>
+                <span className="font-semibold text-gray-700 font-mono">
+                  {PLANT_METRICS.reduce((acc, p) => acc + p.asns, 0)} Total ASNs
+                </span>
               </div>
             </div>
           </div>
 
-          {/* Recent System Inbound Emails */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-900">Recent Inbound System Emails</h2>
-              <button
-                onClick={() => navigate("/emails")}
-                className="text-sm text-blue-600 hover:text-blue-700 font-semibold"
-              >
-                View all system emails →
-              </button>
+          {/* Recent Activity Grid: Inbound Emails & Audit Trail */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Recent System Inbound Emails */}
+            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-gray-900">Recent Inbound System Emails</h2>
+                <button
+                  onClick={() => navigate("/emails")}
+                  className="text-sm text-blue-600 hover:text-blue-700 font-semibold"
+                >
+                  View all emails →
+                </button>
+              </div>
+
+              {recentEmails?.items.length ? (
+                <div className="space-y-2">
+                  {recentEmails.items.map((email) => (
+                    <div
+                      key={email.id}
+                      onClick={() => navigate("/emails")}
+                      className="flex items-center justify-between p-3 rounded-lg hover:bg-blue-50/50 cursor-pointer transition-colors border border-transparent hover:border-gray-200"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+                          <Mail className="w-4 h-4 text-blue-600" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {email.subject || "No subject"}
+                          </p>
+                          <p className="text-xs text-gray-500 truncate">
+                            {email.from_address || "Unknown sender"}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0 ml-3">
+                        <span className="text-xs text-gray-400">
+                          {email.received_at ? format(new Date(email.received_at), "MMM d, HH:mm") : "—"}
+                        </span>
+                        <span className="px-2 py-0.5 text-xs font-semibold rounded bg-emerald-100 text-emerald-800">
+                          AUTO-PARSED
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-400 text-center py-6">No emails ingested yet</p>
+              )}
             </div>
 
-            {recentEmails?.items.length ? (
-              <div className="space-y-2">
-                {recentEmails.items.map((email) => (
-                  <div
-                    key={email.id}
-                    onClick={() => navigate("/emails")}
-                    className="flex items-center justify-between p-3 rounded-lg hover:bg-blue-50/50 cursor-pointer transition-colors border border-transparent hover:border-gray-200"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
-                        <Mail className="w-4 h-4 text-blue-600" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">
-                          {email.subject || "No subject"}
-                        </p>
-                        <p className="text-xs text-gray-500 truncate">
-                          {email.from_address || "Unknown sender"}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 shrink-0 ml-3">
-                      <span className="text-xs text-gray-400">
-                        {email.received_at ? format(new Date(email.received_at), "MMM d, HH:mm") : "—"}
-                      </span>
-                      <span className="px-2.5 py-0.5 text-xs font-semibold rounded bg-emerald-100 text-emerald-800">
-                        AUTO-PARSED
-                      </span>
-                    </div>
-                  </div>
-                ))}
+            {/* Audit Trail & System Activity Stream */}
+            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <ScrollText className="w-5 h-5 text-indigo-600" />
+                  <h2 className="text-lg font-semibold text-gray-900">System Audit Stream</h2>
+                </div>
+                <button
+                  onClick={() => navigate("/audit-logs")}
+                  className="text-sm text-blue-600 hover:text-blue-700 font-semibold"
+                >
+                  View full audit log →
+                </button>
               </div>
-            ) : (
-              <p className="text-sm text-gray-400 text-center py-6">No emails ingested yet</p>
-            )}
+
+              {recentAuditLogs?.items.length ? (
+                <div className="space-y-2">
+                  {recentAuditLogs.items.map((log) => (
+                    <div
+                      key={log.id}
+                      onClick={() => navigate("/audit-logs")}
+                      className="flex items-center justify-between p-3 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors border border-transparent hover:border-gray-200"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
+                          <ShieldAlert className="w-4 h-4 text-indigo-600" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {log.action}
+                          </p>
+                          <p className="text-xs text-gray-500 truncate">
+                            {log.user?.email || log.user?.full_name || log.user_id || "System"} • {log.entity_type}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0 ml-3">
+                        <span className="text-xs text-gray-400">
+                          {log.created_at ? format(new Date(log.created_at), "MMM d, HH:mm") : "—"}
+                        </span>
+                        <span className="px-2 py-0.5 text-[11px] font-semibold rounded bg-slate-100 text-slate-700 border border-slate-200">
+                          {log.entity_type}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-400 text-center py-6">No administrative audit records logged yet</p>
+              )}
+            </div>
           </div>
         </>
       )}

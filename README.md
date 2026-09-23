@@ -4,7 +4,7 @@
 
 ## Overview
 
-This platform serves **5 apparel manufacturing plants** (Sirio, Benjio, Omega Line, Alpha Apparels, Aqua Dynamics), automating email-based PO data ingestion and managing the full ASN lifecycle from purchase order to SAP submission.
+This platform serves **5 apparel manufacturing plants** (Sirio, Benji, Omega Line, Alpha Apparels, Vavuniya Apparels), automating email-based PO data ingestion and managing the full ASN lifecycle from purchase order to SAP submission.
 
 ### Key Capabilities
 
@@ -105,6 +105,10 @@ Run `make help` for all available targets. Key commands:
 - [Development Guide](docs/development.md)
 - [API Documentation](docs/api.md)
 - [Deployment Guide](docs/deployment.md)
+
+## Development Notes & Pending Data Mappings
+
+- **Admin Dashboard — Plant Operations Graph**: The interactive bar chart on the Admin Dashboard (`AdminDashboard.tsx`) is fully wired with metric toggles (`ASNs Dispatched`, `Emails Parsed`, `Success %`) and hover tooltips. The metrics currently display mock plant operational data and will be mapped to live backend DB aggregation endpoints in an upcoming sprint.
 
 ## License
 

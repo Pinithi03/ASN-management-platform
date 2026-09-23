@@ -140,7 +140,7 @@ def run_pipeline_test():
         packing_slip_date="21-04-2025",
         delivery_date="22-04-2025",
         boxes=boxes,
-        note="Test shipment for Benjio",
+        note="Test shipment for Benji",
     )
 
     print("Generated XML snippet:")
