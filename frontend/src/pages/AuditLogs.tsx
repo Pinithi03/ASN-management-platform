@@ -202,10 +202,12 @@ export default function AuditLogs() {
                     <td className="px-6 py-4 text-xs text-gray-600 max-w-xs truncate">
                       {log.metadata?.subject ? (
                         <span>Email: <code className="font-mono">{String(log.metadata.subject)}</code></span>
-                      ) : log.metadata?.supplier_name ? (
-                        <span>Supplier: <strong>{String(log.metadata.supplier_name)}</strong></span>
-                      ) : log.entity_id ? (
-                        <span className="font-mono text-gray-400">ID: {log.entity_id.slice(0, 12)}...</span>
+                      ) : log.metadata?.supplier_name || log.metadata?.name ? (
+                        <span>Supplier: <strong>{String(log.metadata.supplier_name || log.metadata.name)}</strong></span>
+                      ) : log.metadata?.tab ? (
+                        <span>Setting Tab: <strong>{String(log.metadata.tab)}</strong></span>
+                      ) : log.metadata?.entity_code || log.entity_id ? (
+                        <span className="font-mono text-gray-600">{String(log.metadata?.entity_code || log.entity_id)}</span>
                       ) : (
                         <span className="text-gray-400">—</span>
                       )}

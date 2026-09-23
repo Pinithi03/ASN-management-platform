@@ -54,15 +54,43 @@ async def create_audit_log(
     -------
     AuditLog
     """
+    # Parse company_id
+    parsed_company_id = UUID(company_id) if isinstance(company_id, str) else company_id
+
+    # Parse user_id safely
+    parsed_user_id = None
+    if user_id:
+        if isinstance(user_id, UUID):
+            parsed_user_id = user_id
+        elif isinstance(user_id, str):
+            try:
+                parsed_user_id = UUID(user_id)
+            except ValueError:
+                parsed_user_id = None
+
+    # Parse entity_id safely (store non-UUID codes like 'SUP-001' in metadata_)
+    parsed_entity_id = None
+    merged_metadata = dict(metadata) if metadata else {}
+
+    if entity_id:
+        if isinstance(entity_id, UUID):
+            parsed_entity_id = entity_id
+        elif isinstance(entity_id, str):
+            try:
+                parsed_entity_id = UUID(entity_id)
+            except ValueError:
+                parsed_entity_id = None
+                merged_metadata.setdefault("entity_code", entity_id)
+
     log_entry = AuditLog(
-        company_id=UUID(company_id) if isinstance(company_id, str) else company_id,
-        user_id=UUID(user_id) if isinstance(user_id, str) and user_id else None,
+        company_id=parsed_company_id,
+        user_id=parsed_user_id,
         action=action.upper(),
         entity_type=entity_type.upper(),
-        entity_id=UUID(entity_id) if isinstance(entity_id, str) and entity_id else None,
+        entity_id=parsed_entity_id,
         old_values=old_values,
         new_values=new_values,
-        metadata_=metadata or {},
+        metadata_=merged_metadata,
         ip_address=ip_address,
         user_agent=user_agent,
         created_at=datetime.now(timezone.utc),

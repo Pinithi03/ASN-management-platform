@@ -106,6 +106,10 @@ Run `make help` for all available targets. Key commands:
 - [API Documentation](docs/api.md)
 - [Deployment Guide](docs/deployment.md)
 
+## Development Notes & Pending Data Mappings
+
+- **Admin Dashboard — Plant Operations Graph**: The interactive bar chart on the Admin Dashboard (`AdminDashboard.tsx`) is fully wired with metric toggles (`ASNs Dispatched`, `Emails Parsed`, `Success %`) and hover tooltips. The metrics currently display mock plant operational data and will be mapped to live backend DB aggregation endpoints in an upcoming sprint.
+
 ## License
 
 Proprietary — SIRIO.LTD / Oniverse Group
