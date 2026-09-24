@@ -7,6 +7,7 @@ parsing. Maps ParsedPO dataclasses → SQLAlchemy model inserts.
 
 from __future__ import annotations
 
+import email.utils
 import hashlib
 import logging
 from dataclasses import asdict
@@ -112,7 +113,11 @@ async def save_email_record(
         status=status,
         email_type=classification.format.value,
         error_message=error_message,
-        received_at=datetime.now(timezone.utc),
+        received_at=(
+            email.utils.parsedate_to_datetime(decoded.date)
+            if getattr(decoded, "date", None)
+            else datetime.now(timezone.utc)
+        ) if getattr(decoded, "date", None) else datetime.now(timezone.utc),
     )
 
     db.add(record)
