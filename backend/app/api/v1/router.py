@@ -12,6 +12,7 @@ from app.api.v1.endpoints import (
     health,
     purchase_orders,
     shipments,
+    users,
 )
 
 api_router = APIRouter()
@@ -25,6 +26,11 @@ api_router.include_router(
 api_router.include_router(
     health.router,
     tags=["Health"],
+)
+api_router.include_router(
+    users.router,
+    prefix="/users",
+    tags=["User Management"],
 )
 api_router.include_router(
     audit_logs.router,
