@@ -43,6 +43,7 @@ CALZEDONIA_HUB_SUPPLIER_ID = uuid.UUID("00000000-0000-0000-0000-000000058376")
 
 
 async def seed_database() -> None:
+    global COATS_SUPPLIER_ID, HAYLEYS_SUPPLIER_ID, SOUTH_ASIA_SUPPLIER_ID, CALZEDONIA_HUB_SUPPLIER_ID
     logger.info("Starting database seed...")
 
     async with async_session_factory() as db:
@@ -166,30 +167,45 @@ async def seed_database() -> None:
         ]
 
         for s_data in suppliers_data:
-            existing = await db.execute(select(Supplier).where(Supplier.id == s_data["id"]))
+            existing = await db.execute(select(Supplier).where(Supplier.supplier_code == s_data["supplier_code"]))
             if not existing.scalar_one_or_none():
                 db.add(Supplier(**s_data))
         await db.commit()
         logger.info("Suppliers seeded.")
 
+        # Dynamically map supplier IDs
+        coats_obj = (await db.execute(select(Supplier).where(Supplier.supplier_code == "0000018194"))).scalar_one_or_none()
+        if coats_obj:
+            COATS_SUPPLIER_ID = coats_obj.id
+
+        hayleys_obj = (await db.execute(select(Supplier).where(Supplier.supplier_code == "0000001122"))).scalar_one_or_none()
+        if hayleys_obj:
+            HAYLEYS_SUPPLIER_ID = hayleys_obj.id
+
+        south_asia_obj = (await db.execute(select(Supplier).where(Supplier.supplier_code == "0000080589"))).scalar_one_or_none()
+        if south_asia_obj:
+            SOUTH_ASIA_SUPPLIER_ID = south_asia_obj.id
+
         # 3. Supplier Plants
         for s_data in suppliers_data:
-            existing_sp = await db.execute(
-                select(SupplierPlant).where(
-                    SupplierPlant.supplier_id == s_data["id"],
-                    SupplierPlant.company_id == PRIMARY_COMPANY_ID,
-                )
-            )
-            if not existing_sp.scalar_one_or_none():
-                db.add(
-                    SupplierPlant(
-                        id=uuid.uuid4(),
-                        supplier_id=s_data["id"],
-                        company_id=PRIMARY_COMPANY_ID,
-                        plant_code="1001",
-                        is_active=True,
+            s_obj = (await db.execute(select(Supplier).where(Supplier.supplier_code == s_data["supplier_code"]))).scalar_one_or_none()
+            if s_obj:
+                existing_sp = await db.execute(
+                    select(SupplierPlant).where(
+                        SupplierPlant.supplier_id == s_obj.id,
+                        SupplierPlant.company_id == PRIMARY_COMPANY_ID,
                     )
                 )
+                if not existing_sp.scalar_one_or_none():
+                    db.add(
+                        SupplierPlant(
+                            id=uuid.uuid4(),
+                            supplier_id=s_obj.id,
+                            company_id=PRIMARY_COMPANY_ID,
+                            plant_code="1001",
+                            is_active=True,
+                        )
+                    )
         await db.commit()
         logger.info("Supplier plants linked.")
 
@@ -232,37 +248,52 @@ async def seed_database() -> None:
         await db.commit()
         logger.info("Clients seeded.")
 
-        # 5. Users
+        # 5. Users (Plant Administrators)
         users_data = [
             {
                 "id": uuid.UUID("00000000-0000-0000-0000-000000000099"),
                 "company_id": PRIMARY_COMPANY_ID,
                 "keycloak_id": "kc-admin-001",
-                "email": "admin@oniverse.com",
-                "full_name": "Kasun Perera (Plant Administrator)",
-                "role": "COMPANY_ADMIN",
+                "email": "kasun.perera@sirio.lk",
+                "full_name": "Kasun Perera",
+                "role": "SUPER_ADMIN",
                 "supplier_id": None,
-                "is_active": True,
             },
             {
                 "id": uuid.UUID("00000000-0000-0000-0000-000000000098"),
                 "company_id": PRIMARY_COMPANY_ID,
-                "keycloak_id": "kc-supplier-001",
-                "email": "coats.exports@supplier.com",
-                "full_name": "Duminda Silva (Coats Exports)",
-                "role": "SUPPLIER",
-                "supplier_id": COATS_SUPPLIER_ID,
-                "is_active": True,
+                "keycloak_id": "kc-admin-002",
+                "email": "nimal.fernando@sirio.lk",
+                "full_name": "Nimal Fernando",
+                "role": "COMPANY_ADMIN",
+                "supplier_id": None,
             },
             {
                 "id": uuid.UUID("00000000-0000-0000-0000-000000000097"),
                 "company_id": PRIMARY_COMPANY_ID,
-                "keycloak_id": "kc-supplier-002",
-                "email": "hayleys.fabric@supplier.com",
-                "full_name": "Rohan Fernando (Hayleys)",
-                "role": "SUPPLIER",
-                "supplier_id": HAYLEYS_SUPPLIER_ID,
-                "is_active": True,
+                "keycloak_id": "kc-admin-003",
+                "email": "sarath.silva@benji.lk",
+                "full_name": "Sarath Silva",
+                "role": "COMPANY_ADMIN",
+                "supplier_id": None,
+            },
+            {
+                "id": uuid.UUID("00000000-0000-0000-0000-000000000096"),
+                "company_id": PRIMARY_COMPANY_ID,
+                "keycloak_id": "kc-admin-004",
+                "email": "dilini.jayasinghe@omegaline.lk",
+                "full_name": "Dilini Jayasinghe",
+                "role": "OPERATOR",
+                "supplier_id": None,
+            },
+            {
+                "id": uuid.UUID("00000000-0000-0000-0000-000000000095"),
+                "company_id": PRIMARY_COMPANY_ID,
+                "keycloak_id": "kc-admin-005",
+                "email": "pradeep.kumar@alpha.lk",
+                "full_name": "Pradeep Kumar",
+                "role": "REVIEWER",
+                "supplier_id": None,
             },
         ]
 
@@ -271,326 +302,7 @@ async def seed_database() -> None:
             if not existing.scalar_one_or_none():
                 db.add(User(**u_data))
         await db.commit()
-        logger.info("Users seeded.")
-
-        # 6. Email Records
-        emails_data = [
-            {
-                "id": uuid.UUID("00000000-0000-0000-0000-000000000201"),
-                "company_id": PRIMARY_COMPANY_ID,
-                "supplier_id": COATS_SUPPLIER_ID,
-                "message_id": "msg-001-coats@sirio.lk",
-                "from_address": "coats.exports@supplier.com",
-                "to_address": "orders@sirio.lk",
-                "subject": "PO #2001297727 Confirmation — Elastic Tape 15mm",
-                "body_text": "Please find attached order confirmation for PO 2001297727. Total quantity: 12,000 M.",
-                "direction": "INBOUND",
-                "status": "PARSED",
-                "email_type": "PO",
-                "received_at": datetime(2026, 9, 10, 8, 30, tzinfo=timezone.utc),
-                "processed_at": datetime(2026, 9, 10, 8, 31, tzinfo=timezone.utc),
-            },
-            {
-                "id": uuid.UUID("00000000-0000-0000-0000-000000000202"),
-                "company_id": PRIMARY_COMPANY_ID,
-                "supplier_id": COATS_SUPPLIER_ID,
-                "message_id": "msg-002-nike@sirio.lk",
-                "from_address": "orders@nike.com",
-                "to_address": "purchasing@sirio.lk",
-                "subject": "PO #NKE-2026-1450 — Men's Running Shorts DRI-FIT",
-                "body_text": "Please find attached Purchase Order NKE-2026-1450 for 8,000 units of Men's Running Shorts.",
-                "direction": "INBOUND",
-                "status": "PARSED",
-                "email_type": "PO",
-                "received_at": datetime(2026, 9, 11, 14, 20, tzinfo=timezone.utc),
-                "processed_at": datetime(2026, 9, 11, 14, 21, tzinfo=timezone.utc),
-            },
-            {
-                "id": uuid.UUID("00000000-0000-0000-0000-000000000203"),
-                "company_id": PRIMARY_COMPANY_ID,
-                "supplier_id": COATS_SUPPLIER_ID,
-                "message_id": "msg-003-adidas@sirio.lk",
-                "from_address": "supply-chain@adidas.com",
-                "to_address": "purchasing@sirio.lk",
-                "subject": "Updated PO #ADI-2026-0892 — Women's Track Jacket",
-                "body_text": "Revised quantities for PO ADI-2026-0892. Delivery schedule October 10th.",
-                "direction": "INBOUND",
-                "status": "REVIEW",
-                "email_type": "PO_UPDATE",
-                "received_at": datetime(2026, 9, 12, 10, 15, tzinfo=timezone.utc),
-            },
-            {
-                "id": uuid.UUID("00000000-0000-0000-0000-000000000204"),
-                "company_id": PRIMARY_COMPANY_ID,
-                "supplier_id": COATS_SUPPLIER_ID,
-                "message_id": "msg-004-asn-ack@sirio.lk",
-                "from_address": "purchasing@sirio.lk",
-                "to_address": "coats.exports@supplier.com",
-                "subject": "ASN XML Acceptance — Shipment SHP-2026-0018194-01",
-                "body_text": "Calzedonia SdDataSlice XML verified and committed for shipment SHP-2026-0018194-01.",
-                "direction": "OUTBOUND",
-                "status": "COMMITTED",
-                "email_type": "ASN_CONFIRM",
-                "received_at": datetime(2026, 9, 14, 16, 45, tzinfo=timezone.utc),
-            },
-            {
-                "id": uuid.UUID("00000000-0000-0000-0000-000000000205"),
-                "company_id": PRIMARY_COMPANY_ID,
-                "supplier_id": HAYLEYS_SUPPLIER_ID,
-                "message_id": "msg-005-puma@sirio.lk",
-                "from_address": "procurement@puma.com",
-                "to_address": "purchasing@sirio.lk",
-                "subject": "PO #PMA-2026-0567 — Essentials Logo Tee Fabric",
-                "body_text": "New PO for 20,000 meters fabric. Please review schedule.",
-                "direction": "INBOUND",
-                "status": "QUEUED",
-                "email_type": "PO",
-                "received_at": datetime(2026, 9, 15, 7, 10, tzinfo=timezone.utc),
-            },
-        ]
-
-        for e_data in emails_data:
-            existing = await db.execute(select(EmailRecord).where(EmailRecord.id == e_data["id"]))
-            if not existing.scalar_one_or_none():
-                db.add(EmailRecord(**e_data))
-        await db.commit()
-        logger.info("Email records seeded.")
-
-        # 7. Purchase Orders
-        pos_data = [
-            {
-                "id": uuid.UUID("00000000-0000-0000-0000-000000000301"),
-                "company_id": PRIMARY_COMPANY_ID,
-                "supplier_id": COATS_SUPPLIER_ID,
-                "client_id": uuid.UUID("00000000-0000-0000-0000-000000000101"),
-                "client_code": "CALZEDONIA",
-                "source_email_id": uuid.UUID("00000000-0000-0000-0000-000000000201"),
-                "po_number": "2001297727",
-                "style_number": "ELST1K",
-                "description": "Elastic tape 15mm black (Calzedonia Standard)",
-                "quantity": 12000,
-                "unit_price": Decimal("0.8500"),
-                "total_value": Decimal("10200.00"),
-                "currency": "EUR",
-                "delivery_date": date(2026, 10, 20),
-                "ship_date": date(2026, 10, 5),
-                "destination": "SIRIO Plant 1 - Katunayake",
-                "status": "ACTIVE",
-                "version": 1,
-                "extra_data": {
-                    "items": [
-                        {
-                            "line_number": "00100",
-                            "material_code": "ELST1K 000615",
-                            "description": "Elastic tape 15mm black",
-                            "quantity": 6000,
-                            "uom": "M",
-                            "unit_price": 0.85,
-                        },
-                        {
-                            "line_number": "00200",
-                            "material_code": "ELST1K 000616",
-                            "description": "Elastic tape 20mm white",
-                            "quantity": 6000,
-                            "uom": "M",
-                            "unit_price": 0.85,
-                        },
-                    ]
-                },
-            },
-            {
-                "id": uuid.UUID("00000000-0000-0000-0000-000000000302"),
-                "company_id": PRIMARY_COMPANY_ID,
-                "supplier_id": COATS_SUPPLIER_ID,
-                "client_id": uuid.UUID("00000000-0000-0000-0000-000000000102"),
-                "client_code": "NIKE",
-                "source_email_id": uuid.UUID("00000000-0000-0000-0000-000000000202"),
-                "po_number": "NKE-2026-1450",
-                "style_number": "DRI-FIT-7IN",
-                "description": "Men's Dri-FIT 7\" Running Shorts — Black/White",
-                "quantity": 8000,
-                "unit_price": Decimal("8.5000"),
-                "total_value": Decimal("68000.00"),
-                "currency": "USD",
-                "delivery_date": date(2026, 10, 15),
-                "ship_date": date(2026, 9, 28),
-                "destination": "SIRIO Plant 1 - Katunayake",
-                "status": "ACTIVE",
-                "version": 1,
-                "extra_data": {
-                    "items": [
-                        {
-                            "line_number": "00100",
-                            "material_code": "NKE-DF-7IN-BLK",
-                            "description": "Dri-FIT Shorts - Black L",
-                            "quantity": 4000,
-                            "uom": "PCS",
-                            "unit_price": 8.5,
-                        },
-                        {
-                            "line_number": "00200",
-                            "material_code": "NKE-DF-7IN-WHT",
-                            "description": "Dri-FIT Shorts - White M",
-                            "quantity": 4000,
-                            "uom": "PCS",
-                            "unit_price": 8.5,
-                        },
-                    ]
-                },
-            },
-            {
-                "id": uuid.UUID("00000000-0000-0000-0000-000000000303"),
-                "company_id": PRIMARY_COMPANY_ID,
-                "supplier_id": COATS_SUPPLIER_ID,
-                "client_id": uuid.UUID("00000000-0000-0000-0000-000000000103"),
-                "client_code": "ADIDAS",
-                "source_email_id": uuid.UUID("00000000-0000-0000-0000-000000000203"),
-                "po_number": "ADI-2026-0892",
-                "style_number": "TRK-JKT-W",
-                "description": "Women's Tiro Track Jacket — Navy/Gold",
-                "quantity": 5000,
-                "unit_price": Decimal("12.7500"),
-                "total_value": Decimal("63750.00"),
-                "currency": "EUR",
-                "delivery_date": date(2026, 11, 1),
-                "ship_date": date(2026, 10, 10),
-                "destination": "SIRIO Plant 2",
-                "status": "UPDATED",
-                "version": 2,
-                "extra_data": {
-                    "items": [
-                        {
-                            "line_number": "00100",
-                            "material_code": "ADI-TIRO-NVY",
-                            "description": "Tiro Track Jacket Navy",
-                            "quantity": 5000,
-                            "uom": "PCS",
-                            "unit_price": 12.75,
-                        }
-                    ]
-                },
-            },
-            {
-                "id": uuid.UUID("00000000-0000-0000-0000-000000000304"),
-                "company_id": PRIMARY_COMPANY_ID,
-                "supplier_id": HAYLEYS_SUPPLIER_ID,
-                "client_id": uuid.UUID("00000000-0000-0000-0000-000000000104"),
-                "client_code": "PUMA",
-                "source_email_id": uuid.UUID("00000000-0000-0000-0000-000000000205"),
-                "po_number": "PMA-2026-0567",
-                "style_number": "ESS-TEE-M",
-                "description": "Men's Essentials Logo Tee Fabric",
-                "quantity": 20000,
-                "unit_price": Decimal("4.2500"),
-                "total_value": Decimal("85000.00"),
-                "currency": "USD",
-                "delivery_date": date(2026, 11, 15),
-                "ship_date": date(2026, 10, 25),
-                "destination": "INCAS Plant",
-                "status": "ACTIVE",
-                "version": 1,
-                "extra_data": {
-                    "items": [
-                        {
-                            "line_number": "00100",
-                            "material_code": "PMA-TEE-FABRIC",
-                            "description": "Cotton Jersey 180GSM",
-                            "quantity": 20000,
-                            "uom": "M",
-                            "unit_price": 4.25,
-                        }
-                    ]
-                },
-            },
-        ]
-
-        for po_data in pos_data:
-            existing = await db.execute(
-                select(PurchaseOrder).where(
-                    PurchaseOrder.company_id == po_data["company_id"],
-                    PurchaseOrder.po_number == po_data["po_number"],
-                )
-            )
-            if not existing.scalar_one_or_none():
-                db.add(PurchaseOrder(**po_data))
-        await db.commit()
-        logger.info("Purchase orders seeded.")
-
-        # 8. Shipments & ASN Records
-        shipment1_id = uuid.UUID("00000000-0000-0000-0000-000000000401")
-        existing_s1 = await db.execute(select(Shipment).where(Shipment.id == shipment1_id))
-        if not existing_s1.scalar_one_or_none():
-            db.add(
-                Shipment(
-                    id=shipment1_id,
-                    company_id=PRIMARY_COMPANY_ID,
-                    supplier_id=COATS_SUPPLIER_ID,
-                    created_by=uuid.UUID("00000000-0000-0000-0000-000000000098"),
-                    shipment_number="SHP-2026-0018194-01",
-                    plant_code="1001",
-                    storage_location="SL01",
-                    status="XML_SENT",
-                    total_boxes=24,
-                    total_pieces=6000,
-                    ship_date=date(2026, 9, 14),
-                    estimated_arrival=date(2026, 9, 18),
-                    carrier="DHL Global Forwarding",
-                    tracking_number="DHL-9481029481",
-                )
-            )
-            db.add(
-                ASNRecord(
-                    id=uuid.UUID("00000000-0000-0000-0000-000000000501"),
-                    company_id=PRIMARY_COMPANY_ID,
-                    shipment_id=shipment1_id,
-                    supplier_id=COATS_SUPPLIER_ID,
-                    created_by=uuid.UUID("00000000-0000-0000-0000-000000000098"),
-                    asn_number="ASN-2026-0018194-001",
-                    xml_content='<?xml version="1.0" encoding="UTF-8"?><SdDataSlice><Header status="OK"/></SdDataSlice>',
-                    xml_validated=True,
-                    status="ACCEPTED",
-                    sent_at=datetime(2026, 9, 14, 10, 0),
-                    accepted_at=datetime(2026, 9, 14, 11, 30),
-                )
-            )
-
-        shipment2_id = uuid.UUID("00000000-0000-0000-0000-000000000402")
-        existing_s2 = await db.execute(select(Shipment).where(Shipment.id == shipment2_id))
-        if not existing_s2.scalar_one_or_none():
-            db.add(
-                Shipment(
-                    id=shipment2_id,
-                    company_id=PRIMARY_COMPANY_ID,
-                    supplier_id=COATS_SUPPLIER_ID,
-                    created_by=uuid.UUID("00000000-0000-0000-0000-000000000098"),
-                    shipment_number="SHP-2026-0018194-02",
-                    plant_code="1001",
-                    storage_location="SL01",
-                    status="PACKED",
-                    total_boxes=12,
-                    total_pieces=3000,
-                    ship_date=date(2026, 9, 16),
-                    estimated_arrival=date(2026, 9, 20),
-                    carrier="Expeditors International",
-                    tracking_number="EXP-55928103",
-                )
-            )
-            db.add(
-                ASNRecord(
-                    id=uuid.UUID("00000000-0000-0000-0000-000000000502"),
-                    company_id=PRIMARY_COMPANY_ID,
-                    shipment_id=shipment2_id,
-                    supplier_id=COATS_SUPPLIER_ID,
-                    created_by=uuid.UUID("00000000-0000-0000-0000-000000000098"),
-                    asn_number="ASN-2026-0018194-002",
-                    xml_content=None,
-                    xml_validated=False,
-                    status="DRAFT",
-                )
-            )
-
-        await db.commit()
-        logger.info("Shipments and ASN records seeded.")
+        logger.info("Plant administrators seeded.")
 
     logger.info("Database seeding completed successfully!")
 
