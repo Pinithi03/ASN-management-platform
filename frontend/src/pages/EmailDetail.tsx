@@ -74,6 +74,23 @@ function displayValue(value: unknown): string {
   return String(value);
 }
 
+function formatMoney(value: unknown, currency?: string): string {
+  if (value === null || value === undefined || value === "") return "—";
+  const num = typeof value === "number" ? value : parseFloat(String(value));
+  if (isNaN(num)) return String(value);
+
+  const formattedNum = num.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 4,
+  });
+
+  const curr = (currency || "").toUpperCase();
+  if (curr === "USD" || curr === "$") return `$${formattedNum}`;
+  if (curr === "EUR" || curr === "€") return `€${formattedNum}`;
+  if (curr === "GBP" || curr === "£") return `£${formattedNum}`;
+  return curr ? `${formattedNum} ${curr}` : formattedNum;
+}
+
 function previewKind(attachment: EmailAttachment): PreviewKind {
   const name = (attachment.filename ?? "").toLowerCase();
   const type = (attachment.content_type ?? "").toLowerCase();
@@ -239,12 +256,18 @@ function ParsedDataSection({ data }: { data: ParsedData }) {
 
       {fields.length > 0 && (
         <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-3 text-sm">
-          {fields.map(({ key, label }) => (
-            <div key={key} className="min-w-0">
-              <dt className="text-gray-500">{label}</dt>
-              <dd className="text-gray-900 break-words">{displayValue(raw[key])}</dd>
-            </div>
-          ))}
+          {fields.map(({ key, label }) => {
+            const isMoney = key === "total_value";
+            const currency = String(raw.currency || "USD");
+            return (
+              <div key={key} className="min-w-0">
+                <dt className="text-gray-500">{label}</dt>
+                <dd className={`break-words ${isMoney ? "text-gray-950 font-bold" : "text-gray-900"}`}>
+                  {isMoney ? formatMoney(raw[key], currency) : displayValue(raw[key])}
+                </dd>
+              </div>
+            );
+          })}
         </dl>
       )}
 
@@ -263,27 +286,39 @@ function ParsedDataSection({ data }: { data: ParsedData }) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200">
-                  {LINE_ITEM_COLUMNS.map((col) => (
-                    <th
-                      key={col.key}
-                      className={`px-3 py-2 font-medium text-gray-500 ${col.numeric ? "text-right" : "text-left"}`}
-                    >
-                      {col.label}
-                    </th>
-                  ))}
+                  {LINE_ITEM_COLUMNS.map((col) => {
+                    const label =
+                      col.key === "unit_price" && raw.currency
+                        ? `Unit Price (${raw.currency})`
+                        : col.label;
+                    return (
+                      <th
+                        key={col.key}
+                        className={`px-3 py-2 font-medium text-gray-500 ${col.numeric ? "text-right" : "text-left"}`}
+                      >
+                        {label}
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {lineItems.map((item, i) => (
                   <tr key={i}>
-                    {LINE_ITEM_COLUMNS.map((col) => (
-                      <td
-                        key={col.key}
-                        className={`px-3 py-2 text-gray-700 ${col.numeric ? "text-right tabular-nums" : ""}`}
-                      >
-                        {displayValue(item[col.key])}
-                      </td>
-                    ))}
+                    {LINE_ITEM_COLUMNS.map((col) => {
+                      const isMoney = col.key === "unit_price";
+                      const currency = String(raw.currency || "USD");
+                      return (
+                        <td
+                          key={col.key}
+                          className={`px-3 py-2 text-gray-700 ${col.numeric ? "text-right tabular-nums" : ""} ${
+                            isMoney ? "font-semibold text-gray-900" : ""
+                          }`}
+                        >
+                          {isMoney ? formatMoney(item[col.key], currency) : displayValue(item[col.key])}
+                        </td>
+                      );
+                    })}
                   </tr>
                 ))}
               </tbody>
@@ -336,20 +371,28 @@ export default function EmailDetailPage() {
     }
   };
 
-  const backLink = (
-    <Link
-      to="/emails"
-      className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-blue-600"
-    >
-      <ArrowLeft className="w-4 h-4" />
-      Back to emails
-    </Link>
+  const backBar = (
+    <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-gray-200 px-6 py-2.5 flex items-center justify-between shadow-xs">
+      <Link
+        to="/emails"
+        className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 hover:text-blue-700 active:scale-95 rounded-lg border border-gray-200 transition-all shadow-xs"
+        title="Return to Email Processing Queue"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        Back to emails
+      </Link>
+      {email && (
+        <span className="text-xs font-medium text-gray-500 truncate max-w-md hidden sm:inline-block">
+          {email.subject}
+        </span>
+      )}
+    </div>
   );
 
   if (isLoading) {
     return (
-      <div className="p-6 space-y-6">
-        {backLink}
+      <div className="min-h-full">
+        {backBar}
         <div className="flex items-center justify-center py-20 text-gray-400">
           <RefreshCw className="w-6 h-6 animate-spin mr-2" />
           Loading email...
@@ -360,8 +403,8 @@ export default function EmailDetailPage() {
 
   if (isError || !email) {
     return (
-      <div className="p-6 space-y-6">
-        {backLink}
+      <div className="min-h-full">
+        {backBar}
         <div className="flex flex-col items-center justify-center py-20 text-gray-400">
           <Mail className="w-12 h-12 mb-3" />
           <p className="text-lg">Email not found</p>
@@ -391,11 +434,12 @@ export default function EmailDetailPage() {
   ];
 
   return (
-    <div className="p-6 space-y-6">
-      {backLink}
+    <div className="min-h-full">
+      {backBar}
 
-      {/* Header */}
-      <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5">
+      <div className="p-6 space-y-6">
+        {/* Header */}
+        <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0 space-y-2">
             <h1 className="text-2xl font-semibold text-gray-900 break-words">
@@ -599,5 +643,6 @@ export default function EmailDetailPage() {
         )}
       </div>
     </div>
+  </div>
   );
 }
