@@ -31,18 +31,35 @@ def get_minio_client() -> Minio:
     """Get or create the MinIO client singleton."""
     global _client
     if _client is None:
+        try:
+            from app.core.config import get_settings
+            settings = get_settings()
+            endpoint = os.getenv("MINIO_ENDPOINT") or settings.MINIO_ENDPOINT
+            access_key = os.getenv("MINIO_ACCESS_KEY") or settings.MINIO_ACCESS_KEY
+            secret_key = os.getenv("MINIO_SECRET_KEY") or settings.MINIO_SECRET_KEY
+            secure = (os.getenv("MINIO_USE_SSL", "false").lower() == "true") or settings.MINIO_SECURE or settings.MINIO_USE_SSL
+        except Exception:
+            endpoint = os.getenv("MINIO_ENDPOINT", "localhost:9000")
+            access_key = os.getenv("MINIO_ACCESS_KEY", "ans_minio")
+            secret_key = os.getenv("MINIO_SECRET_KEY", "change_me_minio_at_least_8_chars")
+            secure = os.getenv("MINIO_USE_SSL", "false").lower() == "true"
+
         _client = Minio(
-            endpoint=os.getenv("MINIO_ENDPOINT", "localhost:9000"),
-            access_key=os.getenv("MINIO_ACCESS_KEY", "minioadmin"),
-            secret_key=os.getenv("MINIO_SECRET_KEY", "minioadmin"),
-            secure=os.getenv("MINIO_USE_SSL", "false").lower() == "true",
+            endpoint=endpoint,
+            access_key=access_key,
+            secret_key=secret_key,
+            secure=secure,
         )
     return _client
 
 
 def get_bucket_name() -> str:
     """Return the configured bucket name."""
-    return os.getenv("MINIO_BUCKET", "email-attachments")
+    try:
+        from app.core.config import get_settings
+        return os.getenv("MINIO_BUCKET") or get_settings().MINIO_BUCKET
+    except Exception:
+        return os.getenv("MINIO_BUCKET", "email-attachments")
 
 
 def ensure_bucket_exists() -> None:

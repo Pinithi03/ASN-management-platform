@@ -119,7 +119,11 @@ export default function EmailInbox() {
           <button
             onClick={handleSyncMailbox}
             disabled={isSyncing}
-            className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 active:bg-blue-800 disabled:opacity-60 transition-all shadow-sm"
+            className={`inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white rounded-lg transition-all shadow-sm ${
+              isAdmin
+                ? "bg-blue-600 hover:bg-blue-700 active:bg-blue-800"
+                : "bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800"
+            } disabled:opacity-60`}
             title="Immediately check mailbox for new unread order emails"
           >
             <RefreshCw className={`w-4 h-4 ${isSyncing ? "animate-spin" : ""}`} />
@@ -141,12 +145,23 @@ export default function EmailInbox() {
       )}
 
       {syncMessage && (
-        <div className="p-3.5 bg-blue-50 border border-blue-200 text-blue-900 text-sm rounded-xl flex items-center justify-between shadow-sm">
+        <div
+          className={`p-3.5 text-sm rounded-xl flex items-center justify-between shadow-sm ${
+            isAdmin
+              ? "bg-blue-50 border border-blue-200 text-blue-900"
+              : "bg-emerald-50 border border-emerald-200 text-emerald-900"
+          }`}
+        >
           <div className="flex items-center gap-2">
-            <FileCheck2 className="w-4 h-4 text-blue-600" />
+            <FileCheck2 className={`w-4 h-4 ${isAdmin ? "text-blue-600" : "text-emerald-600"}`} />
             <span>{syncMessage}</span>
           </div>
-          <button onClick={() => setSyncMessage(null)} className="text-blue-500 hover:text-blue-700 font-bold ml-4 text-xs">
+          <button
+            onClick={() => setSyncMessage(null)}
+            className={`font-bold ml-4 text-xs ${
+              isAdmin ? "text-blue-500 hover:text-blue-700" : "text-emerald-500 hover:text-emerald-700"
+            }`}
+          >
             ✕ Dismiss
           </button>
         </div>
@@ -156,13 +171,15 @@ export default function EmailInbox() {
       <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-            <Filter className="w-3.5 h-3.5 text-blue-600" />
+            <Filter className={`w-3.5 h-3.5 ${isAdmin ? "text-blue-600" : "text-emerald-600"}`} />
             Filter & Search Email Queue
           </div>
           {hasActiveFilters && (
             <button
               onClick={clearFilters}
-              className="text-xs text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1"
+              className={`text-xs font-semibold flex items-center gap-1 ${
+                isAdmin ? "text-blue-600 hover:text-blue-800" : "text-emerald-600 hover:text-emerald-800"
+              }`}
             >
               ✕ Clear All Filters
             </button>
@@ -178,31 +195,43 @@ export default function EmailInbox() {
               placeholder="Search by keywords, POs, vendors, subject, sender..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+              className={`w-full pl-9 pr-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 outline-none transition-all ${
+                isAdmin
+                  ? "focus:ring-blue-500 focus:border-blue-500"
+                  : "focus:ring-emerald-500 focus:border-emerald-500"
+              }`}
             />
           </div>
 
           {/* Filter by PO Number */}
           <div className="relative">
-            <FileText className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-500" />
+            <FileText className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${isAdmin ? "text-blue-500" : "text-emerald-500"}`} />
             <input
               type="text"
               placeholder="Filter by PO Number (e.g. ZA6A-2001605039)..."
               value={poNumberFilter}
               onChange={(e) => setPoNumberFilter(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all"
+              className={`w-full pl-9 pr-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 outline-none transition-all ${
+                isAdmin
+                  ? "focus:ring-blue-500 focus:border-blue-500"
+                  : "focus:ring-emerald-500 focus:border-emerald-500"
+              }`}
             />
           </div>
 
           {/* Filter by Vendor / Supplier Code */}
           <div className="relative">
-            <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-500" />
+            <Building2 className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${isAdmin ? "text-blue-500" : "text-emerald-500"}`} />
             <input
               type="text"
               placeholder="Filter by Vendor Code (e.g. SUPP-9901)..."
               value={vendorCodeFilter}
               onChange={(e) => setVendorCodeFilter(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
+              className={`w-full pl-9 pr-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 outline-none transition-all ${
+                isAdmin
+                  ? "focus:ring-blue-500 focus:border-blue-500"
+                  : "focus:ring-emerald-500 focus:border-emerald-500"
+              }`}
             />
           </div>
         </div>
@@ -247,23 +276,41 @@ export default function EmailInbox() {
                           onClick={() => setSelectedEmailId(email.id)}
                           className={`cursor-pointer transition-all ${
                             isSelected
-                              ? "bg-blue-100/90 border-l-4 border-blue-800 font-extrabold text-blue-950 shadow-xs"
+                              ? isAdmin
+                                ? "bg-blue-100/90 border-l-4 border-blue-800 font-extrabold text-blue-950 shadow-xs"
+                                : "bg-emerald-100/90 border-l-4 border-emerald-700 font-extrabold text-emerald-950 shadow-xs"
                               : isUnread
-                              ? "bg-blue-50/90 border-l-4 border-blue-600 font-semibold text-blue-950 hover:bg-blue-100/70"
+                              ? isAdmin
+                                ? "bg-blue-50/90 border-l-4 border-blue-600 font-semibold text-blue-950 hover:bg-blue-100/70"
+                                : "bg-emerald-50/90 border-l-4 border-emerald-500 font-semibold text-emerald-950 hover:bg-emerald-100/70"
                               : "hover:bg-gray-50/80"
                           }`}
                         >
                           <td className="px-4 py-3 max-w-[140px] truncate text-gray-900 font-bold">
-                            {isUnread ? (
-                              <span
-                                className="w-2.5 h-2.5 rounded-full bg-blue-700 inline-block mr-2 shrink-0 animate-pulse shadow-xs"
-                                title="Unread Inbound Email"
-                              />
+                            {isAdmin ? (
+                              isUnread ? (
+                                <span
+                                  className="w-2.5 h-2.5 rounded-full bg-blue-600 inline-block mr-2 shrink-0 animate-pulse shadow-xs"
+                                  title="Unread Inbound Email"
+                                />
+                              ) : (
+                                <span
+                                  className="w-2 h-2 rounded-full bg-blue-300 inline-block mr-2 shrink-0"
+                                  title="Processed Email"
+                                />
+                              )
                             ) : (
-                              <span
-                                className="w-2 h-2 rounded-full bg-emerald-600 inline-block mr-2 shrink-0"
-                                title="Processed Email"
-                              />
+                              isUnread ? (
+                                <span
+                                  className="w-2.5 h-2.5 rounded-full bg-emerald-600 inline-block mr-2 shrink-0 animate-pulse shadow-xs"
+                                  title="Unread Inbound Email"
+                                />
+                              ) : (
+                                <span
+                                  className="w-2 h-2 rounded-full bg-emerald-400 inline-block mr-2 shrink-0"
+                                  title="Processed Email"
+                                />
+                              )
                             )}
                             {email.from_address || "—"}
                           </td>
@@ -274,9 +321,9 @@ export default function EmailInbox() {
                             <td className="px-4 py-3">
                               <span
                                 className={`px-2.5 py-0.5 text-xs font-bold rounded-md border shadow-xs ${
-                                  isUnread
-                                    ? "bg-blue-700 text-white border-blue-800"
-                                    : "bg-emerald-700 text-white border-emerald-800"
+                                  isAdmin
+                                    ? "bg-blue-100 text-blue-800 border-blue-300"
+                                    : "bg-emerald-100 text-emerald-800 border-emerald-300"
                                 }`}
                               >
                                 {email.email_type || "PO Email"}
@@ -298,8 +345,12 @@ export default function EmailInbox() {
                               }}
                               className={`p-1.5 rounded-lg transition-colors ${
                                 isSelected
-                                  ? "text-blue-800 bg-blue-200/90 font-bold"
-                                  : "text-gray-400 hover:text-blue-700 hover:bg-blue-100/50"
+                                  ? isAdmin
+                                    ? "text-blue-800 bg-blue-200/90 font-bold"
+                                    : "text-emerald-800 bg-emerald-200/90 font-bold"
+                                  : isAdmin
+                                  ? "text-gray-400 hover:text-blue-700 hover:bg-blue-100/50"
+                                  : "text-gray-400 hover:text-emerald-700 hover:bg-emerald-100/50"
                               }`}
                               title="Preview Email"
                             >
@@ -355,7 +406,13 @@ export default function EmailInbox() {
                 <div className="p-4 border-b border-gray-200 bg-gray-50 flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="px-2 py-0.5 text-xs font-semibold rounded bg-emerald-100 text-emerald-800">
+                      <span
+                        className={`px-2 py-0.5 text-xs font-semibold rounded ${
+                          isAdmin
+                            ? "bg-blue-100 text-blue-800 border border-blue-200"
+                            : "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                        }`}
+                      >
                         AUTO-PARSED
                       </span>
                       <span className="text-xs text-gray-500 truncate font-mono">
@@ -397,7 +454,11 @@ export default function EmailInbox() {
                     <button
                       onClick={() => setPreviewTab("html")}
                       className={`px-3 py-1 rounded-md transition-colors ${
-                        previewTab === "html" ? "bg-white text-blue-600 shadow-sm" : "text-gray-600 hover:text-gray-900"
+                        previewTab === "html"
+                          ? isAdmin
+                            ? "bg-white text-blue-700 font-semibold shadow-sm"
+                            : "bg-white text-emerald-700 font-semibold shadow-sm"
+                          : "text-gray-600 hover:text-gray-900"
                       }`}
                     >
                       HTML Body
@@ -405,7 +466,11 @@ export default function EmailInbox() {
                     <button
                       onClick={() => setPreviewTab("parsed")}
                       className={`px-3 py-1 rounded-md transition-colors ${
-                        previewTab === "parsed" ? "bg-white text-blue-600 shadow-sm" : "text-gray-600 hover:text-gray-900"
+                        previewTab === "parsed"
+                          ? isAdmin
+                            ? "bg-white text-blue-700 font-semibold shadow-sm"
+                            : "bg-white text-emerald-700 font-semibold shadow-sm"
+                          : "text-gray-600 hover:text-gray-900"
                       }`}
                     >
                       Parsed PO ({selectedEmail.parsed_data?.length ?? 0})
@@ -413,7 +478,11 @@ export default function EmailInbox() {
                     <button
                       onClick={() => setPreviewTab("attachments")}
                       className={`px-3 py-1 rounded-md transition-colors ${
-                        previewTab === "attachments" ? "bg-white text-blue-600 shadow-sm" : "text-gray-600 hover:text-gray-900"
+                        previewTab === "attachments"
+                          ? isAdmin
+                            ? "bg-white text-blue-700 font-semibold shadow-sm"
+                            : "bg-white text-emerald-700 font-semibold shadow-sm"
+                          : "text-gray-600 hover:text-gray-900"
                       }`}
                     >
                       Files ({selectedEmail.attachments?.length ?? 0})
@@ -451,7 +520,13 @@ export default function EmailInbox() {
                               <span className="font-bold text-gray-900 text-sm">
                                 PO#: {data.po_number_extracted || "Unknown"}
                               </span>
-                              <span className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded font-medium">
+                              <span
+                                className={`text-xs px-2 py-0.5 rounded font-medium ${
+                                  isAdmin
+                                    ? "bg-blue-100 text-blue-800 border border-blue-200"
+                                    : "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                                }`}
+                              >
                                 Parser: {data.parser_used}
                               </span>
                             </div>
@@ -478,7 +553,15 @@ export default function EmailInbox() {
                               <div>
                                 <span className="text-gray-400">Total Qty:</span>{" "}
                                 <span className="text-gray-800 font-medium">
-                                  {String(data.raw_extracted?.total_quantity || 0)}
+                                  {Number(data.raw_extracted?.total_quantity || 0).toLocaleString()}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-400">Total Value:</span>{" "}
+                                <span className="text-gray-800 font-bold">
+                                  {data.raw_extracted?.currency === "USD"
+                                    ? `$${Number(data.raw_extracted?.total_value || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+                                    : `${Number(data.raw_extracted?.total_value || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} ${data.raw_extracted?.currency || "USD"}`}
                                 </span>
                               </div>
                             </div>
@@ -497,7 +580,9 @@ export default function EmailInbox() {
                                           <th className="p-1.5">#</th>
                                           <th className="p-1.5">Style</th>
                                           <th className="p-1.5">Qty</th>
-                                          <th className="p-1.5">Price</th>
+                                          <th className="p-1.5">
+                                            {data.raw_extracted?.currency ? `Price (${data.raw_extracted.currency})` : "Price"}
+                                          </th>
                                         </tr>
                                       </thead>
                                       <tbody className="divide-y divide-gray-100">
@@ -505,8 +590,12 @@ export default function EmailInbox() {
                                           <tr key={idx}>
                                             <td className="p-1.5">{String(item.line_number || idx + 1)}</td>
                                             <td className="p-1.5 font-medium">{String(item.style || "—")}</td>
-                                            <td className="p-1.5">{String(item.quantity || 0)}</td>
-                                            <td className="p-1.5">{String(item.unit_price || 0)}</td>
+                                            <td className="p-1.5">{Number(item.quantity || 0).toLocaleString()}</td>
+                                            <td className="p-1.5 font-semibold text-gray-900">
+                                              {data.raw_extracted?.currency === "USD"
+                                                ? `$${Number(item.unit_price || 0).toFixed(2)}`
+                                                : `${Number(item.unit_price || 0).toFixed(2)} ${data.raw_extracted?.currency || ""}`}
+                                            </td>
                                           </tr>
                                         ))}
                                       </tbody>

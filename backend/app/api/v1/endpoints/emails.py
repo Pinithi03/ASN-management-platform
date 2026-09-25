@@ -229,7 +229,7 @@ async def list_emails(
     count_query = select(func.count()).select_from(query.subquery())
     total = (await db.execute(count_query)).scalar() or 0
 
-    query = query.order_by(desc(EmailRecord.created_at))
+    query = query.order_by(desc(EmailRecord.received_at))
     query = query.offset((page - 1) * per_page).limit(per_page)
 
     result = await db.execute(query)
@@ -424,6 +424,7 @@ async def test_pipeline(
             db_result = await process_and_save(
                 db, decoded, classification, parsed_pos, resolved_company_id
             )
+            client.mark_as_read(raw.uid)
         except Exception as e:
             db_result = {"error": str(e)}
 

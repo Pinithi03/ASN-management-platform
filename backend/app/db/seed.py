@@ -44,6 +44,7 @@ CALZEDONIA_HUB_ID = CALZEDONIA_HUB_SUPPLIER_ID
 
 
 async def seed_database() -> None:
+    global COATS_SUPPLIER_ID, HAYLEYS_SUPPLIER_ID, SOUTH_ASIA_SUPPLIER_ID, CALZEDONIA_HUB_SUPPLIER_ID
     logger.info("Starting database seed...")
 
     async with async_session_factory() as db:
@@ -167,30 +168,45 @@ async def seed_database() -> None:
         ]
 
         for s_data in suppliers_data:
-            existing = await db.execute(select(Supplier).where(Supplier.id == s_data["id"]))
+            existing = await db.execute(select(Supplier).where(Supplier.supplier_code == s_data["supplier_code"]))
             if not existing.scalar_one_or_none():
                 db.add(Supplier(**s_data))
         await db.commit()
         logger.info("Suppliers seeded.")
 
+        # Dynamically map supplier IDs
+        coats_obj = (await db.execute(select(Supplier).where(Supplier.supplier_code == "0000018194"))).scalar_one_or_none()
+        if coats_obj:
+            COATS_SUPPLIER_ID = coats_obj.id
+
+        hayleys_obj = (await db.execute(select(Supplier).where(Supplier.supplier_code == "0000001122"))).scalar_one_or_none()
+        if hayleys_obj:
+            HAYLEYS_SUPPLIER_ID = hayleys_obj.id
+
+        south_asia_obj = (await db.execute(select(Supplier).where(Supplier.supplier_code == "0000080589"))).scalar_one_or_none()
+        if south_asia_obj:
+            SOUTH_ASIA_SUPPLIER_ID = south_asia_obj.id
+
         # 3. Supplier Plants
         for s_data in suppliers_data:
-            existing_sp = await db.execute(
-                select(SupplierPlant).where(
-                    SupplierPlant.supplier_id == s_data["id"],
-                    SupplierPlant.company_id == PRIMARY_COMPANY_ID,
-                )
-            )
-            if not existing_sp.scalar_one_or_none():
-                db.add(
-                    SupplierPlant(
-                        id=uuid.uuid4(),
-                        supplier_id=s_data["id"],
-                        company_id=PRIMARY_COMPANY_ID,
-                        plant_code="1001",
-                        is_active=True,
+            s_obj = (await db.execute(select(Supplier).where(Supplier.supplier_code == s_data["supplier_code"]))).scalar_one_or_none()
+            if s_obj:
+                existing_sp = await db.execute(
+                    select(SupplierPlant).where(
+                        SupplierPlant.supplier_id == s_obj.id,
+                        SupplierPlant.company_id == PRIMARY_COMPANY_ID,
                     )
                 )
+                if not existing_sp.scalar_one_or_none():
+                    db.add(
+                        SupplierPlant(
+                            id=uuid.uuid4(),
+                            supplier_id=s_obj.id,
+                            company_id=PRIMARY_COMPANY_ID,
+                            plant_code="1001",
+                            is_active=True,
+                        )
+                    )
         await db.commit()
         logger.info("Supplier plants linked.")
 
@@ -212,37 +228,52 @@ async def seed_database() -> None:
         await db.commit()
         logger.info("Clients seeded.")
 
-        # 5. Users
+        # 5. Users (Plant Administrators)
         users_data = [
             {
                 "id": uuid.UUID("00000000-0000-0000-0000-000000000099"),
                 "company_id": PRIMARY_COMPANY_ID,
                 "keycloak_id": "kc-admin-001",
-                "email": "admin@oniverse.com",
-                "full_name": "Kasun Perera (Plant Administrator)",
-                "role": "COMPANY_ADMIN",
+                "email": "kasun.perera@sirio.lk",
+                "full_name": "Kasun Perera",
+                "role": "SUPER_ADMIN",
                 "supplier_id": None,
-                "is_active": True,
             },
             {
                 "id": uuid.UUID("00000000-0000-0000-0000-000000000098"),
                 "company_id": PRIMARY_COMPANY_ID,
-                "keycloak_id": "kc-supplier-001",
-                "email": "coats.exports@supplier.com",
-                "full_name": "Duminda Silva (Coats Exports)",
-                "role": "SUPPLIER",
-                "supplier_id": COATS_SUPPLIER_ID,
-                "is_active": True,
+                "keycloak_id": "kc-admin-002",
+                "email": "nimal.fernando@sirio.lk",
+                "full_name": "Nimal Fernando",
+                "role": "COMPANY_ADMIN",
+                "supplier_id": None,
             },
             {
                 "id": uuid.UUID("00000000-0000-0000-0000-000000000097"),
                 "company_id": PRIMARY_COMPANY_ID,
-                "keycloak_id": "kc-supplier-002",
-                "email": "hayleys.fabric@supplier.com",
-                "full_name": "Rohan Fernando (Hayleys)",
-                "role": "SUPPLIER",
-                "supplier_id": HAYLEYS_SUPPLIER_ID,
-                "is_active": True,
+                "keycloak_id": "kc-admin-003",
+                "email": "sarath.silva@benji.lk",
+                "full_name": "Sarath Silva",
+                "role": "COMPANY_ADMIN",
+                "supplier_id": None,
+            },
+            {
+                "id": uuid.UUID("00000000-0000-0000-0000-000000000096"),
+                "company_id": PRIMARY_COMPANY_ID,
+                "keycloak_id": "kc-admin-004",
+                "email": "dilini.jayasinghe@omegaline.lk",
+                "full_name": "Dilini Jayasinghe",
+                "role": "OPERATOR",
+                "supplier_id": None,
+            },
+            {
+                "id": uuid.UUID("00000000-0000-0000-0000-000000000095"),
+                "company_id": PRIMARY_COMPANY_ID,
+                "keycloak_id": "kc-admin-005",
+                "email": "pradeep.kumar@alpha.lk",
+                "full_name": "Pradeep Kumar",
+                "role": "REVIEWER",
+                "supplier_id": None,
             },
         ]
 
@@ -251,6 +282,7 @@ async def seed_database() -> None:
             if not existing.scalar_one_or_none():
                 db.add(User(**u_data))
         await db.commit()
+        logger.info("Users & Plant administrators seeded.")
         logger.info("Users seeded.")
 
         # 6. Email Records
