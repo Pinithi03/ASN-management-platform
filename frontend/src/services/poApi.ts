@@ -56,6 +56,12 @@ export const poApi = {
     return data;
   },
 
+  /** Get open PO lines for shipment creation */
+  getOpenLines: async (params?: { supplier_id?: string; company_id?: string }): Promise<any[]> => {
+    const { data } = await api.get("/purchase-orders/open-lines", { params });
+    return data;
+  },
+
   /** Update PO fields */
   update: async (poId: string, body: POUpdateBody): Promise<{ status: string }> => {
     const { data } = await api.patch(`/purchase-orders/${poId}`, body);

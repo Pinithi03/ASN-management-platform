@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import re
 from dataclasses import asdict
 from datetime import datetime, timezone, date as date_type
 from typing import Optional
@@ -18,6 +19,7 @@ from sqlalchemy import select
 
 from app.models.email_message import EmailRecord
 from app.models.purchase_order import PurchaseOrder
+from app.models.po_history import POHistory
 from app.models.parsed_data import ParsedData
 from app.models.email_attachment import EmailAttachment
 from app.models.supplier import Supplier
@@ -273,6 +275,7 @@ async def save_purchase_order(
     email_record_id: str,
     company_id: str,
     supplier_id: Optional[str] = None,
+    subject: str = "",
 ) -> PurchaseOrder:
     """
     Upsert a purchase order from parsed data.
@@ -287,11 +290,22 @@ async def save_purchase_order(
     email_record_id : str
     company_id : str
     supplier_id : str, optional
+    subject : str, optional
 
     Returns
     -------
     PurchaseOrder
     """
+    # Check for progressive notification version in subject (e.g. "Progressive Notification: 2" -> version 2)
+    progressive_version = None
+    if subject:
+        m = re.search(r"(?:Progressive\s+Notification|Notification|Rev|Revision|Version|v)[\s:]+(\d+)", subject, re.IGNORECASE)
+        if m:
+            try:
+                progressive_version = int(m.group(1))
+            except (ValueError, TypeError):
+                pass
+
     # Resolve supplier if not explicitly passed
     resolved_supplier_id = supplier_id
     if not resolved_supplier_id and parsed_po.supplier_code:
@@ -327,9 +341,38 @@ async def save_purchase_order(
     result = await db.execute(stmt)
     existing = result.scalar_one_or_none()
 
+    items_data = [
+        {
+            "line_number": getattr(li, "order_line_number", "") or str(li.line_number),
+            "material_code": li.style,
+            "partner_code": getattr(li, "partner_code", "") or "",
+            "description": li.description,
+            "color": li.color,
+            "size": li.size,
+            "uom": getattr(li, "uom", "") or li.size or "M",
+            "quantity": li.quantity,
+            "unit_price": li.unit_price,
+        }
+        for li in parsed_po.line_items
+    ]
+
     if existing:
+        old_version = existing.version or 1
+        new_version = max(old_version + 1, progressive_version) if progressive_version else (old_version + 1)
+
+        # Audit trail of changes
+        old_items = existing.extra_data.get("items", []) if existing.extra_data else []
+        changed_fields = {
+            "version": {"old": old_version, "new": new_version},
+            "status": {"old": existing.status, "new": "UPDATED"},
+            "quantity": {"old": existing.quantity, "new": parsed_po.total_quantity},
+            "total_value": {"old": float(existing.total_value or 0), "new": float(parsed_po.total_value or 0)},
+            "delivery_date": {"old": str(existing.delivery_date), "new": str(_parse_date(parsed_po.delivery_date))},
+            "items_count": {"old": len(old_items), "new": len(items_data)},
+        }
+
         # Update existing PO — increment version
-        existing.version = (existing.version or 1) + 1
+        existing.version = new_version
         existing.status = "UPDATED"
         existing.quantity = parsed_po.total_quantity
         existing.total_value = parsed_po.total_value
@@ -337,43 +380,33 @@ async def save_purchase_order(
         existing.delivery_date = _parse_date(parsed_po.delivery_date) or existing.delivery_date
         existing.currency = parsed_po.currency
         existing.source_email_id = email_record_id
-        if not existing.supplier_id and resolved_supplier_id:
+        if resolved_supplier_id:
             existing.supplier_id = resolved_supplier_id
-        if not existing.client_code:
+        if buyer_code:
             existing.client_code = buyer_code
-        if not existing.style_number and primary_style:
+        if primary_style:
             existing.style_number = primary_style
-        if not existing.description and primary_desc:
+        if primary_desc:
             existing.description = primary_desc
-
-        items_data = [
-            {
-                "line_number": li.line_number,
-                "material_code": li.style,
-                "description": li.description,
-                "color": li.color,
-                "size": li.size,
-                "quantity": li.quantity,
-                "unit_price": li.unit_price,
-            }
-            for li in parsed_po.line_items
-        ]
         existing.extra_data = {"items": items_data}
+
+        # Record in po_history
+        try:
+            hist = POHistory(
+                po_id=existing.id,
+                company_id=existing.company_id,
+                source_email_id=email_record_id,
+                version=new_version,
+                changed_fields=changed_fields,
+                change_source="EMAIL_UPDATE",
+            )
+            db.add(hist)
+        except Exception:
+            logger.exception("Failed to insert POHistory for %s", existing.po_number)
+
         po = existing
-        logger.info("Updated PO: %s (v%d)", po.po_number, po.version)
+        logger.info("Updated PO: %s (v%d, was v%d)", po.po_number, po.version, old_version)
     else:
-        items_data = [
-            {
-                "line_number": li.line_number,
-                "material_code": li.style,
-                "description": li.description,
-                "color": li.color,
-                "size": li.size,
-                "quantity": li.quantity,
-                "unit_price": li.unit_price,
-            }
-            for li in parsed_po.line_items
-        ]
         # Create new PO
         po = PurchaseOrder(
             company_id=company_id,
@@ -388,12 +421,12 @@ async def save_purchase_order(
             destination=parsed_po.destination,
             delivery_date=_parse_date(parsed_po.delivery_date),
             currency=parsed_po.currency,
-            version=1,
+            version=progressive_version or 1,
             source_email_id=email_record_id,
             extra_data={"items": items_data},
         )
         db.add(po)
-        logger.info("Created PO: %s", po.po_number)
+        logger.info("Created PO: %s (v%d)", po.po_number, po.version)
 
     await db.flush()
     return po
@@ -456,6 +489,7 @@ async def process_and_save(
                 parsed_po,
                 email_record_id=str(email_record.id),
                 company_id=company_id,
+                subject=decoded.subject,
             )
             po_ids.append(str(po.id))
 

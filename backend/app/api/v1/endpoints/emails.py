@@ -306,10 +306,12 @@ async def upload_email(
     company_id: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
 ):
-    """Upload a .eml file, parse it, and save results to DB."""
-    from app.email.mime_decoder import decode
-    from app.email.classifier import classify
+    """Upload a .eml or raw .xml file, parse it, and save results to DB."""
+    import uuid
+    from app.email.mime_decoder import decode, DecodedEmail, Attachment
+    from app.email.classifier import classify, ClassificationResult, EmailFormat
     from app.email.parsers import parse
+    from app.email.parsers.xml_parser import parse_xml_all
     from app.services.email_service import process_and_save
 
     settings = get_settings()
@@ -322,9 +324,41 @@ async def upload_email(
         raise HTTPException(status_code=400, detail="company_id is required")
 
     raw_bytes = await file.read()
-    decoded = decode(raw_bytes)
-    classification = classify(decoded)
-    parsed_pos = parse(decoded, classification)
+    fname = (file.filename or "").lower()
+    is_xml = (
+        fname.endswith(".xml")
+        or raw_bytes.strip().startswith(b"<?xml")
+        or b"<SdDataSlice" in raw_bytes[:300]
+    )
+
+    if is_xml:
+        parsed_pos = parse_xml_all(raw_bytes, file.filename or "upload.xml")
+        po_nums = [p.po_number for p in parsed_pos if p.po_number]
+        decoded = DecodedEmail(
+            message_id=f"<xml-upload-{uuid.uuid4().hex[:12]}@oniverse.portal>",
+            from_address="edi@calzedonia.com",
+            to_address="orders@sirio.lk",
+            subject=f"Calzedonia XML Import - {file.filename} (PO: {', '.join(po_nums) if po_nums else 'Unknown'})",
+            body_text=f"Direct Calzedonia XML upload of {file.filename} containing {len(parsed_pos)} purchase order(s).",
+            raw=raw_bytes,
+            attachments=[
+                Attachment(
+                    filename=file.filename or "uploaded.xml",
+                    content_type="application/xml",
+                    payload=raw_bytes,
+                )
+            ],
+        )
+        classification = ClassificationResult(
+            format=EmailFormat.XML_ATTACHMENT,
+            xml_attachment_indices=[0],
+            confidence="high",
+            reason="Direct Calzedonia XML upload",
+        )
+    else:
+        decoded = decode(raw_bytes)
+        classification = classify(decoded)
+        parsed_pos = parse(decoded, classification)
 
     result = await process_and_save(
         db, decoded, classification, parsed_pos, resolved_company_id
@@ -336,6 +370,7 @@ async def upload_email(
         "subject": decoded.subject,
         "format": classification.format.value,
         "po_count": len(parsed_pos),
+        "pos": [p.po_number for p in parsed_pos],
         "db": result,
     }
 

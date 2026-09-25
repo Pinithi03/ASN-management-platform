@@ -554,6 +554,317 @@ async def create_shipment_from_excel(
     }
 
 
+
+class DirectCartonItem(BaseModel):
+    po_number: str
+    po_line: str = "00100"
+    product_code: str
+    description: Optional[str] = ""
+    partner_product_code: Optional[str] = ""
+    lot_number: str = "DEFAULT"
+    quantity: float
+    uom: str = "M"
+    net_weight: float
+    gross_weight: float
+    supplier_carton_ref: Optional[str] = None
+    packaging_type: Optional[str] = "BOX"
+
+
+class CreateDirectShipmentRequest(BaseModel):
+    plant_code: str = "PPD1"
+    supplier_code: Optional[str] = "0000058376"
+    supplier_name: Optional[str] = "CALZEDONIA CENTRAL HUB"
+    supplier_id: Optional[str] = None
+    storage_location: Optional[str] = "SL01"
+    estimated_arrival: Optional[str] = None
+    carrier: Optional[str] = "EXPRESS FREIGHT"
+    tracking_number: Optional[str] = None
+    note: Optional[str] = ""
+    cartons: list[DirectCartonItem]
+
+
+@router.post("/create-direct")
+async def create_direct_shipment(
+    req: CreateDirectShipmentRequest,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """
+    Create shipment directly from Web Packing Wizard (JSON carton payload)
+    or ERP API integration.
+    Allocates 20-digit Calzedonia HUs, validates DTD, and generates official ASN XML.
+    """
+    if not req.cartons:
+        raise HTTPException(status_code=400, detail="At least one carton is required.")
+
+    # 1. Validate weights and quantities
+    for idx, c in enumerate(req.cartons):
+        if c.quantity <= 0:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Carton {idx + 1}: Quantity must be greater than 0",
+            )
+        if c.net_weight <= 0:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Carton {idx + 1}: Net weight must be greater than 0 kg",
+            )
+        if c.gross_weight <= c.net_weight:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Carton {idx + 1}: Gross weight ({c.gross_weight} kg) must be strictly greater than net weight ({c.net_weight} kg)",
+            )
+
+    # 2. Resolve company and plant details
+    company_id = uuid.UUID("00000000-0000-0000-0000-000000000001")
+    plant_upper = (req.plant_code or "PPD1").upper()
+    if "PPD" in plant_upper or "SIRIO" in plant_upper:
+        company_name = "Sirio Ltd"
+        group_code = "SIRIONEW"
+    elif "PPC" in plant_upper or "BENJI" in plant_upper:
+        company_name = "Benji Ltd"
+        group_code = "BENJI"
+    elif "PPB" in plant_upper or "ALPHA" in plant_upper:
+        company_name = "Alpha Apparels Ltd"
+        group_code = "ALPHA"
+    else:
+        company_name = "Omega Line Ltd"
+        group_code = "OMEGA"
+
+    # 3. Resolve supplier
+    supp_code_clean = (req.supplier_code or "0000058376").strip().zfill(10)
+    supp = None
+    if req.supplier_id:
+        try:
+            supp_uuid = uuid.UUID(req.supplier_id)
+            res = await db.execute(select(Supplier).where(Supplier.id == supp_uuid))
+            supp = res.scalar_one_or_none()
+        except ValueError:
+            pass
+
+    if not supp:
+        res = await db.execute(
+            select(Supplier).where(
+                (Supplier.supplier_code == supp_code_clean)
+                | (Supplier.supplier_code == supp_code_clean.lstrip("0"))
+            )
+        )
+        supp = res.scalar_one_or_none()
+
+    if not supp:
+        res = await db.execute(select(Supplier).limit(1))
+        supp = res.scalar_one_or_none()
+
+    supplier_id = supp.id if supp else uuid.UUID("00000000-0000-0000-0000-000000058376")
+    actual_supp_name = supp.name if supp else req.supplier_name or "CALZEDONIA CENTRAL HUB"
+    actual_supp_code = supp.supplier_code if supp else supp_code_clean
+
+    total_cartons = len(req.cartons)
+
+    # 4. Generate 20-digit Handling Units (SSCC)
+    try:
+        hu_numbers = await generate_batch_hu(
+            session=db,
+            supplier_code=actual_supp_code,
+            count=total_cartons,
+            company_id=company_id,
+            supplier_id=supplier_id,
+        )
+    except Exception as e:
+        logger.warning("HU batch generator failed, using calibrated sequence: %s", e)
+        prefix = "1" + actual_supp_code.lstrip("0").zfill(9)
+        base_num = int(datetime.utcnow().timestamp()) % 1000000000
+        hu_numbers = [f"{prefix}{str(base_num + i).zfill(10)}" for i in range(total_cartons)]
+
+    # 5. Build Shipment entity
+    shipment_date = date.today()
+    est_arrival_date = None
+    if req.estimated_arrival:
+        try:
+            est_arrival_date = datetime.strptime(req.estimated_arrival, "%Y-%m-%d").date()
+        except ValueError:
+            pass
+
+    import random
+    random_suffix = str(random.randint(100000, 999999))
+    shipment_number = f"01{random_suffix}"
+
+    total_units = int(sum(c.quantity for c in req.cartons))
+
+    shipment = Shipment(
+        id=uuid.uuid4(),
+        company_id=company_id,
+        supplier_id=supplier_id,
+        shipment_number=shipment_number,
+        plant_code=req.plant_code,
+        storage_location=req.storage_location or "SL01",
+        status=ShipmentStatus.PACKED.value,
+        total_boxes=total_cartons,
+        total_pieces=total_units,
+        ship_date=shipment_date,
+        estimated_arrival=est_arrival_date,
+        carrier=req.carrier or "EXPRESS FREIGHT",
+        tracking_number=req.tracking_number,
+    )
+
+    boxes_for_xml: list[dict[str, Any]] = []
+    packing_slips: list[PackingSlip] = []
+
+    for idx, c in enumerate(req.cartons):
+        hu_num = hu_numbers[idx]
+        slip_number = f"PS-{shipment_number}-{idx + 1}"
+
+        carton_meta = {
+            "po_number": c.po_number,
+            "po_line": c.po_line,
+            "product_code": c.product_code,
+            "lot_number": c.lot_number,
+            "supplier_carton_ref": c.supplier_carton_ref or f"CTN-{idx + 1}",
+            "quantity": c.quantity,
+            "uom": c.uom,
+            "box_index": idx + 1,
+            "total_boxes": total_cartons,
+        }
+
+        ps = PackingSlip(
+            id=uuid.uuid4(),
+            company_id=company_id,
+            shipment_id=shipment.id,
+            slip_number=slip_number,
+            box_number=idx + 1,
+            hu_number=hu_num,
+            barcode_data=hu_num,
+            net_weight=Decimal(str(c.net_weight)),
+            gross_weight=Decimal(str(c.gross_weight)),
+            dimensions=carton_meta,
+            status="PACKED",
+        )
+        packing_slips.append(ps)
+
+        boxes_for_xml.append({
+            "po_number": c.po_number,
+            "po_line": c.po_line,
+            "order_date": shipment_date,
+            "order_type": "ZA6A",
+            "hu_number": hu_num,
+            "material_code": c.product_code,
+            "material_desc": c.description or f"Item {c.product_code}",
+            "partner_product_code": c.partner_product_code or c.product_code,
+            "lot_number": c.lot_number or "DEFAULT",
+            "supplier_carton_ref": c.supplier_carton_ref or f"CTN-{idx + 1}",
+            "quantity": c.quantity,
+            "uom": c.uom or "M",
+            "gross_weight": c.gross_weight,
+            "net_weight": c.net_weight,
+        })
+
+    # Group lines for ShipmentLine
+    line_map: dict[tuple[str, str], float] = {}
+    for c in req.cartons:
+        k = (c.po_number, c.po_line)
+        line_map[k] = line_map.get(k, 0.0) + c.quantity
+
+    shipment_lines: list[ShipmentLine] = []
+    for (po_num, po_item), total_qty in line_map.items():
+        try:
+            line_int = int(str(po_item).split("-")[0])
+        except ValueError:
+            line_int = 100
+
+        # Query PO to link po_id
+        po_stmt = select(PurchaseOrder).where(PurchaseOrder.po_number == po_num)
+        po_res = await db.execute(po_stmt)
+        po_obj = po_res.scalar_one_or_none()
+
+        sample_carton = next((c for c in req.cartons if c.po_number == po_num), req.cartons[0])
+
+        sl = ShipmentLine(
+            id=uuid.uuid4(),
+            company_id=company_id,
+            shipment_id=shipment.id,
+            po_id=po_obj.id if po_obj else None,
+            po_number=po_num,
+            po_line_number=line_int,
+            material_number=sample_carton.product_code,
+            quantity=int(total_qty),
+            unit_of_measure=sample_carton.uom or "M",
+        )
+        shipment_lines.append(sl)
+
+    # 6. Generate Calzedonia ASN XML (SdDataSlice)
+    xml_content = generate_asn_xml(
+        company_name=company_name,
+        group_code=group_code,
+        supplier_code=actual_supp_code,
+        packing_slip_number=shipment_number,
+        packing_slip_date=shipment_date,
+        delivery_date=est_arrival_date or shipment_date,
+        boxes=boxes_for_xml,
+        note=req.note or "",
+    )
+
+    # 7. Validate ASN XML with Two-Phase Validator
+    val_xml_result = validate_asn_xml(
+        xml_content=xml_content,
+        supplier_code=actual_supp_code,
+    )
+    is_xml_valid = val_xml_result.valid
+
+    asn_number = f"ASN-{shipment_number}"
+    asn_record = ASNRecord(
+        id=uuid.uuid4(),
+        company_id=company_id,
+        supplier_id=supplier_id,
+        shipment_id=shipment.id,
+        asn_number=asn_number,
+        xml_content=xml_content,
+        xml_validated=is_xml_valid,
+        status=ASNStatus.VALIDATED.value if is_xml_valid else ASNStatus.DRAFT.value,
+    )
+
+    # 8. Save to DB
+    try:
+        db.add(shipment)
+        for ps in packing_slips:
+            db.add(ps)
+        for sl in shipment_lines:
+            db.add(sl)
+        db.add(asn_record)
+        await db.commit()
+    except Exception as e:
+        logger.error("DB commit failed for direct shipment: %s", e)
+        await db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to save shipment to database: {str(e)}",
+        )
+
+    return {
+        "success": True,
+        "message": f"Shipment {shipment_number} created successfully with {total_cartons} cartons",
+        "shipment": {
+            "id": str(shipment.id),
+            "shipment_number": shipment.shipment_number,
+            "plant_code": shipment.plant_code,
+            "status": shipment.status,
+            "total_boxes": shipment.total_boxes,
+            "total_pieces": shipment.total_pieces,
+            "ship_date": shipment.ship_date.isoformat() if shipment.ship_date else None,
+            "carrier": shipment.carrier,
+        },
+        "asn": {
+            "id": str(asn_record.id),
+            "asn_number": asn_record.asn_number,
+            "status": asn_record.status,
+            "xml_validated": asn_record.xml_validated,
+            "xml_filename": get_asn_xml_filename(shipment_number, actual_supp_code),
+            "email_subject": get_asn_email_subject(shipment_number, shipment_date, actual_supp_code),
+            "xml_content": xml_content,
+        },
+        "handling_units": hu_numbers,
+        "xml_validation": val_xml_result.to_dict(),
+    }
+
+
 @router.get("")
 @router.get("/", include_in_schema=False)
 async def list_shipments(

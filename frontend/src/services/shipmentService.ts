@@ -119,6 +119,64 @@ export const shipmentService = {
   },
 
   /**
+   * Create shipment directly from Web Packing Wizard (JSON carton payload)
+   */
+  async createDirect(params: {
+    plant_code: string;
+    supplier_code?: string;
+    supplier_name?: string;
+    supplier_id?: string;
+    carrier?: string;
+    tracking_number?: string;
+    estimated_arrival?: string;
+    note?: string;
+    cartons: Array<{
+      po_number: string;
+      po_line: string;
+      product_code: string;
+      description?: string;
+      partner_product_code?: string;
+      lot_number?: string;
+      quantity: number;
+      uom: string;
+      net_weight: number;
+      gross_weight: number;
+      supplier_carton_ref?: string;
+      packaging_type?: string;
+    }>;
+  }): Promise<{
+    success: boolean;
+    message: string;
+    shipment: {
+      id: string;
+      shipment_number: string;
+      plant_code: string;
+      status: string;
+      total_boxes: number;
+      total_pieces: number;
+      ship_date?: string;
+      carrier?: string;
+    };
+    asn: {
+      id: string;
+      asn_number: string;
+      status: string;
+      xml_validated: boolean;
+      xml_filename: string;
+      email_subject: string;
+      xml_content?: string;
+    };
+    handling_units: string[];
+    xml_validation: {
+      valid: boolean;
+      errors: Array<{ field: string; message: string }>;
+    };
+  }> {
+    const res = await api.post("/shipments/create-direct", params);
+    return res.data;
+  },
+
+  /**
    * Create shipment from validated Excel file.
    */
   async createFromExcel(params: {
