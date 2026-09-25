@@ -51,7 +51,7 @@ export default function MainLayout() {
       />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header onMenuToggle={() => setSidebarCollapsed(!sidebarCollapsed)} />
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto">
           {isLockoutActive ? (
             <div className="flex flex-col items-center justify-center min-h-[75vh] p-6 text-center animate-in fade-in">
               <div className="bg-white rounded-3xl border border-red-200 p-8 shadow-xl max-w-lg w-full space-y-5 text-center">
