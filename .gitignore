@@ -58,6 +58,7 @@ logs/
 *.log
 
 # ── Celery ─────────────────────────────────────────────────
+celerybeat-schedule*
 backend/celerybeat-schedule*
 automation/celerybeat-schedule*
 
