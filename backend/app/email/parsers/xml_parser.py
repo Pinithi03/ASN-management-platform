@@ -16,7 +16,7 @@ from typing import Optional
 
 from lxml import etree
 
-from app.email.parsers import ParsedPO, POLineItem
+from app.email.parsers import ParsedPO, POLineItem, normalize_po_number
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +72,8 @@ def _parse_sd_data_slice(root: etree._Element, filename: str) -> ParsedPO:
     order = root.xpath(".//SdOrder")
     if order:
         order_elem = order[0]
-        po.po_number = _xpath_text(order_elem, ".//OrderNumber") or ""
+        po.po_number = normalize_po_number(_xpath_text(order_elem, ".//OrderNumber") or "")
+        po.order_type = (_xpath_text(order_elem, ".//OrderTypeName") or "").strip()
         po.order_date = _xpath_text(order_elem, ".//OrderDate") or ""
         po.currency = _xpath_text(order_elem, ".//Currency") or _xpath_text(order_elem, ".//CurrencyAlphabeticCode") or "USD"
 
@@ -132,7 +133,8 @@ def _parse_sd_data_slice(root: etree._Element, filename: str) -> ParsedPO:
         for i, line_elem in enumerate(lines, start=1):
             order_num = _xpath_text(line_elem, ".//OrderNumber") or ""
             if order_num and not po_number_set:
-                po.po_number = order_num
+                po.po_number = normalize_po_number(order_num)
+                po.order_type = (_xpath_text(line_elem, ".//OrderTypeName") or "").strip()
                 po_number_set = True
 
             if not po.order_date:
@@ -178,11 +180,13 @@ def _parse_generic(root: etree._Element, filename: str) -> ParsedPO:
 
     po = ParsedPO(raw_source="xml", source_filename=filename)
 
-    po.po_number = _xpath_text(root, ".//PurchaseOrderNumber") \
-        or _xpath_text(root, ".//PONumber") \
-        or _xpath_text(root, ".//OrderNumber") \
-        or _xpath_text(root, ".//po_number") \
+    po.po_number = normalize_po_number(
+        _xpath_text(root, ".//PurchaseOrderNumber")
+        or _xpath_text(root, ".//PONumber")
+        or _xpath_text(root, ".//OrderNumber")
+        or _xpath_text(root, ".//po_number")
         or ""
+    )
 
     po.supplier_code = _xpath_text(root, ".//SupplierCode") \
         or _xpath_text(root, ".//VendorCode") \

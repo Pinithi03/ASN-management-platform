@@ -24,7 +24,7 @@ from app.models.email_attachment import EmailAttachment
 from app.models.supplier import Supplier
 from app.email.mime_decoder import DecodedEmail
 from app.email.classifier import ClassificationResult
-from app.email.parsers import ParsedPO
+from app.email.parsers import ParsedPO, normalize_po_number
 
 logger = logging.getLogger(__name__)
 
@@ -244,13 +244,16 @@ async def save_parsed_data(
     # Convert dataclass to dict for JSONB storage
     raw_dict = asdict(parsed_po)
 
+    clean_po = normalize_po_number(parsed_po.po_number)
+    parsed_po.po_number = clean_po
+
     parsed = ParsedData(
         email_record_id=email_record_id,
         company_id=company_id,
         parser_used=parsed_po.raw_source.upper() or "XML",
         raw_extracted=raw_dict,
         normalized={
-            "po_number": parsed_po.po_number,
+            "po_number": clean_po,
             "supplier_code": parsed_po.supplier_code,
             "supplier_name": parsed_po.supplier_name,
             "currency": parsed_po.currency,
@@ -259,7 +262,7 @@ async def save_parsed_data(
             "line_count": len(parsed_po.line_items),
         },
         validation_errors=[],
-        po_number_extracted=parsed_po.po_number or None,
+        po_number_extracted=clean_po or None,
         supplier_id_extracted=parsed_po.supplier_code or None,
     )
 
@@ -278,25 +281,25 @@ async def save_purchase_order(
     email_record_id: str,
     company_id: str,
     supplier_id: Optional[str] = None,
-) -> PurchaseOrder:
+) -> Optional[PurchaseOrder]:
     """
     Upsert a purchase order from parsed data.
 
     If a PO with the same po_number already exists for this company,
     it updates the existing record (new version). Otherwise creates new.
-
-    Parameters
-    ----------
-    db : AsyncSession
-    parsed_po : ParsedPO
-    email_record_id : str
-    company_id : str
-    supplier_id : str, optional
-
-    Returns
-    -------
-    PurchaseOrder
     """
+    clean_po = normalize_po_number(parsed_po.po_number)
+    if not clean_po:
+        logger.warning("Skipping PO with empty po_number")
+        return None
+
+    # Skip dummy POs with 0 line items and 0 quantity (e.g. notification cover body)
+    if not parsed_po.line_items and (parsed_po.total_quantity or 0) == 0:
+        logger.warning("Skipping empty PO %s with 0 line items and 0 quantity", clean_po)
+        return None
+
+    parsed_po.po_number = clean_po
+
     # Resolve supplier if not explicitly passed
     resolved_supplier_id = supplier_id
     if not resolved_supplier_id and parsed_po.supplier_code:
@@ -324,61 +327,60 @@ async def save_purchase_order(
     primary_desc = first_item.description if first_item and first_item.description else None
     buyer_code = (parsed_po.buyer_name or "CALZ")[:50]
 
-    # Check if PO already exists
+    items_data = [
+        {
+            "line_number": li.line_number,
+            "material_code": li.style,
+            "description": li.description,
+            "color": li.color,
+            "size": li.size,
+            "quantity": li.quantity,
+            "unit_price": li.unit_price,
+        }
+        for li in parsed_po.line_items
+    ]
+    order_type_str = getattr(parsed_po, "order_type", "") or "ZA6A"
+    extra_info = {
+        "order_type": order_type_str,
+        "items": items_data,
+    }
+
+    # Check if PO already exists (check clean_po and common variations)
     stmt = select(PurchaseOrder).where(
         PurchaseOrder.company_id == company_id,
-        PurchaseOrder.po_number == parsed_po.po_number,
+        (PurchaseOrder.po_number == clean_po) |
+        (PurchaseOrder.po_number == f"ZA6A-{clean_po}") |
+        (PurchaseOrder.po_number == parsed_po.po_number)
     )
     result = await db.execute(stmt)
     existing = result.scalar_one_or_none()
 
     if existing:
-        # Update existing PO — increment version
+        # Update existing PO — ensure canonical normalized number
+        existing.po_number = clean_po
         existing.version = (existing.version or 1) + 1
         existing.status = "UPDATED"
-        existing.quantity = parsed_po.total_quantity
-        existing.total_value = parsed_po.total_value
+        if parsed_po.total_quantity > 0:
+            existing.quantity = parsed_po.total_quantity
+        if parsed_po.total_value > 0:
+            existing.total_value = parsed_po.total_value
         existing.destination = parsed_po.destination or existing.destination
         existing.delivery_date = _parse_date(parsed_po.delivery_date) or existing.delivery_date
-        existing.currency = parsed_po.currency
+        existing.currency = parsed_po.currency or existing.currency
         existing.source_email_id = email_record_id
         if not existing.supplier_id and resolved_supplier_id:
             existing.supplier_id = resolved_supplier_id
         if not existing.client_code:
             existing.client_code = buyer_code
-        if not existing.style_number and primary_style:
+        if primary_style:
             existing.style_number = primary_style
-        if not existing.description and primary_desc:
+        if primary_desc:
             existing.description = primary_desc
-
-        items_data = [
-            {
-                "line_number": li.line_number,
-                "material_code": li.style,
-                "description": li.description,
-                "color": li.color,
-                "size": li.size,
-                "quantity": li.quantity,
-                "unit_price": li.unit_price,
-            }
-            for li in parsed_po.line_items
-        ]
-        existing.extra_data = {"items": items_data}
+        if items_data:
+            existing.extra_data = extra_info
         po = existing
         logger.info("Updated PO: %s (v%d)", po.po_number, po.version)
     else:
-        items_data = [
-            {
-                "line_number": li.line_number,
-                "material_code": li.style,
-                "description": li.description,
-                "color": li.color,
-                "size": li.size,
-                "quantity": li.quantity,
-                "unit_price": li.unit_price,
-            }
-            for li in parsed_po.line_items
-        ]
         # Create new PO
         po = PurchaseOrder(
             company_id=company_id,
@@ -386,7 +388,7 @@ async def save_purchase_order(
             client_code=buyer_code,
             style_number=primary_style,
             description=primary_desc,
-            po_number=parsed_po.po_number,
+            po_number=clean_po,
             status="ACTIVE",
             quantity=parsed_po.total_quantity,
             total_value=parsed_po.total_value,
@@ -395,7 +397,7 @@ async def save_purchase_order(
             currency=parsed_po.currency,
             version=1,
             source_email_id=email_record_id,
-            extra_data={"items": items_data},
+            extra_data=extra_info,
         )
         db.add(po)
         logger.info("Created PO: %s", po.po_number)
@@ -413,24 +415,18 @@ async def process_and_save(
 ) -> dict:
     """
     Full persistence — save email record + attachments + parsed data + POs.
-
-    Parameters
-    ----------
-    db : AsyncSession
-    decoded : DecodedEmail
-    classification : ClassificationResult
-    parsed_pos : list[ParsedPO]
-    company_id : str
-
-    Returns
-    -------
-    dict
-        Summary with email_record_id, attachment_ids, parsed_data_ids, and PO ids.
     """
     try:
-        # 1. Save the email record — fully automated: COMMITTED if POs extracted, ERROR if none
-        status = "COMMITTED" if parsed_pos else "ERROR"
-        err_msg = None if parsed_pos else "No purchase orders extracted from email body or attachments"
+        # Filter out empty 0-item dummy POs if valid POs exist
+        valid_pos = [
+            p for p in parsed_pos
+            if p.line_items or (p.total_quantity and p.total_quantity > 0) or (p.total_value and p.total_value > 0)
+        ]
+        effective_pos = valid_pos if valid_pos else parsed_pos
+
+        # 1. Save the email record — COMMITTED if POs extracted, ERROR if none
+        status = "COMMITTED" if effective_pos else "ERROR"
+        err_msg = None if effective_pos else "No purchase orders extracted from email body or attachments"
         email_record = await save_email_record(
             db, decoded, classification, company_id, status=status, error_message=err_msg
         )
@@ -445,7 +441,7 @@ async def process_and_save(
         # 3. Save each parsed PO → parsed_data + purchase_orders
         po_ids = []
         parsed_data_ids = []
-        for parsed_po in parsed_pos:
+        for parsed_po in effective_pos:
             # Save raw parsed output as JSONB
             pd = await save_parsed_data(
                 db,
@@ -462,7 +458,8 @@ async def process_and_save(
                 email_record_id=str(email_record.id),
                 company_id=company_id,
             )
-            po_ids.append(str(po.id))
+            if po:
+                po_ids.append(str(po.id))
 
         await db.commit()
 

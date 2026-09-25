@@ -159,9 +159,12 @@ async def list_purchase_orders(
     if status and status != "ALL":
         query = query.where(PurchaseOrder.status == status.upper())
     if search:
+        from app.email.parsers import normalize_po_number
         search_filter = f"%{search}%"
+        clean_search = normalize_po_number(search)
         query = query.where(
             PurchaseOrder.po_number.ilike(search_filter)
+            | PurchaseOrder.po_number.ilike(f"%{clean_search}%")
             | PurchaseOrder.client_code.ilike(search_filter)
             | PurchaseOrder.style_number.ilike(search_filter)
             | PurchaseOrder.description.ilike(search_filter)
