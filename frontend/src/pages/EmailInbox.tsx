@@ -553,7 +553,15 @@ export default function EmailInbox() {
                               <div>
                                 <span className="text-gray-400">Total Qty:</span>{" "}
                                 <span className="text-gray-800 font-medium">
-                                  {String(data.raw_extracted?.total_quantity || 0)}
+                                  {Number(data.raw_extracted?.total_quantity || 0).toLocaleString()}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-400">Total Value:</span>{" "}
+                                <span className="text-gray-800 font-bold">
+                                  {data.raw_extracted?.currency === "USD"
+                                    ? `$${Number(data.raw_extracted?.total_value || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+                                    : `${Number(data.raw_extracted?.total_value || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} ${data.raw_extracted?.currency || "USD"}`}
                                 </span>
                               </div>
                             </div>
@@ -572,7 +580,9 @@ export default function EmailInbox() {
                                           <th className="p-1.5">#</th>
                                           <th className="p-1.5">Style</th>
                                           <th className="p-1.5">Qty</th>
-                                          <th className="p-1.5">Price</th>
+                                          <th className="p-1.5">
+                                            {data.raw_extracted?.currency ? `Price (${data.raw_extracted.currency})` : "Price"}
+                                          </th>
                                         </tr>
                                       </thead>
                                       <tbody className="divide-y divide-gray-100">
@@ -580,8 +590,12 @@ export default function EmailInbox() {
                                           <tr key={idx}>
                                             <td className="p-1.5">{String(item.line_number || idx + 1)}</td>
                                             <td className="p-1.5 font-medium">{String(item.style || "—")}</td>
-                                            <td className="p-1.5">{String(item.quantity || 0)}</td>
-                                            <td className="p-1.5">{String(item.unit_price || 0)}</td>
+                                            <td className="p-1.5">{Number(item.quantity || 0).toLocaleString()}</td>
+                                            <td className="p-1.5 font-semibold text-gray-900">
+                                              {data.raw_extracted?.currency === "USD"
+                                                ? `$${Number(item.unit_price || 0).toFixed(2)}`
+                                                : `${Number(item.unit_price || 0).toFixed(2)} ${data.raw_extracted?.currency || ""}`}
+                                            </td>
                                           </tr>
                                         ))}
                                       </tbody>

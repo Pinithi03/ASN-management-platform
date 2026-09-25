@@ -19,7 +19,7 @@ from typing import Optional
 
 from bs4 import BeautifulSoup, Tag
 
-from app.email.parsers import DEFAULT_CURRENCY, ParsedPO, POLineItem
+from app.email.parsers import DEFAULT_CURRENCY, ParsedPO, POLineItem, normalize_po_number
 
 logger = logging.getLogger(__name__)
 
@@ -120,8 +120,15 @@ _HEADER_MAP: dict[str, str] = {
     "colour": "color",
     "color code": "color",
     "colour code": "color",
+    "colour description": "color_desc",
+    "color description": "color_desc",
+    "colour desc": "color_desc",
+    "color desc": "color_desc",
     "size": "size",
     "size code": "size",
+    "unit": "size",
+    "uom": "size",
+    "delivery date": "delivery_date",
     "qty": "quantity",
     "quantity": "quantity",
     "pcs": "quantity",
@@ -204,13 +211,13 @@ def parse_html_document(
         h1 = supplier_tag.find("h1")
         po.supplier_name = _text(h1) if h1 else _text(supplier_tag).splitlines()[0]
 
-    # Combine Order Type + Order Number if present (e.g. ZA6A + 2001607798 -> ZA6A-2001607798)
+    # Check for Order Type + Order Number if present
     order_type = details["fields"].get("Order Type", "")
     order_num = details["fields"].get("Order Number", "")
-    if order_type and order_num:
-        combined_po = f"{order_type.strip()}-{order_num.strip()}"
-        if not po.po_number or len(po.po_number) < len(combined_po):
-            po.po_number = combined_po
+    if order_type:
+        po.order_type = order_type.strip()
+    if order_num:
+        po.po_number = normalize_po_number(order_num.strip())
 
     full_text = soup.get_text(" ", strip=True)
     if not po.po_number:
@@ -219,6 +226,7 @@ def parse_html_document(
             or _find_po_number(title)
             or _find_po_number(full_text)
         )
+    po.po_number = normalize_po_number(po.po_number)
 
     if not po.order_date and not po.delivery_date:
         dates = _DATE_RE.findall(full_text)
@@ -228,6 +236,10 @@ def parse_html_document(
             po.delivery_date = dates[1]
 
     po.line_items = _extract_line_items(soup)
+    if not po.total_quantity and po.line_items:
+        po.total_quantity = sum(item.quantity for item in po.line_items)
+    if not po.total_value and po.line_items:
+        po.total_value = round(sum(item.quantity * item.unit_price for item in po.line_items), 2)
 
     logger.info(
         "HTML parsed (%s): PO=%s, %d fields, %d tables, %d line items",
@@ -341,13 +353,14 @@ def _apply_field(po: ParsedPO, field_name: str, value: str) -> None:
 def _find_po_number(text: str) -> str:
     """
     Try each PO pattern against the text, return first match.
-    Normalizes whitespace around dashes (e.g. "ZA6A - 123" → "ZA6A-123").
+    Normalizes to clean PO number (e.g. "ZA6A - 2001606637" → "2001606637").
     """
     for pattern in _PO_PATTERNS:
         match = pattern.search(text)
         if match:
             raw = match.group(1).strip()
-            return re.sub(r"\s*[-–—]\s*", "-", raw)
+            clean = re.sub(r"\s*[-–—]\s*", "-", raw)
+            return normalize_po_number(clean)
     return ""
 
 
@@ -422,30 +435,69 @@ def _extract_line_items(soup: BeautifulSoup) -> list[POLineItem]:
         return []
 
     items: list[POLineItem] = []
-    for row_number, cells in enumerate(best_rows, start=1):
+    current_item: Optional[POLineItem] = None
+
+    for cells in best_rows:
         texts = [_text(cell) for cell in cells]
         if not any(cell.name == "td" for cell in cells) or not any(texts):
             continue
-        if _TOTAL_ROW_RE.match(next(t for t in texts if t)):
+        first_non_empty = next((t for t in texts if t), "")
+        if _TOTAL_ROW_RE.match(first_non_empty):
             continue
 
-        li = POLineItem(line_number=row_number)
-        for col_idx, field_name in best_map.items():
-            if col_idx >= len(texts) or not texts[col_idx]:
-                continue
-            value = texts[col_idx]
-            if field_name == "quantity":
-                li.quantity = int(_parse_number(value) or 0)
-            elif field_name == "unit_price":
-                li.unit_price = _parse_number(value) or 0.0
-            elif field_name == "line_number":
-                li.line_number = int(_parse_number(value) or row_number)
-            elif not getattr(li, field_name):
-                setattr(li, field_name, value)
+        combined = " ".join(texts)
 
-        # Skip rows with no meaningful data
-        if li.style or li.description or li.quantity > 0:
-            items.append(li)
+        # Sub-row providing customer reference style (e.g. "Yrs: AR.BJCOS555")
+        yrs_match = re.search(r"\bYrs:\s*([A-Za-z0-9\-._/]+)", combined, re.IGNORECASE)
+        if yrs_match and current_item:
+            current_item.style = yrs_match.group(1).strip()
+            continue
+
+        # Skip sub-rows with few cells (e.g. delivery address notes, attachments buttons)
+        if len(texts) < 3 or (len(texts) < len(best_map) and not any("qty" in k.lower() for k in texts)):
+            continue
+
+        row_fields: dict[str, str] = {}
+        qty = 0
+        price = 0.0
+
+        for col_idx, field_name in best_map.items():
+            if col_idx < len(texts) and texts[col_idx]:
+                val = texts[col_idx]
+                if field_name == "quantity":
+                    qty = int(_parse_number(val) or 0)
+                elif field_name == "unit_price":
+                    price = _parse_number(val) or 0.0
+                else:
+                    row_fields[field_name] = val
+
+        # In purchase orders, line items must have a positive quantity
+        if qty <= 0:
+            continue
+
+        style = row_fields.get("style", "").strip()
+        description = row_fields.get("description", "").strip()
+
+        # Check if description has ART. <style>
+        art_match = re.search(r"\bART\.?\s*([A-Za-z0-9\-._/]+)", description, re.IGNORECASE)
+        if art_match and (not style or style.startswith("Ors:") or not style.startswith("AR.")):
+            art_code = art_match.group(1).strip()
+            style = art_code if art_code.startswith("AR.") else f"AR.{art_code}"
+
+        color = row_fields.get("color_desc") or row_fields.get("color", "")
+        size = row_fields.get("size", "")
+
+        item = POLineItem(
+            line_number=len(items) + 1,
+            style=style,
+            color=color,
+            size=size,
+            quantity=qty,
+            unit_price=price,
+            description=description,
+        )
+        items.append(item)
+        current_item = item
 
     return items
 
