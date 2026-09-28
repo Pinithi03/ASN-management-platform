@@ -1,10 +1,11 @@
 /**
  * Supplier Partner Profile & Settings Page — Supplier Portal
- * Allows supplier partners to view & update company profile, contact details,
- * manage plant connections, and manage security settings.
+ * Strictly Read-Only for Supplier Partners.
+ * Mapped continuously with the Admin Dashboard Supplier Registry.
+ * Profile changes must be requested through the System Administrator.
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Building2,
   Mail,
@@ -14,46 +15,89 @@ import {
   CheckCircle2,
   Lock,
   KeyRound,
-  Save,
-  RefreshCw,
-  Sparkles,
   Sliders,
   Bell,
   Globe,
   Tag,
   UserCheck,
   Building,
+  FileText,
+  AlertTriangle,
+  Copy,
+  HelpCircle,
+  X,
+  Send,
+  Clock,
+  Sparkles,
+  ShieldAlert,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
-import { auditApi } from "@/services/auditApi";
 import { cn } from "@/utils/cn";
+import { INITIAL_SUPPLIERS, SupplierItem } from "@/pages/Suppliers";
 
-const SRI_LANKA_PLANTS = [
-  { name: "Sirio Ltd", code: "SIRIO (PPA1)", location: "Badalgama", isPrimary: true },
-  { name: "Benji Ltd", code: "BENJI (PPC1)", location: "Bingiriya", isPrimary: false },
-  { name: "Omega Line Ltd", code: "OMEGA (PPA2)", location: "Sandalankawa", isPrimary: false },
-  { name: "Alpha Apparels Ltd", code: "ALPHA (PPA3)", location: "Polgahawela", isPrimary: false },
-  { name: "Vavuniya Apparels Ltd", code: "VAVUNIYA (PPA4)", location: "Vavuniya", isPrimary: false },
-];
+// Removed manual plant constants in favor of automated PO destination detection
 
 export default function Profile() {
   const user = useAuthStore((s) => s.user);
 
   const [activeTab, setActiveTab] = useState<"company" | "plants" | "security">("company");
-  const [saving, setSaving] = useState(false);
-  const [savedSuccess, setSavedSuccess] = useState(false);
+  const [isContactModalOpen, setIsContactModalOpen] = useState(false);
+  const [copiedEmail, setCopiedEmail] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<string>("Just now");
 
-  // Form State initialized from user state
-  const [companyName, setCompanyName] = useState(user?.supplier_name || user?.full_name || "Coats Thread Exports Ltd");
-  const [supplierCode] = useState(user?.supplier_code || "0000018194");
-  const [email, setEmail] = useState(user?.email || "orders@coatsthread.lk");
-  const [contactName, setContactName] = useState("Kamal Wickramasinghe");
-  const [phone, setPhone] = useState("+94 11 4712000");
-  const [country, setCountry] = useState("Sri Lanka");
-  const [category, setCategory] = useState("Thread & Trims");
-  const [taxId, setTaxId] = useState("PV-10293847");
+  // Suppliers state loaded and mapped directly from Admin Dashboard registry
+  const [suppliers, setSuppliers] = useState<SupplierItem[]>(() => {
+    const saved = localStorage.getItem("asn_onboarded_suppliers");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      } catch {}
+    }
+    return INITIAL_SUPPLIERS;
+  });
 
-  // Security Form State
+  // Keep suppliers state continuously mapped with Admin Dashboard
+  useEffect(() => {
+    const syncFromAdminDashboard = () => {
+      const saved = localStorage.getItem("asn_onboarded_suppliers");
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setSuppliers(parsed);
+            setLastSyncTime(new Date().toLocaleTimeString());
+          }
+        } catch {}
+      }
+    };
+
+    window.addEventListener("storage", syncFromAdminDashboard);
+    window.addEventListener("focus", syncFromAdminDashboard);
+    return () => {
+      window.removeEventListener("storage", syncFromAdminDashboard);
+      window.removeEventListener("focus", syncFromAdminDashboard);
+    };
+  }, []);
+
+  // Match the active logged-in supplier with Admin Dashboard registry
+  const currentSupplierCode = user?.supplier_code || "0000018194";
+  const cleanCode = currentSupplierCode.replace(/^0+/, "");
+
+  const matchedSupplier: SupplierItem =
+    suppliers.find(
+      (s) =>
+        s.supplier_code === currentSupplierCode ||
+        s.supplier_code.replace(/^0+/, "") === cleanCode ||
+        s.id === user?.supplier_id ||
+        s.name.toLowerCase() === (user?.supplier_name || "").toLowerCase()
+    ) ||
+    suppliers[0] ||
+    INITIAL_SUPPLIERS[0];
+
+  // Security Form State (allowed for self-service password update)
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -64,96 +108,10 @@ export default function Profile() {
   const [emailAlerts, setEmailAlerts] = useState(true);
   const [asnConfirmations, setAsnConfirmations] = useState(true);
 
-  const handleSaveProfile = (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    setSavedSuccess(false);
-
-    // 1. Update shared localStorage suppliers registry
-    const savedStr = localStorage.getItem("asn_onboarded_suppliers");
-    let list = savedStr ? JSON.parse(savedStr) : [];
-    if (!list || list.length === 0) {
-      list = [
-        {
-          id: "sup-1",
-          name: "Coats Thread Exports Ltd",
-          supplier_code: "0000018194",
-          email: "orders@coatsthread.lk",
-          contact_name: "Kamal Wickramasinghe",
-          phone: "+94 11 4712000",
-          country: "Sri Lanka",
-          category: "Thread & Trims",
-          is_active: true,
-          onboarded_at: "2026-01-15T08:30:00Z",
-        },
-        {
-          id: "sup-2",
-          name: "Hayleys Fabric PLC",
-          supplier_code: "0000001122",
-          email: "apparel.orders@hayleysfabric.com",
-          contact_name: "Nimali Perera",
-          phone: "+94 34 2280000",
-          country: "Sri Lanka",
-          category: "Knit & Cotton Fabric",
-          is_active: true,
-          onboarded_at: "2026-02-01T10:00:00Z",
-        },
-        {
-          id: "sup-3",
-          name: "South Asia Textiles Ltd",
-          supplier_code: "0000080589",
-          email: "supply@southasiatextiles.com",
-          contact_name: "Wasitha Maheshitha",
-          phone: "+94 11 2855123",
-          country: "Sri Lanka",
-          category: "Dyed & Printed Fabric",
-          is_active: true,
-          onboarded_at: "2026-03-10T14:20:00Z",
-        },
-      ];
-    }
-
-    const currentCode = supplierCode || user?.supplier_code || "0000018194";
-    const updatedList = list.map((item: any) => {
-      if (item.supplier_code === currentCode || item.id === user?.supplier_id) {
-        return {
-          ...item,
-          name: companyName.trim(),
-          email: email.trim().toLowerCase(),
-          contact_name: contactName.trim(),
-          phone: phone.trim(),
-          country: country.trim(),
-          category: category,
-          recently_updated_by_supplier: true,
-          last_profile_updated_at: new Date().toISOString(),
-        };
-      }
-      return item;
-    });
-
-    localStorage.setItem("asn_onboarded_suppliers", JSON.stringify(updatedList));
-
-    // 2. Emit Audit Log for system admin tracking
-    auditApi.create({
-      action: "SUPPLIER_PROFILE_UPDATED",
-      entity_type: "SUPPLIER",
-      entity_id: currentCode,
-      metadata: {
-        name: companyName,
-        supplier_code: currentCode,
-        email: email,
-        contact_name: contactName,
-        phone: phone,
-        category: category,
-        updated_by: "SUPPLIER_SELF_SERVICE",
-      },
-    }).catch(() => {});
-
-    setTimeout(() => {
-      setSaving(false);
-      setSavedSuccess(true);
-      setTimeout(() => setSavedSuccess(false), 3500);
-    }, 600);
+  const handleCopyAdminEmail = () => {
+    navigator.clipboard.writeText("admin@oniverse.com");
+    setCopiedEmail(true);
+    setTimeout(() => setCopiedEmail(false), 3000);
   };
 
   const handlePasswordChange = (e: React.FormEvent) => {
@@ -181,6 +139,12 @@ export default function Profile() {
     setTimeout(() => setPasswordSuccess(false), 4000);
   };
 
+  const mailtoLink = `mailto:admin@oniverse.com?subject=${encodeURIComponent(
+    `Supplier Profile Update Request - ${matchedSupplier.name} (#${matchedSupplier.supplier_code})`
+  )}&body=${encodeURIComponent(
+    `Dear Oniverse System Administrator,\n\nWe would like to request an update to our supplier profile details:\n\nSupplier Name: ${matchedSupplier.name}\nSupplier Code: ${matchedSupplier.supplier_code}\n\nDetails to be updated:\n- Field to Change (e.g. Email / Phone / Contact Person / Address):\n- Current Value:\n- New Requested Value:\n- Reason for Update:\n\nThank you,\n${matchedSupplier.contact_name || user?.full_name || "Supplier Representative"}\n${matchedSupplier.name}`
+  )}`;
+
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto animate-in fade-in duration-200">
       {/* Top Banner Card */}
@@ -194,251 +158,432 @@ export default function Profile() {
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-xl font-bold tracking-tight text-white">{companyName}</h1>
+                <h1 className="text-xl font-bold tracking-tight text-white">{matchedSupplier.name}</h1>
                 <span className="px-2.5 py-0.5 text-xs font-semibold bg-emerald-400/20 text-emerald-100 border border-emerald-300/30 rounded-full flex items-center gap-1">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-300" /> Verified Partner
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-300" /> Verified Calzedonia Partner
                 </span>
+                {matchedSupplier.is_active ? (
+                  <span className="px-2.5 py-0.5 text-xs font-bold bg-green-500/20 text-green-200 border border-green-400/30 rounded-full">
+                    ACTIVE
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-0.5 text-xs font-bold bg-amber-500/20 text-amber-200 border border-amber-400/30 rounded-full">
+                    SUSPENDED
+                  </span>
+                )}
               </div>
               <p className="text-xs text-emerald-100/80 mt-1 flex items-center gap-3 font-mono">
-                <span>Supplier Code: <strong className="text-white font-bold">#{supplierCode}</strong></span>
+                <span>
+                  Supplier Code: <strong className="text-white font-bold">#{matchedSupplier.supplier_code}</strong>
+                </span>
                 <span>•</span>
-                <span>Category: {category}</span>
+                <span>Category: {matchedSupplier.category || "Textiles & Garments"}</span>
+                <span>•</span>
+                <span>Country: {matchedSupplier.country || "Sri Lanka"}</span>
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 self-start md:self-auto">
-            <div className="bg-white/10 backdrop-blur-md border border-white/20 px-4 py-2 rounded-xl text-xs text-emerald-100">
-              <p className="text-[10px] text-emerald-200 uppercase font-bold">Primary Dispatch Plant</p>
-              <p className="font-semibold text-white mt-0.5">{user?.company_name || "Sirio Ltd"} ({user?.company_code || "SIRIO"})</p>
+          <div className="flex items-center gap-3 self-start md:self-auto">
+            <div className="bg-white/10 backdrop-blur-md border border-white/20 px-4 py-2.5 rounded-xl text-xs text-emerald-100">
+              <p className="text-[10px] text-emerald-200 uppercase font-bold">Plant Dispatch Mode</p>
+              <p className="font-semibold text-white mt-0.5">Automated (PO Destination)</p>
             </div>
+            <button
+              onClick={() => setIsContactModalOpen(true)}
+              className="inline-flex items-center gap-2 px-3.5 py-2.5 text-xs font-bold bg-white text-emerald-900 rounded-xl hover:bg-emerald-50 active:bg-emerald-100 shadow-sm transition-all"
+            >
+              <HelpCircle className="w-4 h-4 text-emerald-700" />
+              Contact Admin
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Tabs Header Navigation */}
-      <div className="flex items-center gap-2 border-b border-gray-200 overflow-x-auto pb-1 scrollbar-none">
-        {[
-          { id: "company", label: "Company Profile & Contact", icon: Building },
-          { id: "plants", label: "Oniverse Plants & ASN Rules", icon: Sliders },
-          { id: "security", label: "Security & Credentials", icon: Lock },
-        ].map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={cn(
-                "flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg transition-colors whitespace-nowrap border-b-2 -mb-1",
-                isActive
-                  ? "border-emerald-600 text-emerald-700 bg-emerald-50/50"
-                  : "border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-50"
-              )}
-            >
-              <Icon className="w-4 h-4" />
-              {tab.label}
-            </button>
-          );
-        })}
+      {/* ─── SYSTEM READ-ONLY NOTICE BANNER ─── */}
+      <div className="bg-amber-50/90 border border-amber-200 rounded-2xl p-5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex items-start gap-3.5">
+          <div className="w-10 h-10 rounded-xl bg-amber-100 border border-amber-300 flex items-center justify-center shrink-0 mt-0.5 text-amber-700">
+            <Lock className="w-5 h-5 text-amber-700" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-sm font-bold text-amber-950">
+                Supplier Profile Is Read-Only (Managed by Central Administration)
+              </h3>
+              <span className="text-[11px] font-semibold px-2 py-0.5 bg-amber-200/80 text-amber-900 rounded-md">
+                Admin Synchronized
+              </span>
+            </div>
+            <p className="text-xs text-amber-900/90 mt-1 leading-relaxed max-w-3xl">
+              Company profile information, contact credentials, and Calzedonia partner attributes are strictly controlled by the Oniverse Plant Administrator to maintain compliance with Calzedonia Group supply chain standards.{" "}
+              <strong>If you need to change any details in your profile</strong>, please contact the system administrator.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+          <button
+            onClick={handleCopyAdminEmail}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-amber-900 bg-white border border-amber-300 rounded-xl hover:bg-amber-100/60 transition-all shadow-2xs"
+            title="Copy administrator email address"
+          >
+            {copiedEmail ? (
+              <>
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Copied!</span>
+              </>
+            ) : (
+              <>
+                <Copy className="w-3.5 h-3.5 text-amber-700" />
+                <span>Copy Admin Email</span>
+              </>
+            )}
+          </button>
+          <button
+            onClick={() => setIsContactModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-amber-700 hover:bg-amber-800 active:bg-amber-900 rounded-xl shadow-xs transition-all"
+          >
+            <Mail className="w-3.5 h-3.5 text-white" />
+            Request Change
+          </button>
+        </div>
       </div>
 
-      {/* Tab 1: Company Profile & Contact */}
-      {activeTab === "company" && (
-        <form onSubmit={handleSaveProfile} className="space-y-6 animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-emerald-600" />
-                <h2 className="text-base font-bold text-gray-900">Official Company Profile</h2>
-              </div>
-              {savedSuccess && (
-                <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200 animate-in fade-in">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Profile Changes Saved!
-                </span>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                  Registered Company Name
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={companyName}
-                  onChange={(e) => setCompanyName(e.target.value)}
-                  className="w-full h-10 px-3.5 text-sm rounded-xl border border-gray-200 bg-gray-50/50 text-gray-900 focus:bg-white focus:border-emerald-500 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                  Unique Calzedonia Supplier Code (Read-Only)
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    disabled
-                    value={supplierCode}
-                    className="w-full h-10 px-3.5 text-sm font-mono font-bold rounded-xl border border-gray-200 bg-gray-100 text-gray-600 cursor-not-allowed"
-                  />
-                  <ShieldCheck className="w-4 h-4 text-emerald-600 absolute right-3 top-3" />
-                </div>
-                <span className="text-[10px] text-gray-400 mt-0.5 block">Managed by Oniverse Plant Administrator</span>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                  Official Orders Email
-                </label>
-                <div className="relative">
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full h-10 px-3.5 text-sm rounded-xl border border-gray-200 bg-gray-50/50 text-gray-900 focus:bg-white focus:border-emerald-500 focus:outline-none pl-9"
-                  />
-                  <Mail className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                  Primary Contact Person Name
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    required
-                    value={contactName}
-                    onChange={(e) => setContactName(e.target.value)}
-                    className="w-full h-10 px-3.5 text-sm rounded-xl border border-gray-200 bg-gray-50/50 text-gray-900 focus:bg-white focus:border-emerald-500 focus:outline-none pl-9"
-                  />
-                  <UserCheck className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                  Direct Phone / Mobile
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="w-full h-10 px-3.5 text-sm rounded-xl border border-gray-200 bg-gray-50/50 text-gray-900 focus:bg-white focus:border-emerald-500 focus:outline-none pl-9"
-                  />
-                  <Phone className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                  Manufacturing Category
-                </label>
-                <div className="relative">
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    className="w-full h-10 px-3.5 text-sm rounded-xl border border-gray-200 bg-gray-50/50 text-gray-900 focus:bg-white focus:border-emerald-500 focus:outline-none pl-9"
-                  >
-                    <option value="Thread & Trims">Thread & Trims</option>
-                    <option value="Knit & Cotton Fabric">Knit & Cotton Fabric</option>
-                    <option value="Dyed & Printed Fabric">Dyed & Printed Fabric</option>
-                    <option value="Elastics & Fasteners">Elastics & Fasteners</option>
-                    <option value="Packaging & Labels">Packaging & Labels</option>
-                  </select>
-                  <Tag className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                  Country / Region
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={country}
-                    onChange={(e) => setCountry(e.target.value)}
-                    className="w-full h-10 px-3.5 text-sm rounded-xl border border-gray-200 bg-gray-50/50 text-gray-900 focus:bg-white focus:border-emerald-500 focus:outline-none pl-9"
-                  />
-                  <Globe className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                  Business Registration / Tax ID
-                </label>
-                <input
-                  type="text"
-                  value={taxId}
-                  onChange={(e) => setTaxId(e.target.value)}
-                  className="w-full h-10 px-3.5 text-sm font-mono rounded-xl border border-gray-200 bg-gray-50/50 text-gray-900 focus:bg-white focus:border-emerald-500 focus:outline-none"
-                />
-              </div>
-            </div>
-
-            <div className="pt-4 border-t border-gray-100 flex items-center justify-end">
+      {/* Tabs Header Navigation */}
+      <div className="flex items-center justify-between border-b border-gray-200 overflow-x-auto pb-1 scrollbar-none">
+        <div className="flex items-center gap-2">
+          {[
+            { id: "company", label: "Company Profile & Contact (Read-Only)", icon: Building },
+            { id: "plants", label: "Dispatch & Barcode Guidelines", icon: Sliders },
+            { id: "security", label: "Security & Login Credentials", icon: Lock },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
               <button
-                type="submit"
-                disabled={saving}
-                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-semibold text-sm px-5 py-2.5 rounded-xl transition-all shadow-sm disabled:opacity-50"
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg transition-colors whitespace-nowrap border-b-2 -mb-1",
+                  isActive
+                    ? "border-emerald-600 text-emerald-700 bg-emerald-50/50"
+                    : "border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-50"
+                )}
               >
-                {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                Save Profile Changes
+                <Icon className="w-4 h-4" />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="hidden lg:flex items-center gap-2 text-xs text-gray-400 font-mono pr-2">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span>Mapped to Admin Dashboard ({lastSyncTime})</span>
+        </div>
+      </div>
+
+      {/* ─── TAB 1: COMPANY PROFILE (STRICTLY READ-ONLY) ─── */}
+      {activeTab === "company" && (
+        <div className="space-y-6 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-gray-100 gap-2">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-100">
+                  <Sparkles className="w-5 h-5 text-emerald-600" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-gray-900">Official Company Profile Details</h2>
+                  <p className="text-xs text-gray-500">
+                    Sourced directly from the Oniverse Plant Admin Supplier Registry
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-gray-600 bg-gray-50 border border-gray-200 rounded-lg">
+                  <Lock className="w-3.5 h-3.5 text-gray-400" /> Read-Only Mode
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Synced with Admin
+                </span>
+              </div>
+            </div>
+
+            {/* Read-Only Profile Attributes Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {/* Field 1: Registered Company Name */}
+              <div className="p-4 rounded-xl border border-gray-200/80 bg-gray-50/60 relative group">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                    Registered Company Name
+                  </span>
+                  <span className="text-[10px] font-semibold text-gray-400 flex items-center gap-1">
+                    <Lock className="w-3 h-3 text-gray-400" /> Locked
+                  </span>
+                </div>
+                <div className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                  <Building2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span className="truncate">{matchedSupplier.name}</span>
+                </div>
+                <p className="text-[11px] text-gray-400 mt-1">Official registered enterprise entity</p>
+              </div>
+
+              {/* Field 2: Calzedonia Supplier Code */}
+              <div className="p-4 rounded-xl border border-emerald-200/80 bg-emerald-50/40 relative">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">
+                    Calzedonia Supplier Code
+                  </span>
+                  <span className="text-[10px] font-semibold text-emerald-700 flex items-center gap-1">
+                    <ShieldCheck className="w-3 h-3 text-emerald-600" /> Verified ID
+                  </span>
+                </div>
+                <div className="text-sm font-mono font-bold text-emerald-950 flex items-center gap-2">
+                  <Tag className="w-4 h-4 text-emerald-700 shrink-0" />
+                  <span>#{matchedSupplier.supplier_code}</span>
+                </div>
+                <p className="text-[11px] text-emerald-700/80 mt-1">Unique supply chain routing identifier</p>
+              </div>
+
+              {/* Field 3: Official Orders Email */}
+              <div className="p-4 rounded-xl border border-gray-200/80 bg-gray-50/60 relative">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                    Official Orders Email
+                  </span>
+                  <span className="text-[10px] font-semibold text-gray-400 flex items-center gap-1">
+                    <Lock className="w-3 h-3 text-gray-400" /> Locked
+                  </span>
+                </div>
+                <div className="text-sm font-medium text-gray-900 flex items-center gap-2">
+                  <Mail className="w-4 h-4 text-gray-500 shrink-0" />
+                  <span className="truncate font-mono text-xs font-semibold">{matchedSupplier.email}</span>
+                </div>
+                <p className="text-[11px] text-gray-400 mt-1">Destination for automated PO notifications</p>
+              </div>
+
+              {/* Field 4: Primary Contact Person */}
+              <div className="p-4 rounded-xl border border-gray-200/80 bg-gray-50/60 relative">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                    Primary Contact Person
+                  </span>
+                  <span className="text-[10px] font-semibold text-gray-400 flex items-center gap-1">
+                    <Lock className="w-3 h-3 text-gray-400" /> Locked
+                  </span>
+                </div>
+                <div className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                  <UserCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{matchedSupplier.contact_name || "Not Specified"}</span>
+                </div>
+                <p className="text-[11px] text-gray-400 mt-1">Designated account liaison officer</p>
+              </div>
+
+              {/* Field 5: Direct Phone / Mobile */}
+              <div className="p-4 rounded-xl border border-gray-200/80 bg-gray-50/60 relative">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                    Direct Phone / Hotline
+                  </span>
+                  <span className="text-[10px] font-semibold text-gray-400 flex items-center gap-1">
+                    <Lock className="w-3 h-3 text-gray-400" /> Locked
+                  </span>
+                </div>
+                <div className="text-sm font-medium text-gray-900 flex items-center gap-2">
+                  <Phone className="w-4 h-4 text-gray-500 shrink-0" />
+                  <span className="font-mono text-xs">{matchedSupplier.phone || "Not Specified"}</span>
+                </div>
+                <p className="text-[11px] text-gray-400 mt-1">Dispatches & order coordination</p>
+              </div>
+
+              {/* Field 6: Manufacturing Category */}
+              <div className="p-4 rounded-xl border border-gray-200/80 bg-gray-50/60 relative">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                    Manufacturing Category
+                  </span>
+                  <span className="text-[10px] font-semibold text-gray-400 flex items-center gap-1">
+                    <Lock className="w-3 h-3 text-gray-400" /> Locked
+                  </span>
+                </div>
+                <div className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                  <Tag className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{matchedSupplier.category || "Textiles & Garments"}</span>
+                </div>
+                <p className="text-[11px] text-gray-400 mt-1">Calzedonia raw material classification</p>
+              </div>
+
+              {/* Field 7: Country / Region */}
+              <div className="p-4 rounded-xl border border-gray-200/80 bg-gray-50/60 relative">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                    Country / Region
+                  </span>
+                  <span className="text-[10px] font-semibold text-gray-400 flex items-center gap-1">
+                    <Lock className="w-3 h-3 text-gray-400" /> Locked
+                  </span>
+                </div>
+                <div className="text-sm font-medium text-gray-900 flex items-center gap-2">
+                  <Globe className="w-4 h-4 text-gray-500 shrink-0" />
+                  <span>{matchedSupplier.country || "Sri Lanka"}</span>
+                </div>
+                <p className="text-[11px] text-gray-400 mt-1">Operating manufacturing jurisdiction</p>
+              </div>
+
+              {/* Field 8: Business Registration / Tax ID */}
+              <div className="p-4 rounded-xl border border-gray-200/80 bg-gray-50/60 relative">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                    Business Reg / Tax ID
+                  </span>
+                  <span className="text-[10px] font-semibold text-gray-400 flex items-center gap-1">
+                    <Lock className="w-3 h-3 text-gray-400" /> Locked
+                  </span>
+                </div>
+                <div className="text-sm font-mono font-bold text-gray-900 flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{matchedSupplier.tax_id || "PV-10293847"}</span>
+                </div>
+                <p className="text-[11px] text-gray-400 mt-1">Corporate statutory registration number</p>
+              </div>
+
+              {/* Field 9: Facility Address */}
+              <div className="p-4 rounded-xl border border-gray-200/80 bg-gray-50/60 relative">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                    Facility / Operating Address
+                  </span>
+                  <span className="text-[10px] font-semibold text-gray-400 flex items-center gap-1">
+                    <Lock className="w-3 h-3 text-gray-400" /> Locked
+                  </span>
+                </div>
+                <div className="text-sm font-medium text-gray-900 flex items-center gap-2">
+                  <MapPin className="w-4 h-4 text-gray-500 shrink-0" />
+                  <span className="truncate">{matchedSupplier.address || "Sri Lanka Manufacturing Plant"}</span>
+                </div>
+                <p className="text-[11px] text-gray-400 mt-1">Physical plant dispatch terminal</p>
+              </div>
+
+              {/* Field 10: Partner Status */}
+              <div className="p-4 rounded-xl border border-gray-200/80 bg-gray-50/60 relative">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                    Partner Authorization Status
+                  </span>
+                  <span className="text-[10px] font-semibold text-gray-400 flex items-center gap-1">
+                    <Lock className="w-3 h-3 text-gray-400" /> Locked
+                  </span>
+                </div>
+                <div className="text-sm font-bold flex items-center gap-2">
+                  {matchedSupplier.is_active ? (
+                    <>
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span className="text-emerald-700">Active & Authorized</span>
+                    </>
+                  ) : (
+                    <>
+                      <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                      <span className="text-red-700">Inactive / Suspended</span>
+                    </>
+                  )}
+                </div>
+                <p className="text-[11px] text-gray-400 mt-1">
+                  {matchedSupplier.is_active
+                    ? "Permitted for ASN submission & carton labelling"
+                    : "Shipment dispatch suspended by Admin"}
+                </p>
+              </div>
+
+              {/* Field 11: Onboarding Date */}
+              <div className="p-4 rounded-xl border border-gray-200/80 bg-gray-50/60 relative">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                    Partner Onboarded Date
+                  </span>
+                  <span className="text-[10px] font-semibold text-gray-400 flex items-center gap-1">
+                    <Lock className="w-3 h-3 text-gray-400" /> Locked
+                  </span>
+                </div>
+                <div className="text-sm font-medium text-gray-900 flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-gray-500 shrink-0" />
+                  <span>
+                    {matchedSupplier.onboarded_at
+                      ? new Date(matchedSupplier.onboarded_at).toLocaleDateString("en-US", {
+                          year: "numeric",
+                          month: "long",
+                          day: "numeric",
+                        })
+                      : "January 15, 2026"}
+                  </span>
+                </div>
+                <p className="text-[11px] text-gray-400 mt-1">Oniverse procurement enrollment date</p>
+              </div>
+
+              {/* Field 12: Delivery Plant Resolution */}
+              <div className="p-4 rounded-xl border border-gray-200/80 bg-gray-50/60 relative">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                    Delivering Plant Routing
+                  </span>
+                  <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                    Automated
+                  </span>
+                </div>
+                <div className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                  <Building className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>Auto-Detected Per PO Delivery</span>
+                </div>
+                <p className="text-[11px] text-gray-400 mt-1">Matched automatically from order destination</p>
+              </div>
+            </div>
+
+            {/* Bottom Admin Assistance Banner */}
+            <div className="p-4 bg-gray-50 rounded-xl border border-gray-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-gray-600">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>
+                  Notice any discrepancies? <strong>Direct editing is disabled</strong>. Contact System Admin to update these details.
+                </span>
+              </div>
+              <button
+                onClick={() => setIsContactModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-2xs transition-all shrink-0"
+              >
+                <Mail className="w-3.5 h-3.5" />
+                Contact System Admin
               </button>
             </div>
           </div>
-        </form>
+        </div>
       )}
 
-      {/* Tab 2: Oniverse Plants & Dispatch Rules */}
+      {/* ─── TAB 2: DISPATCH & BARCODE GUIDELINES ─── */}
       {activeTab === "plants" && (
         <div className="space-y-6 animate-in fade-in duration-150">
           <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-gray-100">
               <div>
-                <h2 className="text-base font-bold text-gray-900">Registered Oniverse Group Plants</h2>
+                <h2 className="text-base font-bold text-gray-900">Automated Plant Delivery Routing</h2>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Your supplier account is authorized to dispatch ASNs to the following Sri Lanka manufacturing plants:
+                  No manual plant selection required. The delivering manufacturing plant is automatically determined from each incoming Purchase Order:
                 </p>
               </div>
               <span className="px-2.5 py-1 text-xs font-semibold bg-emerald-50 text-emerald-700 rounded-lg border border-emerald-200">
-                5 Authorized Plants
+                Automatic PO Ingestion
               </span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {SRI_LANKA_PLANTS.map((plant) => (
-                <div
-                  key={plant.name}
-                  className="p-4 rounded-xl border border-gray-100 bg-gray-50/50 flex items-start justify-between"
-                >
-                  <div>
-                    <div className="flex items-center gap-1.5">
-                      <p className="text-sm font-bold text-gray-900">{plant.name}</p>
-                      {plant.isPrimary && (
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded">
-                          PRIMARY
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs font-mono text-gray-500 mt-0.5">{plant.code}</p>
-                    <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
-                      <MapPin className="w-3 h-3 text-gray-400" /> {plant.location}, Sri Lanka
-                    </p>
-                  </div>
-                  <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    ONLINE
-                  </span>
-                </div>
-              ))}
+            <div className="p-4 bg-emerald-50/50 border border-emerald-100 rounded-xl text-xs text-emerald-900 space-y-2">
+              <p className="font-semibold text-emerald-950">
+                How Delivery Plant Mapping Works:
+              </p>
+              <ul className="list-disc list-inside space-y-1 text-emerald-800">
+                <li>When Calzedonia sends a new Purchase Order email, the engine automatically parses the destination plant address from the email body and XML/HTML attachment.</li>
+                <li>Your purchase order in the system is linked directly with its delivery plant (Omega Line, Alpha Apparels, Benji, Sirio, or Vavuniya Apparels).</li>
+                <li>When you create an ASN shipment, the delivery plant and shipping destination are pre-populated automatically without manual entry.</li>
+              </ul>
             </div>
           </div>
 
@@ -454,14 +599,18 @@ export default function Profile() {
                 <CheckCircle2 className="w-4 h-4 text-indigo-600" /> 20-Digit SSCC Standard Active
               </p>
               <p className="text-indigo-800">
-                Your 10-digit Supplier Code prefix <code className="font-mono bg-white px-1 py-0.5 rounded border border-indigo-200 font-bold">{supplierCode}</code> is automatically prepended to generated Handling Unit (HU) barcodes.
+                Your 10-digit Supplier Code prefix{" "}
+                <code className="font-mono bg-white px-1.5 py-0.5 rounded border border-indigo-200 font-bold">
+                  {matchedSupplier.supplier_code}
+                </code>{" "}
+                is automatically prepended to generated Handling Unit (HU) barcodes and Calzedonia EDI XML dispatches.
               </p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Tab 3: Security & Credentials */}
+      {/* ─── TAB 3: SECURITY & CREDENTIALS ─── */}
       {activeTab === "security" && (
         <div className="space-y-6 animate-in fade-in duration-150">
           <form onSubmit={handlePasswordChange} className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-4">
@@ -546,7 +695,9 @@ export default function Profile() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="font-bold text-gray-900 text-sm">Purchase Order Email Alerts</p>
-                  <p className="text-gray-500">Receive instant email notifications when new POs are ingested for your supplier code.</p>
+                  <p className="text-gray-500">
+                    Receive instant email notifications when new POs are ingested for your supplier code.
+                  </p>
                 </div>
                 <input
                   type="checkbox"
@@ -559,7 +710,9 @@ export default function Profile() {
               <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
                 <div>
                   <p className="font-bold text-gray-900 text-sm">ASN Dispatch Confirmations</p>
-                  <p className="text-gray-500">Receive confirmation emails when Calzedonia XML submission is generated.</p>
+                  <p className="text-gray-500">
+                    Receive confirmation emails when Calzedonia XML submission is generated.
+                  </p>
                 </div>
                 <input
                   type="checkbox"
@@ -568,6 +721,116 @@ export default function Profile() {
                   className="w-4 h-4 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500"
                 />
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── CONTACT SYSTEM ADMIN MODAL ─── */}
+      {isContactModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-5 border-b border-gray-100 bg-gradient-to-r from-emerald-800 to-teal-800 text-white">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-white/10 backdrop-blur flex items-center justify-center">
+                  <ShieldAlert className="w-5 h-5 text-emerald-200" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold">Contact System Administrator</h3>
+                  <p className="text-xs text-emerald-100/80">Request profile changes & account modifications</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsContactModalOpen(false)}
+                className="p-1 rounded-lg text-emerald-200 hover:text-white hover:bg-white/10"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-5 text-xs text-gray-700">
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-1.5 text-amber-900">
+                <p className="font-bold flex items-center gap-1.5">
+                  <Lock className="w-4 h-4 text-amber-700 shrink-0" /> Why are profile details read-only?
+                </p>
+                <p className="leading-relaxed">
+                  Supplier details (business name, supplier code, official order email, and facility location) are legally tied to Calzedonia Group purchase orders and dispatch declarations. Any changes must be verified and updated in the system by an authorized Oniverse Administrator.
+                </p>
+              </div>
+
+              {/* Official Admin Contacts */}
+              <div className="space-y-3">
+                <h4 className="font-bold text-gray-900 text-sm uppercase tracking-wider">
+                  Oniverse Plant Administration Contacts
+                </h4>
+
+                <div className="p-3.5 bg-gray-50 rounded-xl border border-gray-200 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-gray-500">Official Admin Email:</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-gray-900">admin@oniverse.com</span>
+                      <button
+                        onClick={handleCopyAdminEmail}
+                        className="p-1 hover:bg-gray-200 rounded text-gray-600 transition-colors"
+                        title="Copy email"
+                      >
+                        {copiedEmail ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between border-t border-gray-200/60 pt-2">
+                    <span className="font-semibold text-gray-500">Vendor Relations Desk:</span>
+                    <span className="font-mono text-gray-900 font-bold">+94 11 4712000 (Ext. 204)</span>
+                  </div>
+
+                  <div className="flex items-center justify-between border-t border-gray-200/60 pt-2">
+                    <span className="font-semibold text-gray-500">Plant Headquarters:</span>
+                    <span className="text-gray-900 font-medium">Sirio Ltd, Badalgama, Sri Lanka</span>
+                  </div>
+
+                  <div className="flex items-center justify-between border-t border-gray-200/60 pt-2">
+                    <span className="font-semibold text-gray-500">Office Working Hours:</span>
+                    <span className="text-gray-900 font-medium">Mon - Fri: 08:30 - 17:30 IST</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Your Current Account Summary */}
+              <div className="p-3.5 rounded-xl border border-gray-100 bg-gray-50/50 space-y-1">
+                <p className="font-bold text-gray-800">Your Supplier Partner Identity:</p>
+                <p className="text-gray-600">
+                  Company: <strong>{matchedSupplier.name}</strong> • Code:{" "}
+                  <strong className="font-mono">#{matchedSupplier.supplier_code}</strong>
+                </p>
+                <p className="text-gray-500">
+                  Current Orders Email: <strong className="font-mono">{matchedSupplier.email}</strong>
+                </p>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-gray-100 bg-gray-50/50 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setIsContactModalOpen(false)}
+                className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl"
+              >
+                Close
+              </button>
+              <a
+                href={mailtoLink}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 rounded-xl shadow-xs transition-all"
+              >
+                <Send className="w-3.5 h-3.5" />
+                Draft Email to Administrator
+              </a>
             </div>
           </div>
         </div>
