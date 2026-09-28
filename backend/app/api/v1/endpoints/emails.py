@@ -376,38 +376,49 @@ async def test_pipeline(
         use_ssl=settings.IMAP_USE_SSL,
     )
 
-    with IMAPClient(config) as client:
-        raw_emails = client.fetch_unread()
+    # Fetch existing Message-IDs so emails already ingested aren't fetched again,
+    # but any new/unseen emails or emails opened in Gmail are reliably fetched.
+    stmt = select(EmailRecord.message_id).where(EmailRecord.message_id.isnot(None))
+    db_res = await db.execute(stmt)
+    existing_message_ids = {m.strip() for m in db_res.scalars().all() if m}
 
     results = []
-    for raw in raw_emails:
-        decoded = decode(raw.raw)
-        classification = classify(decoded)
-        parsed_pos = parse(decoded, classification)
+    with IMAPClient(config) as client:
+        raw_emails = client.fetch_unprocessed(
+            existing_message_ids=existing_message_ids,
+            limit=25,
+            scan_depth=50,
+        )
 
-        try:
-            db_result = await process_and_save(
-                db, decoded, classification, parsed_pos, resolved_company_id
-            )
-            client.mark_as_read(raw.uid)
-        except Exception as e:
-            db_result = {"error": str(e)}
+        for raw in raw_emails:
+            decoded = decode(raw.raw)
+            classification = classify(decoded)
+            parsed_pos = parse(decoded, classification)
 
-        results.append({
-            "subject": decoded.subject,
-            "from": decoded.from_address,
-            "format": classification.format.value,
-            "po_count": len(parsed_pos),
-            "pos": [
-                {
-                    "po_number": po.po_number,
-                    "items": len(po.line_items),
-                    "qty": po.total_quantity,
-                }
-                for po in parsed_pos
-            ],
-            "db": db_result,
-        })
+            try:
+                db_result = await process_and_save(
+                    db, decoded, classification, parsed_pos, resolved_company_id
+                )
+                client.mark_as_read(raw.uid)
+            except Exception as e:
+                logger.exception("Failed to process email UID %s: %s", raw.uid, e)
+                db_result = {"error": str(e)}
+
+            results.append({
+                "subject": decoded.subject,
+                "from": decoded.from_address,
+                "format": classification.format.value,
+                "po_count": len(parsed_pos),
+                "pos": [
+                    {
+                        "po_number": po.po_number,
+                        "items": len(po.line_items),
+                        "qty": po.total_quantity,
+                    }
+                    for po in parsed_pos
+                ],
+                "db": db_result,
+            })
 
     return {
         "status": "ok",

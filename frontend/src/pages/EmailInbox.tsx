@@ -119,11 +119,10 @@ export default function EmailInbox() {
           <button
             onClick={handleSyncMailbox}
             disabled={isSyncing}
-            className={`inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white rounded-lg transition-all shadow-sm ${
-              isAdmin
+            className={`inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white rounded-lg transition-all shadow-sm ${isAdmin
                 ? "bg-blue-600 hover:bg-blue-700 active:bg-blue-800"
                 : "bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800"
-            } disabled:opacity-60`}
+              } disabled:opacity-60`}
             title="Immediately check mailbox for new unread order emails"
           >
             <RefreshCw className={`w-4 h-4 ${isSyncing ? "animate-spin" : ""}`} />
@@ -146,11 +145,10 @@ export default function EmailInbox() {
 
       {syncMessage && (
         <div
-          className={`p-3.5 text-sm rounded-xl flex items-center justify-between shadow-sm ${
-            isAdmin
+          className={`p-3.5 text-sm rounded-xl flex items-center justify-between shadow-sm ${isAdmin
               ? "bg-blue-50 border border-blue-200 text-blue-900"
               : "bg-emerald-50 border border-emerald-200 text-emerald-900"
-          }`}
+            }`}
         >
           <div className="flex items-center gap-2">
             <FileCheck2 className={`w-4 h-4 ${isAdmin ? "text-blue-600" : "text-emerald-600"}`} />
@@ -158,9 +156,8 @@ export default function EmailInbox() {
           </div>
           <button
             onClick={() => setSyncMessage(null)}
-            className={`font-bold ml-4 text-xs ${
-              isAdmin ? "text-blue-500 hover:text-blue-700" : "text-emerald-500 hover:text-emerald-700"
-            }`}
+            className={`font-bold ml-4 text-xs ${isAdmin ? "text-blue-500 hover:text-blue-700" : "text-emerald-500 hover:text-emerald-700"
+              }`}
           >
             ✕ Dismiss
           </button>
@@ -177,9 +174,8 @@ export default function EmailInbox() {
           {hasActiveFilters && (
             <button
               onClick={clearFilters}
-              className={`text-xs font-semibold flex items-center gap-1 ${
-                isAdmin ? "text-blue-600 hover:text-blue-800" : "text-emerald-600 hover:text-emerald-800"
-              }`}
+              className={`text-xs font-semibold flex items-center gap-1 ${isAdmin ? "text-blue-600 hover:text-blue-800" : "text-emerald-600 hover:text-emerald-800"
+                }`}
             >
               ✕ Clear All Filters
             </button>
@@ -195,11 +191,10 @@ export default function EmailInbox() {
               placeholder="Search by keywords, POs, vendors, subject, sender..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className={`w-full pl-9 pr-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 outline-none transition-all ${
-                isAdmin
+              className={`w-full pl-9 pr-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 outline-none transition-all ${isAdmin
                   ? "focus:ring-blue-500 focus:border-blue-500"
                   : "focus:ring-emerald-500 focus:border-emerald-500"
-              }`}
+                }`}
             />
           </div>
 
@@ -211,11 +206,10 @@ export default function EmailInbox() {
               placeholder="Filter by PO Number (e.g. ZA6A-2001605039)..."
               value={poNumberFilter}
               onChange={(e) => setPoNumberFilter(e.target.value)}
-              className={`w-full pl-9 pr-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 outline-none transition-all ${
-                isAdmin
+              className={`w-full pl-9 pr-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 outline-none transition-all ${isAdmin
                   ? "focus:ring-blue-500 focus:border-blue-500"
                   : "focus:ring-emerald-500 focus:border-emerald-500"
-              }`}
+                }`}
             />
           </div>
 
@@ -227,11 +221,10 @@ export default function EmailInbox() {
               placeholder="Filter by Vendor Code (e.g. SUPP-9901)..."
               value={vendorCodeFilter}
               onChange={(e) => setVendorCodeFilter(e.target.value)}
-              className={`w-full pl-9 pr-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 outline-none transition-all ${
-                isAdmin
+              className={`w-full pl-9 pr-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 outline-none transition-all ${isAdmin
                   ? "focus:ring-blue-500 focus:border-blue-500"
                   : "focus:ring-emerald-500 focus:border-emerald-500"
-              }`}
+                }`}
             />
           </div>
         </div>
@@ -274,17 +267,16 @@ export default function EmailInbox() {
                         <tr
                           key={email.id}
                           onClick={() => setSelectedEmailId(email.id)}
-                          className={`cursor-pointer transition-all ${
-                            isSelected
+                          className={`cursor-pointer transition-all ${isSelected
                               ? isAdmin
                                 ? "bg-blue-100/90 border-l-4 border-blue-800 font-extrabold text-blue-950 shadow-xs"
                                 : "bg-emerald-100/90 border-l-4 border-emerald-700 font-extrabold text-emerald-950 shadow-xs"
                               : isUnread
-                              ? isAdmin
-                                ? "bg-blue-50/90 border-l-4 border-blue-600 font-semibold text-blue-950 hover:bg-blue-100/70"
-                                : "bg-emerald-50/90 border-l-4 border-emerald-500 font-semibold text-emerald-950 hover:bg-emerald-100/70"
-                              : "hover:bg-gray-50/80"
-                          }`}
+                                ? isAdmin
+                                  ? "bg-blue-50/90 border-l-4 border-blue-600 font-semibold text-blue-950 hover:bg-blue-100/70"
+                                  : "bg-emerald-50/90 border-l-4 border-emerald-500 font-semibold text-emerald-950 hover:bg-emerald-100/70"
+                                : "hover:bg-gray-50/80"
+                            }`}
                         >
                           <td className="px-4 py-3 max-w-[140px] truncate text-gray-900 font-bold">
                             {isAdmin ? (
@@ -320,11 +312,10 @@ export default function EmailInbox() {
                           {!selectedEmailId && (
                             <td className="px-4 py-3">
                               <span
-                                className={`px-2.5 py-0.5 text-xs font-bold rounded-md border shadow-xs ${
-                                  isAdmin
+                                className={`px-2.5 py-0.5 text-xs font-bold rounded-md border shadow-xs ${isAdmin
                                     ? "bg-blue-100 text-blue-800 border-blue-300"
                                     : "bg-emerald-100 text-emerald-800 border-emerald-300"
-                                }`}
+                                  }`}
                               >
                                 {email.email_type || "PO Email"}
                               </span>
@@ -343,15 +334,14 @@ export default function EmailInbox() {
                                 e.stopPropagation();
                                 setSelectedEmailId(email.id);
                               }}
-                              className={`p-1.5 rounded-lg transition-colors ${
-                                isSelected
+                              className={`p-1.5 rounded-lg transition-colors ${isSelected
                                   ? isAdmin
                                     ? "text-blue-800 bg-blue-200/90 font-bold"
                                     : "text-emerald-800 bg-emerald-200/90 font-bold"
                                   : isAdmin
-                                  ? "text-gray-400 hover:text-blue-700 hover:bg-blue-100/50"
-                                  : "text-gray-400 hover:text-emerald-700 hover:bg-emerald-100/50"
-                              }`}
+                                    ? "text-gray-400 hover:text-blue-700 hover:bg-blue-100/50"
+                                    : "text-gray-400 hover:text-emerald-700 hover:bg-emerald-100/50"
+                                }`}
                               title="Preview Email"
                             >
                               <Eye className="w-4 h-4" />
@@ -407,11 +397,10 @@ export default function EmailInbox() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <span
-                        className={`px-2 py-0.5 text-xs font-semibold rounded ${
-                          isAdmin
+                        className={`px-2 py-0.5 text-xs font-semibold rounded ${isAdmin
                             ? "bg-blue-100 text-blue-800 border border-blue-200"
                             : "bg-emerald-100 text-emerald-800 border border-emerald-200"
-                        }`}
+                          }`}
                       >
                         AUTO-PARSED
                       </span>
@@ -453,37 +442,34 @@ export default function EmailInbox() {
                   <div className="flex bg-gray-100 p-1 rounded-lg text-xs font-medium">
                     <button
                       onClick={() => setPreviewTab("html")}
-                      className={`px-3 py-1 rounded-md transition-colors ${
-                        previewTab === "html"
+                      className={`px-3 py-1 rounded-md transition-colors ${previewTab === "html"
                           ? isAdmin
                             ? "bg-white text-blue-700 font-semibold shadow-sm"
                             : "bg-white text-emerald-700 font-semibold shadow-sm"
                           : "text-gray-600 hover:text-gray-900"
-                      }`}
+                        }`}
                     >
                       HTML Body
                     </button>
                     <button
                       onClick={() => setPreviewTab("parsed")}
-                      className={`px-3 py-1 rounded-md transition-colors ${
-                        previewTab === "parsed"
+                      className={`px-3 py-1 rounded-md transition-colors ${previewTab === "parsed"
                           ? isAdmin
                             ? "bg-white text-blue-700 font-semibold shadow-sm"
                             : "bg-white text-emerald-700 font-semibold shadow-sm"
                           : "text-gray-600 hover:text-gray-900"
-                      }`}
+                        }`}
                     >
                       Parsed PO ({selectedEmail.parsed_data?.length ?? 0})
                     </button>
                     <button
                       onClick={() => setPreviewTab("attachments")}
-                      className={`px-3 py-1 rounded-md transition-colors ${
-                        previewTab === "attachments"
+                      className={`px-3 py-1 rounded-md transition-colors ${previewTab === "attachments"
                           ? isAdmin
                             ? "bg-white text-blue-700 font-semibold shadow-sm"
                             : "bg-white text-emerald-700 font-semibold shadow-sm"
                           : "text-gray-600 hover:text-gray-900"
-                      }`}
+                        }`}
                     >
                       Files ({selectedEmail.attachments?.length ?? 0})
                     </button>
@@ -521,11 +507,10 @@ export default function EmailInbox() {
                                 PO#: {data.po_number_extracted || "Unknown"}
                               </span>
                               <span
-                                className={`text-xs px-2 py-0.5 rounded font-medium ${
-                                  isAdmin
+                                className={`text-xs px-2 py-0.5 rounded font-medium ${isAdmin
                                     ? "bg-blue-100 text-blue-800 border border-blue-200"
                                     : "bg-emerald-100 text-emerald-800 border border-emerald-200"
-                                }`}
+                                  }`}
                               >
                                 Parser: {data.parser_used}
                               </span>
