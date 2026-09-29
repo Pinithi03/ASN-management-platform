@@ -101,19 +101,26 @@ async def _persist_error(
             raise
 
 
+async def _get_existing_message_ids() -> set[str]:
+    """Async helper to retrieve all already-persisted Message-IDs from DB."""
+    from sqlalchemy import select
+    from app.db.session import async_session_factory
+    from app.models.email_message import EmailRecord
+
+    async with async_session_factory() as session:
+        stmt = select(EmailRecord.message_id).where(EmailRecord.message_id.isnot(None))
+        res = await session.execute(stmt)
+        return {m.strip() for m in res.scalars().all() if m}
+
+
 @shared_task(name="email.poll_mailboxes", bind=True, max_retries=3)
 def poll_mailboxes(self) -> dict:
     """
-    Beat task — poll IMAP mailbox for unread emails.
+    Beat task — poll IMAP mailbox for unread/unprocessed emails.
 
-    Fetches up to 20 unread messages per run and dispatches
+    Fetches up to 20 unprocessed messages per run and dispatches
     process_inbound_email for each. Runs every 10 seconds via
     Celery Beat.
-
-    Returns
-    -------
-    dict
-        Summary of the poll: fetched count, dispatched count.
     """
     config = _get_imap_config()
 
@@ -125,9 +132,18 @@ def poll_mailboxes(self) -> dict:
     # per-plant config when multi-plant support is added.
     company_id = os.getenv("DEFAULT_COMPANY_ID", "")
 
+    existing_ids: set[str] = set()
+    try:
+        existing_ids = asyncio.run(_get_existing_message_ids())
+    except Exception as e:
+        logger.warning("Could not query existing message IDs: %s", e)
+
     try:
         with IMAPClient(config) as client:
-            raw_emails = client.fetch_unread(limit=20)
+            raw_emails = client.fetch_unprocessed(
+                existing_message_ids=existing_ids if existing_ids else None,
+                limit=20,
+            )
 
             dispatched = 0
             for raw_email in raw_emails:

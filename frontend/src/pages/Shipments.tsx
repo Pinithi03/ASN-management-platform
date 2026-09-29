@@ -1259,13 +1259,23 @@ function ExcelPackingWorkflow({
       .catch((err) => console.warn("Failed to load POs:", err));
   }, [user, targetPo]);
 
+  const PLANT_NAMES: Record<string, string> = {
+    PPA1: "Omega Line Ltd (PPA1)",
+    PPB1: "Alpha Apparels Ltd (PPB1)",
+    PPC1: "Benji Ltd (PPC1)",
+    PPD1: "Sirio Ltd (PPD1)",
+    PPE1: "Vavuniya Apparels Ltd (PPE1)",
+  };
+
+  // Helper to accurately match plant code from client_code or destination automatically
   const matchPlant = (clientOrDest?: string | null): string => {
     if (!clientOrDest) return "PPA1";
     const s = clientOrDest.toLowerCase();
-    if (s.includes("omega") || s.includes("ppa1")) return "PPA1";
     if (s.includes("alpha") || s.includes("ppb1")) return "PPB1";
     if (s.includes("benji") || s.includes("ppc1")) return "PPC1";
     if (s.includes("sirio") || s.includes("ppd1")) return "PPD1";
+    if (s.includes("vavuniya") || s.includes("ppe1") || s.includes("ppa4")) return "PPE1";
+    if (s.includes("omega") || s.includes("ppa1") || s.includes("ppa2")) return "PPA1";
     return "PPA1";
   };
 
@@ -1549,6 +1559,7 @@ function ExcelPackingWorkflow({
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+              {/* PO Selector */}
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">
                   Purchase Order (PO #)
@@ -1556,45 +1567,52 @@ function ExcelPackingWorkflow({
                 {availablePOs.length > 0 ? (
                   <select
                     value={selectedPoNumber}
-                    onChange={(e) => setSelectedPoNumber(e.target.value)}
-                    className="h-9 w-full rounded-lg border border-gray-300 bg-white px-2.5 text-xs font-semibold text-gray-900 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                    onChange={(e) => {
+                      const poNum = e.target.value;
+                      setSelectedPoNumber(poNum);
+                      const poObj = availablePOs.find((p) => p.po_number === poNum);
+                      if (poObj) {
+                        setPlantCode(matchPlant(poObj.client_code || poObj.destination));
+                        if (poObj.delivery_date) {
+                          setEstimatedArrival(poObj.delivery_date.split("T")[0]);
+                        }
+                      }
+                    }}
+                    className="h-9 w-full rounded-lg border border-gray-300 bg-white px-2.5 text-xs font-mono font-bold text-gray-900 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
                   >
                     {availablePOs.map((p) => (
-                      <option key={p.id} value={p.po_number || ""}>
-                        PO #{p.po_number} ({p.client_code || "Calzedonia"})
+                      <option key={p.id || p.po_number} value={p.po_number || ""}>
+                        PO #{p.po_number} {p.client_code ? `(${p.client_code})` : ""} - {p.quantity?.toLocaleString() || ""} pcs
                       </option>
                     ))}
                   </select>
                 ) : (
                   <input
-                    type="text"
                     value={selectedPoNumber}
                     onChange={(e) => setSelectedPoNumber(e.target.value)}
-                    placeholder="Enter PO number"
-                    className="h-9 w-full rounded-lg border border-gray-300 bg-white px-2.5 text-xs font-semibold text-gray-900 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                    placeholder="e.g. 2001606986"
+                    className="h-9 w-full rounded-lg border border-gray-300 bg-white px-2.5 text-xs font-mono font-bold text-gray-900 focus:border-emerald-500 focus:outline-none"
                   />
                 )}
               </div>
 
+              {/* Destination Plant (Automatically Detected from PO) */}
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  Destination Plant (Auto-matched)
+                  Delivering Plant (Auto-Detected)
                 </label>
-                <select
-                  value={plantCode}
-                  onChange={(e) => setPlantCode(e.target.value)}
-                  className="h-9 w-full rounded-lg border border-gray-300 bg-white px-2.5 text-xs font-semibold text-gray-900 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
-                >
-                  <option value="PPA1">PPA1 (Omega Line)</option>
-                  <option value="PPB1">PPB1 (Alpha Apparels)</option>
-                  <option value="PPC1">PPC1 (Benji Ltd)</option>
-                  <option value="PPD1">PPD1 (Sirio Ltd)</option>
-                </select>
+                <div className="h-9 w-full rounded-lg border border-gray-200 bg-gray-50 px-2.5 flex items-center justify-between text-xs font-semibold text-gray-800">
+                  <span className="truncate">{PLANT_NAMES[plantCode] || plantCode}</span>
+                  <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-200 ml-1">
+                    Auto
+                  </span>
+                </div>
               </div>
 
+              {/* Est. Delivery Date */}
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  Estimated Arrival / Delivery Date
+                  Est. Delivery Date
                 </label>
                 <input
                   type="date"
