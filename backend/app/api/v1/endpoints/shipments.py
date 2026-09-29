@@ -30,6 +30,7 @@ from app.db.session import get_db
 from app.models.asn import ASNRecord
 from app.models.company import Company
 from app.models.enums import ASNStatus, ShipmentStatus
+from app.models.hu_sequence import HUSequence
 from app.models.packing_slip import PackingSlip
 from app.models.purchase_order import PurchaseOrder
 from app.models.shipment import Shipment
@@ -42,7 +43,7 @@ from app.services.asn_xml_generator_service import (
     validate_asn_xml,
 )
 from app.services.barcode_label_service import generate_batch_labels
-from app.services.hu_service import generate_batch_hu
+from app.services.hu_service import format_hu_number, generate_batch_hu
 from app.services.packing_excel_service import (
     generate_packing_template,
     validate_packing_excel,
@@ -51,6 +52,63 @@ from app.services.packing_excel_service import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+@router.get("/next-hu-sequence")
+async def get_next_hu_sequence(
+    supplier_code: Optional[str] = Query(None, description="Supplier partner code, e.g. 0000018194"),
+    supplier_id: Optional[str] = Query(None, description="Supplier UUID"),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """
+    Get the next available 20-digit Handling Unit (SSCC) sequence number for a supplier.
+    Ensures sequential continuity across cartons and shipments without gaps or random numbers.
+    """
+    supp = None
+    if supplier_id:
+        try:
+            res = await db.execute(select(Supplier).where(Supplier.id == uuid.UUID(supplier_id)))
+            supp = res.scalar_one_or_none()
+        except ValueError:
+            pass
+
+    if not supp and supplier_code:
+        code_clean = supplier_code.strip()
+        res = await db.execute(
+            select(Supplier).where(
+                (Supplier.supplier_code == code_clean)
+                | (Supplier.supplier_code == code_clean.zfill(10))
+                | (Supplier.supplier_code == code_clean.lstrip("0"))
+            )
+        )
+        supp = res.scalar_one_or_none()
+
+    if not supp:
+        res = await db.execute(select(Supplier).limit(1))
+        supp = res.scalar_one_or_none()
+
+    resolved_code = supp.supplier_code if supp else (supplier_code or "0000018194")
+    resolved_id = supp.id if supp else uuid.UUID("00000000-0000-0000-0000-000000018194")
+
+    seq_res = await db.execute(
+        select(HUSequence).where(HUSequence.supplier_id == resolved_id)
+    )
+    seq = seq_res.scalar_one_or_none()
+    last_num = seq.last_number if seq else 0
+    next_num = last_num + 1
+
+    clean_code = resolved_code.lstrip("0")
+    prefix = f"1{clean_code.zfill(9)}"
+    next_hu = f"{prefix}{str(next_num).zfill(10)}"
+
+    return {
+        "supplier_id": str(resolved_id),
+        "supplier_code": resolved_code,
+        "prefix": prefix,
+        "last_number": last_num,
+        "next_number": next_num,
+        "next_hu": next_hu,
+    }
 
 
 @router.get("/template")
@@ -585,6 +643,7 @@ class DirectCartonItem(BaseModel):
     gross_weight: float
     supplier_carton_ref: Optional[str] = None
     packaging_type: Optional[str] = "BOX"
+    hu_number: Optional[str] = None
 
 
 class CreateDirectShipmentRequest(BaseModel):
@@ -702,20 +761,46 @@ async def create_direct_shipment(
 
     total_cartons = len(req.cartons)
 
-    # 4. Generate 20-digit Handling Units (SSCC)
-    try:
-        hu_numbers = await generate_batch_hu(
-            session=db,
-            supplier_code=actual_supp_code,
-            count=total_cartons,
-            company_id=company_id,
-            supplier_id=supplier_id,
-        )
-    except Exception as e:
-        logger.warning("HU batch generator failed, using calibrated sequence: %s", e)
-        prefix = "1" + actual_supp_code.lstrip("0").zfill(9)
-        base_num = int(datetime.utcnow().timestamp()) % 1000000000
-        hu_numbers = [f"{prefix}{str(base_num + i).zfill(10)}" for i in range(total_cartons)]
+    # 4. Generate or validate 20-digit Handling Units (SSCC)
+    provided_hus = [
+        c.hu_number.strip()
+        for c in req.cartons
+        if c.hu_number and len(c.hu_number.strip()) == 20 and c.hu_number.strip().isdigit()
+    ]
+    if len(provided_hus) == total_cartons:
+        hu_numbers = provided_hus
+        # Update sequence table to ensure next shipments continue seamlessly
+        try:
+            prefix = "1" + actual_supp_code.lstrip("0").zfill(9)
+            serials = [int(h[10:]) for h in hu_numbers if h.startswith(prefix) and h[10:].isdigit()]
+            if serials:
+                max_serial = max(serials)
+                seq_stmt = select(HUSequence).where(HUSequence.supplier_id == supplier_id).with_for_update()
+                seq_res = await db.execute(seq_stmt)
+                seq_obj = seq_res.scalar_one_or_none()
+                if seq_obj:
+                    if max_serial > seq_obj.last_number:
+                        seq_obj.last_number = max_serial
+                else:
+                    seq_obj = HUSequence(supplier_id=supplier_id, last_number=max_serial)
+                    db.add(seq_obj)
+                await db.flush()
+        except Exception as e:
+            logger.warning("Could not sync HU sequence with provided HUs: %s", e)
+    else:
+        try:
+            hu_numbers = await generate_batch_hu(
+                session=db,
+                supplier_code=actual_supp_code,
+                count=total_cartons,
+                company_id=company_id,
+                supplier_id=supplier_id,
+            )
+        except Exception as e:
+            logger.warning("HU batch generator failed, using calibrated sequence: %s", e)
+            prefix = "1" + actual_supp_code.lstrip("0").zfill(9)
+            base_num = int(datetime.utcnow().timestamp()) % 1000000000
+            hu_numbers = [f"{prefix}{str(base_num + i).zfill(10)}" for i in range(total_cartons)]
 
     # 5. Build Shipment entity
     shipment_date = date.today()

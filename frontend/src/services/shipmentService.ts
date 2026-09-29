@@ -143,6 +143,7 @@ export const shipmentService = {
       gross_weight: number;
       supplier_carton_ref?: string;
       packaging_type?: string;
+      hu_number?: string;
     }>;
   }): Promise<{
     success: boolean;
@@ -261,4 +262,23 @@ export const shipmentService = {
     const res = await api.post(url);
     return res.data;
   },
+
+  /**
+   * Fetch next available HU sequence number for supplier.
+   */
+  async getNextHuSequence(supplierCode?: string, supplierId?: string): Promise<{
+    supplier_id: string;
+    supplier_code: string;
+    prefix: string;
+    last_number: number;
+    next_number: number;
+    next_hu: string;
+  }> {
+    const params = new URLSearchParams();
+    if (supplierCode) params.append("supplier_code", supplierCode);
+    if (supplierId) params.append("supplier_id", supplierId);
+    const res = await api.get(`/shipments/next-hu-sequence?${params.toString()}`);
+    return res.data;
+  },
 };
+

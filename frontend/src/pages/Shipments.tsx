@@ -610,19 +610,55 @@ function WebPackingWizard({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccessResult, setSubmitSuccessResult] = useState<any>(null);
   const [previewXmlModal, setPreviewXmlModal] = useState<string | null>(null);
+  const [startingSeq, setStartingSeq] = useState<number>(1);
 
   const getHuPrefix = () => {
     const suppCodeClean = (user?.supplier_code || "0000018194").replace(/^0+/, "");
     return "1" + suppCodeClean.padStart(9, "0");
   };
 
-  const generateHu = (seq?: number) => {
+  const formatHu = (seq: number) => {
     const prefix = getHuPrefix();
-    const serial = seq !== undefined
-      ? String(seq).padStart(10, "0")
-      : String(Math.floor(1000000000 + Math.random() * 9000000000));
-    return `${prefix}${serial}`;
+    return `${prefix}${String(seq).padStart(10, "0")}`;
   };
+
+  const resequenceAllCartons = (itemsToResequence: PackedItem[], startNum = startingSeq): PackedItem[] => {
+    let currentSeq = startNum;
+    return itemsToResequence.map((item) => ({
+      ...item,
+      boxes: item.boxes.map((box) => ({
+        ...box,
+        hu_number: formatHu(currentSeq++),
+      })),
+    }));
+  };
+
+  // Synchronize next sequential HU from database sequence
+  useEffect(() => {
+    let isMounted = true;
+    const fetchSeq = async () => {
+      try {
+        const suppCode = user?.supplier_code || "0000018194";
+        const suppId = user?.supplier_id;
+        const res = await shipmentService.getNextHuSequence(suppCode, suppId);
+        if (isMounted && res && typeof res.next_number === "number") {
+          setStartingSeq(res.next_number);
+          setPackedItems((prev) => {
+            if (prev.length > 0) {
+              return resequenceAllCartons(prev, res.next_number);
+            }
+            return prev;
+          });
+        }
+      } catch (err) {
+        console.warn("Could not fetch next HU sequence, defaulting to 1:", err);
+      }
+    };
+    fetchSeq();
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.supplier_code, user?.supplier_id]);
 
   const handleDispatchASN = async () => {
     setIsSubmitting(true);
@@ -646,6 +682,7 @@ function WebPackingWizard({
           gross_weight: Number(box.gross_weight),
           supplier_carton_ref: `CTN-${bIdx + 1}`,
           packaging_type: item.packaging_type || "BOX",
+          hu_number: box.hu_number,
         }))
       );
 
@@ -756,7 +793,8 @@ function WebPackingWizard({
       return;
     }
 
-    let runningBoxSeq = 1;
+    let runningSeq = startingSeq;
+    const prefix = getHuPrefix();
     const initialPacked: PackedItem[] = toPack.map((item) => {
       const q = item.shipping_now || 0;
       const nw = Math.max(0.1, Math.round(q * 0.12 * 100) / 100);
@@ -767,8 +805,8 @@ function WebPackingWizard({
         lot_number: "LOT-01",
         boxes: [
           {
-            id: Math.random().toString(),
-            hu_number: generateHu(runningBoxSeq++),
+            id: `box-${Date.now()}-${Math.random()}`,
+            hu_number: `${prefix}${String(runningSeq++).padStart(10, "0")}`,
             batch_code: "LOT-01",
             qty: q,
             gross_weight: gw,
@@ -783,8 +821,8 @@ function WebPackingWizard({
   };
 
   const handleSplitBox = (itemId: string, boxQty: number) => {
-    setPackedItems((prev) =>
-      prev.map((item) => {
+    setPackedItems((prev) => {
+      const updated = prev.map((item) => {
         if (item.id !== itemId) return item;
 
         const totalQty = item.shipping_now || 0;
@@ -798,8 +836,8 @@ function WebPackingWizard({
           const nw = Math.max(0.1, Math.round(qtyThisBox * 0.12 * 100) / 100);
           const gw = Math.max(nw + 0.1, Math.round(qtyThisBox * 0.15 * 100) / 100);
           newBoxes.push({
-            id: Math.random().toString(),
-            hu_number: generateHu(),
+            id: `box-${Date.now()}-${i}-${Math.random()}`,
+            hu_number: "", // Allocated sequentially below
             batch_code: item.boxes[0]?.batch_code || "LOT-01",
             qty: qtyThisBox,
             gross_weight: gw,
@@ -807,8 +845,9 @@ function WebPackingWizard({
           });
         }
         return { ...item, boxes: newBoxes };
-      })
-    );
+      });
+      return resequenceAllCartons(updated, startingSeq);
+    });
   };
 
   const updateBox = (itemId: string, boxIndex: number, patch: Partial<PackingBox>) => {
@@ -822,30 +861,32 @@ function WebPackingWizard({
   };
 
   const addBox = (itemId: string) => {
-    setPackedItems((prev) =>
-      prev.map((item) => {
+    setPackedItems((prev) => {
+      const updated = prev.map((item) => {
         if (item.id !== itemId) return item;
         const lastBox = item.boxes[item.boxes.length - 1];
         const newBox: PackingBox = {
-          id: Math.random().toString(),
-          hu_number: generateHu(),
+          id: `box-${Date.now()}-${Math.random()}`,
+          hu_number: "",
           batch_code: lastBox?.batch_code || "LOT-01",
           qty: 0,
           gross_weight: 1.0,
           net_weight: 0.8,
         };
         return { ...item, boxes: [...item.boxes, newBox] };
-      })
-    );
+      });
+      return resequenceAllCartons(updated, startingSeq);
+    });
   };
 
   const removeBox = (itemId: string, boxIndex: number) => {
-    setPackedItems((prev) =>
-      prev.map((item) => {
+    setPackedItems((prev) => {
+      const updated = prev.map((item) => {
         if (item.id !== itemId || item.boxes.length <= 1) return item;
         return { ...item, boxes: item.boxes.filter((_, idx) => idx !== boxIndex) };
-      })
-    );
+      });
+      return resequenceAllCartons(updated, startingSeq);
+    });
   };
 
   const handleProceedToReview = () => {
@@ -1011,10 +1052,20 @@ function WebPackingWizard({
       {step === 2 && (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-6">
           <div className="border-b border-gray-100 pb-4">
-            <h2 className="text-lg font-bold text-gray-900">Step 2: Box & Handling Unit (HU) Assignment</h2>
-            <p className="text-xs text-gray-500 mt-0.5">
-              Each carton automatically receives an atomic 20-digit Calzedonia SSCC Handling Unit barcode.
-            </p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">Step 2: Box & Handling Unit (HU) Assignment</h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Each carton automatically receives an atomic, strictly sequential 20-digit Calzedonia SSCC barcode.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700">
+                  <Barcode className="h-3.5 w-3.5 text-blue-600" />
+                  Starting SSCC: #{String(startingSeq).padStart(10, "0")}
+                </span>
+              </div>
+            </div>
           </div>
 
           <div className="space-y-6">
@@ -1066,7 +1117,12 @@ function WebPackingWizard({
                             <Box className="w-3.5 h-3.5 text-blue-500 shrink-0" />
                             <span>Carton {idx + 1}</span>
                           </td>
-                          <td className="px-3 py-2 font-mono text-blue-600 font-semibold text-[11px]">{box.hu_number}</td>
+                          <td className="px-3 py-2 font-mono text-[11px] whitespace-nowrap">
+                            <span className="inline-flex items-center gap-1 rounded bg-blue-50/90 px-2 py-0.5 font-semibold text-blue-700 border border-blue-200/60">
+                              <CheckCircle2 className="w-3 h-3 text-blue-500 shrink-0" />
+                              {box.hu_number}
+                            </span>
+                          </td>
                           <td className="px-3 py-2">
                             <input
                               type="text"
