@@ -117,7 +117,8 @@ def _parse_sd_data_slice_all(root: etree._Element, filename: str) -> list[Parsed
                 or "0000058376"
             )
             po.supplier_name = global_supplier_name or "CALZEDONIA CENTRAL HUB"
-            po.destination = global_destination or "SIRIO Plant"
+            order_deliv = _xpath_text(order_elem, ".//DeliveryAddress")
+            po.destination = order_deliv or (f"{buyer_name}" if buyer_name else global_destination) or "SIRIO Plant"
 
             lines = order_elem.xpath(".//SdOrderLine")
             for i, line_elem in enumerate(lines, start=1):
@@ -165,6 +166,10 @@ def _parse_sd_data_slice_all(root: etree._Element, filename: str) -> list[Parsed
                 line_delivery = _xpath_text(line_elem, ".//DeliveryDate")
                 if line_delivery and not po.delivery_date:
                     po.delivery_date = line_delivery
+
+                line_delivery_addr = _xpath_text(line_elem, ".//DeliveryAddress")
+                if line_delivery_addr:
+                    po.destination = f"{line_delivery_addr} ({buyer_name})" if buyer_name else line_delivery_addr
 
                 po.line_items.append(li)
 
