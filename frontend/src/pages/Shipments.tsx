@@ -27,7 +27,6 @@ import {
   ChevronRight,
   ArrowLeft,
   Box,
-  Sparkles,
   FileText,
   Eye,
 } from "lucide-react";
@@ -123,7 +122,6 @@ type PackedItem = POLineItem & {
 export default function Shipments() {
   const user = useAuthStore((s) => s.user);
   const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
 
   const poQuery = searchParams.get("pos") || searchParams.get("po") || "";
   const initialMode = (searchParams.get("mode") as "web" | "excel") || "web";
@@ -319,119 +317,67 @@ export default function Shipments() {
       {/* 1. TOP HEADER / TITLE                                         */}
       {/* ───────────────────────────────────────────────────────────── */}
       {!isCreating ? (
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-gray-900">Shipments & Packing Lists</h1>
-            <p className="mt-1 text-sm text-gray-500">
-              Manage past shipments or create new EDI-compliant ASNs via Interactive Web Wizard or Excel Drop.
+            <h1 className="text-xl font-bold tracking-tight text-slate-900">Shipments & Outbound Deliveries</h1>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Manage past deliveries or prepare new Calzedonia ASNs via Outbound Delivery Workbench or Excel upload.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={handleDownloadBlankTemplate}
-              className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 transition-colors"
+              className="flex items-center gap-1.5 rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
             >
-              <Download className="h-4 w-4 text-gray-500" />
-              Blank Template (.xlsx)
+              <Download className="h-3.5 w-3.5 text-slate-500" />
+              Template (.xlsx)
             </button>
             <button
               onClick={() => {
                 setCreationMethod("excel");
                 setIsCreating(true);
               }}
-              className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800 shadow-sm hover:bg-emerald-100 transition-colors"
+              className="flex items-center gap-1.5 rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
             >
-              <FileSpreadsheet className="h-4 w-4 text-emerald-700" />
-              New via Excel Drop
+              <FileSpreadsheet className="h-3.5 w-3.5 text-slate-600" />
+              Excel Drop
             </button>
             <button
               onClick={() => {
                 setCreationMethod("web");
                 setIsCreating(true);
               }}
-              className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 transition-colors shadow-blue-500/20"
+              className="flex items-center gap-1.5 rounded bg-slate-900 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 transition-colors shadow-xs cursor-pointer"
             >
-              <Sparkles className="h-4 w-4" />
-              New via Web Wizard
+              <PackagePlus className="h-3.5 w-3.5" />
+              + Create Delivery
             </button>
           </div>
         </div>
-      ) : (
-        /* ───────────────────────────────────────────────────────────── */
-        /* CREATE SHIPMENT TOP NAVIGATION & METHOD SELECTOR              */
-        /* ───────────────────────────────────────────────────────────── */
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
+      ) : creationMethod === "excel" ? (
+        <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+          <button
+            onClick={() => {
+              setIsCreating(false);
+              setSearchParams({});
+            }}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4" /> Back to Shipments
+          </button>
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+              Excel Packing List Dispatch
+            </span>
             <button
-              onClick={() => {
-                setIsCreating(false);
-                setSearchParams({});
-              }}
-              className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 hover:text-gray-900 transition-colors"
+              onClick={() => setCreationMethod("web")}
+              className="text-xs text-blue-600 hover:underline font-semibold cursor-pointer"
             >
-              <ArrowLeft className="w-4 h-4" /> Back to Shipments List
+              Switch to Web Workbench →
             </button>
-            <button
-              onClick={() => navigate("/purchase-orders")}
-              className="text-xs font-semibold text-blue-600 hover:underline"
-            >
-              + Select Different POs
-            </button>
-          </div>
-
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
-            <div>
-              <h2 className="text-xl font-bold text-gray-900">Create Calzedonia Shipment (ASN)</h2>
-              <p className="text-xs text-gray-500 mt-0.5">
-                {poQuery ? (
-                  <span>
-                    Selected Orders: <strong className="text-gray-900">{poQuery}</strong>
-                  </span>
-                ) : (
-                  "Select your preferred packing & dispatch method below"
-                )}
-              </p>
-            </div>
-
-            {/* Segmented Control / Tab Switcher */}
-            <div className="flex items-center bg-gray-100/80 p-1 rounded-xl border border-gray-200/80">
-              <button
-                type="button"
-                onClick={() => setCreationMethod("web")}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all",
-                  creationMethod === "web"
-                    ? "bg-white text-blue-600 shadow-sm"
-                    : "text-gray-500 hover:text-gray-800"
-                )}
-              >
-                <Sparkles className="w-4 h-4" />
-                <span>Web Packing Wizard</span>
-                <span className="hidden sm:inline-block text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-full uppercase tracking-wider font-semibold">
-                  Online
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setCreationMethod("excel")}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all",
-                  creationMethod === "excel"
-                    ? "bg-white text-emerald-700 shadow-sm"
-                    : "text-gray-500 hover:text-gray-800"
-                )}
-              >
-                <FileSpreadsheet className="w-4 h-4" />
-                <span>Excel Packing List</span>
-                <span className="hidden sm:inline-block text-[10px] bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded-full uppercase tracking-wider font-semibold">
-                  Template
-                </span>
-              </button>
-            </div>
           </div>
         </div>
-      )}
+      ) : null}
 
       {/* ───────────────────────────────────────────────────────────── */}
       {/* 2. BODY CONTENT (LIST vs WEB WIZARD vs EXCEL DROP)            */}
@@ -1044,25 +990,14 @@ function WebPackingWizard({
 
       {/* ─── STEP 1: QUANTITIES TO SHIP ─────────────────────────────────── */}
       {step === 1 && (
-        <div className="bg-white rounded-lg border border-slate-200 shadow-xs p-4 space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
-            <div>
-              <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wide">
-                Purchase Order Allocation
-              </h2>
-              <span className="text-xs text-slate-500">
-                Specify quantities to dispatch for open PO line items.
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleProceedToPacking}
-                className="inline-flex items-center gap-1 px-3 py-1 bg-slate-900 hover:bg-slate-800 text-white rounded text-xs font-semibold transition-colors"
-              >
-                Next <ChevronRight className="w-3 h-3" />
-              </button>
-            </div>
+        <div className="bg-white rounded-lg border border-slate-200 shadow-xs p-4 space-y-3">
+          <div className="border-b border-slate-200 pb-2">
+            <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
+              Purchase Order Line Item Allocation
+            </h2>
+            <span className="text-[11px] text-slate-500">
+              Specify quantities to dispatch for open PO line items. Use top toolbar to proceed.
+            </span>
           </div>
 
           {isLoading ? (
@@ -1084,27 +1019,27 @@ function WebPackingWizard({
               <table className="w-full text-xs text-left">
                 <thead>
                   <tr className="bg-slate-100 text-slate-700 border-b border-slate-200 font-semibold uppercase tracking-wider text-[11px]">
-                    <th className="px-3 py-2.5">PO Number</th>
-                    <th className="px-3 py-2.5">Item</th>
-                    <th className="px-3 py-2.5">Material Code</th>
-                    <th className="px-3 py-2.5">Description</th>
-                    <th className="px-3 py-2.5 text-right">Ordered</th>
-                    <th className="px-3 py-2.5 text-right">Open Balance</th>
-                    <th className="px-3 py-2.5 text-right w-44">Shipping Qty</th>
+                    <th className="px-3 py-2">PO Number</th>
+                    <th className="px-3 py-2">Item</th>
+                    <th className="px-3 py-2">Material Code</th>
+                    <th className="px-3 py-2">Description</th>
+                    <th className="px-3 py-2 text-right">Ordered</th>
+                    <th className="px-3 py-2 text-right">Open Balance</th>
+                    <th className="px-3 py-2 text-right w-44">Shipping Qty</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {items.map((item) => (
                     <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-3 py-2 font-mono font-semibold text-slate-900">{item.po_number}</td>
-                      <td className="px-3 py-2 font-mono text-slate-500">{item.po_item}</td>
-                      <td className="px-3 py-2 font-mono font-semibold text-slate-800">{item.item_code}</td>
-                      <td className="px-3 py-2 text-slate-600 max-w-xs truncate">{item.description}</td>
-                      <td className="px-3 py-2 text-right font-mono text-slate-500">{item.ordered_qty}</td>
-                      <td className="px-3 py-2 text-right font-mono font-bold text-slate-700">
+                      <td className="px-3 py-1.5 font-mono font-semibold text-slate-900">{item.po_number}</td>
+                      <td className="px-3 py-1.5 font-mono text-slate-500">{item.po_item}</td>
+                      <td className="px-3 py-1.5 font-mono font-semibold text-slate-800">{item.item_code}</td>
+                      <td className="px-3 py-1.5 text-slate-600 max-w-xs truncate">{item.description}</td>
+                      <td className="px-3 py-1.5 text-right font-mono text-slate-500">{item.ordered_qty}</td>
+                      <td className="px-3 py-1.5 text-right font-mono font-bold text-slate-700">
                         {item.remaining_qty}
                       </td>
-                      <td className="px-3 py-2 text-right">
+                      <td className="px-3 py-1.5 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           <input
                             type="number"
@@ -1117,7 +1052,7 @@ function WebPackingWizard({
                           <button
                             type="button"
                             onClick={() => handleShippingNowChange(item.id, item.remaining_qty)}
-                            className="text-[11px] font-semibold text-slate-700 hover:bg-slate-200 bg-slate-100 px-2 py-1 rounded border border-slate-300"
+                            className="text-[11px] font-semibold text-slate-700 hover:bg-slate-200 bg-slate-100 px-2 py-1 rounded border border-slate-300 cursor-pointer"
                           >
                             Max
                           </button>
@@ -1129,47 +1064,20 @@ function WebPackingWizard({
               </table>
             </div>
           )}
-
-          <div className="flex justify-end pt-2 border-t border-slate-100">
-            <button
-              onClick={handleProceedToPacking}
-              className="bg-slate-900 hover:bg-slate-800 text-white px-5 py-2 rounded text-xs font-semibold transition-all flex items-center gap-1.5"
-            >
-              Next: Pack Cartons & Assign HUs <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
         </div>
       )}
 
       {/* ─── STEP 2: CARTON PACKING & HU ASSIGNMENT ─────────────────────── */}
       {step === 2 && (
         <div className="space-y-4">
-          {/* Subheader bar */}
-          <div className="bg-white rounded-lg border border-slate-200 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-xs">
-            <div>
-              <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wide">
-                Handling Unit (HU) Packaging
-              </h2>
-              <span className="text-xs text-slate-500">
-                20-digit Calzedonia SSCC contiguous sequential allocation starting at #{String(startingSeq).padStart(10, "0")}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setStep(1)}
-                className="px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded hover:bg-slate-50"
-              >
-                Back
-              </button>
-              <button
-                type="button"
-                onClick={handleProceedToReview}
-                className="px-4 py-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded flex items-center gap-1.5"
-              >
-                Review & Generate XML <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
+          {/* Compact header */}
+          <div className="flex items-center justify-between px-1">
+            <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+              Carton Packaging & Handling Unit (SSCC) Assignment
+            </h2>
+            <span className="text-[11px] font-mono text-slate-500">
+              Seq Start: #{String(startingSeq).padStart(10, "0")}
+            </span>
           </div>
 
           <div className="space-y-4">
@@ -1325,21 +1233,7 @@ function WebPackingWizard({
             })}
           </div>
 
-          {/* Bottom navigation */}
-          <div className="flex justify-between pt-3 border-t border-slate-200">
-            <button
-              onClick={() => setStep(1)}
-              className="px-4 py-2 border border-slate-300 rounded font-medium text-slate-700 hover:bg-slate-50 text-xs"
-            >
-              ← Back to Quantities
-            </button>
-            <button
-              onClick={handleProceedToReview}
-              className="bg-slate-900 hover:bg-slate-800 text-white px-5 py-2 rounded font-semibold text-xs transition-all flex items-center gap-1.5"
-            >
-              Review Shipment & Generate XML <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
+
         </div>
       )}
 
@@ -1458,30 +1352,13 @@ function WebPackingWizard({
           ) : (
             <>
               {/* Step 3 Pre-dispatch Review */}
-              <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
-                <div>
-                  <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wide">
-                    Dispatch Verification
-                  </h2>
-                  <span className="text-xs text-slate-500">
-                    Verify totals and submit official Calzedonia SdPackingSlip XML.
-                  </span>
-                </div>
-                <button
-                  onClick={handleDispatchASN}
-                  disabled={isSubmitting}
-                  className="px-4 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Transmitting...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="w-3.5 h-3.5" /> Transmit to IUNGO EDI
-                    </>
-                  )}
-                </button>
+              <div className="border-b border-slate-200 pb-2">
+                <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
+                  Dispatch Verification & Summary
+                </h2>
+                <span className="text-[11px] text-slate-500">
+                  Review consignment metrics before final EDI transmission. Transmit using the top toolbar.
+                </span>
               </div>
 
               {/* 4 Neutral KPI Cards */}
@@ -1519,37 +1396,11 @@ function WebPackingWizard({
               </div>
 
               {/* Validation Checkbox Card */}
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded text-xs flex items-center gap-2.5 text-slate-700">
+              <div className="p-2.5 bg-slate-50 border border-slate-200 rounded text-xs flex items-center gap-2 text-slate-700">
                 <Check className="w-4 h-4 text-emerald-600 shrink-0" />
                 <span>
-                  <strong>Calzedonia DTD Rule Compliance:</strong> Gross weight &gt; Net weight &gt; 0 verified across all cartons. 20-digit SSCC sequence contiguous.
+                  <strong>EDI Compliance:</strong> Calzedonia DTD rules verified (GW &gt; NW &gt; 0, contiguous 20-digit SSCC sequence). Ready for transmission.
                 </span>
-              </div>
-
-              {/* Bottom buttons */}
-              <div className="flex justify-between pt-3 border-t border-slate-200">
-                <button
-                  onClick={() => setStep(2)}
-                  disabled={isSubmitting}
-                  className="px-4 py-2 border border-slate-300 rounded font-medium text-slate-700 hover:bg-slate-50 text-xs disabled:opacity-50"
-                >
-                  ← Back to Packing
-                </button>
-                <button
-                  onClick={handleDispatchASN}
-                  disabled={isSubmitting}
-                  className="bg-emerald-700 hover:bg-emerald-800 text-white px-5 py-2 rounded text-xs font-semibold transition-all flex items-center gap-1.5 disabled:opacity-50"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Transmitting Calzedonia XML...
-                    </>
-                  ) : (
-                    <>
-                      Submit ASN to Calzedonia (IUNGO EDI) →
-                    </>
-                  )}
-                </button>
               </div>
             </>
           )}

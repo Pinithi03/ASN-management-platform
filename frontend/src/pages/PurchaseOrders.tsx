@@ -12,8 +12,6 @@ import {
   PackagePlus,
   CheckSquare,
   Square,
-  Sparkles,
-  FileSpreadsheet,
 } from "lucide-react";
 import { poApi } from "../services/poApi";
 import { useAuthStore } from "../store/authStore";
@@ -99,20 +97,50 @@ export default function PurchaseOrders() {
 
   return (
     <div className="space-y-6 pb-24">
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Top Header & Sticky Toolbar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Purchase Orders</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Review incoming orders and select multiple POs to generate a batch shipment.
+          <h1 className="text-xl font-bold tracking-tight text-slate-900">Purchase Orders</h1>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Calzedonia Group incoming purchase orders. Select orders to generate outbound delivery.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          {selectedPOs.size > 0 && (
+            <div className="flex items-center gap-2 bg-slate-900 text-white px-3 py-1.5 rounded-lg shadow-sm">
+              <span className="text-xs font-mono font-bold text-slate-200">
+                {selectedPOs.size} Selected
+              </span>
+              <div className="h-4 w-px bg-slate-700" />
+              <button
+                type="button"
+                onClick={() => handleCreateShipment("web")}
+                className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                + Create Delivery
+              </button>
+              <button
+                type="button"
+                onClick={() => handleCreateShipment("excel")}
+                className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-2.5 py-1 rounded text-xs font-medium transition-colors cursor-pointer"
+              >
+                Excel Drop
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedPOs(new Set())}
+                className="text-slate-400 hover:text-white text-xs px-1 cursor-pointer"
+                title="Clear selection"
+              >
+                ✕
+              </button>
+            </div>
+          )}
           <button
             onClick={() => refetch()}
-            className="flex items-center gap-2 px-3.5 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 shadow-sm transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 shadow-xs transition-colors cursor-pointer"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className="w-3.5 h-3.5" />
             Refresh
           </button>
         </div>
@@ -287,41 +315,6 @@ export default function PurchaseOrders() {
           </div>
         )}
       </div>
-
-      {/* Floating Action Bar for Selected POs */}
-      {selectedPOs.size > 0 && (
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-3xl px-4 z-50 animate-in slide-in-from-bottom-10 fade-in duration-300">
-          <div className="bg-slate-900 text-white rounded-2xl shadow-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-slate-700">
-            <div className="flex items-center gap-3 px-2">
-              <div className="bg-blue-500/20 text-blue-400 p-2.5 rounded-xl">
-                <PackagePlus className="w-6 h-6" />
-              </div>
-              <div>
-                <p className="font-bold text-base text-white">
-                  {selectedPOs.size} Purchase Order{selectedPOs.size > 1 ? "s" : ""} Selected
-                </p>
-                <p className="text-xs text-slate-400">Choose your preferred shipping method:</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2.5">
-              <button
-                onClick={() => handleCreateShipment("web")}
-                className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl font-semibold shadow-lg transition-all active:scale-95 flex items-center gap-2 text-xs cursor-pointer"
-              >
-                <Sparkles className="w-4 h-4" />
-                Online Web Wizard
-              </button>
-              <button
-                onClick={() => handleCreateShipment("excel")}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2.5 rounded-xl font-semibold shadow-lg transition-all active:scale-95 flex items-center gap-2 text-xs cursor-pointer"
-              >
-                <FileSpreadsheet className="w-4 h-4" />
-                Excel Packing Drop
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
