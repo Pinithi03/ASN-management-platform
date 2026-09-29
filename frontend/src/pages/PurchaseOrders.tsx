@@ -62,11 +62,14 @@ export default function PurchaseOrders() {
         page,
         per_page: 15,
       }),
+    refetchInterval: 10000,
+    refetchIntervalInBackground: true,
   });
 
   const { data: stats } = useQuery({
     queryKey: ["poStats", supplierId],
     queryFn: () => poApi.getStats(supplierId),
+    refetchInterval: 10000,
   });
 
   // Detail query when a PO is selected

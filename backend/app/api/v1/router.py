@@ -12,6 +12,7 @@ from app.api.v1.endpoints import (
     health,
     purchase_orders,
     shipments,
+    suppliers,
     users,
 )
 
@@ -56,4 +57,9 @@ api_router.include_router(
     asn.router,
     prefix="/asn",
     tags=["ASN"],
+)
+api_router.include_router(
+    suppliers.router,
+    prefix="/suppliers",
+    tags=["Suppliers"],
 )

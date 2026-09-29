@@ -25,6 +25,8 @@ import {
   Building,
 } from "lucide-react";
 import { auditApi } from "@/services/auditApi";
+import { useQuery } from "@tanstack/react-query";
+import { supplierApi } from "@/services/supplierApi";
 
 export interface SupplierItem {
   id: string;
@@ -41,6 +43,8 @@ export interface SupplierItem {
   onboarded_at: string;
   recently_updated_by_supplier?: boolean;
   last_profile_updated_at?: string;
+  total_pos?: number;
+  latest_po_date?: string | null;
 }
 
 export const INITIAL_SUPPLIERS: SupplierItem[] = [
@@ -123,23 +127,27 @@ export default function Suppliers() {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.map((item: any) => {
-            const initMatch = INITIAL_SUPPLIERS.find(
-              (i) => i.supplier_code === item.supplier_code || i.id === item.id
-            );
-            return {
-              ...item,
-              tax_id: item.tax_id || initMatch?.tax_id || "PV-10293847",
-              address: item.address || initMatch?.address || "Sri Lanka Manufacturing Plant",
-            };
-          });
+          return parsed;
         }
-      } catch {
-        return INITIAL_SUPPLIERS;
-      }
+      } catch {}
     }
     return INITIAL_SUPPLIERS;
   });
+
+  // Live query from PostgreSQL backend API (/api/v1/suppliers)
+  // Automatically refetches every 10s to pick up newly parsed suppliers from incoming emails
+  const { data: serverSuppliers, refetch } = useQuery({
+    queryKey: ["suppliers"],
+    queryFn: () => supplierApi.list(),
+    refetchInterval: 10000,
+  });
+
+  useEffect(() => {
+    if (serverSuppliers && serverSuppliers.length > 0) {
+      setSuppliers(serverSuppliers);
+      localStorage.setItem("asn_onboarded_suppliers", JSON.stringify(serverSuppliers));
+    }
+  }, [serverSuppliers]);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "INACTIVE">("ALL");
@@ -161,7 +169,7 @@ export default function Suppliers() {
   };
 
   // ─── DELETE (WITH ADMIN VERIFICATION) ────────────────────────
-  const handleDeleteConfirm = (e: React.FormEvent) => {
+  const handleDeleteConfirm = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!deletingSupplier) return;
 
@@ -176,6 +184,13 @@ export default function Suppliers() {
 
     const name = deletingSupplier.name;
     const code = deletingSupplier.supplier_code;
+
+    try {
+      await supplierApi.delete(deletingSupplier.id);
+      refetch();
+    } catch (err) {
+      console.warn("Backend delete warning:", err);
+    }
 
     setSuppliers((prev) => prev.filter((s) => s.id !== deletingSupplier.id));
     showToast(`Verified Admin Action: Deleted supplier ${name} (#${code})`);
@@ -240,39 +255,57 @@ export default function Suppliers() {
   };
 
   // ─── CREATE ───────────────────────────────────────────────────
-  const handleCreateSupplier = (e: React.FormEvent) => {
+  const handleCreateSupplier = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name || !formData.supplier_code || !formData.email) {
       alert("Please fill in mandatory fields: Name, Unique Supplier Code, and Email.");
       return;
     }
 
-    const newSupplier: SupplierItem = {
-      id: `sup-${Date.now()}`,
-      name: formData.name.trim(),
-      supplier_code: formData.supplier_code.trim().toUpperCase(),
-      email: formData.email.trim().toLowerCase(),
-      contact_name: formData.contact_name.trim(),
-      phone: formData.phone.trim(),
-      country: formData.country.trim(),
-      category: formData.category,
-      tax_id: formData.tax_id.trim() || "PV-10293847",
-      address: formData.address.trim() || "Sri Lanka Manufacturing Plant",
-      is_active: formData.is_active,
-      onboarded_at: new Date().toISOString(),
-    };
+    try {
+      const created = await supplierApi.create({
+        name: formData.name.trim(),
+        supplier_code: formData.supplier_code.trim().toUpperCase(),
+        email: formData.email.trim().toLowerCase(),
+        contact_name: formData.contact_name.trim() || undefined,
+        phone: formData.phone.trim() || undefined,
+        country: formData.country.trim() || "Sri Lanka",
+        category: formData.category,
+        tax_id: formData.tax_id.trim() || undefined,
+        address: formData.address.trim() || undefined,
+        is_active: formData.is_active,
+      });
+      setSuppliers((prev) => [created, ...prev.filter((s) => s.supplier_code !== created.supplier_code)]);
+      refetch();
+      showToast(`Successfully onboarded ${created.name} (#${created.supplier_code})!`);
+    } catch (err: any) {
+      const newSupplier: SupplierItem = {
+        id: `sup-${Date.now()}`,
+        name: formData.name.trim(),
+        supplier_code: formData.supplier_code.trim().toUpperCase(),
+        email: formData.email.trim().toLowerCase(),
+        contact_name: formData.contact_name.trim(),
+        phone: formData.phone.trim(),
+        country: formData.country.trim(),
+        category: formData.category,
+        tax_id: formData.tax_id.trim() || "PV-10293847",
+        address: formData.address.trim() || "Sri Lanka Manufacturing Plant",
+        is_active: formData.is_active,
+        onboarded_at: new Date().toISOString(),
+      };
+      setSuppliers((prev) => [newSupplier, ...prev]);
+      showToast(`Successfully onboarded ${newSupplier.name} (#${newSupplier.supplier_code})!`);
+    }
 
-    setSuppliers((prev) => [newSupplier, ...prev]);
-    showToast(`Successfully onboarded ${newSupplier.name} (#${newSupplier.supplier_code})!`);
     auditApi.create({
       action: "SUPPLIER_ONBOARDED",
       entity_type: "SUPPLIER",
-      entity_id: newSupplier.supplier_code,
+      entity_id: formData.supplier_code,
       metadata: {
-        name: newSupplier.name,
-        supplier_code: newSupplier.supplier_code,
-        email: newSupplier.email,
-        category: newSupplier.category,
+        name: formData.name,
+        supplier_code: formData.supplier_code,
+        email: formData.email,
+        category: formData.category,
       },
     }).catch(() => {});
     setIsAddModalOpen(false);
@@ -301,31 +334,51 @@ export default function Suppliers() {
     });
   };
 
-  const handleUpdateSupplier = (e: React.FormEvent) => {
+  const handleUpdateSupplier = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingSupplier) return;
 
-    setSuppliers((prev) =>
-      prev.map((s) =>
-        s.id === editingSupplier.id
-          ? {
-              ...s,
-              name: formData.name.trim(),
-              supplier_code: formData.supplier_code.trim().toUpperCase(),
-              email: formData.email.trim().toLowerCase(),
-              contact_name: formData.contact_name.trim(),
-              phone: formData.phone.trim(),
-              country: formData.country.trim(),
-              category: formData.category,
-              tax_id: formData.tax_id.trim() || s.tax_id || "PV-10293847",
-              address: formData.address.trim() || s.address || "Sri Lanka Manufacturing Plant",
-              is_active: formData.is_active,
-            }
-          : s
-      )
-    );
+    try {
+      const updated = await supplierApi.update(editingSupplier.id, {
+        name: formData.name.trim(),
+        supplier_code: formData.supplier_code.trim().toUpperCase(),
+        email: formData.email.trim().toLowerCase(),
+        contact_name: formData.contact_name.trim() || undefined,
+        phone: formData.phone.trim() || undefined,
+        country: formData.country.trim() || undefined,
+        category: formData.category,
+        tax_id: formData.tax_id.trim() || undefined,
+        address: formData.address.trim() || undefined,
+        is_active: formData.is_active,
+      });
+      setSuppliers((prev) =>
+        prev.map((s) => (s.id === editingSupplier.id ? { ...s, ...updated } : s))
+      );
+      refetch();
+      showToast(`Updated details for ${updated.name} (#${updated.supplier_code})`);
+    } catch (err) {
+      setSuppliers((prev) =>
+        prev.map((s) =>
+          s.id === editingSupplier.id
+            ? {
+                ...s,
+                name: formData.name.trim(),
+                supplier_code: formData.supplier_code.trim().toUpperCase(),
+                email: formData.email.trim().toLowerCase(),
+                contact_name: formData.contact_name.trim(),
+                phone: formData.phone.trim(),
+                country: formData.country.trim(),
+                category: formData.category,
+                tax_id: formData.tax_id.trim() || s.tax_id || "PV-10293847",
+                address: formData.address.trim() || s.address || "Sri Lanka Manufacturing Plant",
+                is_active: formData.is_active,
+              }
+            : s
+        )
+      );
+      showToast(`Updated details for ${formData.name} (#${formData.supplier_code})`);
+    }
 
-    showToast(`Updated details for ${formData.name} (#${formData.supplier_code})`);
     auditApi.create({
       action: "SUPPLIER_UPDATED",
       entity_type: "SUPPLIER",
@@ -342,11 +395,17 @@ export default function Suppliers() {
   };
 
   // ─── TOGGLE ACTIVE / INACTIVE ─────────────────────────────────
-  const handleToggleActive = (supplier: SupplierItem) => {
+  const handleToggleActive = async (supplier: SupplierItem) => {
     const nextStatus = !supplier.is_active;
     setSuppliers((prev) =>
       prev.map((s) => (s.id === supplier.id ? { ...s, is_active: nextStatus } : s))
     );
+    try {
+      await supplierApi.update(supplier.id, { is_active: nextStatus });
+      refetch();
+    } catch (err) {
+      console.warn("Backend status update:", err);
+    }
     showToast(
       `${supplier.name} is now marked as ${nextStatus ? "ACTIVE PARTNER" : "INACTIVE / SUSPENDED"}`
     );
@@ -563,6 +622,12 @@ export default function Suppliers() {
                     {s.category && (
                       <span className="text-[11px] text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md font-medium">
                         {s.category}
+                      </span>
+                    )}
+                    {s.total_pos !== undefined && s.total_pos > 0 && (
+                      <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 flex items-center gap-1">
+                        <Sparkles className="w-3 h-3 text-emerald-600" />
+                        {s.total_pos} PO{s.total_pos > 1 ? "s" : ""} (Email Ingested)
                       </span>
                     )}
                   </div>

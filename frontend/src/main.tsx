@@ -8,7 +8,9 @@ import "./styles/globals.css";
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 5 * 60 * 1000, // 5 minutes
+      staleTime: 5000, // 5s freshness window
+      refetchInterval: 10000, // Autonomous continuous 10s background polling
+      refetchOnWindowFocus: true, // Refresh instantly when user refocuses the app
       retry: 1,
     },
   },
