@@ -54,6 +54,26 @@ const statusColor: Record<string, string> = {
   DELIVERED: "bg-emerald-100 text-emerald-700",
 };
 
+export const PLANT_NAMES: Record<string, string> = {
+  PPA1: "Omega Line Ltd (PPA1)",
+  PPB1: "Alpha Apparels Ltd (PPB1)",
+  PPC1: "Benji Ltd (PPC1)",
+  PPD1: "Sirio Ltd (PPD1)",
+  PPE1: "Vavuniya Apparels Ltd (PPE1)",
+};
+
+// Helper to accurately match plant code from client_code or destination automatically
+export const matchPlant = (clientOrDest?: string | null): string => {
+  if (!clientOrDest) return "PPA1";
+  const s = clientOrDest.toLowerCase();
+  if (s.includes("alpha") || s.includes("ppb1")) return "PPB1";
+  if (s.includes("benji") || s.includes("ppc1")) return "PPC1";
+  if (s.includes("sirio") || s.includes("ppd1")) return "PPD1";
+  if (s.includes("vavuniya") || s.includes("ppe1") || s.includes("ppa4")) return "PPE1";
+  if (s.includes("omega") || s.includes("ppa1") || s.includes("ppa2")) return "PPA1";
+  return "PPA1";
+};
+
 interface ShipmentDisplayItem {
   id: string;
   shipment_number: string;
@@ -70,12 +90,19 @@ interface ShipmentDisplayItem {
 type POLineItem = {
   id: string;
   po_number: string;
+  po_item: string;
   item_code: string;
+  partner_product_code?: string;
   description: string;
   ordered_qty: number;
   shipped_qty: number;
   remaining_qty: number;
   shipping_now?: number;
+  uom?: string;
+  destination?: string;
+  delivery_date?: string;
+  order_date?: string;
+  supplier_id?: string;
 };
 
 type PackingBox = {
@@ -91,9 +118,6 @@ type PackingBox = {
 type PackedItem = POLineItem & {
   packaging_type?: "BOX" | "ROLL";
   lot_number?: string;
-  po_item?: string;
-  uom?: string;
-  partner_product_code?: string;
   boxes: PackingBox[];
 };
 
@@ -576,6 +600,7 @@ function WebPackingWizard({
   onSuccess: () => void;
   onSwitchToExcel: () => void;
 }) {
+  const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
   const poNumbers = poQuery.split(",").filter(Boolean);
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -586,30 +611,49 @@ function WebPackingWizard({
   const [submitSuccessResult, setSubmitSuccessResult] = useState<any>(null);
   const [previewXmlModal, setPreviewXmlModal] = useState<string | null>(null);
 
+  const getHuPrefix = () => {
+    const suppCodeClean = (user?.supplier_code || "0000018194").replace(/^0+/, "");
+    return "1" + suppCodeClean.padStart(9, "0");
+  };
+
+  const generateHu = (seq?: number) => {
+    const prefix = getHuPrefix();
+    const serial = seq !== undefined
+      ? String(seq).padStart(10, "0")
+      : String(Math.floor(1000000000 + Math.random() * 9000000000));
+    return `${prefix}${serial}`;
+  };
+
   const handleDispatchASN = async () => {
     setIsSubmitting(true);
     try {
+      const firstItem = packedItems[0];
+      const targetPlant = matchPlant(firstItem?.destination);
+      const activeSupplierCode = user?.supplier_code || "0000018194";
+      const activeSupplierName = user?.supplier_name || "COATS THREAD EXPORTS (PRIVATE) LIMITED";
+
       const cartonsPayload = packedItems.flatMap((item) =>
         item.boxes.map((box, bIdx) => ({
           po_number: item.po_number,
-          po_line: (item as any).po_item || "00100",
+          po_line: item.po_item || "00100",
           product_code: item.item_code,
-          partner_product_code: item.item_code,
+          partner_product_code: item.partner_product_code || item.item_code,
           description: item.description,
-          lot_number: (box as any).lot_number || (box as any).batch_code || item.lot_number || "DEFAULT",
-          quantity: box.qty,
-          uom: (item as any).uom || "M",
-          net_weight: box.net_weight,
-          gross_weight: box.gross_weight,
+          lot_number: box.batch_code || box.lot_number || "LOT-01",
+          quantity: Number(box.qty),
+          uom: item.uom || "M",
+          net_weight: Number(box.net_weight),
+          gross_weight: Number(box.gross_weight),
           supplier_carton_ref: `CTN-${bIdx + 1}`,
           packaging_type: item.packaging_type || "BOX",
         }))
       );
 
       const res = await shipmentService.createDirect({
-        plant_code: "PPD1",
-        supplier_code: "0000058376",
-        supplier_name: "CALZEDONIA CENTRAL HUB",
+        plant_code: targetPlant,
+        supplier_code: activeSupplierCode,
+        supplier_name: activeSupplierName,
+        supplier_id: user?.supplier_id,
         carrier: "EXPRESS FREIGHT",
         note: `Online Web Packing Wizard dispatch for PO ${poNumbers.join(", ")}`,
         cartons: cartonsPayload,
@@ -625,22 +669,30 @@ function WebPackingWizard({
 
   // Fetch open PO lines
   const { data: openLinesData, isLoading } = useQuery({
-    queryKey: ["open_lines_wizard", poNumbers],
+    queryKey: ["open_lines_wizard", poNumbers, user?.supplier_id],
     queryFn: async () => {
       try {
-        const lines = await poApi.getOpenLines();
+        const supplierId = user?.role === "SUPPLIER" ? user.supplier_id : undefined;
+        const lines = await poApi.getOpenLines(supplierId ? { supplier_id: supplierId } : undefined);
         if (Array.isArray(lines) && lines.length > 0) {
           const matched = lines.filter((l) => !poNumbers.length || poNumbers.includes(l.po_number));
           if (matched.length > 0) {
             return matched.map((m: any, idx: number) => ({
               id: `${m.po_number}-${m.po_item || idx}`,
               po_number: m.po_number,
+              po_item: m.po_item ? String(m.po_item).split("-")[0].padStart(5, "0") : String((idx + 1) * 100).padStart(5, "0"),
               item_code: m.material_code || "ITEM-" + idx,
+              partner_product_code: m.partner_code || m.partner_product_code || "",
               description: m.material_description || "PO Line Item",
               ordered_qty: Number(m.ordered_qty || 1000),
               shipped_qty: 0,
               remaining_qty: Number(m.ordered_qty || 1000),
               shipping_now: 0,
+              uom: m.uom || "M",
+              destination: m.destination || "",
+              delivery_date: m.delivery_date || "",
+              order_date: m.order_date || "",
+              supplier_id: m.supplier_id || "",
             }));
           }
         }
@@ -655,22 +707,30 @@ function WebPackingWizard({
         fallback.push({
           id: `${po}-line-1`,
           po_number: po,
+          po_item: "00100",
           item_code: "ELST1K 000615",
+          partner_product_code: "SK104546-015.0-61851",
           description: "Elastic tape 15mm black - Sirio Spec",
           ordered_qty: 2450,
           shipped_qty: 0,
           remaining_qty: 2450,
           shipping_now: 0,
+          uom: "M",
+          destination: "Omega Line Ltd (PPA1)",
         });
         fallback.push({
           id: `${po}-line-2`,
           po_number: po,
+          po_item: "00200",
           item_code: "RECT0724DKK0000000",
+          partner_product_code: "TH002500-120.0-SETA",
           description: "RE-Thread-EP-2500m, 120tkt, SETA",
           ordered_qty: 1200,
           shipped_qty: 0,
           remaining_qty: 1200,
           shipping_now: 0,
+          uom: "M",
+          destination: "Omega Line Ltd (PPA1)",
         });
       });
       return fallback;
@@ -696,18 +756,23 @@ function WebPackingWizard({
       return;
     }
 
+    let runningBoxSeq = 1;
     const initialPacked: PackedItem[] = toPack.map((item) => {
-      const randomHU = "1000058376" + Math.floor(1000000000 + Math.random() * 9000000000);
+      const q = item.shipping_now || 0;
+      const nw = Math.max(0.1, Math.round(q * 0.12 * 100) / 100);
+      const gw = Math.max(nw + 0.1, Math.round(q * 0.15 * 100) / 100);
       return {
         ...item,
+        packaging_type: "BOX",
+        lot_number: "LOT-01",
         boxes: [
           {
             id: Math.random().toString(),
-            hu_number: randomHU,
-            batch_code: "LOT-" + Math.floor(100000 + Math.random() * 900000),
-            qty: item.shipping_now || 0,
-            gross_weight: Math.round((item.shipping_now || 0) * 0.15 * 100) / 100,
-            net_weight: Math.round((item.shipping_now || 0) * 0.12 * 100) / 100,
+            hu_number: generateHu(runningBoxSeq++),
+            batch_code: "LOT-01",
+            qty: q,
+            gross_weight: gw,
+            net_weight: nw,
           },
         ],
       };
@@ -730,18 +795,87 @@ function WebPackingWizard({
         for (let i = 0; i < numBoxes; i++) {
           const qtyThisBox = Math.min(boxQty, remaining);
           remaining -= qtyThisBox;
+          const nw = Math.max(0.1, Math.round(qtyThisBox * 0.12 * 100) / 100);
+          const gw = Math.max(nw + 0.1, Math.round(qtyThisBox * 0.15 * 100) / 100);
           newBoxes.push({
             id: Math.random().toString(),
-            hu_number: "1000058376" + Math.floor(1000000000 + Math.random() * 9000000000),
-            batch_code: "LOT-" + Math.floor(100000 + Math.random() * 900000),
+            hu_number: generateHu(),
+            batch_code: item.boxes[0]?.batch_code || "LOT-01",
             qty: qtyThisBox,
-            gross_weight: Math.round(qtyThisBox * 0.15 * 100) / 100,
-            net_weight: Math.round(qtyThisBox * 0.12 * 100) / 100,
+            gross_weight: gw,
+            net_weight: nw,
           });
         }
         return { ...item, boxes: newBoxes };
       })
     );
+  };
+
+  const updateBox = (itemId: string, boxIndex: number, patch: Partial<PackingBox>) => {
+    setPackedItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== itemId) return item;
+        const newBoxes = item.boxes.map((b, idx) => (idx === boxIndex ? { ...b, ...patch } : b));
+        return { ...item, boxes: newBoxes };
+      })
+    );
+  };
+
+  const addBox = (itemId: string) => {
+    setPackedItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== itemId) return item;
+        const lastBox = item.boxes[item.boxes.length - 1];
+        const newBox: PackingBox = {
+          id: Math.random().toString(),
+          hu_number: generateHu(),
+          batch_code: lastBox?.batch_code || "LOT-01",
+          qty: 0,
+          gross_weight: 1.0,
+          net_weight: 0.8,
+        };
+        return { ...item, boxes: [...item.boxes, newBox] };
+      })
+    );
+  };
+
+  const removeBox = (itemId: string, boxIndex: number) => {
+    setPackedItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== itemId || item.boxes.length <= 1) return item;
+        return { ...item, boxes: item.boxes.filter((_, idx) => idx !== boxIndex) };
+      })
+    );
+  };
+
+  const handleProceedToReview = () => {
+    for (const item of packedItems) {
+      const boxTotal = item.boxes.reduce((acc, b) => acc + (Number(b.qty) || 0), 0);
+      if (boxTotal !== item.shipping_now) {
+        alert(
+          `Item ${item.item_code} carton quantities total (${boxTotal}) does not match shipping quantity (${item.shipping_now}). Please balance carton quantities.`
+        );
+        return;
+      }
+      for (let bIdx = 0; bIdx < item.boxes.length; bIdx++) {
+        const box = item.boxes[bIdx];
+        if (!box.qty || box.qty <= 0) {
+          alert(`Carton ${bIdx + 1} for item ${item.item_code} has 0 or invalid quantity.`);
+          return;
+        }
+        if (!box.net_weight || box.net_weight <= 0) {
+          alert(`Carton ${bIdx + 1} for item ${item.item_code} Net Weight must be > 0.`);
+          return;
+        }
+        if (!box.gross_weight || box.gross_weight <= box.net_weight) {
+          alert(
+            `Carton ${bIdx + 1} for item ${item.item_code}: Gross Weight (${box.gross_weight}kg) must be strictly greater than Net Weight (${box.net_weight}kg).`
+          );
+          return;
+        }
+      }
+    }
+    setStep(3);
   };
 
   return (
@@ -918,28 +1052,93 @@ function WebPackingWizard({
                       <tr className="bg-gray-50 text-gray-500 border-b border-gray-100 font-semibold">
                         <th className="px-3 py-2.5">Box #</th>
                         <th className="px-3 py-2.5">20-digit HU Number (SSCC)</th>
-                        <th className="px-3 py-2.5">Batch / Lot</th>
-                        <th className="px-3 py-2.5 text-right">Quantity</th>
-                        <th className="px-3 py-2.5 text-right">Gross Wt (kg)</th>
-                        <th className="px-3 py-2.5 text-right">Net Wt (kg)</th>
+                        <th className="px-3 py-2.5">Batch / Lot #</th>
+                        <th className="px-3 py-2.5 text-right w-24">Qty ({item.uom || "M"})</th>
+                        <th className="px-3 py-2.5 text-right w-28">Gross Wt (kg)</th>
+                        <th className="px-3 py-2.5 text-right w-28">Net Wt (kg)</th>
+                        <th className="px-3 py-2.5 text-center w-16">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
                       {item.boxes.map((box, idx) => (
-                        <tr key={box.id}>
+                        <tr key={box.id} className="hover:bg-slate-50/50">
                           <td className="px-3 py-2 font-bold text-gray-700 flex items-center gap-1.5">
-                            <Box className="w-3.5 h-3.5 text-blue-500" />
-                            Carton {idx + 1}
+                            <Box className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                            <span>Carton {idx + 1}</span>
                           </td>
-                          <td className="px-3 py-2 font-mono text-blue-600 font-semibold">{box.hu_number}</td>
-                          <td className="px-3 py-2 font-mono text-gray-600">{box.batch_code}</td>
-                          <td className="px-3 py-2 text-right font-mono font-bold text-gray-900">{box.qty}</td>
-                          <td className="px-3 py-2 text-right font-mono text-gray-600">{box.gross_weight}</td>
-                          <td className="px-3 py-2 text-right font-mono text-gray-600">{box.net_weight}</td>
+                          <td className="px-3 py-2 font-mono text-blue-600 font-semibold text-[11px]">{box.hu_number}</td>
+                          <td className="px-3 py-2">
+                            <input
+                              type="text"
+                              value={box.batch_code}
+                              onChange={(e) => updateBox(item.id, idx, { batch_code: e.target.value })}
+                              className="w-24 px-2 py-1 text-xs border border-gray-200 rounded font-mono focus:ring-1 focus:ring-blue-500 outline-none"
+                              placeholder="LOT-01"
+                            />
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <input
+                              type="number"
+                              min="1"
+                              value={box.qty}
+                              onChange={(e) => updateBox(item.id, idx, { qty: Number(e.target.value) || 0 })}
+                              className="w-20 px-2 py-1 text-xs text-right border border-gray-200 rounded font-mono font-bold focus:ring-1 focus:ring-blue-500 outline-none"
+                            />
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0.01"
+                              value={box.gross_weight}
+                              onChange={(e) => updateBox(item.id, idx, { gross_weight: parseFloat(e.target.value) || 0 })}
+                              className={`w-24 px-2 py-1 text-xs text-right border rounded font-mono focus:ring-1 focus:ring-blue-500 outline-none ${
+                                box.gross_weight <= box.net_weight ? "border-red-300 bg-red-50 text-red-700" : "border-gray-200"
+                              }`}
+                            />
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0.01"
+                              value={box.net_weight}
+                              onChange={(e) => updateBox(item.id, idx, { net_weight: parseFloat(e.target.value) || 0 })}
+                              className="w-24 px-2 py-1 text-xs text-right border border-gray-200 rounded font-mono focus:ring-1 focus:ring-blue-500 outline-none"
+                            />
+                            {box.gross_weight <= box.net_weight && (
+                              <span className="text-[10px] text-red-500 font-bold block mt-0.5">GW &le; NW!</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-center">
+                            {item.boxes.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => removeBox(item.id, idx)}
+                                className="text-gray-400 hover:text-red-600 p-1 rounded hover:bg-red-50 transition-colors"
+                                title="Remove carton"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <button
+                    type="button"
+                    onClick={() => addBox(item.id)}
+                    className="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1 px-2.5 py-1 rounded-md hover:bg-blue-50 border border-blue-200/60"
+                  >
+                    + Add Carton
+                  </button>
+                  <span className="text-xs text-gray-500">
+                    Carton sum: <strong className="text-gray-900">{item.boxes.reduce((a, b) => a + (Number(b.qty) || 0), 0)}</strong> / {item.shipping_now} {item.uom || "M"}
+                  </span>
                 </div>
               </div>
             ))}
@@ -953,7 +1152,7 @@ function WebPackingWizard({
               Back
             </button>
             <button
-              onClick={() => setStep(3)}
+              onClick={handleProceedToReview}
               className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-xl font-semibold shadow-md shadow-blue-500/10 transition-all flex items-center gap-2 text-sm"
             >
               Review Shipment & Generate XML <ChevronRight className="w-4 h-4" />
@@ -1086,7 +1285,7 @@ function WebPackingWizard({
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
                   <span className="text-xs text-gray-400 font-medium">TOTAL CARTONS / HUS</span>
                   <p className="text-2xl font-bold text-gray-900 mt-1">
@@ -1096,12 +1295,26 @@ function WebPackingWizard({
                 <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
                   <span className="text-xs text-gray-400 font-medium">TOTAL UNITS SHIPPING</span>
                   <p className="text-2xl font-bold text-blue-600 mt-1">
-                    {packedItems.reduce((acc, curr) => acc + (curr.shipping_now || 0), 0).toLocaleString()} M
+                    {packedItems.reduce((acc, curr) => acc + (curr.shipping_now || 0), 0).toLocaleString()} {packedItems[0]?.uom || "M"}
                   </p>
                 </div>
                 <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
                   <span className="text-xs text-gray-400 font-medium">CALZEDONIA PARTNER ID</span>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">0000058376</p>
+                  <p className="text-xl font-bold text-gray-900 mt-1 font-mono">
+                    {user?.supplier_code || "0000018194"}
+                  </p>
+                  <span className="text-[10px] text-gray-500 truncate block mt-0.5">
+                    {user?.supplier_name || "COATS THREAD EXPORTS"}
+                  </span>
+                </div>
+                <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                  <span className="text-xs text-gray-400 font-medium">DESTINATION PLANT</span>
+                  <p className="text-base font-bold text-gray-900 mt-1 truncate">
+                    {PLANT_NAMES[matchPlant(packedItems[0]?.destination)] || "Omega Line Ltd (PPA1)"}
+                  </p>
+                  <span className="text-[10px] text-emerald-700 font-medium block mt-0.5">
+                    Plant Code: {matchPlant(packedItems[0]?.destination)}
+                  </span>
                 </div>
               </div>
 
@@ -1259,26 +1472,6 @@ function ExcelPackingWorkflow({
       .catch((err) => console.warn("Failed to load POs:", err));
   }, [user, targetPo]);
 
-  const PLANT_NAMES: Record<string, string> = {
-    PPA1: "Omega Line Ltd (PPA1)",
-    PPB1: "Alpha Apparels Ltd (PPB1)",
-    PPC1: "Benji Ltd (PPC1)",
-    PPD1: "Sirio Ltd (PPD1)",
-    PPE1: "Vavuniya Apparels Ltd (PPE1)",
-  };
-
-  // Helper to accurately match plant code from client_code or destination automatically
-  const matchPlant = (clientOrDest?: string | null): string => {
-    if (!clientOrDest) return "PPA1";
-    const s = clientOrDest.toLowerCase();
-    if (s.includes("alpha") || s.includes("ppb1")) return "PPB1";
-    if (s.includes("benji") || s.includes("ppc1")) return "PPC1";
-    if (s.includes("sirio") || s.includes("ppd1")) return "PPD1";
-    if (s.includes("vavuniya") || s.includes("ppe1") || s.includes("ppa4")) return "PPE1";
-    if (s.includes("omega") || s.includes("ppa1") || s.includes("ppa2")) return "PPA1";
-    return "PPA1";
-  };
-
   // When PO changes, auto-select Plant and fetch items
   useEffect(() => {
     if (!selectedPoNumber) return;
@@ -1395,49 +1588,37 @@ function ExcelPackingWorkflow({
       const res = await shipmentService.validateExcel(file, supplierId);
       setValidationResult(res);
     } catch (e: any) {
-      // Demo simulated response if server is offline
-      const mockResult: ExcelValidationResult = {
-        is_valid: true,
-        total_rows: 2,
-        total_cartons: 2,
-        total_gross_weight: 51.5,
-        total_net_weight: 48.5,
-        total_quantity: 500,
-        general_errors: [],
-        line_summaries: [
-          {
-            po_number: selectedPoNumber || "2001297727",
-            po_item: "00100",
-            product_code: "ELST1K 000615",
-            total_qty: 500,
-            carton_count: 2,
-            total_gw: 51.5,
-            total_nw: 48.5,
-            po_ordered_qty: 500,
-            po_open_balance: 500,
-            is_valid: true,
-            errors: [],
-          },
-        ],
-        rows: [
-          {
-            row_index: 2,
-            po_number: selectedPoNumber || "2001297727",
-            po_item: "00100",
-            pack_number: "PACK-001",
-            carton_number: 1,
-            supplier_carton_ref: "SK104546-015.0-61851",
-            product_code: "ELST1K 000615",
-            lot_number: "LOT-2025-01",
-            gross_weight: 25.5,
-            net_weight: 24.0,
-            quantity: 245,
-            uom: "M",
-            errors: [],
-          },
-        ],
-      };
-      setValidationResult(mockResult);
+      console.error("Excel validation error:", e);
+      const detail = e?.response?.data?.detail;
+      let errorMsg = "Failed to validate Excel file.";
+      let generalErrors: string[] = [];
+
+      if (typeof detail === "string") {
+        errorMsg = detail;
+        generalErrors = [detail];
+      } else if (detail && typeof detail === "object") {
+        if (detail.message) errorMsg = detail.message;
+        if (Array.isArray(detail.errors) && detail.errors.length > 0) {
+          generalErrors = detail.errors;
+        } else {
+          generalErrors = [errorMsg];
+        }
+      } else if (e?.message) {
+        errorMsg = e.message;
+        generalErrors = [errorMsg];
+      }
+
+      setValidationResult({
+        is_valid: false,
+        total_rows: 0,
+        total_cartons: 0,
+        total_gross_weight: 0,
+        total_net_weight: 0,
+        total_quantity: 0,
+        general_errors: generalErrors,
+        line_summaries: [],
+        rows: [],
+      });
     } finally {
       setValidating(false);
     }
@@ -1474,11 +1655,28 @@ function ExcelPackingWorkflow({
       setCreatedResponse(res);
     } catch (e: any) {
       console.error("Create shipment error:", e);
-      const msg =
-        e?.response?.data?.detail?.message ||
-        e?.response?.data?.detail ||
-        e?.message ||
-        "Failed to create shipment";
+      const detail = e?.response?.data?.detail;
+      let msg = "Failed to create shipment";
+      if (typeof detail === "string") {
+        msg = detail;
+      } else if (detail && typeof detail === "object") {
+        if (detail.message) {
+          msg = detail.message;
+          if (Array.isArray(detail.errors) && detail.errors.length > 0) {
+            msg += ": " + detail.errors.join("; ");
+          }
+          if (Array.isArray(detail.lines) && detail.lines.length > 0) {
+            const flatLines = detail.lines.flat().filter(Boolean);
+            if (flatLines.length > 0) {
+              msg += " (" + flatLines.join("; ") + ")";
+            }
+          }
+        } else {
+          msg = JSON.stringify(detail);
+        }
+      } else if (e?.message) {
+        msg = e.message;
+      }
       alert(`Error creating shipment: ${msg}`);
     } finally {
       setSubmitting(false);

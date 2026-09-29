@@ -303,6 +303,15 @@ async def list_open_po_lines(
         open_lines = []
         for po in pos:
             items = (po.extra_data or {}).get("items", [])
+            if not items:
+                items = [{
+                    "line_number": "00100",
+                    "material_code": po.style_number or "ELST1K 000615",
+                    "partner_code": "",
+                    "description": po.description or "PO Line Item",
+                    "quantity": float(po.quantity or 0),
+                    "uom": "M",
+                }]
             for item in items:
                 line_num = str(item.get("line_number", "00100")).split("-")[0].zfill(5)
                 ordered = float(item.get("quantity", 0))
@@ -311,11 +320,14 @@ async def list_open_po_lines(
                     "po_number": po.po_number,
                     "po_item": line_num,
                     "material_code": item.get("material_code", ""),
+                    "partner_code": item.get("partner_code", ""),
                     "material_description": item.get("description", po.description or ""),
                     "ordered_qty": ordered,
                     "uom": item.get("uom", "M"),
                     "destination": po.destination,
                     "delivery_date": str(po.delivery_date) if po.delivery_date else None,
+                    "order_date": str(getattr(po, "order_date", None) or (po.created_at.date() if po.created_at else "")),
+                    "supplier_id": str(po.supplier_id) if po.supplier_id else None,
                 })
         return open_lines
     except Exception as e:
