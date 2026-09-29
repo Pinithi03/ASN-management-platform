@@ -517,6 +517,8 @@ async def process_and_save(
             )
             if po:
                 po_ids.append(str(po.id))
+                if po.supplier_id and not email_record.supplier_id:
+                    email_record.supplier_id = po.supplier_id
 
         await db.commit()
 

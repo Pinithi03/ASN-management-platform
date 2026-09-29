@@ -188,12 +188,16 @@ async def list_emails(
             ParsedData.supplier_id_extracted.ilike(v_filter)
             | cast(ParsedData.raw_extracted, String).ilike(v_filter)
         )
+        po_supp_subq = select(PurchaseOrder.source_email_id).where(
+            PurchaseOrder.supplier_id.in_(supp_ids_subq)
+        )
         query = query.where(
             EmailRecord.from_address.ilike(v_filter)
             | EmailRecord.body_html.ilike(v_filter)
             | EmailRecord.body_text.ilike(v_filter)
             | EmailRecord.supplier_id.in_(supp_ids_subq)
             | EmailRecord.id.in_(parsed_v_subq)
+            | EmailRecord.id.in_(po_supp_subq)
         )
 
     if search:
