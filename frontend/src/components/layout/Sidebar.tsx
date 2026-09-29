@@ -155,16 +155,16 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         ))}
       </nav>
 
-      {/* Plant info at bottom */}
+      {/* Organization info at bottom */}
       {!collapsed && user && (
         <div className="border-t border-gray-200 px-4 py-3">
           <p className="text-xs font-medium text-gray-400">
-            {isAdmin ? "Your Plant" : "Primary Plant"}
+            {isAdmin ? "Company / Tenant" : "Supplier Partner"}
           </p>
           <p className="truncate text-sm font-medium text-gray-700">
             {user.company_name}
           </p>
-          <p className="text-xs text-gray-400">{user.company_code}</p>
+          <p className="text-xs text-gray-400 font-mono">{user.company_code}</p>
         </div>
       )}
 

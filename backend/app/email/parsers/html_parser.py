@@ -78,6 +78,7 @@ _FIELD_LABELS: dict[str, tuple[str, ...]] = {
     "destination": (
         "destination", "ship to", "deliver to", "delivery address", "delivery to",
         "delivery place", "place of delivery", "consignee", "destinazione",
+        "plant", "delivering plant", "delivery plant", "receiving plant", "dest. plant",
     ),
     "currency": ("currency", "curr", "valuta"),
     "total_quantity": (

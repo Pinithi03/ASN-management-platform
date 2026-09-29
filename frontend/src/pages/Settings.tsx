@@ -25,14 +25,6 @@ import { auditApi } from "@/services/auditApi";
 
 type TabType = "company" | "email" | "asn" | "security" | "health";
 
-const SRI_LANKA_PLANTS = [
-  { name: "Sirio Ltd", code: "SIRIO (PPA1)", location: "Badalgama", isDefault: true },
-  { name: "Benji Ltd", code: "Benji (PPC1)", location: "Bingiriya", isDefault: false },
-  { name: "Omega Line Ltd", code: "OMEGA (PPA2)", location: "Sandalankawa", isDefault: false },
-  { name: "Alpha Apparels Ltd", code: "ALPHA (PPA3)", location: "Polgahawela", isDefault: false },
-  { name: "Vavuniya Apparels Ltd", code: "VAVUNIYA (PPA4)", location: "Vavuniya", isDefault: false },
-];
-
 export default function Settings() {
   const user = useAuthStore((s) => s.user);
   const [activeTab, setActiveTab] = useState<TabType>("company");
@@ -102,7 +94,7 @@ export default function Settings() {
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Platform Settings</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Configure plant operations, automated email ingestion, Calzedonia ASN engine, and security rules.
+            Configure corporate identity, automated email ingestion, Calzedonia ASN engine, and security rules.
           </p>
         </div>
 
@@ -131,7 +123,7 @@ export default function Settings() {
       {/* Tabs Navigation Bar */}
       <div className="flex items-center gap-2 border-b border-gray-200 overflow-x-auto pb-1 scrollbar-none">
         {[
-          { id: "company", label: "Company & Plants", icon: Building2 },
+          { id: "company", label: "Company Profile", icon: Building2 },
           { id: "email", label: "Email Engine", icon: Mail },
           { id: "asn", label: "ASN & Storage", icon: Package },
           { id: "security", label: "Security & RBAC", icon: Shield },
@@ -157,18 +149,18 @@ export default function Settings() {
         })}
       </div>
 
-      {/* Tab Content 1: Company & Plants */}
+      {/* Tab Content 1: Company Profile */}
       {activeTab === "company" && (
         <div className="space-y-6 animate-in fade-in duration-200">
           <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm space-y-4">
             <div className="flex items-center gap-2 pb-3 border-b border-gray-100">
               <Building2 className="w-5 h-5 text-brand-600" />
-              <h2 className="text-base font-semibold text-gray-900">Plant & Company Profile</h2>
+              <h2 className="text-base font-semibold text-gray-900">Company Profile</h2>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Company / Plant Name</label>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Company Name</label>
                 <input
                   type="text"
                   value={companyName}
@@ -188,7 +180,7 @@ export default function Settings() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Plant Address / Location</label>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Company Address / Location</label>
                 <input
                   type="text"
                   value={plantLocation}
@@ -204,34 +196,6 @@ export default function Settings() {
                   <option value="UTC">UTC (Coordinated Universal Time)</option>
                 </select>
               </div>
-            </div>
-          </div>
-
-          {/* 5 Sri Lanka Manufacturing Plants */}
-          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-              <h2 className="text-base font-semibold text-gray-900">Oniverse Group Sri Lanka Plants</h2>
-              <span className="text-xs font-semibold px-2.5 py-0.5 bg-blue-50 text-blue-700 rounded-md border border-blue-100">
-                5 Registered Plants
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {SRI_LANKA_PLANTS.map((plant) => (
-                <div
-                  key={plant.name}
-                  className="p-4 rounded-xl border border-gray-100 bg-gray-50/50 hover:bg-gray-50 transition-colors flex items-center justify-between"
-                >
-                  <div>
-                    <p className="text-sm font-bold text-gray-900">{plant.name}</p>
-                    <p className="text-xs text-gray-500 font-mono mt-0.5">{plant.code}</p>
-                    <p className="text-xs text-gray-400 mt-1">{plant.location}, Sri Lanka</p>
-                  </div>
-                  <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
-                    ACTIVE
-                  </span>
-                </div>
-              ))}
             </div>
           </div>
         </div>

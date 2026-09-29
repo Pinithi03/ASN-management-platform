@@ -1,26 +1,16 @@
 // ─── Admin Dashboard Page ──────────────────────────────────────────
 // frontend/src/pages/AdminDashboard.tsx
 
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Mail, FileText, Package, Truck, RefreshCw, ScrollText, ShieldAlert, BarChart3, TrendingUp } from "lucide-react";
+import { Mail, FileText, Package, Truck, RefreshCw, ScrollText, ShieldAlert, Zap, CheckCircle2, ArrowRight } from "lucide-react";
 import { emailApi } from "@/services/emailApi";
 import { poApi } from "@/services/poApi";
 import { auditApi } from "@/services/auditApi";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 
-const PLANT_METRICS = [
-  { name: "Sirio Ltd", code: "SIRIO", location: "Badalgama", asns: 42, emails: 128, success: 98, color: "bg-blue-500", text: "text-blue-600", lightBg: "bg-blue-50" },
-  { name: "Benji Ltd", code: "BENJI", location: "Bingiriya", asns: 35, emails: 94, success: 96, color: "bg-emerald-500", text: "text-emerald-600", lightBg: "bg-emerald-50" },
-  { name: "Omega Line Ltd", code: "OMEGA", location: "Sandalankawa", asns: 48, emails: 142, success: 100, color: "bg-purple-500", text: "text-purple-600", lightBg: "bg-purple-50" },
-  { name: "Alpha Apparels", code: "ALPHA", location: "Polgahawela", asns: 29, emails: 82, success: 95, color: "bg-amber-500", text: "text-amber-600", lightBg: "bg-amber-50" },
-  { name: "Vavuniya Apparels", code: "VAVUNIYA", location: "Vavuniya", asns: 38, emails: 105, success: 97, color: "bg-indigo-500", text: "text-indigo-600", lightBg: "bg-indigo-50" },
-];
-
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const [activeMetric, setActiveMetric] = useState<"asns" | "emails" | "success">("asns");
 
   const { data: emailStats, isLoading: emailLoading } = useQuery({
     queryKey: ["emailStats"],
@@ -216,99 +206,91 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {/* Plant Operations & Throughput Graph */}
+            {/* Automated Ingestion & Parsing Engine Breakdown */}
             <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm flex flex-col justify-between h-full">
               <div>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <BarChart3 className="w-5 h-5 text-blue-600" />
+                    <Zap className="w-5 h-5 text-blue-600" />
                     <h2 className="text-lg font-semibold text-gray-900">
-                      Plant Operations & Throughput
+                      Automated Ingestion Pipeline
                     </h2>
                   </div>
-
-                  {/* Metric Toggle Pills */}
-                  <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg self-start sm:self-auto">
-                    {[
-                      { id: "asns", label: "ASNs" },
-                      { id: "emails", label: "Emails" },
-                      { id: "success", label: "Success %" },
-                    ].map((m) => (
-                      <button
-                        key={m.id}
-                        onClick={() => setActiveMetric(m.id as "asns" | "emails" | "success")}
-                        className={`px-2.5 py-0.5 text-xs font-semibold rounded-md transition-all ${
-                          activeMetric === m.id
-                            ? "bg-white text-gray-900 shadow-sm"
-                            : "text-gray-500 hover:text-gray-700"
-                        }`}
-                      >
-                        {m.label}
-                      </button>
-                    ))}
-                  </div>
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-0.5 bg-emerald-50 text-emerald-700 rounded-md border border-emerald-100">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    Live Parsing Active
+                  </span>
                 </div>
 
                 <p className="text-xs text-gray-500 mb-4">
-                  Comparative performance & volume distribution across 5 apparel manufacturing plants:
+                  Incoming mailbox status and automated parsing throughput:
                 </p>
 
-                {/* Graph Visualization Container */}
-                <div className="mt-4 pt-4 border-t border-gray-100">
-                  <div className="h-44 flex items-end justify-between gap-3 px-2 pb-2">
-                    {PLANT_METRICS.map((plant) => {
-                      const maxVal = Math.max(...PLANT_METRICS.map((p) => p[activeMetric]));
-                      const val = plant[activeMetric];
-                      const heightPct = maxVal > 0 ? Math.max(18, Math.round((val / maxVal) * 100)) : 10;
-
-                      return (
-                        <div key={plant.code} className="flex-1 flex flex-col items-center group relative">
-                          {/* Floating Hover Tooltip */}
-                          <div className="absolute -top-12 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none bg-gray-900 text-white text-[11px] rounded-lg py-1 px-2.5 shadow-xl whitespace-nowrap z-20">
-                            <p className="font-bold">{plant.name}</p>
-                            <p className="text-gray-300">
-                              {activeMetric === "asns"
-                                ? `${val} ASNs Dispatched`
-                                : activeMetric === "emails"
-                                ? `${val} Emails Parsed`
-                                : `${val}% Auto-Parsed`}
-                              {" • "}{plant.location}
-                            </p>
-                          </div>
-
-                          {/* Value Badge above Bar */}
-                          <span className="text-xs font-bold text-gray-700 mb-1.5 font-mono transition-transform group-hover:scale-110">
-                            {val}{activeMetric === "success" ? "%" : ""}
-                          </span>
-
-                          {/* Bar Graphic with Hover Effect */}
-                          <div className="w-full bg-gray-100 rounded-t-lg overflow-hidden flex items-end h-32 p-0.5">
-                            <div
-                              className={`w-full ${plant.color} rounded-t-md transition-all duration-500 group-hover:brightness-110 shadow-sm`}
-                              style={{ height: `${heightPct}%` }}
-                            />
-                          </div>
-
-                          {/* Plant Code Label below Bar */}
-                          <span className="mt-2 text-[11px] font-bold text-gray-500 font-mono tracking-wider group-hover:text-gray-900">
-                            {plant.code}
-                          </span>
-                        </div>
-                      );
-                    })}
+                {/* 4 Ingestion Metrics Grid */}
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  <div
+                    onClick={() => navigate("/emails")}
+                    className="p-3 bg-blue-50/50 rounded-xl border border-blue-100 hover:bg-blue-50 transition-colors cursor-pointer"
+                  >
+                    <p className="text-[11px] font-semibold text-blue-700 uppercase tracking-wider">Auto-Parsed</p>
+                    <p className="text-2xl font-bold text-blue-900 mt-1">
+                      {emailStats?.parsed ?? 0}
+                    </p>
+                    <p className="text-[11px] text-blue-600 mt-0.5">IUNGO HTML & XML</p>
                   </div>
+
+                  <div
+                    onClick={() => navigate("/purchase-orders")}
+                    className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-100 hover:bg-emerald-50 transition-colors cursor-pointer"
+                  >
+                    <p className="text-[11px] font-semibold text-emerald-700 uppercase tracking-wider">Committed POs</p>
+                    <p className="text-2xl font-bold text-emerald-900 mt-1">
+                      {emailStats?.committed ?? 0}
+                    </p>
+                    <p className="text-[11px] text-emerald-600 mt-0.5">Synced to database</p>
+                  </div>
+
+                  <div
+                    onClick={() => navigate("/emails")}
+                    className="p-3 bg-amber-50/50 rounded-xl border border-amber-100 hover:bg-amber-50 transition-colors cursor-pointer"
+                  >
+                    <p className="text-[11px] font-semibold text-amber-700 uppercase tracking-wider">Queued / In-Flight</p>
+                    <p className="text-2xl font-bold text-amber-900 mt-1">
+                      {(emailStats?.queued ?? 0) + (emailStats?.processing ?? 0)}
+                    </p>
+                    <p className="text-[11px] text-amber-600 mt-0.5">Celery worker queue</p>
+                  </div>
+
+                  <div
+                    onClick={() => navigate("/emails")}
+                    className="p-3 bg-slate-50 rounded-xl border border-slate-200 hover:bg-slate-100/70 transition-colors cursor-pointer"
+                  >
+                    <p className="text-[11px] font-semibold text-slate-700 uppercase tracking-wider">Success Rate</p>
+                    <p className="text-2xl font-bold text-slate-900 mt-1 font-mono">
+                      {successRate}%
+                    </p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">Automated accuracy</p>
+                  </div>
+                </div>
+
+                {/* Automation Note */}
+                <div className="p-3 bg-gray-50 rounded-lg border border-gray-100 text-xs text-gray-600 flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <span>
+                    Delivering plant and line items are automatically detected from email attachments and populated into POs without manual configuration.
+                  </span>
                 </div>
               </div>
 
               {/* Card Footer Summary */}
               <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
-                <span className="flex items-center gap-1.5">
-                  <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
-                  <span>5-Plant Operations Active</span>
-                </span>
-                <span className="font-semibold text-gray-700 font-mono">
-                  {PLANT_METRICS.reduce((acc, p) => acc + p.asns, 0)} Total ASNs
-                </span>
+                <span>IMAP Ingestion Active (Every 5 mins)</span>
+                <button
+                  onClick={() => navigate("/emails")}
+                  className="text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1"
+                >
+                  View Ingestion Mailbox <ArrowRight className="w-3.5 h-3.5" />
+                </button>
               </div>
             </div>
           </div>

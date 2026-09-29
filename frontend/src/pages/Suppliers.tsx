@@ -21,6 +21,8 @@ import {
   AlertTriangle,
   Power,
   BellRing,
+  FileText,
+  Building,
 } from "lucide-react";
 import { auditApi } from "@/services/auditApi";
 
@@ -33,13 +35,15 @@ export interface SupplierItem {
   phone?: string;
   country?: string;
   category?: string;
+  tax_id?: string;
+  address?: string;
   is_active: boolean;
   onboarded_at: string;
   recently_updated_by_supplier?: boolean;
   last_profile_updated_at?: string;
 }
 
-const INITIAL_SUPPLIERS: SupplierItem[] = [
+export const INITIAL_SUPPLIERS: SupplierItem[] = [
   {
     id: "sup-1",
     name: "Coats Thread Exports Ltd",
@@ -49,6 +53,8 @@ const INITIAL_SUPPLIERS: SupplierItem[] = [
     phone: "+94 11 4712000",
     country: "Sri Lanka",
     category: "Thread & Trims",
+    tax_id: "PV-10293847",
+    address: "No. 40, Station Road, Colombo 03",
     is_active: true,
     onboarded_at: "2026-01-15T08:30:00Z",
   },
@@ -61,6 +67,8 @@ const INITIAL_SUPPLIERS: SupplierItem[] = [
     phone: "+94 34 2280000",
     country: "Sri Lanka",
     category: "Knit & Cotton Fabric",
+    tax_id: "PQ-49201934",
+    address: "Narthupana Estate, Neboda",
     is_active: true,
     onboarded_at: "2026-02-01T10:00:00Z",
   },
@@ -73,6 +81,8 @@ const INITIAL_SUPPLIERS: SupplierItem[] = [
     phone: "+94 11 2855123",
     country: "Sri Lanka",
     category: "Dyed & Printed Fabric",
+    tax_id: "PV-88371920",
+    address: "Pugoda Road, Kirindiwela",
     is_active: true,
     onboarded_at: "2026-03-10T14:20:00Z",
   },
@@ -85,6 +95,8 @@ const INITIAL_SUPPLIERS: SupplierItem[] = [
     phone: "+94 11 4567890",
     country: "Sri Lanka",
     category: "Elastics & Fasteners",
+    tax_id: "PV-55291048",
+    address: "Export Processing Zone, Biyagama",
     is_active: true,
     onboarded_at: "2026-04-05T09:15:00Z",
   },
@@ -97,6 +109,8 @@ const INITIAL_SUPPLIERS: SupplierItem[] = [
     phone: "+94 11 2489100",
     country: "Sri Lanka",
     category: "Zippers & Fasteners",
+    tax_id: "PV-77182901",
+    address: "Phase 1, EPZ, Seethawaka, Avissawella",
     is_active: true,
     onboarded_at: "2026-05-12T11:45:00Z",
   },
@@ -107,7 +121,19 @@ export default function Suppliers() {
     const saved = localStorage.getItem("asn_onboarded_suppliers");
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((item: any) => {
+            const initMatch = INITIAL_SUPPLIERS.find(
+              (i) => i.supplier_code === item.supplier_code || i.id === item.id
+            );
+            return {
+              ...item,
+              tax_id: item.tax_id || initMatch?.tax_id || "PV-10293847",
+              address: item.address || initMatch?.address || "Sri Lanka Manufacturing Plant",
+            };
+          });
+        }
       } catch {
         return INITIAL_SUPPLIERS;
       }
@@ -173,6 +199,8 @@ export default function Suppliers() {
     phone: "",
     country: "Sri Lanka",
     category: "Textiles & Garments",
+    tax_id: "",
+    address: "",
     is_active: true,
   });
 
@@ -228,6 +256,8 @@ export default function Suppliers() {
       phone: formData.phone.trim(),
       country: formData.country.trim(),
       category: formData.category,
+      tax_id: formData.tax_id.trim() || "PV-10293847",
+      address: formData.address.trim() || "Sri Lanka Manufacturing Plant",
       is_active: formData.is_active,
       onboarded_at: new Date().toISOString(),
     };
@@ -265,6 +295,8 @@ export default function Suppliers() {
       phone: supplier.phone || "",
       country: supplier.country || "Sri Lanka",
       category: supplier.category || "Textiles & Garments",
+      tax_id: supplier.tax_id || "",
+      address: supplier.address || "",
       is_active: supplier.is_active,
     });
   };
@@ -285,6 +317,8 @@ export default function Suppliers() {
               phone: formData.phone.trim(),
               country: formData.country.trim(),
               category: formData.category,
+              tax_id: formData.tax_id.trim() || s.tax_id || "PV-10293847",
+              address: formData.address.trim() || s.address || "Sri Lanka Manufacturing Plant",
               is_active: formData.is_active,
             }
           : s
@@ -337,6 +371,8 @@ export default function Suppliers() {
       phone: "",
       country: "Sri Lanka",
       category: "Textiles & Garments",
+      tax_id: "",
+      address: "",
       is_active: true,
     });
   };
@@ -571,6 +607,18 @@ export default function Suppliers() {
                     <span>{s.country}</span>
                   </div>
                 )}
+                {s.tax_id && (
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                    <span>Tax ID: <strong className="font-mono text-gray-800">{s.tax_id}</strong></span>
+                  </div>
+                )}
+                {s.address && (
+                  <div className="flex items-center gap-2 truncate">
+                    <Building className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                    <span className="truncate">{s.address}</span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -728,6 +776,34 @@ export default function Suppliers() {
                 </div>
               </div>
 
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
+                    Tax ID / Business Reg
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.tax_id}
+                    onChange={(e) => setFormData({ ...formData, tax_id: e.target.value })}
+                    placeholder="PV-10293847"
+                    className="w-full h-10 px-3 text-sm font-mono rounded-xl border border-gray-200 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
+                    Operating Facility Address
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.address}
+                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                    placeholder="Facility Address, Sri Lanka"
+                    className="w-full h-10 px-3 text-sm rounded-xl border border-gray-200 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  />
+                </div>
+              </div>
+
               <div className="pt-4 border-t border-gray-100 flex items-center justify-end gap-3">
                 <button
                   type="button"
@@ -860,6 +936,34 @@ export default function Suppliers() {
                     type="text"
                     value={formData.country}
                     onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+                    className="w-full h-10 px-3 text-sm rounded-xl border border-gray-200 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
+                    Tax ID / Business Reg
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.tax_id}
+                    onChange={(e) => setFormData({ ...formData, tax_id: e.target.value })}
+                    placeholder="PV-10293847"
+                    className="w-full h-10 px-3 text-sm font-mono rounded-xl border border-gray-200 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
+                    Operating Facility Address
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.address}
+                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                    placeholder="Facility Address, Sri Lanka"
                     className="w-full h-10 px-3 text-sm rounded-xl border border-gray-200 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                   />
                 </div>
