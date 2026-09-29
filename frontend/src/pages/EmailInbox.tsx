@@ -46,7 +46,7 @@ export default function EmailInbox() {
   }, [search, poNumberFilter, effectiveVendorCode]);
 
   // ─── Queries ────────────────────────────────────────────────
-  const { data: emailsData, isLoading } = useQuery({
+  const { data: emailsData, isLoading, isFetching } = useQuery({
     queryKey: ["emails", search, poNumberFilter, effectiveVendorCode, page, user?.role],
     queryFn: () =>
       emailApi.list({
@@ -56,12 +56,18 @@ export default function EmailInbox() {
         page,
         per_page: 15,
       }),
+    refetchInterval: 10000, // Continuous autonomous polling every 10s
+    refetchIntervalInBackground: true,
   });
 
   const { data: selectedEmail, isLoading: isDetailLoading } = useQuery({
     queryKey: ["emailDetail", selectedEmailId],
     queryFn: () => emailApi.getById(selectedEmailId!),
     enabled: !!selectedEmailId,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === "QUEUED" ? 3000 : false;
+    },
   });
 
   // ─── Instant Mailbox Sync ────────────────────────────────────
@@ -116,6 +122,10 @@ export default function EmailInbox() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <div className="hidden sm:flex items-center gap-2 px-3 py-2 bg-emerald-50 text-emerald-800 text-xs font-semibold rounded-lg border border-emerald-200 shadow-2xs">
+            <span className={`w-2 h-2 rounded-full ${isFetching ? "bg-emerald-500 animate-ping" : "bg-emerald-500 animate-pulse"}`} />
+            <span>Auto-Sync Active (Every 10s)</span>
+          </div>
           <button
             onClick={handleSyncMailbox}
             disabled={isSyncing}
@@ -123,10 +133,10 @@ export default function EmailInbox() {
                 ? "bg-blue-600 hover:bg-blue-700 active:bg-blue-800"
                 : "bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800"
               } disabled:opacity-60`}
-            title="Immediately check mailbox for new unread order emails"
+            title="Immediately trigger an emergency mailbox check"
           >
             <RefreshCw className={`w-4 h-4 ${isSyncing ? "animate-spin" : ""}`} />
-            {isSyncing ? "Fetching Mailbox..." : "Fetch & Sync Emails"}
+            {isSyncing ? "Fetching Mailbox..." : "Fetch Now (Manual)"}
           </button>
         </div>
       </div>

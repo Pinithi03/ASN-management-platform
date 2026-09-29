@@ -312,11 +312,18 @@ async def save_purchase_order(
         supp = supp_res.scalar_one_or_none()
         if supp:
             resolved_supplier_id = supp.id
+            if (not supp.name or supp.name.startswith("Supplier ")) and parsed_po.supplier_name:
+                supp.name = parsed_po.supplier_name.strip()
+            if not supp.address and parsed_po.destination:
+                supp.address = parsed_po.destination.strip()
         else:
             new_supp = Supplier(
                 supplier_code=parsed_po.supplier_code,
-                name=parsed_po.supplier_name or f"Supplier {parsed_po.supplier_code}",
+                name=parsed_po.supplier_name.strip() if parsed_po.supplier_name else f"Supplier {parsed_po.supplier_code}",
                 email=f"supplier_{supp_clean or 'unknown'}@oniverse.local",
+                address=parsed_po.destination.strip() if parsed_po.destination else None,
+                country="Sri Lanka",
+                category="Textiles & Garments",
             )
             db.add(new_supp)
             await db.flush()

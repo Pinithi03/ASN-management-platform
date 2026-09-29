@@ -42,6 +42,8 @@ class Supplier(Base, TimestampMixin, SoftDeleteMixin):
     phone: Mapped[Optional[str]] = mapped_column(String(50))
     address: Mapped[Optional[str]] = mapped_column(Text)
     country: Mapped[Optional[str]] = mapped_column(String(100))
+    tax_id: Mapped[Optional[str]] = mapped_column(String(50))
+    category: Mapped[Optional[str]] = mapped_column(String(100))
 
     # --- Relationships ---
     plant_registrations: Mapped[list[SupplierPlant]] = relationship(

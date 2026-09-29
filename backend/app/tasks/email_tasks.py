@@ -128,9 +128,8 @@ def poll_mailboxes(self) -> dict:
         logger.error("IMAP credentials not configured — skipping poll")
         return {"status": "skipped", "reason": "no_credentials"}
 
-    # Company ID for this mailbox — from env for now, will come from
-    # per-plant config when multi-plant support is added.
-    company_id = os.getenv("DEFAULT_COMPANY_ID", "")
+    # Company ID for this mailbox — from env with default fallback
+    company_id = os.getenv("DEFAULT_COMPANY_ID") or "00000000-0000-0000-0000-000000000001"
 
     existing_ids: set[str] = set()
     try:
@@ -254,18 +253,15 @@ def process_inbound_email(
         logger.info("Parsed %d PO(s)", len(parsed_pos))
 
         # Stage 4: Persist to DB
-        if company_id:
-            try:
-                db_result = asyncio.run(
-                    _persist_email(decoded, classification, parsed_pos, company_id)
-                )
-                logger.info("Saved to DB: %s", db_result)
-            except Exception as db_err:
-                logger.exception("DB save failed — returning parse result without persistence")
-                db_result = {"db_error": str(db_err)}
-        else:
-            logger.warning("No company_id — skipping DB persistence")
-            db_result = {"skipped": "no_company_id"}
+        target_company_id = company_id or os.getenv("DEFAULT_COMPANY_ID") or "00000000-0000-0000-0000-000000000001"
+        try:
+            db_result = asyncio.run(
+                _persist_email(decoded, classification, parsed_pos, target_company_id)
+            )
+            logger.info("Saved to DB: %s", db_result)
+        except Exception as db_err:
+            logger.exception("DB save failed — returning parse result without persistence")
+            db_result = {"db_error": str(db_err)}
 
         if not parsed_pos:
             return {
@@ -304,20 +300,20 @@ def process_inbound_email(
         logger.exception("Failed to process email: tracking_id=%s", tracking_id)
 
         # Try to save the error record to DB
-        if company_id:
-            try:
-                decoded_for_error = decode(raw_bytes)
-                classification_for_error = classify(decoded_for_error)
-                asyncio.run(
-                    _persist_error(
-                        decoded_for_error,
-                        classification_for_error,
-                        company_id,
-                        str(e),
-                    )
+        target_company_id = company_id or os.getenv("DEFAULT_COMPANY_ID") or "00000000-0000-0000-0000-000000000001"
+        try:
+            decoded_for_error = decode(raw_bytes)
+            classification_for_error = classify(decoded_for_error)
+            asyncio.run(
+                _persist_error(
+                    decoded_for_error,
+                    classification_for_error,
+                    target_company_id,
+                    str(e),
                 )
-            except Exception:
-                logger.exception("Failed to save error record to DB")
+            )
+        except Exception:
+            logger.exception("Failed to save error record to DB")
 
         return {
             "status": "error",
