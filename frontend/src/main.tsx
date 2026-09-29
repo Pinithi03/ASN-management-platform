@@ -8,7 +8,10 @@ import "./styles/globals.css";
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 5 * 60 * 1000, // 5 minutes
+      staleTime: 5000, // Data fresh for 5 seconds
+      refetchInterval: 10000, // Silent background poll every 10 seconds without page reload
+      refetchIntervalInBackground: false, // Pause background polling when browser tab is inactive
+      refetchOnWindowFocus: true, // Immediately revalidate when user focuses the tab
       retry: 1,
     },
   },

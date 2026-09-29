@@ -56,12 +56,15 @@ export default function EmailInbox() {
         page,
         per_page: 15,
       }),
+    placeholderData: (previousData) => previousData,
+    refetchInterval: 10000,
   });
 
   const { data: selectedEmail, isLoading: isDetailLoading } = useQuery({
     queryKey: ["emailDetail", selectedEmailId],
     queryFn: () => emailApi.getById(selectedEmailId!),
     enabled: !!selectedEmailId,
+    staleTime: 60000,
   });
 
   // ─── Instant Mailbox Sync ────────────────────────────────────

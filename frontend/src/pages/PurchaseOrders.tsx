@@ -59,6 +59,8 @@ export default function PurchaseOrders() {
         status: statusFilter || undefined,
         supplier_id: supplierId,
       }),
+    placeholderData: (previousData) => previousData,
+    refetchInterval: 10000,
   });
 
   const { data: stats } = useQuery({
