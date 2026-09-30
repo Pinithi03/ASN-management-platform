@@ -135,11 +135,11 @@ export default function Suppliers() {
   });
 
   // Live query from PostgreSQL backend API (/api/v1/suppliers)
-  // Automatically refetches every 10s to pick up newly parsed suppliers from incoming emails
+  // Automatically refetches every 5s to pick up newly parsed suppliers from incoming emails
   const { data: serverSuppliers, refetch } = useQuery({
     queryKey: ["suppliers"],
     queryFn: () => supplierApi.list(),
-    refetchInterval: 10000,
+    refetchInterval: 5000,
   });
 
   useEffect(() => {

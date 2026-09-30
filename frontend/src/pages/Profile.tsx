@@ -44,7 +44,7 @@ export default function Profile() {
   const { data: serverSuppliers, dataUpdatedAt } = useQuery({
     queryKey: ["suppliers"],
     queryFn: () => supplierApi.list(),
-    refetchInterval: 10000,
+    refetchInterval: 5000,
   });
 
   const suppliersList: SupplierItem[] =

@@ -21,7 +21,7 @@ from celery import shared_task
 
 from app.email.imap_client import IMAPClient, IMAPConfig
 from app.email.mime_decoder import decode
-from app.email.classifier import classify, EmailFormat
+from app.email.classifier import classify, validate_order_email, EmailFormat
 from app.email.parsers import parse
 
 logger = logging.getLogger(__name__)
@@ -146,6 +146,21 @@ def poll_mailboxes(self) -> dict:
 
             dispatched = 0
             for raw_email in raw_emails:
+                # Fast pre-validation: only dispatch genuine order emails (XML attached or valid HTML order)
+                try:
+                    decoded = decode(raw_email.raw)
+                    is_valid, val_reason, _ = validate_order_email(decoded)
+                    if not is_valid:
+                        logger.info(
+                            "poll_mailboxes: Skipping non-order email UID %s: %s",
+                            raw_email.uid,
+                            val_reason,
+                        )
+                        client.mark_as_read(raw_email.uid)
+                        continue
+                except Exception as val_err:
+                    logger.warning("Pre-validation error for UID %s: %s", raw_email.uid, val_err)
+
                 email_tracking_id = str(uuid.uuid4())
 
                 # Base64-encode bytes → string so JSON serializer can
@@ -193,32 +208,14 @@ def process_inbound_email(
 
     Steps:
       1. MIME decode
-      2. Classify (XML vs HTML vs UNKNOWN)
-      3. Parse PO data
-      4. Save to DB (email_records + parsed_data + purchase_orders)
-
-    Parameters
-    ----------
-    raw_bytes : bytes | str
-        Full RFC-5322 email message. Arrives as a base64-encoded string
-        from the JSON-serialized Celery message; decoded back to bytes here.
-    uid : str
-        IMAP UID (base64-encoded) for reference.
-    tracking_id : str
-        UUID for tracking this email through the pipeline.
-    company_id : str
-        Company UUID — which plant this email belongs to.
-
-    Returns
-    -------
-    dict
-        Processing result with status and parsed data summary.
+      2. Validate order email (XML attachment or valid HTML order)
+      3. Classify (XML vs HTML vs MIXED)
+      4. Parse PO data
+      5. Save to DB (email_records + parsed_data + purchase_orders)
     """
     logger.info("Processing email: tracking_id=%s, uid=%s", tracking_id, uid)
 
     # ── Decode base64 back to raw bytes ─────────────────────────
-    # Celery's JSON serializer can't handle bytes, so poll_mailboxes
-    # base64-encodes them before dispatch. Undo that here.
     if isinstance(raw_bytes, str):
         raw_bytes = base64.b64decode(raw_bytes)
     if isinstance(uid, str) and uid:
@@ -239,8 +236,21 @@ def process_inbound_email(
             len(decoded.attachments),
         )
 
-        # Stage 2: Classify
-        classification = classify(decoded)
+        # Stage 2: Validate order email
+        is_valid, val_reason, classification = validate_order_email(decoded)
+        if not is_valid:
+            logger.info(
+                "process_inbound_email: Rejected non-order email: tracking_id=%s, reason=%s",
+                tracking_id,
+                val_reason,
+            )
+            return {
+                "status": "rejected",
+                "tracking_id": tracking_id,
+                "subject": decoded.subject,
+                "reason": val_reason,
+            }
+
         logger.info(
             "Classified: format=%s, confidence=%s, reason=%s",
             classification.format.value,
@@ -251,6 +261,20 @@ def process_inbound_email(
         # Stage 3: Parse
         parsed_pos = parse(decoded, classification)
         logger.info("Parsed %d PO(s)", len(parsed_pos))
+
+        # Do not persist non-XML emails if no purchase orders could be found
+        if not parsed_pos and not classification.xml_attachment_indices:
+            logger.info(
+                "Skipping DB save: No POs found in non-XML email: subject=%r",
+                decoded.subject,
+            )
+            return {
+                "status": "no_po_found",
+                "tracking_id": tracking_id,
+                "subject": decoded.subject,
+                "format": classification.format.value,
+                "reason": "No purchase orders extracted from non-XML email",
+            }
 
         # Stage 4: Persist to DB
         target_company_id = company_id or os.getenv("DEFAULT_COMPANY_ID") or "00000000-0000-0000-0000-000000000001"

@@ -146,13 +146,13 @@ class IMAPClient:
         # Clean existing IDs for case-insensitive matching
         clean_existing = {mid.strip().strip("<>").lower() for mid in existing_message_ids if mid}
 
-        # Batch-peek Message-ID headers for all candidate UIDs in one round-trip
+        # Batch-peek Message-ID, From, and Subject headers in one round-trip
         uid_str = b",".join(ordered_uids)
         try:
             status, fetch_data = self._conn.uid(
                 "fetch",
                 uid_str,
-                "(UID BODY.PEEK[HEADER.FIELDS (MESSAGE-ID)])",
+                "(UID BODY.PEEK[HEADER.FIELDS (MESSAGE-ID FROM SUBJECT)])",
             )
         except Exception as e:
             logger.warning("Batch header fetch failed: %s", e)
@@ -160,6 +160,8 @@ class IMAPClient:
             fetch_data = []
 
         uid_to_msgid: dict[bytes, str] = {}
+        uid_to_from: dict[bytes, str] = {}
+        uid_to_subject: dict[bytes, str] = {}
         if status == "OK" and fetch_data:
             for item in fetch_data:
                 if isinstance(item, tuple) and len(item) == 2:
@@ -168,18 +170,38 @@ class IMAPClient:
                     if m:
                         uid = m.group(1)
                         parsed_hdr = email.message_from_bytes(header_bytes)
-                        msg_id = (parsed_hdr.get("Message-ID") or "").strip()
-                        uid_to_msgid[uid] = msg_id
+                        uid_to_msgid[uid] = (parsed_hdr.get("Message-ID") or "").strip()
+                        uid_to_from[uid] = (parsed_hdr.get("From") or "").strip()
+                        uid_to_subject[uid] = (parsed_hdr.get("Subject") or "").strip()
+
+        from app.email.classifier import is_system_or_automated_email
 
         # Filter candidate UIDs
         uids_to_process: list[bytes] = []
         for uid in ordered_uids:
             msg_id = uid_to_msgid.get(uid, "")
             clean_id = msg_id.strip("<>").lower()
-            if not clean_id or clean_id not in clean_existing:
-                uids_to_process.append(uid)
-                if len(uids_to_process) >= limit:
-                    break
+            from_addr = uid_to_from.get(uid, "")
+            subj = uid_to_subject.get(uid, "")
+
+            # 1. Skip if already processed in database
+            if clean_id and clean_id in clean_existing:
+                continue
+
+            # 2. Skip and mark as read any automated system / no-reply / Google notifications
+            if is_system_or_automated_email(from_addr, subj):
+                logger.info(
+                    "IMAP: Skipping & marking as read non-order system message UID %s (From: %s, Subj: %s)",
+                    uid,
+                    from_addr,
+                    subj,
+                )
+                self.mark_as_read(uid)
+                continue
+
+            uids_to_process.append(uid)
+            if len(uids_to_process) >= limit:
+                break
 
         logger.info(
             "IMAP scan: %d candidate emails, %d unprocessed (fetching %d)",
