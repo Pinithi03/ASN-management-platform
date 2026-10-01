@@ -16,13 +16,13 @@ export default function SupplierDashboard() {
   const { isLoading: emailLoading } = useQuery({
     queryKey: ["emailStats", user?.supplier_code],
     queryFn: () => emailApi.getStats(),
-    refetchInterval: 10000,
+    refetchInterval: 5000,
   });
 
   const { data: poStats, isLoading: poLoading } = useQuery({
     queryKey: ["poStats", user?.supplier_code],
     queryFn: () => poApi.getStats(user?.supplier_code),
-    refetchInterval: 10000,
+    refetchInterval: 5000,
   });
 
   const { data: recentEmails } = useQuery({
@@ -32,7 +32,7 @@ export default function SupplierDashboard() {
         vendor_code: user?.supplier_code,
         per_page: 5,
       }),
-    refetchInterval: 10000,
+    refetchInterval: 5000,
   });
 
   const isLoading = emailLoading || poLoading;

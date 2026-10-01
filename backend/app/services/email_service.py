@@ -431,6 +431,11 @@ async def process_and_save(
         ]
         effective_pos = valid_pos if valid_pos else parsed_pos
 
+        # Guard: never persist non-XML emails if no valid POs could be extracted
+        if not effective_pos and not classification.xml_attachment_indices:
+            logger.info("process_and_save: Skipping non-XML email with 0 POs: subject=%r", decoded.subject)
+            return {"status": "skipped", "reason": "No POs found in non-XML email"}
+
         # 1. Save the email record — COMMITTED if POs extracted, ERROR if none
         status = "COMMITTED" if effective_pos else "ERROR"
         err_msg = None if effective_pos else "No purchase orders extracted from email body or attachments"

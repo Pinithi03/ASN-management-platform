@@ -350,7 +350,7 @@ async def test_pipeline(
     """Test the full IMAP → parse → DB pipeline (no Celery)."""
     from app.email.imap_client import IMAPClient, IMAPConfig
     from app.email.mime_decoder import decode
-    from app.email.classifier import classify
+    from app.email.classifier import classify, validate_order_email
     from app.email.parsers import parse
     from app.services.email_service import process_and_save
 
@@ -392,8 +392,26 @@ async def test_pipeline(
 
         for raw in raw_emails:
             decoded = decode(raw.raw)
-            classification = classify(decoded)
+            is_valid, val_reason, classification = validate_order_email(decoded)
+            if not is_valid:
+                logger.info(
+                    "test_pipeline: Skipping non-order email UID %s: %s",
+                    raw.uid,
+                    val_reason,
+                )
+                client.mark_as_read(raw.uid)
+                continue
+
             parsed_pos = parse(decoded, classification)
+
+            # Skip persistence if no POs were found and there are no XML attachments
+            if not parsed_pos and not classification.xml_attachment_indices:
+                logger.info(
+                    "test_pipeline: Skipping non-XML email with 0 POs: subject=%r",
+                    decoded.subject,
+                )
+                client.mark_as_read(raw.uid)
+                continue
 
             try:
                 db_result = await process_and_save(

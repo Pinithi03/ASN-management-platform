@@ -15,25 +15,25 @@ export default function AdminDashboard() {
   const { data: emailStats, isLoading: emailLoading } = useQuery({
     queryKey: ["emailStats"],
     queryFn: () => emailApi.getStats(),
-    refetchInterval: 10000,
+    refetchInterval: 5000,
   });
 
   const { data: poStats, isLoading: poLoading } = useQuery({
     queryKey: ["poStats"],
     queryFn: () => poApi.getStats(),
-    refetchInterval: 10000,
+    refetchInterval: 5000,
   });
 
   const { data: recentEmails } = useQuery({
     queryKey: ["recentEmails"],
     queryFn: () => emailApi.list({ per_page: 5 }),
-    refetchInterval: 10000,
+    refetchInterval: 5000,
   });
 
   const { data: recentAuditLogs } = useQuery({
     queryKey: ["recentAuditLogs"],
     queryFn: () => auditApi.list({ per_page: 5 }),
-    refetchInterval: 10000,
+    refetchInterval: 5000,
   });
 
   const isLoading = emailLoading || poLoading;
