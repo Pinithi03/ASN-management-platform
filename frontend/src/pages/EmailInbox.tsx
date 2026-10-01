@@ -46,7 +46,7 @@ export default function EmailInbox() {
   }, [search, poNumberFilter, effectiveVendorCode]);
 
   // ─── Queries ────────────────────────────────────────────────
-  const { data: emailsData, isLoading } = useQuery({
+  const { data: emailsData, isLoading, isFetching } = useQuery({
     queryKey: ["emails", search, poNumberFilter, effectiveVendorCode, page, user?.role],
     queryFn: () =>
       emailApi.list({
@@ -54,10 +54,11 @@ export default function EmailInbox() {
         po_number: poNumberFilter || undefined,
         vendor_code: effectiveVendorCode || undefined,
         page,
-        per_page: 15,
+        per_page: 50,
       }),
     placeholderData: (previousData) => previousData,
-    refetchInterval: 10000,
+    refetchInterval: 5000, // Continuous autonomous polling every 5s
+    refetchIntervalInBackground: true,
   });
 
   const { data: selectedEmail, isLoading: isDetailLoading } = useQuery({
@@ -65,6 +66,10 @@ export default function EmailInbox() {
     queryFn: () => emailApi.getById(selectedEmailId!),
     enabled: !!selectedEmailId,
     staleTime: 60000,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === "QUEUED" ? 3000 : false;
+    },
   });
 
   // ─── Instant Mailbox Sync ────────────────────────────────────
@@ -102,7 +107,12 @@ export default function EmailInbox() {
   };
 
   const emails = emailsData?.items ?? [];
+  const totalEmails = emailsData?.total ?? 0;
   const totalPages = emailsData?.pages ?? 1;
+
+  const startItem = totalEmails === 0 ? 0 : (page - 1) * 50 + 1;
+  const endItem = Math.min(page * 50, totalEmails);
+  const paginationText = totalEmails === 0 ? "0 of 0" : `${startItem.toLocaleString()}–${endItem.toLocaleString()} of ${totalEmails.toLocaleString()}`;
 
   return (
     <div className="p-6 space-y-6">
@@ -119,6 +129,10 @@ export default function EmailInbox() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <div className="hidden sm:flex items-center gap-2 px-3 py-2 bg-emerald-50 text-emerald-800 text-xs font-semibold rounded-lg border border-emerald-200 shadow-2xs">
+            <span className={`w-2 h-2 rounded-full ${isFetching ? "bg-emerald-500 animate-ping" : "bg-emerald-500 animate-pulse"}`} />
+            <span>Auto-Sync Active (Every 5s)</span>
+          </div>
           <button
             onClick={handleSyncMailbox}
             disabled={isSyncing}
@@ -126,10 +140,10 @@ export default function EmailInbox() {
                 ? "bg-blue-600 hover:bg-blue-700 active:bg-blue-800"
                 : "bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800"
               } disabled:opacity-60`}
-            title="Immediately check mailbox for new unread order emails"
+            title="Immediately trigger an emergency mailbox check"
           >
             <RefreshCw className={`w-4 h-4 ${isSyncing ? "animate-spin" : ""}`} />
-            {isSyncing ? "Fetching Mailbox..." : "Fetch & Sync Emails"}
+            {isSyncing ? "Fetching Mailbox..." : "Fetch Now (Manual)"}
           </button>
         </div>
       </div>
@@ -250,6 +264,34 @@ export default function EmailInbox() {
             </div>
           ) : (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              {/* Google-Style Top Pagination Toolbar */}
+              <div className="flex items-center justify-end px-3 py-2 border-b border-gray-200/90 bg-white select-none">
+                {/* Google-style Pagination Controls: 1–50 of 4,069  <  > */}
+                <div className="flex items-center gap-1 text-xs text-gray-600">
+                  <span className="px-2 font-normal tracking-tight text-gray-600">
+                    {paginationText}
+                  </span>
+                  <button
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page <= 1}
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+                    title="Newer"
+                    aria-label="Newer emails"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={page >= totalPages}
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+                    title="Older"
+                    aria-label="Older emails"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -357,30 +399,36 @@ export default function EmailInbox() {
                 </table>
               </div>
 
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
-                  <p className="text-xs text-gray-500">
-                    Page {page} of {totalPages} ({emailsData?.total} total emails)
-                  </p>
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
-                      disabled={page <= 1}
-                      className="p-1.5 rounded-lg border border-gray-300 disabled:opacity-40 hover:bg-gray-100 transition-colors"
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                      disabled={page >= totalPages}
-                      className="p-1.5 rounded-lg border border-gray-300 disabled:opacity-40 hover:bg-gray-100 transition-colors"
-                    >
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                  </div>
+              {/* Google-Style Bottom Pagination Footer */}
+              <div className="flex items-center justify-between px-4 py-2.5 border-t border-gray-200 bg-gray-50/70 select-none">
+                <div className="text-xs text-gray-500">
+                  <span className="font-semibold text-gray-700">{totalEmails.toLocaleString()} total emails</span>
                 </div>
-              )}
+
+                <div className="flex items-center gap-1 text-xs text-gray-600">
+                  <span className="px-2 font-normal tracking-tight text-gray-600">
+                    {paginationText}
+                  </span>
+                  <button
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page <= 1}
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-200/70 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+                    title="Newer"
+                    aria-label="Newer emails"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={page >= totalPages}
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-200/70 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+                    title="Older"
+                    aria-label="Older emails"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>

@@ -58,12 +58,14 @@ export default function PurchaseOrders() {
         supplier_id: supplierId,
       }),
     placeholderData: (previousData) => previousData,
-    refetchInterval: 10000,
+    refetchInterval: 5000,
+    refetchIntervalInBackground: true,
   });
 
   const { data: stats } = useQuery({
     queryKey: ["poStats", supplierId],
     queryFn: () => poApi.getStats(supplierId),
+    refetchInterval: 5000,
   });
 
   const orders: PurchaseOrder[] = data?.items || [];

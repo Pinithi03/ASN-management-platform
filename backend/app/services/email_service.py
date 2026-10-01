@@ -325,11 +325,18 @@ async def save_purchase_order(
         supp = supp_res.scalar_one_or_none()
         if supp:
             resolved_supplier_id = supp.id
+            if (not supp.name or supp.name.startswith("Supplier ")) and parsed_po.supplier_name:
+                supp.name = parsed_po.supplier_name.strip()
+            if not supp.address and parsed_po.destination:
+                supp.address = parsed_po.destination.strip()
         else:
             new_supp = Supplier(
                 supplier_code=parsed_po.supplier_code,
-                name=parsed_po.supplier_name or f"Supplier {parsed_po.supplier_code}",
+                name=parsed_po.supplier_name.strip() if parsed_po.supplier_name else f"Supplier {parsed_po.supplier_code}",
                 email=f"supplier_{supp_clean or 'unknown'}@oniverse.local",
+                address=parsed_po.destination.strip() if parsed_po.destination else None,
+                country="Sri Lanka",
+                category="Textiles & Garments",
             )
             db.add(new_supp)
             await db.flush()
@@ -479,6 +486,11 @@ async def process_and_save(
             if p.line_items or (p.total_quantity and p.total_quantity > 0) or (p.total_value and p.total_value > 0)
         ]
         effective_pos = valid_pos if valid_pos else parsed_pos
+
+        # Guard: never persist non-XML emails if no valid POs could be extracted
+        if not effective_pos and not classification.xml_attachment_indices:
+            logger.info("process_and_save: Skipping non-XML email with 0 POs: subject=%r", decoded.subject)
+            return {"status": "skipped", "reason": "No POs found in non-XML email"}
 
         # 1. Save the email record - COMMITTED if POs extracted, ERROR if none
         status = "COMMITTED" if effective_pos else "ERROR"

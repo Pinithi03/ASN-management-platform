@@ -21,7 +21,7 @@ from celery import shared_task
 
 from app.email.imap_client import IMAPClient, IMAPConfig
 from app.email.mime_decoder import decode
-from app.email.classifier import classify, EmailFormat
+from app.email.classifier import classify, validate_order_email, EmailFormat
 from app.email.parsers import parse
 
 logger = logging.getLogger(__name__)
@@ -128,9 +128,8 @@ def poll_mailboxes(self) -> dict:
         logger.error("IMAP credentials not configured — skipping poll")
         return {"status": "skipped", "reason": "no_credentials"}
 
-    # Company ID for this mailbox — from env for now, will come from
-    # per-plant config when multi-plant support is added.
-    company_id = os.getenv("DEFAULT_COMPANY_ID", "")
+    # Company ID for this mailbox — from env with default fallback
+    company_id = os.getenv("DEFAULT_COMPANY_ID") or "00000000-0000-0000-0000-000000000001"
 
     existing_ids: set[str] = set()
     try:
@@ -147,6 +146,21 @@ def poll_mailboxes(self) -> dict:
 
             dispatched = 0
             for raw_email in raw_emails:
+                # Fast pre-validation: only dispatch genuine order emails (XML attached or valid HTML order)
+                try:
+                    decoded = decode(raw_email.raw)
+                    is_valid, val_reason, _ = validate_order_email(decoded)
+                    if not is_valid:
+                        logger.info(
+                            "poll_mailboxes: Skipping non-order email UID %s: %s",
+                            raw_email.uid,
+                            val_reason,
+                        )
+                        client.mark_as_read(raw_email.uid)
+                        continue
+                except Exception as val_err:
+                    logger.warning("Pre-validation error for UID %s: %s", raw_email.uid, val_err)
+
                 email_tracking_id = str(uuid.uuid4())
 
                 # Base64-encode bytes → string so JSON serializer can
@@ -194,32 +208,14 @@ def process_inbound_email(
 
     Steps:
       1. MIME decode
-      2. Classify (XML vs HTML vs UNKNOWN)
-      3. Parse PO data
-      4. Save to DB (email_records + parsed_data + purchase_orders)
-
-    Parameters
-    ----------
-    raw_bytes : bytes | str
-        Full RFC-5322 email message. Arrives as a base64-encoded string
-        from the JSON-serialized Celery message; decoded back to bytes here.
-    uid : str
-        IMAP UID (base64-encoded) for reference.
-    tracking_id : str
-        UUID for tracking this email through the pipeline.
-    company_id : str
-        Company UUID — which plant this email belongs to.
-
-    Returns
-    -------
-    dict
-        Processing result with status and parsed data summary.
+      2. Validate order email (XML attachment or valid HTML order)
+      3. Classify (XML vs HTML vs MIXED)
+      4. Parse PO data
+      5. Save to DB (email_records + parsed_data + purchase_orders)
     """
     logger.info("Processing email: tracking_id=%s, uid=%s", tracking_id, uid)
 
     # ── Decode base64 back to raw bytes ─────────────────────────
-    # Celery's JSON serializer can't handle bytes, so poll_mailboxes
-    # base64-encodes them before dispatch. Undo that here.
     if isinstance(raw_bytes, str):
         raw_bytes = base64.b64decode(raw_bytes)
     if isinstance(uid, str) and uid:
@@ -240,8 +236,21 @@ def process_inbound_email(
             len(decoded.attachments),
         )
 
-        # Stage 2: Classify
-        classification = classify(decoded)
+        # Stage 2: Validate order email
+        is_valid, val_reason, classification = validate_order_email(decoded)
+        if not is_valid:
+            logger.info(
+                "process_inbound_email: Rejected non-order email: tracking_id=%s, reason=%s",
+                tracking_id,
+                val_reason,
+            )
+            return {
+                "status": "rejected",
+                "tracking_id": tracking_id,
+                "subject": decoded.subject,
+                "reason": val_reason,
+            }
+
         logger.info(
             "Classified: format=%s, confidence=%s, reason=%s",
             classification.format.value,
@@ -253,19 +262,30 @@ def process_inbound_email(
         parsed_pos = parse(decoded, classification)
         logger.info("Parsed %d PO(s)", len(parsed_pos))
 
+        # Do not persist non-XML emails if no purchase orders could be found
+        if not parsed_pos and not classification.xml_attachment_indices:
+            logger.info(
+                "Skipping DB save: No POs found in non-XML email: subject=%r",
+                decoded.subject,
+            )
+            return {
+                "status": "no_po_found",
+                "tracking_id": tracking_id,
+                "subject": decoded.subject,
+                "format": classification.format.value,
+                "reason": "No purchase orders extracted from non-XML email",
+            }
+
         # Stage 4: Persist to DB
-        if company_id:
-            try:
-                db_result = asyncio.run(
-                    _persist_email(decoded, classification, parsed_pos, company_id)
-                )
-                logger.info("Saved to DB: %s", db_result)
-            except Exception as db_err:
-                logger.exception("DB save failed — returning parse result without persistence")
-                db_result = {"db_error": str(db_err)}
-        else:
-            logger.warning("No company_id — skipping DB persistence")
-            db_result = {"skipped": "no_company_id"}
+        target_company_id = company_id or os.getenv("DEFAULT_COMPANY_ID") or "00000000-0000-0000-0000-000000000001"
+        try:
+            db_result = asyncio.run(
+                _persist_email(decoded, classification, parsed_pos, target_company_id)
+            )
+            logger.info("Saved to DB: %s", db_result)
+        except Exception as db_err:
+            logger.exception("DB save failed — returning parse result without persistence")
+            db_result = {"db_error": str(db_err)}
 
         if not parsed_pos:
             return {
@@ -304,20 +324,20 @@ def process_inbound_email(
         logger.exception("Failed to process email: tracking_id=%s", tracking_id)
 
         # Try to save the error record to DB
-        if company_id:
-            try:
-                decoded_for_error = decode(raw_bytes)
-                classification_for_error = classify(decoded_for_error)
-                asyncio.run(
-                    _persist_error(
-                        decoded_for_error,
-                        classification_for_error,
-                        company_id,
-                        str(e),
-                    )
+        target_company_id = company_id or os.getenv("DEFAULT_COMPANY_ID") or "00000000-0000-0000-0000-000000000001"
+        try:
+            decoded_for_error = decode(raw_bytes)
+            classification_for_error = classify(decoded_for_error)
+            asyncio.run(
+                _persist_error(
+                    decoded_for_error,
+                    classification_for_error,
+                    target_company_id,
+                    str(e),
                 )
-            except Exception:
-                logger.exception("Failed to save error record to DB")
+            )
+        except Exception:
+            logger.exception("Failed to save error record to DB")
 
         return {
             "status": "error",

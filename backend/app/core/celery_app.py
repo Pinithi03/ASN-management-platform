@@ -59,10 +59,10 @@ celery.conf.task_routes = {
 }
 
 # ── Beat Schedule (Periodic Tasks) ──────────────────────────────
-POLL_INTERVAL = int(os.getenv("EMAIL_POLL_INTERVAL", "10"))
+POLL_INTERVAL = int(os.getenv("EMAIL_POLL_INTERVAL", os.getenv("EMAIL_POLL_INTERVAL_SECONDS", "5")))
 
 celery.conf.beat_schedule = {
-    "poll-mailboxes-every-10s": {
+    "poll-mailboxes-every-5s": {
         "task": "email.poll_mailboxes",
         "schedule": POLL_INTERVAL,  # seconds
         "options": {"queue": "email"},

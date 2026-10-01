@@ -64,11 +64,13 @@ async def _continuous_imap_poller() -> None:
                     raw_emails = await asyncio.to_thread(_fetch_unprocessed)
                     if raw_emails:
                         print(f"[IMAP Poller] Detected {len(raw_emails)} new email(s) in inbox. Processing...")
+                        from app.email.classifier import validate_order_email
                         for raw in raw_emails:
                             try:
                                 decoded = decode(raw.raw)
-                                # Filter non-order system messages (e.g. Google security alerts)
-                                if "google" in decoded.from_address.lower() or "alert" in (decoded.subject or "").lower():
+                                is_valid, val_reason, cls = validate_order_email(decoded)
+                                if not is_valid:
+                                    print(f"[IMAP Poller] Skipping non-order email: {decoded.subject} ({val_reason})")
                                     continue
 
                                 # Skip duplicates
@@ -79,8 +81,11 @@ async def _continuous_imap_poller() -> None:
                                     if dup.scalar_one_or_none():
                                         continue
 
-                                cls = classify(decoded)
                                 pos = parse(decoded, cls)
+                                if not pos and not cls.xml_attachment_indices:
+                                    print(f"[IMAP Poller] Skipping non-XML email with 0 POs: {decoded.subject}")
+                                    continue
+
                                 res = await process_and_save(
                                     db,
                                     decoded,
