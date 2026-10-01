@@ -21,26 +21,35 @@ import { format } from "date-fns";
 import { emailApi } from "@/services/emailApi";
 import type { EmailAttachment, ParsedData } from "@/types/email";
 
-const PO_FIELDS: { key: string; label: string }[] = [
+const PO_FIELDS: { key: string; label: string; fallbackKey?: string }[] = [
   { key: "po_number", label: "PO Number" },
-  { key: "supplier_code", label: "Supplier Code" },
+  { key: "partner_id", label: "PartnerId", fallbackKey: "supplier_code" },
   { key: "supplier_name", label: "Supplier" },
   { key: "buyer_name", label: "Buyer" },
+  { key: "contact_person", label: "ContactPerson" },
   { key: "order_date", label: "Order Date" },
   { key: "delivery_date", label: "Delivery Date" },
   { key: "destination", label: "Destination" },
+  { key: "delivery_address", label: "DeliveryAddress" },
+  { key: "payment", label: "Payment" },
+  { key: "address", label: "Address", fallbackKey: "supplier_address" },
+  { key: "zipcode", label: "ZIPCode", fallbackKey: "supplier_zipcode" },
+  { key: "city", label: "City", fallbackKey: "supplier_city" },
+  { key: "town", label: "Town", fallbackKey: "supplier_town" },
+  { key: "country", label: "Country", fallbackKey: "supplier_country" },
   { key: "currency", label: "Currency" },
   { key: "total_quantity", label: "Total Qty" },
   { key: "total_value", label: "Total Value" },
   { key: "source_filename", label: "Source File" },
 ];
 
-const LINE_ITEM_COLUMNS: { key: string; label: string; numeric?: boolean }[] = [
-  { key: "line_number", label: "#" },
-  { key: "style", label: "Style" },
-  { key: "description", label: "Description" },
+const LINE_ITEM_COLUMNS: { key: string; label: string; numeric?: boolean; fallbackKey?: string }[] = [
+  { key: "order_line_number", label: "OrderLineNumber", fallbackKey: "line_number" },
+  { key: "item_code", label: "ItemCode" },
+  { key: "partner_item_code", label: "PartnerItemCode", fallbackKey: "style" },
+  { key: "item_description", label: "ItemDescription", fallbackKey: "description" },
   { key: "color", label: "Color" },
-  { key: "size", label: "Size" },
+  { key: "qty_unit", label: "QtyUnit", fallbackKey: "size" },
   { key: "quantity", label: "Qty", numeric: true },
   { key: "unit_price", label: "Unit Price", numeric: true },
 ];
@@ -233,12 +242,17 @@ function AttachmentPreview({
 function ParsedDataSection({ data }: { data: ParsedData }) {
   const raw = data.raw_extracted ?? {};
   const lineItems = Array.isArray(raw.line_items)
-    ? raw.line_items.filter(
-        (item): item is Record<string, unknown> => typeof item === "object" && item !== null
-      )
+    ? raw.line_items
+        .filter(
+          (item): item is Record<string, unknown> => typeof item === "object" && item !== null
+        )
+        .filter((item) => Number(item.quantity ?? item.qty ?? 0) > 0)
     : [];
-  const fields = PO_FIELDS.filter(
-    ({ key }) => raw[key] !== undefined && raw[key] !== null && raw[key] !== ""
+  const fields = PO_FIELDS.map(({ key, label, fallbackKey }) => {
+    const val = raw[key] ?? (fallbackKey ? raw[fallbackKey] : undefined);
+    return { key, label, value: val };
+  }).filter(
+    ({ value }) => value !== undefined && value !== null && value !== ""
   );
   const validationErrors = data.validation_errors ?? [];
 
@@ -256,14 +270,14 @@ function ParsedDataSection({ data }: { data: ParsedData }) {
 
       {fields.length > 0 && (
         <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-3 text-sm">
-          {fields.map(({ key, label }) => {
+          {fields.map(({ key, label, value }) => {
             const isMoney = key === "total_value";
             const currency = String(raw.currency || "USD");
             return (
               <div key={key} className="min-w-0">
                 <dt className="text-gray-500">{label}</dt>
                 <dd className={`break-words ${isMoney ? "text-gray-950 font-bold" : "text-gray-900"}`}>
-                  {isMoney ? formatMoney(raw[key], currency) : displayValue(raw[key])}
+                  {isMoney ? formatMoney(value, currency) : displayValue(value)}
                 </dd>
               </div>
             );
@@ -308,6 +322,7 @@ function ParsedDataSection({ data }: { data: ParsedData }) {
                     {LINE_ITEM_COLUMNS.map((col) => {
                       const isMoney = col.key === "unit_price";
                       const currency = String(raw.currency || "USD");
+                      const val = item[col.key] ?? (col.fallbackKey ? item[col.fallbackKey] : undefined);
                       return (
                         <td
                           key={col.key}
@@ -315,7 +330,7 @@ function ParsedDataSection({ data }: { data: ParsedData }) {
                             isMoney ? "font-semibold text-gray-900" : ""
                           }`}
                         >
-                          {isMoney ? formatMoney(item[col.key], currency) : displayValue(item[col.key])}
+                          {isMoney ? formatMoney(val, currency) : displayValue(val)}
                         </td>
                       );
                     })}
@@ -427,10 +442,9 @@ export default function EmailDetailPage() {
     { label: "To", value: email.to_address },
     { label: "Received", value: formatDate(email.received_at) },
     { label: "Fetched", value: formatDate(email.fetched_at) },
-    { label: "Processed", value: formatDate(email.processed_at) },
-    { label: "Direction", value: email.direction },
-    { label: "Type", value: email.email_type },
-    { label: "Retries", value: email.retry_count },
+    { label: "LegalName", value: email.xml_legal_name },
+    { label: "IungoEmailAddress", value: email.xml_iungo_email_address },
+    { label: "TransmissionDate", value: email.xml_transmission_date },
   ];
 
   return (
@@ -507,7 +521,7 @@ export default function EmailDetailPage() {
           {details.map((d) => (
             <div key={d.label} className="min-w-0">
               <dt className="text-gray-500">{d.label}</dt>
-              <dd className="text-gray-900 break-words">{displayValue(d.value)}</dd>
+              <dd className="text-gray-900 break-words font-medium">{displayValue(d.value)}</dd>
             </div>
           ))}
           <div className="sm:col-span-2 lg:col-span-4 min-w-0">

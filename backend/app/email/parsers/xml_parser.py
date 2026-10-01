@@ -78,11 +78,35 @@ def _parse_sd_data_slice_all(root: etree._Element, filename: str) -> list[Parsed
     """
     results: list[ParsedPO] = []
 
+<<<<<<< HEAD
     # Common Company header
     buyer_name = ""
     header = root.xpath(".//SdCompanyHeader")
     if header:
         buyer_name = _xpath_text(header[0], ".//LegalName") or ""
+=======
+    po = ParsedPO(raw_source="xml", source_filename=filename)
+
+    # Company header — extract LegalName, IungoEmailAddress, and TransmissionDate
+    header = root.xpath(".//SdCompanyHeader")
+    if header:
+        po.buyer_name = _xpath_text(header[0], ".//LegalName") or ""
+        po.legal_name = po.buyer_name  # Mirror for explicit field
+        po.iungo_email_address = _xpath_text(header[0], ".//IungoEmailAddress") or ""
+        po.transmission_date = _xpath_text(header[0], ".//TransmissionDate") or ""
+
+    # Also try root-level IungoEmailAddress if not found in header
+    if not po.iungo_email_address:
+        po.iungo_email_address = _xpath_text(root, ".//IungoEmailAddress") or ""
+
+    # Also try root-level LegalName if not found in header
+    if not po.legal_name:
+        po.legal_name = _xpath_text(root, ".//LegalName") or ""
+
+    # Also try root-level TransmissionDate if not found in header
+    if not po.transmission_date:
+        po.transmission_date = _xpath_text(root, ".//TransmissionDate") or ""
+>>>>>>> 79ee190 (fix(email): filter 0-qty cancelled line items and support PO updates)
 
     # Common Partner info (supplier)
     global_supplier_name = ""
@@ -90,9 +114,21 @@ def _parse_sd_data_slice_all(root: etree._Element, filename: str) -> list[Parsed
     global_destination = ""
     partner = root.xpath(".//SdPartner")
     if partner:
+<<<<<<< HEAD
         global_supplier_name = _xpath_text(partner[0], ".//LegalName") or ""
         global_supplier_code = _xpath_text(partner[0], ".//PartnerId") or ""
         global_destination = _xpath_text(partner[0], ".//Address") or ""
+=======
+        p = partner[0]
+        po.supplier_name = _xpath_text(p, ".//LegalName") or ""
+        po.supplier_code = _xpath_text(p, ".//PartnerId") or ""
+        po.destination = _xpath_text(p, ".//Address") or ""
+        po.address = (_xpath_text(p, ".//Address") or "").strip()
+        po.zipcode = (_xpath_text(p, ".//ZIPCode") or _xpath_text(p, ".//Zipcode") or "").strip()
+        po.city = (_xpath_text(p, ".//City") or "").strip()
+        po.town = (_xpath_text(p, ".//Town") or "").strip()
+        po.country = (_xpath_text(p, ".//Country") or "").strip()
+>>>>>>> 79ee190 (fix(email): filter 0-qty cancelled line items and support PO updates)
 
     # ─── Format A: SdOrder + SdOrderLine (Purchase Orders from Iungo/Calzedonia) ───
     order_elements = root.xpath(".//SdOrder")
@@ -102,6 +138,7 @@ def _parse_sd_data_slice_all(root: etree._Element, filename: str) -> list[Parsed
             if not po_num:
                 continue
 
+<<<<<<< HEAD
             po = ParsedPO(raw_source="xml", source_filename=filename)
             po.po_number = po_num
             po.buyer_name = buyer_name or "Calzedonia Group"
@@ -115,6 +152,80 @@ def _parse_sd_data_slice_all(root: etree._Element, filename: str) -> list[Parsed
                 _xpath_text(order_elem, ".//PartnerId")
                 or global_supplier_code
                 or "0000058376"
+=======
+        if not po.supplier_code:
+            po.supplier_code = _xpath_text(order_elem, ".//PartnerId") or ""
+        po.partner_id = _xpath_text(order_elem, ".//PartnerId") or po.supplier_code or _xpath_text(root, ".//PartnerId") or ""
+        po.supplier_code = po.partner_id
+        po.contact_person = (_xpath_text(order_elem, ".//ContactPerson") or _xpath_text(root, ".//ContactPerson") or "").strip()
+        po.payment = (_xpath_text(order_elem, ".//Payment") or _xpath_text(root, ".//Payment") or "").strip()
+        po.delivery_address = (_xpath_text(order_elem, ".//DeliveryAddress") or "").strip()
+
+        # Order lines
+        lines = order_elem.xpath(".//SdOrderLine")
+        for i, line_elem in enumerate(lines, start=1):
+            oln = (_xpath_text(line_elem, ".//OrderLineNumber") or "").strip()
+            item_code = (_xpath_text(line_elem, ".//ItemCode") or "").strip()
+            partner_item_code = (_xpath_text(line_elem, ".//PartnerItemCode") or "").strip()
+            item_desc = (_xpath_text(line_elem, ".//ItemDescription") or "").strip()
+            qty_unit = (_xpath_text(line_elem, ".//QtyUnit") or "").strip()
+            qty = _xpath_int(line_elem, ".//Qty") or 0
+            price = _xpath_float(line_elem, ".//Price") or 0.0
+
+            # Ignore cancelled / 0-quantity line items
+            if qty <= 0:
+                continue
+
+            li = POLineItem(
+                line_number=oln or i,
+                order_line_number=oln or str(i),
+                item_code=item_code,
+                partner_item_code=partner_item_code,
+                item_description=item_desc,
+                qty_unit=qty_unit,
+                style=partner_item_code or item_code,
+                description=item_desc,
+                color="",
+                size=qty_unit,
+                quantity=qty,
+                unit_price=price,
+            )
+
+            # Try to extract color from AuxRow2 or ItemDescription
+            aux_color = (_xpath_text(line_elem, ".//AuxRow2") or "").strip()
+            if aux_color:
+                li.color = aux_color
+            elif "," in item_desc:
+                parts = [p.strip() for p in item_desc.split(",")]
+                if len(parts) >= 2:
+                    li.color = parts[1]  # second part is usually color
+
+            # Delivery date per line overrides order-level
+            line_delivery = _xpath_text(line_elem, ".//DeliveryDate")
+            if line_delivery and not po.delivery_date:
+                po.delivery_date = line_delivery
+
+            po.line_items.append(li)
+
+        # Fallback to line-item DeliveryAddress if empty on order
+        if not po.delivery_address:
+            for line_elem in lines:
+                da = (_xpath_text(line_elem, ".//DeliveryAddress") or "").strip()
+                if da:
+                    po.delivery_address = da
+                    break
+        if not po.delivery_address:
+            po.delivery_address = (_xpath_text(root, ".//DeliveryAddress") or "").strip()
+
+        po.total_quantity = sum(li.quantity for li in po.line_items)
+        po.total_value = round(sum(li.quantity * li.unit_price for li in po.line_items), 2)
+
+        if po.po_number:
+            logger.info(
+                "SdOrder parsed: PO=%s, supplier=%s, %d lines, total_qty=%d, total_value=%.2f",
+                po.po_number, po.supplier_code, len(po.line_items),
+                po.total_quantity, po.total_value,
+>>>>>>> 79ee190 (fix(email): filter 0-qty cancelled line items and support PO updates)
             )
             po.supplier_name = global_supplier_name or "CALZEDONIA CENTRAL HUB"
             order_deliv = _xpath_text(order_elem, ".//DeliveryAddress")
@@ -173,6 +284,7 @@ def _parse_sd_data_slice_all(root: etree._Element, filename: str) -> list[Parsed
 
                 po.line_items.append(li)
 
+<<<<<<< HEAD
             po.total_quantity = sum(li.quantity for li in po.line_items)
             po.total_value = round(sum(li.quantity * li.unit_price for li in po.line_items), 2)
             results.append(po)
@@ -188,6 +300,25 @@ def _parse_sd_data_slice_all(root: etree._Element, filename: str) -> list[Parsed
                 _xpath_text(slip_elem, ".//PartnerId")
                 or global_supplier_code
                 or "0000058376"
+=======
+            qty = _xpath_int(line_elem, ".//Qty") or 0
+            if qty <= 0:
+                continue
+
+            li = POLineItem(
+                line_number=i,
+                order_line_number=str(i),
+                item_code=(_xpath_text(line_elem, ".//ProductCode") or "").strip(),
+                partner_item_code=(_xpath_text(line_elem, ".//ProductCode") or "").strip(),
+                item_description=(_xpath_text(line_elem, ".//ProductCodePartner") or "").strip(),
+                qty_unit=(_xpath_text(line_elem, ".//AuxRow5") or "").strip(),
+                style=(_xpath_text(line_elem, ".//ProductCode") or "").strip(),
+                description=_xpath_text(line_elem, ".//ProductCodePartner") or "",
+                size=_xpath_text(line_elem, ".//AuxRow5") or "",
+                quantity=qty,
+                unit_price=_xpath_float(line_elem, ".//Price") or 0.0,
+                color="",
+>>>>>>> 79ee190 (fix(email): filter 0-qty cancelled line items and support PO updates)
             )
             slip_delivery = _xpath_text(slip_elem, ".//DeliveryDate") or ""
             packing_slip_num = _xpath_text(slip_elem, ".//PackingSlipNumber") or ""
@@ -304,11 +435,62 @@ def _parse_generic(root: etree._Element, filename: str) -> ParsedPO:
         or ""
     )
 
+<<<<<<< HEAD
     po.supplier_code = (
         _xpath_text(root, ".//SupplierCode")
         or _xpath_text(root, ".//VendorCode")
         or _xpath_text(root, ".//supplier_code")
         or "0000058376"
+=======
+    po.supplier_code = _xpath_text(root, ".//SupplierCode") \
+        or _xpath_text(root, ".//VendorCode") \
+        or _xpath_text(root, ".//supplier_code") \
+        or ""
+    po.partner_id = _xpath_text(root, ".//PartnerId") or po.supplier_code or ""
+    po.supplier_code = po.partner_id or po.supplier_code
+    po.contact_person = (_xpath_text(root, ".//ContactPerson") or "").strip()
+    po.delivery_address = (_xpath_text(root, ".//DeliveryAddress") or "").strip()
+    po.payment = (_xpath_text(root, ".//Payment") or "").strip()
+    po.address = (_xpath_text(root, ".//Address") or "").strip()
+    po.zipcode = (_xpath_text(root, ".//ZIPCode") or _xpath_text(root, ".//Zipcode") or "").strip()
+    po.city = (_xpath_text(root, ".//City") or "").strip()
+    po.town = (_xpath_text(root, ".//Town") or "").strip()
+    po.country = (_xpath_text(root, ".//Country") or "").strip()
+
+    po.supplier_name = _xpath_text(root, ".//SupplierName") \
+        or _xpath_text(root, ".//VendorName") \
+        or _xpath_text(root, ".//supplier_name") \
+        or ""
+
+    po.buyer_name = _xpath_text(root, ".//BuyerName") \
+        or _xpath_text(root, ".//buyer_name") \
+        or ""
+
+    po.order_date = _xpath_text(root, ".//OrderDate") \
+        or _xpath_text(root, ".//PODate") \
+        or _xpath_text(root, ".//order_date") \
+        or _xpath_text(root, ".//Date") \
+        or ""
+
+    po.delivery_date = _xpath_text(root, ".//DeliveryDate") \
+        or _xpath_text(root, ".//delivery_date") \
+        or _xpath_text(root, ".//RequiredDate") \
+        or ""
+
+    po.destination = _xpath_text(root, ".//Destination") \
+        or _xpath_text(root, ".//ShipTo") \
+        or _xpath_text(root, ".//destination") \
+        or ""
+
+    po.currency = _xpath_text(root, ".//Currency") \
+        or _xpath_text(root, ".//currency") \
+        or "USD"
+
+    # ── Extract line items ───────────────────────────────
+    # Search for all common line element tag names
+    line_tags = root.xpath(
+        ".//LineItem | .//Item | .//OrderLine | .//line_item | .//Line"
+>>>>>>> 79ee190 (fix(email): filter 0-qty cancelled line items and support PO updates)
     )
 
     po.supplier_name = (
@@ -357,6 +539,7 @@ def _parse_generic(root: etree._Element, filename: str) -> ParsedPO:
         line_tags = root.xpath(".//POLines/* | .//Items/* | .//OrderLines/* | .//Lines/*")
 
     for i, elem in enumerate(line_tags, start=1):
+<<<<<<< HEAD
         raw_style = (
             _xpath_text(elem, ".//Style")
             or _xpath_text(elem, ".//StyleNumber")
@@ -384,10 +567,77 @@ def _parse_generic(root: etree._Element, filename: str) -> ParsedPO:
 
     po.total_quantity = sum(li.quantity for li in po.line_items)
     po.total_value = round(sum(li.quantity * li.unit_price for li in po.line_items), 2)
+=======
+        qty = _xpath_int(elem, ".//Quantity") \
+            or _xpath_int(elem, ".//Qty") \
+            or _xpath_int(elem, ".//OrderQty") \
+            or 0
+        if qty <= 0:
+            continue
+
+        li = POLineItem(
+            line_number=_xpath_int(elem, ".//LineNumber") or i,
+            order_line_number=str(_xpath_int(elem, ".//LineNumber") or i),
+            item_code=_xpath_text(elem, ".//ItemCode") or _xpath_text(elem, ".//ProductCode") or _xpath_text(elem, ".//SKU") or "",
+            partner_item_code=_xpath_text(elem, ".//Style") or _xpath_text(elem, ".//StyleNumber") or _xpath_text(elem, ".//ArticleNumber") or "",
+            item_description=_xpath_text(elem, ".//Description") or _xpath_text(elem, ".//ItemDescription") or _xpath_text(elem, ".//ProductName") or "",
+            qty_unit=_xpath_text(elem, ".//Size") or _xpath_text(elem, ".//UOM") or "",
+            style=_xpath_text(elem, ".//Style")
+                or _xpath_text(elem, ".//StyleNumber")
+                or _xpath_text(elem, ".//ArticleNumber")
+                or _xpath_text(elem, ".//ItemCode")
+                or _xpath_text(elem, ".//ProductCode")
+                or _xpath_text(elem, ".//SKU")
+                or "",
+            color=_xpath_text(elem, ".//Color")
+                or _xpath_text(elem, ".//Colour")
+                or "",
+            size=_xpath_text(elem, ".//Size")
+                or _xpath_text(elem, ".//UOM")
+                or "",
+            quantity=qty,
+            unit_price=_xpath_float(elem, ".//UnitPrice")
+                or _xpath_float(elem, ".//Price")
+                or _xpath_float(elem, ".//Cost")
+                or 0.0,
+            description=_xpath_text(elem, ".//Description")
+                or _xpath_text(elem, ".//ItemDescription")
+                or _xpath_text(elem, ".//ProductName")
+                or "",
+        )
+        po.line_items.append(li)
+
+    # ── Try to get total from XML, otherwise compute ─────
+    if po.line_items:
+        po.total_quantity = sum(li.quantity for li in po.line_items)
+        po.total_value = round(sum(li.quantity * li.unit_price for li in po.line_items), 2)
+    else:
+        xml_total = _xpath_float(root, ".//POTotal") \
+            or _xpath_float(root, ".//TotalValue") \
+            or _xpath_float(root, ".//OrderTotal") \
+            or _xpath_float(root, ".//GrandTotal")
+        if xml_total:
+            po.total_value = xml_total
+
+        xml_qty = _xpath_int(root, ".//TotalQuantity") \
+            or _xpath_int(root, ".//TotalQty")
+        if xml_qty:
+            po.total_quantity = xml_qty
+>>>>>>> 79ee190 (fix(email): filter 0-qty cancelled line items and support PO updates)
 
     if not po.po_number:
         raise ValueError(f"No PO number found in XML: {filename}")
 
+<<<<<<< HEAD
+=======
+    logger.info(
+        "Generic XML parsed: PO=%s, supplier=%s, %d lines, total_qty=%d, total_value=%.2f",
+        po.po_number, po.supplier_code, len(po.line_items),
+        po.total_quantity,
+        po.total_value,
+    )
+
+>>>>>>> 79ee190 (fix(email): filter 0-qty cancelled line items and support PO updates)
     return po
 
 

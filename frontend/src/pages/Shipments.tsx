@@ -1549,6 +1549,7 @@ function ExcelPackingWorkflow({
           // Fetch full PO items
           try {
             const fullPo = await poApi.getById(found.id);
+<<<<<<< HEAD
             if (
               fullPo &&
               (fullPo as any).extra_data &&
@@ -1556,6 +1557,12 @@ function ExcelPackingWorkflow({
               (fullPo as any).extra_data.items.length > 0
             ) {
               const lines: PackingLineItemState[] = (fullPo as any).extra_data.items.map((it: any) => ({
+=======
+            if (fullPo && fullPo.extra_data && Array.isArray((fullPo.extra_data as any).items) && (fullPo.extra_data as any).items.length > 0) {
+              const lines: PackingLineItemState[] = (fullPo.extra_data as any).items
+                .filter((it: any) => Number(it.quantity || 0) > 0)
+                .map((it: any) => ({
+>>>>>>> 79ee190 (fix(email): filter 0-qty cancelled line items and support PO updates)
                 line_number: it.line_number || 1,
                 po_item: String(it.line_number || 1).split("-")[0].padStart(5, "0"),
                 material_code: it.material_code || "",

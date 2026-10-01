@@ -69,6 +69,10 @@ export interface EmailDetail extends EmailRecord {
   retry_count: number;
   attachments: EmailAttachment[];
   parsed_data: ParsedData[];
+  // XML company info (extracted from parsed XML)
+  xml_legal_name: string | null;
+  xml_iungo_email_address: string | null;
+  xml_transmission_date: string | null;
 }
 
 export interface PurchaseOrder {

@@ -10,7 +10,11 @@ from __future__ import annotations
 import email.utils
 import hashlib
 import logging
+<<<<<<< HEAD
 import re
+=======
+import uuid
+>>>>>>> 79ee190 (fix(email): filter 0-qty cancelled line items and support PO updates)
 from dataclasses import asdict
 from datetime import datetime, timezone, date as date_type
 from typing import Optional
@@ -24,6 +28,7 @@ from app.models.po_history import POHistory
 from app.models.parsed_data import ParsedData
 from app.models.email_attachment import EmailAttachment
 from app.models.supplier import Supplier
+from app.models.po_history import POHistory
 from app.email.mime_decoder import DecodedEmail
 from app.email.classifier import ClassificationResult
 from app.email.parsers import ParsedPO, normalize_po_number
@@ -243,6 +248,16 @@ async def save_parsed_data(
     -------
     ParsedData
     """
+    # Filter out 0 or negative quantity line items defensively
+    parsed_po.line_items = [
+        li for li in parsed_po.line_items if getattr(li, "quantity", 0) > 0
+    ]
+    if parsed_po.line_items:
+        parsed_po.total_quantity = sum(li.quantity for li in parsed_po.line_items)
+        parsed_po.total_value = round(
+            sum(li.quantity * getattr(li, "unit_price", 0.0) for li in parsed_po.line_items), 2
+        )
+
     # Convert dataclass to dict for JSONB storage
     raw_dict = asdict(parsed_po)
 
@@ -342,7 +357,9 @@ async def save_purchase_order(
             await db.flush()
             resolved_supplier_id = new_supp.id
 
-    first_item = parsed_po.line_items[0] if parsed_po.line_items else None
+    # Filter out any non-positive line items
+    active_line_items = [li for li in parsed_po.line_items if getattr(li, "quantity", 0) > 0]
+    first_item = active_line_items[0] if active_line_items else (parsed_po.line_items[0] if parsed_po.line_items else None)
     primary_style = first_item.style[:50] if first_item and first_item.style else None
     primary_desc = first_item.description if first_item and first_item.description else None
     buyer_code = (parsed_po.buyer_name or "CALZ")[:50]
@@ -350,6 +367,11 @@ async def save_purchase_order(
     items_data = [
         {
             "line_number": li.line_number,
+            "order_line_number": getattr(li, "order_line_number", None) or str(li.line_number),
+            "item_code": getattr(li, "item_code", None) or li.style,
+            "partner_item_code": getattr(li, "partner_item_code", None) or li.style,
+            "item_description": getattr(li, "item_description", None) or li.description,
+            "qty_unit": getattr(li, "qty_unit", None) or li.size,
             "material_code": li.style,
             "description": li.description,
             "color": li.color,
@@ -357,7 +379,7 @@ async def save_purchase_order(
             "quantity": li.quantity,
             "unit_price": li.unit_price,
         }
-        for li in parsed_po.line_items
+        for li in active_line_items
     ]
     order_type_str = getattr(parsed_po, "order_type", "") or "ZA6A"
     extra_info = {
@@ -391,6 +413,7 @@ async def save_purchase_order(
     ]
 
     if existing:
+<<<<<<< HEAD
         old_version = existing.version or 1
         new_version = max(old_version + 1, progressive_version) if progressive_version else (old_version + 1)
 
@@ -413,6 +436,16 @@ async def save_purchase_order(
             existing.quantity = parsed_po.total_quantity
         if parsed_po.total_value > 0:
             existing.total_value = parsed_po.total_value
+=======
+        # Update existing PO with latest email amounts and items
+        old_quantity = existing.quantity
+        old_total_value = existing.total_value
+        existing.po_number = clean_po
+        existing.version = (existing.version or 1) + 1
+        existing.status = "UPDATED" if (parsed_po.total_quantity or 0) > 0 else "CANCELLED"
+        existing.quantity = parsed_po.total_quantity
+        existing.total_value = parsed_po.total_value
+>>>>>>> 79ee190 (fix(email): filter 0-qty cancelled line items and support PO updates)
         existing.destination = parsed_po.destination or existing.destination
         existing.delivery_date = _parse_date(parsed_po.delivery_date) or existing.delivery_date
         existing.currency = parsed_po.currency or existing.currency
@@ -425,6 +458,7 @@ async def save_purchase_order(
             existing.style_number = primary_style
         if primary_desc:
             existing.description = primary_desc
+<<<<<<< HEAD
         if items_data:
             existing.extra_data = extra_info
 
@@ -443,6 +477,35 @@ async def save_purchase_order(
             logger.exception("Failed to insert POHistory for %s", existing.po_number)
         po = existing
         logger.info("Updated PO: %s (v%d, was v%d)", po.po_number, po.version, old_version)
+=======
+        existing.extra_data = extra_info
+        po = existing
+        logger.info(
+            "Updated PO: %s (v%d), qty=%s->%s, val=%s->%s",
+            po.po_number, po.version, old_quantity, po.quantity, old_total_value, po.total_value,
+        )
+
+        # Audit history log
+        try:
+            history_entry = POHistory(
+                po_id=existing.id,
+                company_id=company_id,
+                source_email_id=uuid.UUID(str(email_record_id)) if email_record_id else None,
+                version=existing.version,
+                changed_fields={
+                    "previous_quantity": old_quantity,
+                    "new_quantity": existing.quantity,
+                    "previous_total_value": float(old_total_value) if old_total_value is not None else None,
+                    "new_total_value": float(existing.total_value) if existing.total_value is not None else None,
+                    "status": existing.status,
+                    "line_items_count": len(items_data),
+                },
+                change_source="EMAIL_UPDATE",
+            )
+            db.add(history_entry)
+        except Exception as e:
+            logger.warning("Could not record POHistory for PO %s: %s", clean_po, e)
+>>>>>>> 79ee190 (fix(email): filter 0-qty cancelled line items and support PO updates)
     else:
         # Create new PO
         po = PurchaseOrder(
