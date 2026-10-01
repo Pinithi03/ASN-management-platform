@@ -209,31 +209,31 @@ async def parse_and_validate_packing_excel(
         if not row:
             continue
         row_str = " ".join([str(c or "").lower() for c in row])
-        if "p/o" in row_str or "po #" in row_str or "po item" in row_str or "cart no" in row_str:
+        if "p/o" in row_str or "po #" in row_str or "po item" in row_str or "cart no" in row_str or "order" in row_str:
             header_row_idx = row_idx
             for c_idx, cell in enumerate(row):
                 val = str(cell or "").strip().lower()
-                if "p/o" in val or "po #" in val or val == "po" or val == "order number":
-                    col_map["po_number"] = c_idx
-                elif "po item" in val or "item" in val or "line" in val:
+                if "item" in val or "line" in val:
                     col_map["po_item"] = c_idx
-                elif "pack no" in val or "slip" in val or "packing" in val:
+                elif "p/o" in val or "po" in val or "order" in val:
+                    col_map["po_number"] = c_idx
+                elif "pack" in val or "slip" in val:
                     col_map["pack_number"] = c_idx
-                elif "cart no" in val or "box" in val or "carton" in val:
+                elif "cart" in val or "box" in val:
                     col_map["carton_number"] = c_idx
-                elif "carton_ref" in val or "supplier_carton" in val or "roll" in val or "ref" in val:
+                elif "ref" in val or "roll" in val or "barcode" in val:
                     col_map["supplier_carton_ref"] = c_idx
-                elif "productcode" in val or "product code" in val or "material" in val or "item code" in val:
+                elif "product" in val or "material" in val or "style" in val or "item code" in val:
                     col_map["product_code"] = c_idx
                 elif "lot" in val or "batch" in val:
                     col_map["lot_number"] = c_idx
                 elif "width" in val or "dim" in val:
                     col_map["width"] = c_idx
-                elif val == "gw" or "gross" in val:
+                elif "gross" in val or val == "gw" or "gw" in val:
                     col_map["gross_weight"] = c_idx
-                elif val == "nw" or "net" in val:
+                elif "net" in val or val == "nw" or "nw" in val:
                     col_map["net_weight"] = c_idx
-                elif "quantity" in val or val == "qty":
+                elif "qty" in val or "quantity" in val or "pieces" in val:
                     col_map["quantity"] = c_idx
                 elif "uom" in val or "unit" in val:
                     col_map["uom"] = c_idx
@@ -278,7 +278,8 @@ async def parse_and_validate_packing_excel(
         gw = _parse_float(get_val("gross_weight"))
         nw = _parse_float(get_val("net_weight"))
         qty = _parse_float(get_val("quantity"))
-        uom = _clean_str(get_val("uom")) or "M"
+        uom_raw = _clean_str(get_val("uom")) or "M"
+        uom = "M" if uom_raw.upper() in ("MTR", "METERS", "METER", "METRE", "METRES") else uom_raw.upper()
 
         row_errors: List[str] = []
 
@@ -359,13 +360,24 @@ async def parse_and_validate_packing_excel(
             if po_obj is None:
                 group_errors.append(f"PO #{po_num} not found in database or belongs to another company")
             else:
-                if supplier_id and po_obj.supplier_id and po_obj.supplier_id != supplier_id:
+                if supplier_id and po_obj.supplier_id and str(po_obj.supplier_id) != str(supplier_id):
                     group_errors.append(f"PO #{po_num} does not belong to your supplier account")
-                po_ordered_qty = float(po_obj.quantity or 0)
+
+                # Match line item in extra_data for accurate line-level quantity check
+                po_items = (po_obj.extra_data or {}).get("items", []) if isinstance(po_obj.extra_data, dict) else []
+                item_info = next(
+                    (it for it in po_items if str(it.get("line_number", "")).split("-")[0].zfill(5) == po_item.split("-")[0].zfill(5)),
+                    None
+                )
+                if item_info and item_info.get("quantity") is not None:
+                    po_ordered_qty = float(item_info["quantity"])
+                else:
+                    po_ordered_qty = float(po_obj.quantity or 0)
+
                 po_open_balance = po_ordered_qty
-                if total_line_qty > po_ordered_qty > 0:
+                if po_ordered_qty > 0 and total_line_qty > po_ordered_qty:
                     group_errors.append(
-                        f"Packed qty ({total_line_qty}) exceeds PO ordered quantity ({po_ordered_qty})"
+                        f"Packed qty ({total_line_qty}) exceeds PO ordered quantity ({po_ordered_qty}) for item {po_item}"
                     )
 
         is_group_valid = len(group_errors) == 0
@@ -464,7 +476,7 @@ def generate_open_lines_template(open_lines: List[Dict[str, Any]]) -> bytes:
             item.get("gw", ""),
             item.get("nw", ""),
             item.get("quantity", ""),
-            item.get("uom", "MTR"),
+            item.get("uom", "M"),
         ]
         ws.append(row_data)
 

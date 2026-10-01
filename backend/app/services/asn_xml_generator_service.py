@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import os
 import re
-from datetime import datetime
+from datetime import date, datetime
 from io import BytesIO
 from typing import Any, Optional
 
@@ -103,15 +103,25 @@ def generate_asn_xml(
     transmission_date_str = now.strftime("%d-%m-%Y %H:%M")
 
     def format_date(d: Any) -> str:
-        if isinstance(d, datetime):
+        if isinstance(d, (date, datetime)):
             return d.strftime("%d-%m-%Y")
         if isinstance(d, str):
+            s = d.strip()
             # If already DD-MM-YYYY
-            if re.match(r"^\d{2}-\d{2}-\d{4}$", d.strip()):
-                return d.strip()
-            # If YYYY-MM-DD
+            if re.match(r"^\d{2}-\d{2}-\d{4}$", s):
+                return s
+            # Strip time part if present
+            if "T" in s:
+                s = s.split("T")[0]
+            if " " in s and "-" in s:
+                s = s.split(" ")[0]
             try:
-                parsed = datetime.strptime(d.strip(), "%Y-%m-%d")
+                parsed = datetime.strptime(s, "%Y-%m-%d")
+                return parsed.strftime("%d-%m-%Y")
+            except Exception:
+                pass
+            try:
+                parsed = datetime.strptime(s, "%d/%m/%Y")
                 return parsed.strftime("%d-%m-%Y")
             except Exception:
                 pass
@@ -217,7 +227,7 @@ def generate_asn_xml(
         etree.SubElement(line_elem, "Note").text = ""
         etree.SubElement(line_elem, "AuxRow1").text = str(group_id)
         etree.SubElement(line_elem, "AuxRow2").text = str(box.get("hu_number") or "")
-        etree.SubElement(line_elem, "AuxRow3").text = "BOX"
+        etree.SubElement(line_elem, "AuxRow3").text = str(box.get("packaging_type") or "BOX").upper()
         etree.SubElement(line_elem, "AuxRow4").text = str(box.get("supplier_carton_ref") or box.get("lot_number") or "")
         etree.SubElement(line_elem, "AuxRow5").text = uom
         etree.SubElement(line_elem, "AuxRowNum1").text = str(box_seq)

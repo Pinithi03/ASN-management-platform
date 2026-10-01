@@ -47,15 +47,24 @@ async def _continuous_imap_poller() -> None:
                     use_ssl=settings.IMAP_USE_SSL,
                 )
 
-                def _fetch_unread():
-                    with IMAPClient(config) as client:
-                        return client.fetch_unread(limit=20)
+                async with async_session_factory() as db:
+                    # Query existing message_ids to detect new/unprocessed emails even if previously opened in Gmail
+                    stmt = select(EmailRecord.message_id).where(EmailRecord.message_id.isnot(None))
+                    db_res = await db.execute(stmt)
+                    existing_message_ids = {m.strip() for m in db_res.scalars().all() if m}
 
-                raw_emails = await asyncio.to_thread(_fetch_unread)
-                if raw_emails:
-                    print(f"[IMAP Poller] Detected {len(raw_emails)} new email(s) in inbox. Processing...")
-                    from app.email.classifier import validate_order_email
-                    async with async_session_factory() as db:
+                    def _fetch_unprocessed():
+                        with IMAPClient(config) as client:
+                            return client.fetch_unprocessed(
+                                existing_message_ids=existing_message_ids,
+                                limit=10,
+                                scan_depth=30,
+                            )
+
+                    raw_emails = await asyncio.to_thread(_fetch_unprocessed)
+                    if raw_emails:
+                        print(f"[IMAP Poller] Detected {len(raw_emails)} new email(s) in inbox. Processing...")
+                        from app.email.classifier import validate_order_email
                         for raw in raw_emails:
                             try:
                                 decoded = decode(raw.raw)

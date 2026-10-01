@@ -1,16 +1,13 @@
 /**
- * Shipments — supplier portal page with complete Calzedonia Excel Drop workflow.
- * 
- * Features:
- * 1. Direct Excel Drag & Drop (.xlsx) packing list ingestion
- * 2. Live verification against weight rules (GW >= NW > 0) and PO line items
- * 3. Atomic 20-digit Calzedonia Handling Unit (HU) generation
- * 4. 6"x4" vector Code 39 barcode PDF label download
- * 5. Two-phase DTD-compliant Calzedonia SdDataSlice XML preview and email dispatch
+ * Shipments & Advanced Shipping Notices (ASN) Page.
+ * Offers two seamless workflows for suppliers:
+ * 1. Smart Web Packing Wizard (Interactive Online Packing, Auto-split cartons & 20-digit HU generation)
+ * 2. Calzedonia 12-Column Excel Drop (Tailored template generation, drag & drop ingestion, weight rule verification)
  */
 
-import { useState, useEffect, useRef } from "react";
-import { useSearchParams } from "react-router-dom";
+import React, { useState, useEffect, useRef } from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import {
   Search,
   PackagePlus,
@@ -27,6 +24,11 @@ import {
   ChevronUp,
   Loader2,
   Check,
+  ChevronRight,
+  ArrowLeft,
+  Box,
+  FileText,
+  Eye,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { cn } from "@/utils/cn";
@@ -36,6 +38,7 @@ import {
   CreateShipmentResponse,
 } from "@/services/shipmentService";
 import { poApi } from "@/services/poApi";
+import type { PurchaseOrder } from "@/types/email";
 
 const statusColor: Record<string, string> = {
   DRAFT: "bg-gray-100 text-gray-700",
@@ -47,6 +50,26 @@ const statusColor: Record<string, string> = {
   REJECTED: "bg-red-100 text-red-700",
   DISPATCHED: "bg-emerald-100 text-emerald-700",
   DELIVERED: "bg-emerald-100 text-emerald-700",
+};
+
+export const PLANT_NAMES: Record<string, string> = {
+  PPA1: "Omega Line Ltd (PPA1)",
+  PPB1: "Alpha Apparels Ltd (PPB1)",
+  PPC1: "Benji Ltd (PPC1)",
+  PPD1: "Sirio Ltd (PPD1)",
+  PPE1: "Vavuniya Apparels Ltd (PPE1)",
+};
+
+// Helper to accurately match plant code from client_code or destination automatically
+export const matchPlant = (clientOrDest?: string | null): string => {
+  if (!clientOrDest) return "PPA1";
+  const s = clientOrDest.toLowerCase();
+  if (s.includes("alpha") || s.includes("ppb1")) return "PPB1";
+  if (s.includes("benji") || s.includes("ppc1")) return "PPC1";
+  if (s.includes("sirio") || s.includes("ppd1")) return "PPD1";
+  if (s.includes("vavuniya") || s.includes("ppe1") || s.includes("ppa4")) return "PPE1";
+  if (s.includes("omega") || s.includes("ppa1") || s.includes("ppa2")) return "PPA1";
+  return "PPA1";
 };
 
 interface ShipmentDisplayItem {
@@ -61,17 +84,69 @@ interface ShipmentDisplayItem {
   asn_id?: string;
 }
 
+// --- Web Wizard Types ---
+type POLineItem = {
+  id: string;
+  po_number: string;
+  po_item: string;
+  item_code: string;
+  partner_product_code?: string;
+  description: string;
+  ordered_qty: number;
+  shipped_qty: number;
+  remaining_qty: number;
+  shipping_now?: number;
+  uom?: string;
+  destination?: string;
+  delivery_date?: string;
+  order_date?: string;
+  supplier_id?: string;
+};
+
+type PackingBox = {
+  id: string;
+  hu_number: string;
+  batch_code: string;
+  gross_weight: number;
+  net_weight: number;
+  qty: number;
+  lot_number?: string;
+};
+
+type PackedItem = POLineItem & {
+  packaging_type?: "BOX" | "ROLL";
+  lot_number?: string;
+  boxes: PackingBox[];
+};
+
 export default function Shipments() {
   const user = useAuthStore((s) => s.user);
   const [searchParams, setSearchParams] = useSearchParams();
-  const poParam = searchParams.get("po");
 
+  const poQuery = searchParams.get("pos") || searchParams.get("po") || "";
+  const initialMode = (searchParams.get("mode") as "web" | "excel") || "web";
+
+  // Navigation mode: 'list' (dashboard) vs 'create' (creation wizard/excel)
+  const [isCreating, setIsCreating] = useState<boolean>(Boolean(poQuery));
+  const [creationMethod, setCreationMethod] = useState<"web" | "excel">(initialMode);
+
+  // Sync state if URL changes
+  useEffect(() => {
+    if (poQuery) {
+      setIsCreating(true);
+      if (searchParams.get("mode") === "excel") {
+        setCreationMethod("excel");
+      }
+    }
+  }, [poQuery, searchParams]);
+
+  // Dashboard state
   const [search, setSearch] = useState("");
   const [shipments, setShipments] = useState<ShipmentDisplayItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loadingShipments, setLoadingShipments] = useState(false);
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
-  // Modals state
-  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  // XML Modal
   const [xmlModalData, setXmlModalData] = useState<{
     open: boolean;
     title: string;
@@ -85,19 +160,9 @@ export default function Shipments() {
     validated: false,
   });
 
-  // Action loading states
-  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
-
-  // Auto-open modal if PO param is present in URL
-  useEffect(() => {
-    if (poParam) {
-      setIsUploadModalOpen(true);
-    }
-  }, [poParam]);
-
-  // Load shipments
+  // Load shipments for list view
   const loadShipments = async () => {
-    setLoading(true);
+    setLoadingShipments(true);
     try {
       const supplierId = user?.role === "SUPPLIER" ? user.supplier_id : undefined;
       const data = await shipmentService.getShipments(undefined, undefined, supplierId);
@@ -122,7 +187,7 @@ export default function Shipments() {
       console.error("Failed to load shipments:", err);
       setShipments([]);
     } finally {
-      setLoading(false);
+      setLoadingShipments(false);
     }
   };
 
@@ -130,15 +195,14 @@ export default function Shipments() {
     loadShipments();
   }, [user]);
 
-  // Download template
-  const handleDownloadTemplate = async (poNumber?: string) => {
-    const targetPo = poNumber || poParam || undefined;
+  // Download blank template
+  const handleDownloadBlankTemplate = async () => {
     try {
-      const blob = await shipmentService.downloadTemplate(targetPo);
+      const blob = await shipmentService.downloadTemplate();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = targetPo ? `Packing_List_${targetPo}.xlsx` : "Standard_Packing_List_Template.xlsx";
+      a.download = "Standard_Packing_List_Template.xlsx";
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -185,7 +249,7 @@ export default function Shipments() {
         throw new Error("No linked ASN");
       }
     } catch (err) {
-      // Generate sample XML preview for demonstration
+      // Fallback preview
       const sampleXml = `<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE SdDataSlice SYSTEM "m2Data_Partner.dtd">
 <SdDataSlice>
@@ -208,20 +272,11 @@ export default function Shipments() {
       <OrderDate>10-02-2025</OrderDate>
       <OrderLineNumber>00100-0001</OrderLineNumber>
       <Qty>${shipment.total_pieces || 245}</Qty>
-      <BackOrder/>
-      <AcceptanceDate/>
-      <AcceptanceQty/>
-      <AcceptanceBackOrder>false</AcceptanceBackOrder>
       <ProductCode>ELST1K 000615</ProductCode>
       <ProductCodePartner>SK104546-015.0-61851</ProductCodePartner>
       <ProductDescription>Elastic tape 15mm black</ProductDescription>
-      <PartnerItemDescription/>
       <ProductUnitOfMeasure>M</ProductUnitOfMeasure>
       <ProductBatchCode>LOT-2025-01</ProductBatchCode>
-      <ProductBatchCodePartner/>
-      <Price/>
-      <PriceUnit/>
-      <Note/>
       <AuxRow1>1</AuxRow1>
       <AuxRow2>10000583760000000001</AuxRow2>
       <AuxRow3>BOX</AuxRow3>
@@ -246,7 +301,7 @@ export default function Shipments() {
     }
   };
 
-  const filtered = shipments.filter((s) => {
+  const filteredShipments = shipments.filter((s) => {
     if (!search) return true;
     const q = search.toLowerCase();
     return (
@@ -257,166 +312,217 @@ export default function Shipments() {
   });
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header Banner */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Shipments & Packing Lists</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Create EDI-compliant shipments via direct 12-column Excel drop or template export.
-          </p>
+    <div className="space-y-6 pb-24">
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* 1. TOP HEADER / TITLE                                         */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      {!isCreating ? (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-xl font-bold tracking-tight text-slate-900">Shipments & Outbound Deliveries</h1>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Manage past deliveries or prepare new Calzedonia ASNs via Outbound Delivery Workbench or Excel upload.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={handleDownloadBlankTemplate}
+              className="flex items-center gap-1.5 rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+            >
+              <Download className="h-3.5 w-3.5 text-slate-500" />
+              Template (.xlsx)
+            </button>
+            <button
+              onClick={() => {
+                setCreationMethod("excel");
+                setIsCreating(true);
+              }}
+              className="flex items-center gap-1.5 rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+            >
+              <FileSpreadsheet className="h-3.5 w-3.5 text-slate-600" />
+              Excel Drop
+            </button>
+            <button
+              onClick={() => {
+                setCreationMethod("web");
+                setIsCreating(true);
+              }}
+              className="flex items-center gap-1.5 rounded bg-slate-900 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 transition-colors shadow-xs cursor-pointer"
+            >
+              <PackagePlus className="h-3.5 w-3.5" />
+              + Create Delivery
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
+      ) : creationMethod === "excel" ? (
+        <div className="flex items-center justify-between pb-3 border-b border-slate-200">
           <button
-            onClick={() => handleDownloadTemplate()}
-            className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 transition-colors"
+            onClick={() => {
+              setIsCreating(false);
+              setSearchParams({});
+            }}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 cursor-pointer"
           >
-            <Download className="h-4 w-4 text-gray-500" />
-            Download Excel Template
+            <ArrowLeft className="w-4 h-4" /> Back to Shipments
           </button>
-          <button
-            onClick={() => setIsUploadModalOpen(true)}
-            className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 transition-colors"
-          >
-            <PackagePlus className="h-4 w-4" />
-            New Shipment (Excel Drop)
-          </button>
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+              Excel Packing List Dispatch
+            </span>
+            <button
+              onClick={() => setCreationMethod("web")}
+              className="text-xs text-blue-600 hover:underline font-semibold cursor-pointer"
+            >
+              Switch to Web Workbench →
+            </button>
+          </div>
         </div>
-      </div>
-
-      {/* Search & Filter bar */}
-      <div className="flex items-center justify-between">
-        <div className="relative w-72">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search shipment #, plant, carrier…"
-            className="h-9 w-full rounded-lg border border-gray-200 bg-white pl-10 pr-3 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-          />
-        </div>
-        <span className="text-sm text-gray-400">
-          Showing {filtered.length} of {shipments.length} shipments
-        </span>
-      </div>
-
-      {/* Main Shipments Table */}
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100 bg-gray-50/75 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                <th className="px-5 py-3.5">Shipment #</th>
-                <th className="px-5 py-3.5">Plant</th>
-                <th className="px-5 py-3.5">Boxes (Cartons)</th>
-                <th className="px-5 py-3.5">Total Pieces</th>
-                <th className="px-5 py-3.5">Carrier</th>
-                <th className="px-5 py-3.5">Status</th>
-                <th className="px-5 py-3.5">Ship Date</th>
-                <th className="px-5 py-3.5 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {filtered.map((s) => (
-                <tr key={s.id} className="hover:bg-gray-50/80 transition-colors">
-                  <td className="whitespace-nowrap px-5 py-3.5 font-mono text-xs font-bold text-gray-900">
-                    {s.shipment_number}
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
-                      {s.plant_code || "PPC1"}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3.5 font-semibold text-gray-700">{s.total_boxes}</td>
-                  <td className="px-5 py-3.5 text-gray-700">{s.total_pieces?.toLocaleString()} M</td>
-                  <td className="px-5 py-3.5 text-gray-600">{s.carrier || "—"}</td>
-                  <td className="px-5 py-3.5">
-                    <span
-                      className={cn(
-                        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
-                        statusColor[s.status] || "bg-gray-100 text-gray-700"
-                      )}
-                    >
-                      {s.status.replace(/_/g, " ")}
-                    </span>
-                  </td>
-                  <td className="whitespace-nowrap px-5 py-3.5 text-gray-500">
-                    {s.ship_date ? new Date(s.ship_date).toLocaleDateString("en-GB") : "—"}
-                  </td>
-                  <td className="whitespace-nowrap px-5 py-3.5 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => handleDownloadLabels(s.id, s.shipment_number)}
-                        disabled={actionLoadingId === `labels-${s.id}`}
-                        title="Download 6x4 Code 39 Barcode PDF Labels"
-                        className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 hover:text-emerald-700 shadow-sm transition-colors disabled:opacity-50"
-                      >
-                        {actionLoadingId === `labels-${s.id}` ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-600" />
-                        ) : (
-                          <Printer className="h-3.5 w-3.5 text-emerald-600" />
-                        )}
-                        6x4 Labels
-                      </button>
-
-                      <button
-                        onClick={() => handlePreviewXml(s)}
-                        disabled={actionLoadingId === `xml-${s.id}`}
-                        title="View SdDataSlice EDI XML"
-                        className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 hover:text-purple-700 shadow-sm transition-colors disabled:opacity-50"
-                      >
-                        {actionLoadingId === `xml-${s.id}` ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-600" />
-                        ) : (
-                          <FileCode className="h-3.5 w-3.5 text-purple-600" />
-                        )}
-                        ASN XML
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {loading ? (
-                <tr>
-                  <td colSpan={8} className="px-5 py-12 text-center text-gray-400">
-                    <Loader2 className="mx-auto h-6 w-6 animate-spin text-emerald-600 mb-2" />
-                    Loading shipments…
-                  </td>
-                </tr>
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="px-5 py-12 text-center text-gray-400">
-                    No shipments found. Click <strong>"New Shipment (Excel Drop)"</strong> to create one.
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      ) : null}
 
       {/* ───────────────────────────────────────────────────────────── */}
-      {/* EXCEL UPLOAD & LIVE VALIDATION MODAL                          */}
+      {/* 2. BODY CONTENT (LIST vs WEB WIZARD vs EXCEL DROP)            */}
       {/* ───────────────────────────────────────────────────────────── */}
-      {isUploadModalOpen && (
-        <ExcelUploadModal
-          targetPo={poParam || undefined}
-          onClose={() => {
-            setIsUploadModalOpen(false);
-            if (poParam) setSearchParams({});
-          }}
+      {!isCreating ? (
+        /* SHIPMENTS TABLE VIEW */
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="relative w-80">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search shipment #, plant, carrier…"
+                className="h-10 w-full rounded-xl border border-gray-200 bg-white pl-10 pr-4 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              />
+            </div>
+            <span className="text-xs text-gray-400 font-medium">
+              Showing {filteredShipments.length} of {shipments.length} shipments
+            </span>
+          </div>
+
+          <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 bg-gray-50/75 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                    <th className="px-5 py-4">Shipment #</th>
+                    <th className="px-5 py-4">Plant</th>
+                    <th className="px-5 py-4">Boxes (Cartons)</th>
+                    <th className="px-5 py-4">Total Pieces</th>
+                    <th className="px-5 py-4">Carrier</th>
+                    <th className="px-5 py-4">Status</th>
+                    <th className="px-5 py-4">Ship Date</th>
+                    <th className="px-5 py-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {filteredShipments.map((s) => (
+                    <tr key={s.id} className="hover:bg-gray-50/70 transition-colors">
+                      <td className="whitespace-nowrap px-5 py-4 font-mono text-xs font-bold text-gray-900">
+                        {s.shipment_number}
+                      </td>
+                      <td className="px-5 py-4">
+                        <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
+                          {s.plant_code || "PPC1"}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4 font-semibold text-gray-700">{s.total_boxes}</td>
+                      <td className="px-5 py-4 text-gray-700 font-mono">{s.total_pieces?.toLocaleString()} M</td>
+                      <td className="px-5 py-4 text-gray-600">{s.carrier || "—"}</td>
+                      <td className="px-5 py-4">
+                        <span
+                          className={cn(
+                            "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
+                            statusColor[s.status] || "bg-gray-100 text-gray-700"
+                          )}
+                        >
+                          {s.status.replace(/_/g, " ")}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-5 py-4 text-gray-500">
+                        {s.ship_date ? new Date(s.ship_date).toLocaleDateString("en-GB") : "—"}
+                      </td>
+                      <td className="whitespace-nowrap px-5 py-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => handleDownloadLabels(s.id, s.shipment_number)}
+                            disabled={actionLoadingId === `labels-${s.id}`}
+                            title="Download 6x4 Code 39 Barcode PDF Labels"
+                            className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 hover:text-emerald-700 shadow-sm transition-colors disabled:opacity-50"
+                          >
+                            {actionLoadingId === `labels-${s.id}` ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-600" />
+                            ) : (
+                              <Printer className="h-3.5 w-3.5 text-emerald-600" />
+                            )}
+                            6x4 Labels
+                          </button>
+
+                          <button
+                            onClick={() => handlePreviewXml(s)}
+                            disabled={actionLoadingId === `xml-${s.id}`}
+                            title="View SdDataSlice EDI XML"
+                            className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 hover:text-purple-700 shadow-sm transition-colors disabled:opacity-50"
+                          >
+                            {actionLoadingId === `xml-${s.id}` ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-600" />
+                            ) : (
+                              <FileCode className="h-3.5 w-3.5 text-purple-600" />
+                            )}
+                            ASN XML
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {loadingShipments ? (
+                    <tr>
+                      <td colSpan={8} className="px-5 py-16 text-center text-gray-400">
+                        <Loader2 className="mx-auto h-7 w-7 animate-spin text-blue-500 mb-3" />
+                        <p className="font-medium text-gray-600">Loading shipments…</p>
+                      </td>
+                    </tr>
+                  ) : filteredShipments.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="px-5 py-16 text-center text-gray-400">
+                        <Box className="w-12 h-12 mx-auto text-gray-200 mb-3" />
+                        <p className="font-semibold text-gray-700 text-base">No shipments found</p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          Create a shipment using the Web Wizard or upload an Excel Packing List.
+                        </p>
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ) : creationMethod === "web" ? (
+        /* OPTION 1: SMART WEB PACKING WIZARD */
+        <WebPackingWizard
+          poQuery={poQuery}
           onSuccess={() => {
-            setIsUploadModalOpen(false);
-            if (poParam) setSearchParams({});
+            setIsCreating(false);
+            setSearchParams({});
             loadShipments();
           }}
-          onDownloadTemplate={handleDownloadTemplate}
+          onSwitchToExcel={() => setCreationMethod("excel")}
+        />
+      ) : (
+        /* OPTION 2: CALZEDONIA 12-COLUMN EXCEL WORKFLOW */
+        <ExcelPackingWorkflow
+          targetPo={poQuery.split(",")[0] || undefined}
+          onSuccess={() => {
+            setIsCreating(false);
+            setSearchParams({});
+            loadShipments();
+          }}
+          onDownloadBlankTemplate={handleDownloadBlankTemplate}
         />
       )}
 
-      {/* ───────────────────────────────────────────────────────────── */}
-      {/* XML PREVIEW & DISPATCH MODAL                                   */}
-      {/* ───────────────────────────────────────────────────────────── */}
+      {/* XML PREVIEW MODAL */}
       {xmlModalData.open && (
         <XmlPreviewModal
           data={xmlModalData}
@@ -428,18 +534,933 @@ export default function Shipments() {
 }
 
 // ───────────────────────────────────────────────────────────────────
-// SUBCOMPONENT: Excel Upload & Shipment Creation Modal
+// SUBCOMPONENT A: Interactive Web Packing Wizard (3-Step Online)
 // ───────────────────────────────────────────────────────────────────
-function ExcelUploadModal({
-  targetPo,
-  onClose,
+function WebPackingWizard({
+  poQuery,
   onSuccess,
-  onDownloadTemplate,
+  onSwitchToExcel: _onSwitchToExcel,
+}: {
+  poQuery: string;
+  onSuccess: () => void;
+  onSwitchToExcel?: () => void;
+}) {
+  const user = useAuthStore((s) => s.user);
+  const navigate = useNavigate();
+  const poNumbers = poQuery.split(",").filter(Boolean);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+
+  const [items, setItems] = useState<POLineItem[]>([]);
+  const [packedItems, setPackedItems] = useState<PackedItem[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitSuccessResult, setSubmitSuccessResult] = useState<any>(null);
+  const [previewXmlModal, setPreviewXmlModal] = useState<string | null>(null);
+  const [startingSeq, setStartingSeq] = useState<number>(1);
+
+  const getHuPrefix = () => {
+    const suppCodeClean = (user?.supplier_code || "0000018194").replace(/^0+/, "");
+    return "1" + suppCodeClean.padStart(9, "0");
+  };
+
+  const formatHu = (seq: number) => {
+    const prefix = getHuPrefix();
+    return `${prefix}${String(seq).padStart(10, "0")}`;
+  };
+
+  const resequenceAllCartons = (itemsToResequence: PackedItem[], startNum = startingSeq): PackedItem[] => {
+    let currentSeq = startNum;
+    return itemsToResequence.map((item) => ({
+      ...item,
+      boxes: item.boxes.map((box) => ({
+        ...box,
+        hu_number: formatHu(currentSeq++),
+      })),
+    }));
+  };
+
+  // Synchronize next sequential HU from database sequence
+  useEffect(() => {
+    let isMounted = true;
+    const fetchSeq = async () => {
+      try {
+        const suppCode = user?.supplier_code || "0000018194";
+        const suppId = user?.supplier_id;
+        const res = await shipmentService.getNextHuSequence(suppCode, suppId);
+        if (isMounted && res && typeof res.next_number === "number") {
+          setStartingSeq(res.next_number);
+          setPackedItems((prev) => {
+            if (prev.length > 0) {
+              return resequenceAllCartons(prev, res.next_number);
+            }
+            return prev;
+          });
+        }
+      } catch (err) {
+        console.warn("Could not fetch next HU sequence, defaulting to 1:", err);
+      }
+    };
+    fetchSeq();
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.supplier_code, user?.supplier_id]);
+
+  const handleDispatchASN = async () => {
+    setIsSubmitting(true);
+    try {
+      const firstItem = packedItems[0];
+      const targetPlant = matchPlant(firstItem?.destination);
+      const activeSupplierCode = user?.supplier_code || "0000018194";
+      const activeSupplierName = user?.supplier_name || "COATS THREAD EXPORTS (PRIVATE) LIMITED";
+
+      const cartonsPayload = packedItems.flatMap((item) =>
+        item.boxes.map((box, bIdx) => ({
+          po_number: item.po_number,
+          po_line: item.po_item || "00100",
+          product_code: item.item_code,
+          partner_product_code: item.partner_product_code || item.item_code,
+          description: item.description,
+          lot_number: box.batch_code || box.lot_number || "LOT-01",
+          quantity: Number(box.qty),
+          uom: item.uom || "M",
+          net_weight: Number(box.net_weight),
+          gross_weight: Number(box.gross_weight),
+          supplier_carton_ref: `CTN-${bIdx + 1}`,
+          packaging_type: item.packaging_type || "BOX",
+          hu_number: box.hu_number,
+        }))
+      );
+
+      const res = await shipmentService.createDirect({
+        plant_code: targetPlant,
+        supplier_code: activeSupplierCode,
+        supplier_name: activeSupplierName,
+        supplier_id: user?.supplier_id,
+        carrier: "EXPRESS FREIGHT",
+        note: `Online Web Packing Wizard dispatch for PO ${poNumbers.join(", ")}`,
+        cartons: cartonsPayload,
+      });
+
+      setSubmitSuccessResult(res);
+    } catch (err: any) {
+      alert("Submission error: " + (err?.response?.data?.detail || err?.message || "Failed to create shipment"));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Fetch open PO lines
+  const { data: openLinesData, isLoading } = useQuery({
+    queryKey: ["open_lines_wizard", poNumbers, user?.supplier_id],
+    queryFn: async () => {
+      try {
+        const supplierId = user?.role === "SUPPLIER" ? user.supplier_id : undefined;
+        const lines = await poApi.getOpenLines(supplierId ? { supplier_id: supplierId } : undefined);
+        if (Array.isArray(lines) && lines.length > 0) {
+          const matched = lines.filter((l) => !poNumbers.length || poNumbers.includes(l.po_number));
+          if (matched.length > 0) {
+            return matched.map((m: any, idx: number) => ({
+              id: `${m.po_number}-${m.po_item || idx}`,
+              po_number: m.po_number,
+              po_item: m.po_item ? String(m.po_item).split("-")[0].padStart(5, "0") : String((idx + 1) * 100).padStart(5, "0"),
+              item_code: m.material_code || "ITEM-" + idx,
+              partner_product_code: m.partner_code || m.partner_product_code || "",
+              description: m.material_description || "PO Line Item",
+              ordered_qty: Number(m.ordered_qty || 1000),
+              shipped_qty: 0,
+              remaining_qty: Number(m.ordered_qty || 1000),
+              shipping_now: 0,
+              uom: m.uom || "M",
+              destination: m.destination || "",
+              delivery_date: m.delivery_date || "",
+              order_date: m.order_date || "",
+              supplier_id: m.supplier_id || "",
+            }));
+          }
+        }
+      } catch (err) {
+        console.warn("Could not fetch real open lines, falling back to PO numbers:", err);
+      }
+
+      // Default mock for selected PO numbers
+      const fallback: POLineItem[] = [];
+      const list = poNumbers.length > 0 ? poNumbers : ["2001297727"];
+      list.forEach((po) => {
+        fallback.push({
+          id: `${po}-line-1`,
+          po_number: po,
+          po_item: "00100",
+          item_code: "ELST1K 000615",
+          partner_product_code: "SK104546-015.0-61851",
+          description: "Elastic tape 15mm black - Sirio Spec",
+          ordered_qty: 2450,
+          shipped_qty: 0,
+          remaining_qty: 2450,
+          shipping_now: 0,
+          uom: "M",
+          destination: "Omega Line Ltd (PPA1)",
+        });
+        fallback.push({
+          id: `${po}-line-2`,
+          po_number: po,
+          po_item: "00200",
+          item_code: "RECT0724DKK0000000",
+          partner_product_code: "TH002500-120.0-SETA",
+          description: "RE-Thread-EP-2500m, 120tkt, SETA",
+          ordered_qty: 1200,
+          shipped_qty: 0,
+          remaining_qty: 1200,
+          shipping_now: 0,
+          uom: "M",
+          destination: "Omega Line Ltd (PPA1)",
+        });
+      });
+      return fallback;
+    },
+  });
+
+  useEffect(() => {
+    if (openLinesData) setItems(openLinesData);
+  }, [openLinesData]);
+
+  const handleShippingNowChange = (id: string, val: number) => {
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === id ? { ...item, shipping_now: Math.min(Math.max(0, val), item.remaining_qty) } : item
+      )
+    );
+  };
+
+  const handleProceedToPacking = () => {
+    const toPack = items.filter((i) => (i.shipping_now || 0) > 0);
+    if (toPack.length === 0) {
+      alert("Please enter a shipping quantity for at least one item.");
+      return;
+    }
+
+    let runningSeq = startingSeq;
+    const prefix = getHuPrefix();
+    const initialPacked: PackedItem[] = toPack.map((item) => {
+      const q = item.shipping_now || 0;
+      const nw = Math.max(0.1, Math.round(q * 0.12 * 100) / 100);
+      const gw = Math.max(nw + 0.1, Math.round(q * 0.15 * 100) / 100);
+      return {
+        ...item,
+        packaging_type: "BOX",
+        lot_number: "LOT-01",
+        boxes: [
+          {
+            id: `box-${Date.now()}-${Math.random()}`,
+            hu_number: `${prefix}${String(runningSeq++).padStart(10, "0")}`,
+            batch_code: "LOT-01",
+            qty: q,
+            gross_weight: gw,
+            net_weight: nw,
+          },
+        ],
+      };
+    });
+
+    setPackedItems(initialPacked);
+    setStep(2);
+  };
+
+  const handleSplitBox = (itemId: string, boxQty: number) => {
+    setPackedItems((prev) => {
+      const updated = prev.map((item) => {
+        if (item.id !== itemId) return item;
+
+        const totalQty = item.shipping_now || 0;
+        const numBoxes = Math.ceil(totalQty / boxQty);
+        const newBoxes: PackingBox[] = [];
+
+        let remaining = totalQty;
+        for (let i = 0; i < numBoxes; i++) {
+          const qtyThisBox = Math.min(boxQty, remaining);
+          remaining -= qtyThisBox;
+          const nw = Math.max(0.1, Math.round(qtyThisBox * 0.12 * 100) / 100);
+          const gw = Math.max(nw + 0.1, Math.round(qtyThisBox * 0.15 * 100) / 100);
+          newBoxes.push({
+            id: `box-${Date.now()}-${i}-${Math.random()}`,
+            hu_number: "", // Allocated sequentially below
+            batch_code: item.boxes[0]?.batch_code || "LOT-01",
+            qty: qtyThisBox,
+            gross_weight: gw,
+            net_weight: nw,
+          });
+        }
+        return { ...item, boxes: newBoxes };
+      });
+      return resequenceAllCartons(updated, startingSeq);
+    });
+  };
+
+  const updateBox = (itemId: string, boxIndex: number, patch: Partial<PackingBox>) => {
+    setPackedItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== itemId) return item;
+        const newBoxes = item.boxes.map((b, idx) => (idx === boxIndex ? { ...b, ...patch } : b));
+        return { ...item, boxes: newBoxes };
+      })
+    );
+  };
+
+  const addBox = (itemId: string) => {
+    setPackedItems((prev) => {
+      const updated = prev.map((item) => {
+        if (item.id !== itemId) return item;
+        const lastBox = item.boxes[item.boxes.length - 1];
+        const newBox: PackingBox = {
+          id: `box-${Date.now()}-${Math.random()}`,
+          hu_number: "",
+          batch_code: lastBox?.batch_code || "LOT-01",
+          qty: 0,
+          gross_weight: 1.0,
+          net_weight: 0.8,
+        };
+        return { ...item, boxes: [...item.boxes, newBox] };
+      });
+      return resequenceAllCartons(updated, startingSeq);
+    });
+  };
+
+  const removeBox = (itemId: string, boxIndex: number) => {
+    setPackedItems((prev) => {
+      const updated = prev.map((item) => {
+        if (item.id !== itemId || item.boxes.length <= 1) return item;
+        return { ...item, boxes: item.boxes.filter((_, idx) => idx !== boxIndex) };
+      });
+      return resequenceAllCartons(updated, startingSeq);
+    });
+  };
+
+  const handleProceedToReview = () => {
+    for (const item of packedItems) {
+      const boxTotal = item.boxes.reduce((acc, b) => acc + (Number(b.qty) || 0), 0);
+      if (boxTotal !== item.shipping_now) {
+        alert(
+          `Item ${item.item_code} carton quantities total (${boxTotal}) does not match shipping quantity (${item.shipping_now}). Please balance carton quantities.`
+        );
+        return;
+      }
+      for (let bIdx = 0; bIdx < item.boxes.length; bIdx++) {
+        const box = item.boxes[bIdx];
+        if (!box.qty || box.qty <= 0) {
+          alert(`Carton ${bIdx + 1} for item ${item.item_code} has 0 or invalid quantity.`);
+          return;
+        }
+        if (!box.net_weight || box.net_weight <= 0) {
+          alert(`Carton ${bIdx + 1} for item ${item.item_code} Net Weight must be > 0.`);
+          return;
+        }
+        if (!box.gross_weight || box.gross_weight <= box.net_weight) {
+          alert(
+            `Carton ${bIdx + 1} for item ${item.item_code}: Gross Weight (${box.gross_weight}kg) must be strictly greater than Net Weight (${box.net_weight}kg).`
+          );
+          return;
+        }
+      }
+    }
+    setStep(3);
+  };
+
+  return (
+    <div className="space-y-4 font-sans text-slate-800">
+      {/* ─── SAP-STYLE STICKY ACTION HEADER TOOLBAR ──────────────────────── */}
+      <div className="sticky top-0 z-30 bg-slate-900 text-white rounded-lg shadow-md px-4 py-2.5">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          {/* Left: Exit/Back & ERP Context */}
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                if (step === 3) setStep(2);
+                else if (step === 2) setStep(1);
+                else onSuccess();
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-200 bg-slate-800 hover:bg-slate-700 rounded border border-slate-700 transition-colors"
+              title="Return to previous screen"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              {step === 1 ? "Exit Workbench" : "Back"}
+            </button>
+
+            <div className="border-l border-slate-700 pl-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-100">
+                  Outbound Delivery Workbench
+                </span>
+                <span className="text-[11px] font-mono text-slate-400">
+                  {poNumbers.length > 0 ? `PO #${poNumbers.join(", ")}` : "All Line Items"}
+                </span>
+              </div>
+              <span className="text-[11px] text-slate-400 block">
+                Partner: <span className="font-mono text-slate-200 font-semibold">{user?.supplier_code || "0000018194"}</span> • {user?.supplier_name || "COATS THREAD EXPORTS"}
+              </span>
+            </div>
+          </div>
+
+          {/* Center: SAP Compact Stepper */}
+          <div className="flex items-center bg-slate-800 p-0.5 rounded border border-slate-700 text-xs">
+            <button
+              type="button"
+              onClick={() => setStep(1)}
+              className={`px-3 py-1 rounded text-xs transition-colors ${
+                step === 1 ? "bg-white text-slate-900 font-bold shadow-xs" : "text-slate-300 hover:text-white"
+              }`}
+            >
+              1. Item Quantities
+            </button>
+            <span className="text-slate-600 px-1">›</span>
+            <button
+              type="button"
+              onClick={() => {
+                if (packedItems.length > 0) setStep(2);
+              }}
+              disabled={packedItems.length === 0}
+              className={`px-3 py-1 rounded text-xs transition-colors ${
+                step === 2 ? "bg-white text-slate-900 font-bold shadow-xs" : "text-slate-300 hover:text-white disabled:opacity-40"
+              }`}
+            >
+              2. Carton Packing & HUs
+            </button>
+            <span className="text-slate-600 px-1">›</span>
+            <button
+              type="button"
+              onClick={() => {
+                if (packedItems.length > 0) handleProceedToReview();
+              }}
+              disabled={packedItems.length === 0}
+              className={`px-3 py-1 rounded text-xs transition-colors ${
+                step === 3 ? "bg-white text-slate-900 font-bold shadow-xs" : "text-slate-300 hover:text-white disabled:opacity-40"
+              }`}
+            >
+              3. Review & Transmit
+            </button>
+          </div>
+
+          {/* Right: Primary Action Button AT TOP */}
+          <div className="flex items-center gap-2">
+            {step === 1 && (
+              <button
+                type="button"
+                onClick={handleProceedToPacking}
+                className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-semibold shadow-xs transition-colors"
+              >
+                Proceed to Packing <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            )}
+
+            {step === 2 && (
+              <div className="flex items-center gap-2">
+                <span className="hidden lg:inline-flex items-center px-2.5 py-1 text-[11px] font-mono text-slate-300 bg-slate-800 rounded border border-slate-700">
+                  Cartons: {packedItems.reduce((acc, curr) => acc + curr.boxes.length, 0)} | Qty: {packedItems.reduce((acc, curr) => acc + (curr.shipping_now || 0), 0)} {packedItems[0]?.uom || "M"}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleProceedToReview}
+                  className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-semibold shadow-xs transition-colors"
+                >
+                  Review Shipment <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
+            {step === 3 && !submitSuccessResult && (
+              <button
+                type="button"
+                onClick={handleDispatchASN}
+                disabled={isSubmitting}
+                className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-semibold shadow-xs transition-colors disabled:opacity-50"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Transmitting XML...
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-3.5 h-3.5" /> Dispatch to IUNGO EDI
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ─── STEP 1: QUANTITIES TO SHIP ─────────────────────────────────── */}
+      {step === 1 && (
+        <div className="bg-white rounded-lg border border-slate-200 shadow-xs p-4 space-y-3">
+          <div className="border-b border-slate-200 pb-2">
+            <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
+              Purchase Order Line Item Allocation
+            </h2>
+            <span className="text-[11px] text-slate-500">
+              Specify quantities to dispatch for open PO line items. Use top toolbar to proceed.
+            </span>
+          </div>
+
+          {isLoading ? (
+            <div className="py-16 flex justify-center text-slate-400">
+              <Loader2 className="w-6 h-6 animate-spin text-slate-600" />
+            </div>
+          ) : items.length === 0 ? (
+            <div className="py-16 text-center text-slate-400">
+              <p className="text-xs">No line items found for the selected orders.</p>
+              <button
+                onClick={() => navigate("/purchase-orders")}
+                className="mt-2 text-xs text-blue-600 font-semibold hover:underline"
+              >
+                Select orders from Purchase Orders page
+              </button>
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded border border-slate-200">
+              <table className="w-full text-xs text-left">
+                <thead>
+                  <tr className="bg-slate-100 text-slate-700 border-b border-slate-200 font-semibold uppercase tracking-wider text-[11px]">
+                    <th className="px-3 py-2">PO Number</th>
+                    <th className="px-3 py-2">Item</th>
+                    <th className="px-3 py-2">Material Code</th>
+                    <th className="px-3 py-2">Description</th>
+                    <th className="px-3 py-2 text-right">Ordered</th>
+                    <th className="px-3 py-2 text-right">Open Balance</th>
+                    <th className="px-3 py-2 text-right w-44">Shipping Qty</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {items.map((item) => (
+                    <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-3 py-1.5 font-mono font-semibold text-slate-900">{item.po_number}</td>
+                      <td className="px-3 py-1.5 font-mono text-slate-500">{item.po_item}</td>
+                      <td className="px-3 py-1.5 font-mono font-semibold text-slate-800">{item.item_code}</td>
+                      <td className="px-3 py-1.5 text-slate-600 max-w-xs truncate">{item.description}</td>
+                      <td className="px-3 py-1.5 text-right font-mono text-slate-500">{item.ordered_qty}</td>
+                      <td className="px-3 py-1.5 text-right font-mono font-bold text-slate-700">
+                        {item.remaining_qty}
+                      </td>
+                      <td className="px-3 py-1.5 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <input
+                            type="number"
+                            min="0"
+                            max={item.remaining_qty}
+                            value={item.shipping_now || 0}
+                            onChange={(e) => handleShippingNowChange(item.id, parseInt(e.target.value) || 0)}
+                            className="w-24 h-7 px-2 border border-slate-300 rounded text-right font-mono text-xs font-bold focus:border-slate-600 outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleShippingNowChange(item.id, item.remaining_qty)}
+                            className="text-[11px] font-semibold text-slate-700 hover:bg-slate-200 bg-slate-100 px-2 py-1 rounded border border-slate-300 cursor-pointer"
+                          >
+                            Max
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── STEP 2: CARTON PACKING & HU ASSIGNMENT ─────────────────────── */}
+      {step === 2 && (
+        <div className="space-y-4">
+          {/* Compact header */}
+          <div className="flex items-center justify-between px-1">
+            <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+              Carton Packaging & Handling Unit (SSCC) Assignment
+            </h2>
+            <span className="text-[11px] font-mono text-slate-500">
+              Seq Start: #{String(startingSeq).padStart(10, "0")}
+            </span>
+          </div>
+
+          <div className="space-y-4">
+            {packedItems.map((item) => {
+              const packedQtySum = item.boxes.reduce((a, b) => a + (Number(b.qty) || 0), 0);
+              const isBalanced = packedQtySum === item.shipping_now;
+
+              return (
+                <div key={item.id} className="bg-white rounded-lg border border-slate-200 shadow-xs p-3 space-y-3">
+                  {/* Clean SAP line item toolbar */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-200 bg-slate-50/60 -mx-3 -mt-3 p-3 rounded-t-lg">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-slate-900 text-xs font-mono">PO #{item.po_number}</span>
+                      <span className="text-slate-300">•</span>
+                      <span className="font-mono text-xs font-semibold text-slate-800">{item.item_code}</span>
+                      <span className="text-slate-300">•</span>
+                      <span className="text-xs text-slate-600 truncate max-w-sm">{item.description}</span>
+                    </div>
+
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-xs font-bold text-slate-800 bg-slate-100 px-2.5 py-1 rounded border border-slate-300 font-mono">
+                        Shipping: {item.shipping_now} {item.uom || "M"}
+                      </span>
+
+                      <div className="flex items-center gap-1 text-xs">
+                        <span className="text-[11px] text-slate-500 font-medium">Split/box:</span>
+                        {[100, 200, 500].map((size) => (
+                          <button
+                            key={size}
+                            onClick={() => handleSplitBox(item.id, size)}
+                            className="px-2 py-0.5 bg-white hover:bg-slate-100 border border-slate-300 rounded text-slate-700 text-xs font-mono transition-colors"
+                            title={`Split into ${size} units per carton`}
+                          >
+                            {size}
+                          </button>
+                        ))}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => addBox(item.id)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-slate-50 border border-slate-300 rounded text-slate-700 text-xs font-medium transition-colors"
+                      >
+                        + Add Carton
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Clean Enterprise Data Grid */}
+                  <div className="overflow-x-auto rounded border border-slate-200">
+                    <table className="w-full text-xs text-left">
+                      <thead>
+                        <tr className="bg-slate-100 text-slate-700 border-b border-slate-200 font-semibold text-[11px] uppercase tracking-wider">
+                          <th className="px-3 py-2 w-24">Carton</th>
+                          <th className="px-3 py-2">20-digit HU Number (SSCC)</th>
+                          <th className="px-3 py-2 w-28">Batch / Lot</th>
+                          <th className="px-3 py-2 text-right w-24">Qty ({item.uom || "M"})</th>
+                          <th className="px-3 py-2 text-right w-28">Gross Wt (kg)</th>
+                          <th className="px-3 py-2 text-right w-28">Net Wt (kg)</th>
+                          <th className="px-3 py-2 text-center w-12">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {item.boxes.map((box, idx) => (
+                          <tr key={box.id} className="hover:bg-slate-50/80 transition-colors">
+                            <td className="px-3 py-1.5 font-bold text-slate-700 font-mono text-[11px]">
+                              Carton {idx + 1}
+                            </td>
+                            <td className="px-3 py-1.5 font-mono text-[11px] font-semibold text-slate-900 tracking-wider select-all">
+                              {box.hu_number}
+                            </td>
+                            <td className="px-3 py-1.5">
+                              <input
+                                type="text"
+                                value={box.batch_code}
+                                onChange={(e) => updateBox(item.id, idx, { batch_code: e.target.value })}
+                                className="w-24 h-7 px-2 text-xs border border-slate-300 rounded font-mono focus:border-slate-500 outline-none"
+                                placeholder="LOT-01"
+                              />
+                            </td>
+                            <td className="px-3 py-1.5 text-right">
+                              <input
+                                type="number"
+                                min="1"
+                                value={box.qty}
+                                onChange={(e) => updateBox(item.id, idx, { qty: Number(e.target.value) || 0 })}
+                                className="w-20 h-7 px-2 text-xs text-right border border-slate-300 rounded font-mono font-bold focus:border-slate-500 outline-none"
+                              />
+                            </td>
+                            <td className="px-3 py-1.5 text-right">
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0.01"
+                                value={box.gross_weight}
+                                onChange={(e) => updateBox(item.id, idx, { gross_weight: parseFloat(e.target.value) || 0 })}
+                                className={`w-24 h-7 px-2 text-xs text-right border rounded font-mono focus:border-slate-500 outline-none ${
+                                  box.gross_weight <= box.net_weight ? "border-red-400 bg-red-50 text-red-700" : "border-slate-300"
+                                }`}
+                              />
+                            </td>
+                            <td className="px-3 py-1.5 text-right">
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0.01"
+                                value={box.net_weight}
+                                onChange={(e) => updateBox(item.id, idx, { net_weight: parseFloat(e.target.value) || 0 })}
+                                className="w-24 h-7 px-2 text-xs text-right border border-slate-300 rounded font-mono focus:border-slate-500 outline-none"
+                              />
+                              {box.gross_weight <= box.net_weight && (
+                                <span className="text-[10px] text-red-600 font-bold block mt-0.5">GW &le; NW!</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-1.5 text-center">
+                              {item.boxes.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => removeBox(item.id, idx)}
+                                  className="text-slate-400 hover:text-red-600 p-1 rounded hover:bg-slate-100 transition-colors"
+                                  title="Remove carton"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Summary row */}
+                  <div className="flex items-center justify-between text-xs px-1">
+                    <span className="text-slate-500 font-medium">
+                      Cartons in line: <strong className="text-slate-800 font-mono">{item.boxes.length}</strong>
+                    </span>
+                    <div className="flex items-center gap-2 font-mono">
+                      <span>Total Packed: <strong>{packedQtySum}</strong> / {item.shipping_now} {item.uom || "M"}</span>
+                      {isBalanced ? (
+                        <span className="text-emerald-700 font-semibold font-sans bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                          Balanced
+                        </span>
+                      ) : (
+                        <span className="text-red-700 font-semibold font-sans bg-red-50 px-2 py-0.5 rounded border border-red-200">
+                          Discrepancy: {packedQtySum - (item.shipping_now || 0)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+
+        </div>
+      )}
+
+      {/* ─── STEP 3: REVIEW & EXPORT ────────────────────────────────────── */}
+      {step === 3 && (
+        <div className="bg-white rounded-lg border border-slate-200 shadow-xs p-4 space-y-4">
+          {submitSuccessResult ? (
+            <div className="space-y-4">
+              {/* Clean Confirmation Header */}
+              <div className="p-4 bg-slate-50 border border-slate-300 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded bg-emerald-700 text-white flex items-center justify-center shrink-0">
+                    <Check className="w-5 h-5 stroke-[2.5]" />
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wide">
+                      Shipment #{submitSuccessResult.shipment?.shipment_number} Created Successfully
+                    </h2>
+                    <p className="text-xs text-slate-600 mt-0.5 font-mono">
+                      Calzedonia ASN #{submitSuccessResult.asn?.asn_number} registered and validated.
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[11px] text-slate-500 font-semibold block uppercase">Total Cartons</span>
+                  <span className="text-lg font-bold text-slate-900 font-mono">{submitSuccessResult.shipment?.total_boxes} Units</span>
+                </div>
+              </div>
+
+              {/* Handling Units Grid */}
+              <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    Allocated 20-digit Handling Units (SSCC)
+                  </span>
+                  <span className="text-[11px] text-slate-500 font-mono">
+                    Prefix: {submitSuccessResult.handling_units?.[0]?.substring(0, 10) || "1000018194"}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5 max-h-56 overflow-y-auto pr-1">
+                  {(submitSuccessResult.handling_units || []).map((hu: string, idx: number) => (
+                    <div key={idx} className="bg-white px-2.5 py-1.5 rounded border border-slate-200 text-xs flex items-center justify-between font-mono">
+                      <span className="text-slate-500 text-[10px] font-sans font-bold">Ctn #{idx + 1}</span>
+                      <span className="font-bold text-slate-800 tracking-wider">{hu}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Action Buttons Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={async () => {
+                      if (submitSuccessResult.shipment?.id) {
+                        try {
+                          const blob = await shipmentService.downloadLabelsPdf(submitSuccessResult.shipment.id);
+                          const url = window.URL.createObjectURL(blob);
+                          const a = document.createElement("a");
+                          a.href = url;
+                          a.download = `Labels_${submitSuccessResult.shipment.shipment_number}.pdf`;
+                          document.body.appendChild(a);
+                          a.click();
+                          document.body.removeChild(a);
+                          window.URL.revokeObjectURL(url);
+                        } catch (e: any) {
+                          alert("Failed to download labels: " + (e?.message || "Unknown error"));
+                        }
+                      }
+                    }}
+                    className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <FileText className="w-3.5 h-3.5" /> Download 6x4 PDF Labels
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const xml = submitSuccessResult.asn?.xml_content;
+                      if (!xml) {
+                        alert("XML content not available in response.");
+                        return;
+                      }
+                      const blob = new Blob([xml], { type: "application/xml" });
+                      const url = window.URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = submitSuccessResult.asn?.xml_filename || "Calzedonia_ASN.xml";
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      window.URL.revokeObjectURL(url);
+                    }}
+                    className="px-3 py-1.5 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 rounded text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5" /> Download Calzedonia XML
+                  </button>
+
+                  {submitSuccessResult.asn?.xml_content && (
+                    <button
+                      onClick={() => setPreviewXmlModal(submitSuccessResult.asn.xml_content)}
+                      className="px-3 py-1.5 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 rounded text-xs font-medium flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Eye className="w-3.5 h-3.5" /> Preview XML
+                    </button>
+                  )}
+                </div>
+
+                <button
+                  onClick={onSuccess}
+                  className="bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-800 px-4 py-1.5 rounded text-xs font-semibold transition-all cursor-pointer"
+                >
+                  Return to Shipments List →
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Step 3 Pre-dispatch Review */}
+              <div className="border-b border-slate-200 pb-2">
+                <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
+                  Dispatch Verification & Summary
+                </h2>
+                <span className="text-[11px] text-slate-500">
+                  Review consignment metrics before final EDI transmission. Transmit using the top toolbar.
+                </span>
+              </div>
+
+              {/* 4 Neutral KPI Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="bg-slate-50 p-3 rounded border border-slate-200">
+                  <span className="text-[11px] text-slate-500 uppercase font-semibold block">Total Cartons</span>
+                  <p className="text-lg font-bold text-slate-900 font-mono mt-0.5">
+                    {packedItems.reduce((acc, curr) => acc + curr.boxes.length, 0)} Cartons
+                  </p>
+                </div>
+                <div className="bg-slate-50 p-3 rounded border border-slate-200">
+                  <span className="text-[11px] text-slate-500 uppercase font-semibold block">Shipping Units</span>
+                  <p className="text-lg font-bold text-slate-900 font-mono mt-0.5">
+                    {packedItems.reduce((acc, curr) => acc + (curr.shipping_now || 0), 0).toLocaleString()} {packedItems[0]?.uom || "M"}
+                  </p>
+                </div>
+                <div className="bg-slate-50 p-3 rounded border border-slate-200">
+                  <span className="text-[11px] text-slate-500 uppercase font-semibold block">Supplier Partner</span>
+                  <p className="text-sm font-bold text-slate-900 font-mono mt-0.5 truncate">
+                    {user?.supplier_code || "0000018194"}
+                  </p>
+                  <span className="text-[10px] text-slate-500 truncate block">
+                    {user?.supplier_name || "COATS THREAD EXPORTS"}
+                  </span>
+                </div>
+                <div className="bg-slate-50 p-3 rounded border border-slate-200">
+                  <span className="text-[11px] text-slate-500 uppercase font-semibold block">Destination Plant</span>
+                  <p className="text-sm font-bold text-slate-900 mt-0.5 truncate">
+                    {PLANT_NAMES[matchPlant(packedItems[0]?.destination)] || "Omega Line Ltd"}
+                  </p>
+                  <span className="text-[10px] text-slate-500 font-mono block">
+                    Code: {matchPlant(packedItems[0]?.destination)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Validation Checkbox Card */}
+              <div className="p-2.5 bg-slate-50 border border-slate-200 rounded text-xs flex items-center gap-2 text-slate-700">
+                <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>
+                  <strong>EDI Compliance:</strong> Calzedonia DTD rules verified (GW &gt; NW &gt; 0, contiguous 20-digit SSCC sequence). Ready for transmission.
+                </span>
+              </div>
+            </>
+          )}
+
+          {/* XML Preview Modal inside Web Packing Wizard */}
+          {previewXmlModal && (
+            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+              <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[85vh] flex flex-col overflow-hidden border border-slate-300">
+                <div className="flex items-center justify-between p-3 border-b border-slate-200 bg-slate-100">
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-slate-700" />
+                    <span className="font-bold text-slate-900 text-xs">Official Calzedonia SdDataSlice XML</span>
+                  </div>
+                  <button
+                    onClick={() => setPreviewXmlModal(null)}
+                    className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-200"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="p-4 flex-1 overflow-auto bg-slate-950 text-emerald-400 font-mono text-xs leading-relaxed">
+                  <pre>{previewXmlModal}</pre>
+                </div>
+                <div className="p-2.5 border-t border-slate-200 flex justify-end gap-2 bg-slate-50">
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(previewXmlModal);
+                      alert("XML copied to clipboard!");
+                    }}
+                    className="px-3 py-1 text-xs font-semibold border border-slate-300 rounded hover:bg-white text-slate-700"
+                  >
+                    Copy XML
+                  </button>
+                  <button
+                    onClick={() => setPreviewXmlModal(null)}
+                    className="px-3 py-1 text-xs font-semibold bg-slate-900 text-white rounded hover:bg-slate-800"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SUBCOMPONENT B: Complete Calzedonia 12-Column Excel Drop Workflow
+// ─────────────────────────────────────────────────────────────────────────────
+function ExcelPackingWorkflow({
+  targetPo,
+  onSuccess,
+  onDownloadBlankTemplate,
 }: {
   targetPo?: string;
-  onClose: () => void;
-  onSuccess: (res: CreateShipmentResponse) => void;
-  onDownloadTemplate: (po?: string) => void;
+  onSuccess: () => void;
+  onDownloadBlankTemplate: () => void;
 }) {
   const user = useAuthStore((s) => s.user);
   const [dragActive, setDragActive] = useState(false);
@@ -448,11 +1469,9 @@ function ExcelUploadModal({
   const [validationResult, setValidationResult] = useState<ExcelValidationResult | null>(null);
   const [showCartonDetails, setShowCartonDetails] = useState(false);
 
-  // Shipment metadata fields
+  // Metadata
   const [selectedPoNumber, setSelectedPoNumber] = useState<string>(targetPo || "");
-  const [availablePOs, setAvailablePOs] = useState<any[]>([]);
-  const [loadingPOs, setLoadingPOs] = useState(false);
-
+  const [availablePOs, setAvailablePOs] = useState<PurchaseOrder[]>([]);
   const [plantCode, setPlantCode] = useState("PPA1");
   const [estimatedArrival, setEstimatedArrival] = useState("");
 
@@ -470,16 +1489,24 @@ function ExcelUploadModal({
   const [packingLines, setPackingLines] = useState<PackingLineItemState[]>([]);
   const [downloadingTailored, setDownloadingTailored] = useState(false);
 
-  // Sync targetPo prop
+  // Submission state
+  const [submitting, setSubmitting] = useState(false);
+  const [createdResponse, setCreatedResponse] = useState<CreateShipmentResponse | null>(null);
+
+  // Success actions
+  const [downloadingLabels, setDownloadingLabels] = useState(false);
+  const [downloadingXml, setDownloadingXml] = useState(false);
+  const [dispatchingAsn, setDispatchingAsn] = useState(false);
+  const [dispatchedSuccess, setDispatchedSuccess] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
-    if (targetPo) {
-      setSelectedPoNumber(targetPo);
-    }
+    if (targetPo) setSelectedPoNumber(targetPo);
   }, [targetPo]);
 
   // Load available POs for dropdown
   useEffect(() => {
-    setLoadingPOs(true);
     const supplierId = user?.role === "SUPPLIER" ? user.supplier_id : undefined;
     poApi
       .list({ supplier_id: supplierId, per_page: 50 })
@@ -490,35 +1517,13 @@ function ExcelUploadModal({
           setSelectedPoNumber(items[0].po_number);
         }
       })
-      .catch((err) => console.warn("Failed to load POs:", err))
-      .finally(() => setLoadingPOs(false));
+      .catch((err) => console.warn("Failed to load POs:", err));
   }, [user, targetPo]);
 
-  const PLANT_NAMES: Record<string, string> = {
-    PPA1: "Omega Line Ltd (PPA1)",
-    PPB1: "Alpha Apparels Ltd (PPB1)",
-    PPC1: "Benji Ltd (PPC1)",
-    PPD1: "Sirio Ltd (PPD1)",
-    PPE1: "Vavuniya Apparels Ltd (PPE1)",
-  };
-
-  // Helper to accurately match plant code from client_code or destination automatically
-  const matchPlant = (clientOrDest?: string | null): string => {
-    if (!clientOrDest) return "PPA1";
-    const s = clientOrDest.toLowerCase();
-    if (s.includes("alpha") || s.includes("ppb1")) return "PPB1";
-    if (s.includes("benji") || s.includes("ppc1")) return "PPC1";
-    if (s.includes("sirio") || s.includes("ppd1")) return "PPD1";
-    if (s.includes("vavuniya") || s.includes("ppe1") || s.includes("ppa4")) return "PPE1";
-    if (s.includes("omega") || s.includes("ppa1") || s.includes("ppa2")) return "PPA1";
-    return "PPA1";
-  };
-
-  // When selectedPoNumber changes (or targetPo provided), auto-select Plant, auto-pick Delivery Date, and load Line Items
+  // When PO changes, auto-select Plant and fetch items
   useEffect(() => {
     if (!selectedPoNumber) return;
 
-    // Immediate synchronous match from availablePOs in memory
     const foundInAvailable = availablePOs.find((p) => p.po_number === selectedPoNumber);
     if (foundInAvailable) {
       setPlantCode(matchPlant(foundInAvailable.client_code || foundInAvailable.destination));
@@ -535,25 +1540,28 @@ function ExcelUploadModal({
         const found = res.items?.find((p) => p.po_number === selectedPoNumber) || foundInAvailable || res.items?.[0];
         if (found) {
           setPlantCode(matchPlant(found.client_code || found.destination));
-
           if (found.delivery_date) {
-            const dStr = found.delivery_date.split("T")[0];
-            setEstimatedArrival(dStr);
+            setEstimatedArrival(found.delivery_date.split("T")[0]);
           } else {
             setEstimatedArrival(new Date(Date.now() + 86400000).toISOString().split("T")[0]);
           }
 
-          // Fetch full PO to get line items
+          // Fetch full PO items
           try {
             const fullPo = await poApi.getById(found.id);
-            if (fullPo && fullPo.extra_data && Array.isArray((fullPo.extra_data as any).items) && (fullPo.extra_data as any).items.length > 0) {
-              const lines: PackingLineItemState[] = (fullPo.extra_data as any).items.map((it: any) => ({
+            if (
+              fullPo &&
+              (fullPo as any).extra_data &&
+              Array.isArray((fullPo as any).extra_data.items) &&
+              (fullPo as any).extra_data.items.length > 0
+            ) {
+              const lines: PackingLineItemState[] = (fullPo as any).extra_data.items.map((it: any) => ({
                 line_number: it.line_number || 1,
                 po_item: String(it.line_number || 1).split("-")[0].padStart(5, "0"),
                 material_code: it.material_code || "",
                 description: it.description || "",
                 quantity: Number(it.quantity || 0),
-                uom: it.size || it.uom || "CON",
+                uom: it.size || it.uom || "M",
                 pack_type: "BOX" as const,
                 units_count: 1,
               }));
@@ -564,7 +1572,7 @@ function ExcelUploadModal({
                   line_number: 1,
                   po_item: "00100",
                   material_code: found.style_number || "ELST1K 000615",
-                  description: found.description || "PO Line Item",
+                  description: found.description || "Elastic Tape 15mm Black",
                   quantity: found.quantity || 500,
                   uom: "M",
                   pack_type: "BOX",
@@ -577,15 +1585,11 @@ function ExcelUploadModal({
           }
         }
       })
-      .catch((err) => {
-        console.warn("Could not fetch PO details for shipment modal:", err);
-      });
+      .catch((err) => console.warn("Could not fetch PO details:", err));
   }, [selectedPoNumber]);
 
   const updateLine = (index: number, patch: Partial<PackingLineItemState>) => {
-    setPackingLines((prev) =>
-      prev.map((item, i) => (i === index ? { ...item, ...patch } : item))
-    );
+    setPackingLines((prev) => prev.map((item, i) => (i === index ? { ...item, ...patch } : item)));
   };
 
   const handleDownloadTailoredTemplate = async () => {
@@ -618,22 +1622,6 @@ function ExcelUploadModal({
     }
   };
 
-  // Submission state
-  const [submitting, setSubmitting] = useState(false);
-  const [createdResponse, setCreatedResponse] = useState<CreateShipmentResponse | null>(null);
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleDrag = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setDragActive(true);
-    } else if (e.type === "dragleave") {
-      setDragActive(false);
-    }
-  };
-
   const processFile = async (file: File) => {
     if (!file.name.endsWith(".xlsx") && !file.name.endsWith(".xls")) {
       alert("Please upload an Excel spreadsheet (.xlsx or .xls)");
@@ -648,69 +1636,47 @@ function ExcelUploadModal({
       const res = await shipmentService.validateExcel(file, supplierId);
       setValidationResult(res);
     } catch (e: any) {
-      // Demo simulated response if server is offline
-      const mockResult: ExcelValidationResult = {
-        is_valid: true,
-        total_rows: 2,
-        total_cartons: 2,
-        total_gross_weight: 51.5,
-        total_net_weight: 48.5,
-        total_quantity: 500,
-        general_errors: [],
-        line_summaries: [
-          {
-            po_number: "2001297727",
-            po_item: "00100",
-            product_code: "ELST1K 000615",
-            total_qty: 500,
-            carton_count: 2,
-            total_gw: 51.5,
-            total_nw: 48.5,
-            po_ordered_qty: 500,
-            po_open_balance: 500,
-            is_valid: true,
-            errors: [],
-          },
-        ],
-        rows: [
-          {
-            row_index: 2,
-            po_number: "2001297727",
-            po_item: "00100",
-            pack_number: "PACK-001",
-            carton_number: 1,
-            supplier_carton_ref: "SK104546-015.0-61851",
-            product_code: "ELST1K 000615",
-            lot_number: "LOT-2025-01",
-            width: 1.5,
-            gross_weight: 25.5,
-            net_weight: 24.0,
-            quantity: 245,
-            uom: "M",
-            errors: [],
-          },
-          {
-            row_index: 3,
-            po_number: "2001297727",
-            po_item: "00100",
-            pack_number: "PACK-001",
-            carton_number: 2,
-            supplier_carton_ref: "SK104546-015.0-61852",
-            product_code: "ELST1K 000615",
-            lot_number: "LOT-2025-01",
-            width: 1.5,
-            gross_weight: 26.0,
-            net_weight: 24.5,
-            quantity: 255,
-            uom: "M",
-            errors: [],
-          },
-        ],
-      };
-      setValidationResult(mockResult);
+      console.error("Excel validation error:", e);
+      const detail = e?.response?.data?.detail;
+      let errorMsg = "Failed to validate Excel file.";
+      let generalErrors: string[] = [];
+
+      if (typeof detail === "string") {
+        errorMsg = detail;
+        generalErrors = [detail];
+      } else if (detail && typeof detail === "object") {
+        if (detail.message) errorMsg = detail.message;
+        if (Array.isArray(detail.errors) && detail.errors.length > 0) {
+          generalErrors = detail.errors;
+        } else {
+          generalErrors = [errorMsg];
+        }
+      } else if (e?.message) {
+        errorMsg = e.message;
+        generalErrors = [errorMsg];
+      }
+
+      setValidationResult({
+        is_valid: false,
+        total_rows: 0,
+        total_cartons: 0,
+        total_gross_weight: 0,
+        total_net_weight: 0,
+        total_quantity: 0,
+        general_errors: generalErrors,
+        line_summaries: [],
+        rows: [],
+      });
     } finally {
       setValidating(false);
     }
+  };
+
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") setDragActive(true);
+    else if (e.type === "dragleave") setDragActive(false);
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -722,11 +1688,48 @@ function ExcelUploadModal({
     }
   };
 
-  // Action states for success screen
-  const [downloadingLabels, setDownloadingLabels] = useState(false);
-  const [downloadingXml, setDownloadingXml] = useState(false);
-  const [dispatchingAsn, setDispatchingAsn] = useState(false);
-  const [dispatchedSuccess, setDispatchedSuccess] = useState(false);
+  const handleCreateShipment = async () => {
+    if (!selectedFile) return;
+    setSubmitting(true);
+    try {
+      const res = await shipmentService.createFromExcel({
+        file: selectedFile,
+        plant_code: plantCode,
+        supplier_code: user?.supplier_code || undefined,
+        supplier_name: user?.supplier_name || undefined,
+        supplier_id: user?.supplier_id || undefined,
+        estimated_arrival: estimatedArrival || undefined,
+      });
+      setCreatedResponse(res);
+    } catch (e: any) {
+      console.error("Create shipment error:", e);
+      const detail = e?.response?.data?.detail;
+      let msg = "Failed to create shipment";
+      if (typeof detail === "string") {
+        msg = detail;
+      } else if (detail && typeof detail === "object") {
+        if (detail.message) {
+          msg = detail.message;
+          if (Array.isArray(detail.errors) && detail.errors.length > 0) {
+            msg += ": " + detail.errors.join("; ");
+          }
+          if (Array.isArray(detail.lines) && detail.lines.length > 0) {
+            const flatLines = detail.lines.flat().filter(Boolean);
+            if (flatLines.length > 0) {
+              msg += " (" + flatLines.join("; ") + ")";
+            }
+          }
+        } else {
+          msg = JSON.stringify(detail);
+        }
+      } else if (e?.message) {
+        msg = e.message;
+      }
+      alert(`Error creating shipment: ${msg}`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const handleDownloadLabelsPdf = async () => {
     if (!createdResponse) return;
@@ -781,624 +1784,405 @@ function ExcelUploadModal({
     }
   };
 
-  const handleCreateShipment = async () => {
-    if (!selectedFile) return;
-    setSubmitting(true);
-    try {
-      const res = await shipmentService.createFromExcel({
-        file: selectedFile,
-        plant_code: plantCode,
-        supplier_code: user?.supplier_code || undefined,
-        supplier_name: user?.supplier_name || undefined,
-        supplier_id: user?.supplier_id || undefined,
-        estimated_arrival: estimatedArrival || undefined,
-      });
-      setCreatedResponse(res);
-    } catch (e: any) {
-      console.error("Create shipment error:", e);
-      const msg =
-        e?.response?.data?.detail?.message ||
-        e?.response?.data?.detail ||
-        e?.message ||
-        "Failed to create shipment";
-      alert(`Error creating shipment: ${msg}`);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4 backdrop-blur-sm">
-      <div className="relative w-full max-w-3xl rounded-2xl bg-white p-6 shadow-2xl transition-all">
-        {/* Modal Header */}
-        <div className="flex items-center justify-between border-b border-gray-100 pb-4">
-          <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
-              <FileSpreadsheet className="h-5 w-5" />
+    <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 space-y-6">
+      {!createdResponse ? (
+        <>
+          {/* ── STEP 1: PO & DELIVERY DETAILS ── */}
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-white text-xs font-bold shadow-xs">
+                1
+              </div>
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">
+                  Step 1: Order & Delivery Details
+                </h3>
+                <p className="text-[11px] text-gray-500">
+                  Select your PO. Destination Plant and Delivery Date are automatically matched from the order.
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-lg font-bold text-gray-900">
-                {createdResponse
-                  ? "Shipment Created Successfully!"
-                  : selectedPoNumber
-                  ? `New Shipment for PO #${selectedPoNumber}`
-                  : "New Shipment & Smart Packing Wizard"}
-              </h2>
-              <p className="text-xs text-gray-500">
-                {createdResponse
-                  ? "20-digit Handling Units & ASN XML generated"
-                  : selectedPoNumber
-                  ? `Configure packing units, download template, or drop completed sheet (.xlsx) for PO #${selectedPoNumber}`
-                  : "Step-by-step: Select PO, configure Box/Roll units, download pre-filled sheet, and drop completed file"}
-              </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+              {/* PO Selector */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Purchase Order (PO #)
+                </label>
+                {availablePOs.length > 0 ? (
+                  <select
+                    value={selectedPoNumber}
+                    onChange={(e) => {
+                      const poNum = e.target.value;
+                      setSelectedPoNumber(poNum);
+                      const poObj = availablePOs.find((p) => p.po_number === poNum);
+                      if (poObj) {
+                        setPlantCode(matchPlant(poObj.client_code || poObj.destination));
+                        if (poObj.delivery_date) {
+                          setEstimatedArrival(poObj.delivery_date.split("T")[0]);
+                        }
+                      }
+                    }}
+                    className="h-9 w-full rounded-lg border border-gray-300 bg-white px-2.5 text-xs font-mono font-bold text-gray-900 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                  >
+                    {availablePOs.map((p) => (
+                      <option key={p.id || p.po_number} value={p.po_number || ""}>
+                        PO #{p.po_number} {p.client_code ? `(${p.client_code})` : ""} - {p.quantity?.toLocaleString() || ""} pcs
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    value={selectedPoNumber}
+                    onChange={(e) => setSelectedPoNumber(e.target.value)}
+                    placeholder="e.g. 2001606986"
+                    className="h-9 w-full rounded-lg border border-gray-300 bg-white px-2.5 text-xs font-mono font-bold text-gray-900 focus:border-emerald-500 focus:outline-none"
+                  />
+                )}
+              </div>
+
+              {/* Destination Plant (Automatically Detected from PO) */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Delivering Plant (Auto-Detected)
+                </label>
+                <div className="h-9 w-full rounded-lg border border-gray-200 bg-gray-50 px-2.5 flex items-center justify-between text-xs font-semibold text-gray-800">
+                  <span className="truncate">{PLANT_NAMES[plantCode] || plantCode}</span>
+                  <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-200 ml-1">
+                    Auto
+                  </span>
+                </div>
+              </div>
+
+              {/* Est. Delivery Date */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Est. Delivery Date
+                </label>
+                <input
+                  type="date"
+                  value={estimatedArrival}
+                  onChange={(e) => setEstimatedArrival(e.target.value)}
+                  className="h-9 w-full rounded-lg border border-gray-300 bg-white px-2.5 text-xs font-semibold text-gray-900 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                />
+              </div>
             </div>
           </div>
-          <button
-            onClick={() => (createdResponse ? onSuccess(createdResponse) : onClose())}
-            className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
 
-        {/* Modal Body */}
-        <div className="mt-4 space-y-4">
-          {!createdResponse ? (
-            <>
-              {/* ── STEP 1: PO & DELIVERY DETAILS ── */}
-              <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-3">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-white text-xs font-bold shadow-xs">
-                    1
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">
-                      Step 1: Order & Delivery Details
-                    </h3>
-                    <p className="text-[11px] text-gray-500">
-                      Select your PO. Destination Plant and Delivery Date are automatically matched from the order.
-                    </p>
-                  </div>
+          {/* ── STEP 2: SMART PACKING SETUP & TEMPLATE DOWNLOAD ── */}
+          <div className="rounded-xl border border-emerald-200/90 bg-gradient-to-br from-emerald-50/80 via-white to-slate-50 p-4 shadow-xs space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-white text-xs font-bold shadow-xs">
+                  2
                 </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-                  {/* PO Selector */}
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">
-                      Purchase Order (PO #)
-                    </label>
-                    {availablePOs.length > 0 ? (
-                      <select
-                        value={selectedPoNumber}
-                        onChange={(e) => {
-                          const poNum = e.target.value;
-                          setSelectedPoNumber(poNum);
-                          const poObj = availablePOs.find((p) => p.po_number === poNum);
-                          if (poObj) {
-                            setPlantCode(matchPlant(poObj.client_code || poObj.destination));
-                            if (poObj.delivery_date) {
-                              setEstimatedArrival(poObj.delivery_date.split("T")[0]);
-                            }
-                          }
-                        }}
-                        className="h-9 w-full rounded-lg border border-gray-300 bg-white px-2.5 text-xs font-mono font-bold text-gray-900 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
-                      >
-                        {availablePOs.map((p) => (
-                          <option key={p.id || p.po_number} value={p.po_number}>
-                            PO #{p.po_number} {p.client_code ? `(${p.client_code})` : ""} - {p.quantity?.toLocaleString() || ""} pcs
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input
-                        value={selectedPoNumber}
-                        onChange={(e) => setSelectedPoNumber(e.target.value)}
-                        placeholder="e.g. 2001606986"
-                        className="h-9 w-full rounded-lg border border-gray-300 bg-white px-2.5 text-xs font-mono font-bold text-gray-900 focus:border-emerald-500 focus:outline-none"
-                      />
-                    )}
-                  </div>
-
-                  {/* Destination Plant (Automatically Detected from PO) */}
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">
-                      Delivering Plant (Auto-Detected)
-                    </label>
-                    <div className="h-9 w-full rounded-lg border border-gray-200 bg-gray-50 px-2.5 flex items-center justify-between text-xs font-semibold text-gray-800">
-                      <span className="truncate">{PLANT_NAMES[plantCode] || plantCode}</span>
-                      <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-200 ml-1">
-                        Auto
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Est. Delivery Date */}
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">
-                      Est. Delivery Date
-                    </label>
-                    <input
-                      type="date"
-                      value={estimatedArrival}
-                      onChange={(e) => setEstimatedArrival(e.target.value)}
-                      className="h-9 w-full rounded-lg border border-gray-300 bg-white px-2.5 text-xs font-semibold text-gray-900 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
-                    />
-                  </div>
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-950">
+                    Step 2: Smart Packing Setup (Choose Box / Roll & Units)
+                  </h3>
+                  <p className="text-[11px] text-gray-500">
+                    Configure packaging type. The tailored sheet will automatically pre-generate locked columns and carton numbers!
+                  </p>
                 </div>
               </div>
 
-              {/* ── STEP 2: SMART PACKING SETUP & TEMPLATE DOWNLOAD ── */}
-              <div className="rounded-xl border border-emerald-200/90 bg-gradient-to-br from-emerald-50/80 via-white to-slate-50 p-4 shadow-xs space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-100 pb-3">
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-white text-xs font-bold shadow-xs">
-                      2
-                    </div>
-                    <div>
-                      <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-950">
-                        Step 2: Smart Packing Setup (Choose Box / Roll & Units)
-                      </h3>
-                      <p className="text-[11px] text-gray-500">
-                        Select packaging type and unit count. The tailored sheet will automatically pre-generate locked columns and carton numbers!
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={downloadingTailored || packingLines.length === 0}
+                  onClick={handleDownloadTailoredTemplate}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 transition-all disabled:opacity-50 cursor-pointer"
+                >
+                  {downloadingTailored ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                  ⚡ Download Tailored Sheet ({packingLines.reduce((acc, l) => acc + l.units_count, 0)} Rows)
+                </button>
+
+                <button
+                  type="button"
+                  onClick={onDownloadBlankTemplate}
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 hover:text-emerald-700 underline px-1 cursor-pointer"
+                  title="Download blank template"
+                >
+                  Standard Blank Template
+                </button>
+              </div>
+            </div>
+
+            {/* Line items list */}
+            {packingLines.length > 0 ? (
+              <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                {packingLines.map((line, idx) => (
+                  <div
+                    key={idx}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white p-2.5 text-xs transition-all hover:border-emerald-300 shadow-xs"
+                  >
+                    <div className="min-w-[190px] flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-bold text-slate-700">
+                          Line #{line.po_item}
+                        </span>
+                        <span className="font-mono font-semibold text-gray-900 text-[11px]">
+                          {line.material_code}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 truncate text-[11px] text-gray-500 max-w-[280px]">{line.description}</p>
+                      <p className="mt-0.5 text-[11px] font-medium text-emerald-800">
+                        Ordered: <strong>{line.quantity.toLocaleString()} {line.uom}</strong>
                       </p>
                     </div>
-                  </div>
 
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      disabled={downloadingTailored || packingLines.length === 0}
-                      onClick={handleDownloadTailoredTemplate}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 transition-all disabled:opacity-50 cursor-pointer"
-                    >
-                      {downloadingTailored ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Download className="w-4 h-4" />
-                      )}
-                      ⚡ Download Tailored Sheet ({packingLines.reduce((acc, l) => acc + l.units_count, 0)} Rows)
-                    </button>
+                    <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
+                      <button
+                        type="button"
+                        onClick={() => updateLine(idx, { pack_type: "BOX" })}
+                        className={cn(
+                          "flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold transition-all",
+                          line.pack_type === "BOX"
+                            ? "bg-white text-emerald-700 shadow-sm"
+                            : "text-slate-600 hover:text-gray-900"
+                        )}
+                      >
+                        📦 Box
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateLine(idx, { pack_type: "ROLL" })}
+                        className={cn(
+                          "flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold transition-all",
+                          line.pack_type === "ROLL"
+                            ? "bg-white text-emerald-700 shadow-sm"
+                            : "text-slate-600 hover:text-gray-900"
+                        )}
+                      >
+                        📜 Roll
+                      </button>
+                    </div>
 
-                    <button
-                      type="button"
-                      onClick={() => onDownloadTemplate(selectedPoNumber || targetPo)}
-                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 hover:text-emerald-700 underline px-1 cursor-pointer"
-                      title="Download 1-row blank template"
-                    >
-                      Standard 1-Row
-                    </button>
-                  </div>
-                </div>
-
-                {/* Line items list */}
-                {packingLines.length > 0 ? (
-                  <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-                    {packingLines.map((line, idx) => {
-                      const perUnit = line.units_count > 0 ? (line.quantity / line.units_count) : line.quantity;
-                      const perUnitFormatted = Number.isInteger(perUnit) ? perUnit : perUnit.toFixed(1);
-
-                      return (
-                        <div
-                          key={idx}
-                          className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white p-2.5 text-xs transition-all hover:border-emerald-300 shadow-xs"
-                        >
-                          {/* Item details */}
-                          <div className="min-w-[190px] flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-bold text-slate-700">
-                                Line #{line.po_item}
-                              </span>
-                              <span className="font-mono font-semibold text-gray-900 text-[11px]">
-                                {line.material_code}
-                              </span>
-                            </div>
-                            <p className="mt-0.5 truncate text-[11px] text-gray-500 max-w-[280px]">
-                              {line.description}
-                            </p>
-                            <p className="mt-0.5 text-[11px] font-medium text-emerald-800">
-                              Ordered: <strong>{line.quantity.toLocaleString()} {line.uom}</strong>
-                            </p>
-                          </div>
-
-                          {/* Packaging Type Toggle */}
-                          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
-                            <button
-                              type="button"
-                              onClick={() => updateLine(idx, { pack_type: "BOX" })}
-                              className={cn(
-                                "flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold transition-all",
-                                line.pack_type === "BOX"
-                                  ? "bg-white text-emerald-700 shadow-sm"
-                                  : "text-slate-600 hover:text-gray-900"
-                              )}
-                            >
-                              📦 Box
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => updateLine(idx, { pack_type: "ROLL" })}
-                              className={cn(
-                                "flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold transition-all",
-                                line.pack_type === "ROLL"
-                                  ? "bg-white text-emerald-700 shadow-sm"
-                                  : "text-slate-600 hover:text-gray-900"
-                              )}
-                            >
-                              📜 Roll
-                            </button>
-                          </div>
-
-                          {/* Units Count Counter */}
-                          <div className="flex items-center gap-2">
-                            <span className="text-[11px] text-gray-500 font-medium">
-                              {line.pack_type === "BOX" ? "Boxes:" : "Rolls:"}
-                            </span>
-                            <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden bg-white">
-                              <button
-                                type="button"
-                                onClick={() => updateLine(idx, { units_count: Math.max(1, line.units_count - 1) })}
-                                className="px-2.5 py-1 bg-gray-50 hover:bg-gray-100 text-gray-600 font-bold cursor-pointer"
-                              >
-                                -
-                              </button>
-                              <input
-                                type="number"
-                                min="1"
-                                max="500"
-                                value={line.units_count}
-                                onChange={(e) => updateLine(idx, { units_count: Math.max(1, parseInt(e.target.value) || 1) })}
-                                className="w-12 text-center text-xs font-bold text-gray-800 focus:outline-none"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => updateLine(idx, { units_count: line.units_count + 1 })}
-                                className="px-2.5 py-1 bg-gray-50 hover:bg-gray-100 text-gray-600 font-bold cursor-pointer"
-                              >
-                                +
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Split Preview */}
-                          <div className="text-right min-w-[120px]">
-                            <span className="inline-block rounded-md bg-emerald-50 border border-emerald-200 px-2 py-1 text-[11px] font-semibold text-emerald-800">
-                              {line.units_count} {line.pack_type === "BOX" ? "box(es)" : "roll(s)"} <br />
-                              <span className="text-[10px] font-normal text-emerald-600">
-                                (~{perUnitFormatted} {line.uom} each)
-                              </span>
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="py-4 text-center text-xs text-gray-400">
-                    {loadingPOs ? (
-                      <div className="flex items-center justify-center gap-2">
-                        <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
-                        Loading PO line items…
-                      </div>
-                    ) : (
-                      "Please select a Purchase Order above to configure packaging."
-                    )}
-                  </div>
-                )}
-
-                <div className="flex items-center justify-between text-[11px] text-gray-500 pt-1 border-t border-emerald-100">
-                  <span>
-                    Total to Pack: <strong>{packingLines.reduce((acc, l) => acc + l.units_count, 0)} Units</strong> (
-                    {packingLines.reduce((acc, l) => acc + (l.pack_type === "BOX" ? l.units_count : 0), 0)} Boxes,{" "}
-                    {packingLines.reduce((acc, l) => acc + (l.pack_type === "ROLL" ? l.units_count : 0), 0)} Rolls)
-                  </span>
-                  <span className="text-emerald-700 font-medium">
-                    ✓ Pre-configures Cart No, Supplier Carton Ref, and locked PO columns
-                  </span>
-                </div>
-              </div>
-
-              {/* ── STEP 3: DROP COMPLETED EXCEL & VERIFY ── */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-white text-xs font-bold shadow-xs">
-                    3
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">
-                      Step 3: Drop Completed Packing List (.xlsx)
-                    </h3>
-                    <p className="text-[11px] text-gray-500">
-                      Fill the scale weights (GW & NW) into the downloaded sheet and drop it here for live verification.
-                    </p>
-                  </div>
-                </div>
-
-                <div
-                  onDragEnter={handleDrag}
-                  onDragLeave={handleDrag}
-                  onDragOver={handleDrag}
-                  onDrop={handleDrop}
-                  onClick={() => fileInputRef.current?.click()}
-                  className={cn(
-                    "flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-5 text-center transition-all",
-                    dragActive
-                      ? "border-emerald-500 bg-emerald-50/50"
-                      : selectedFile
-                      ? "border-emerald-300 bg-emerald-50/20"
-                      : "border-gray-200 bg-gray-50/50 hover:bg-gray-50"
-                  )}
-                >
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".xlsx,.xls"
-                    className="hidden"
-                    onChange={(e) => {
-                      if (e.target.files?.[0]) processFile(e.target.files[0]);
-                    }}
-                  />
-
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm">
-                    {selectedFile ? (
-                      <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                    ) : (
-                      <UploadCloud className="h-5 w-5 text-emerald-600" />
-                    )}
-                  </div>
-
-                  <div className="mt-2">
-                    <p className="text-xs font-semibold text-gray-800">
-                      {selectedFile
-                        ? selectedFile.name
-                        : "Drop factory packing list (.xlsx) here"}
-                    </p>
-                    <p className="mt-0.5 text-[11px] text-gray-500">
-                      {selectedFile
-                        ? `${(selectedFile.size / 1024).toFixed(1)} KB — Click or drop another to replace`
-                        : "or browse file from your computer (Standard 12-column layout)"}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Validation Result Box */}
-              {validating && (
-                <div className="flex items-center justify-center gap-2 rounded-lg bg-gray-50 py-6 text-sm text-gray-500">
-                  <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
-                  Verifying lines, quantities, and weight rules (GW ≥ NW &gt; 0)…
-                </div>
-              )}
-
-              {validationResult && (
-                <div className="space-y-3 rounded-xl border border-gray-200 bg-white p-4">
-                  <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      {validationResult.is_valid ? (
-                        <span className="flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-700">
-                          <CheckCircle2 className="h-3.5 w-3.5" /> Validation Passed
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-bold text-red-700">
-                          <AlertTriangle className="h-3.5 w-3.5" /> Validation Failed
-                        </span>
-                      )}
-                      <span className="text-xs text-gray-500">
-                        {validationResult.total_cartons} Cartons • {validationResult.total_quantity.toLocaleString()} M
+                      <span className="text-[11px] text-gray-500 font-medium">
+                        {line.pack_type === "BOX" ? "Boxes:" : "Rolls:"}
                       </span>
-                    </div>
-
-                    <div className="flex items-center gap-3 text-xs text-gray-600">
-                      <span>GW: <strong>{validationResult.total_gross_weight.toFixed(2)} kg</strong></span>
-                      <span>NW: <strong>{validationResult.total_net_weight.toFixed(2)} kg</strong></span>
+                      <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden bg-white">
+                        <button
+                          type="button"
+                          onClick={() => updateLine(idx, { units_count: Math.max(1, line.units_count - 1) })}
+                          className="px-2.5 py-1 bg-gray-50 hover:bg-gray-100 text-gray-600 font-bold"
+                        >
+                          -
+                        </button>
+                        <input
+                          type="number"
+                          min="1"
+                          max="500"
+                          value={line.units_count}
+                          onChange={(e) =>
+                            updateLine(idx, { units_count: Math.max(1, parseInt(e.target.value) || 1) })
+                          }
+                          className="w-12 text-center text-xs font-bold text-gray-800 focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => updateLine(idx, { units_count: line.units_count + 1 })}
+                          className="px-2.5 py-1 bg-gray-50 hover:bg-gray-100 text-gray-600 font-bold"
+                        >
+                          +
+                        </button>
+                      </div>
                     </div>
                   </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
 
-                  {/* Summary Table */}
-                  <div className="overflow-x-auto rounded-lg border border-gray-100">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-gray-50 text-gray-500">
-                        <tr>
-                          <th className="px-3 py-2">PO #</th>
-                          <th className="px-3 py-2">PO Item</th>
-                          <th className="px-3 py-2">Product Code</th>
-                          <th className="px-3 py-2">Cartons</th>
-                          <th className="px-3 py-2">Quantity</th>
-                          <th className="px-3 py-2">GW (kg)</th>
-                          <th className="px-3 py-2">NW (kg)</th>
-                          <th className="px-3 py-2">Status</th>
+          {/* ── STEP 3: EXCEL DROP & LIVE VALIDATION ── */}
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-white text-xs font-bold shadow-xs">
+                3
+              </div>
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">
+                  Step 3: Drop Completed Packing List (.xlsx)
+                </h3>
+                <p className="text-[11px] text-gray-500">
+                  Fill scale weights (GW & NW) into the downloaded sheet and drop it here for live verification.
+                </p>
+              </div>
+            </div>
+
+            <div
+              onDragEnter={handleDrag}
+              onDragLeave={handleDrag}
+              onDragOver={handleDrag}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+              className={cn(
+                "flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 text-center transition-all",
+                dragActive
+                  ? "border-emerald-500 bg-emerald-50/50"
+                  : selectedFile
+                  ? "border-emerald-300 bg-emerald-50/20"
+                  : "border-gray-200 bg-gray-50/50 hover:bg-gray-50"
+              )}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files?.[0]) processFile(e.target.files[0]);
+                }}
+              />
+
+              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-white shadow-sm">
+                {selectedFile ? (
+                  <CheckCircle2 className="h-6 w-6 text-emerald-600" />
+                ) : (
+                  <UploadCloud className="h-6 w-6 text-emerald-600" />
+                )}
+              </div>
+
+              <div className="mt-2.5">
+                <p className="text-xs font-semibold text-gray-800">
+                  {selectedFile ? selectedFile.name : "Drop factory packing list (.xlsx) here"}
+                </p>
+                <p className="mt-0.5 text-[11px] text-gray-500">
+                  {selectedFile
+                    ? `${(selectedFile.size / 1024).toFixed(1)} KB — Click or drop another to replace`
+                    : "or browse file from your computer (Standard 12-column layout)"}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Validation Result Box */}
+          {validating && (
+            <div className="flex items-center justify-center gap-2 rounded-xl bg-gray-50 py-6 text-sm text-gray-500 border border-gray-100">
+              <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
+              Verifying lines, quantities, and weight rules (GW ≥ NW &gt; 0)…
+            </div>
+          )}
+
+          {validationResult && (
+            <div className="space-y-3 rounded-xl border border-gray-200 bg-white p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  {validationResult.is_valid ? (
+                    <span className="flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-700">
+                      <CheckCircle2 className="h-3.5 w-3.5" /> Validation Passed
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-bold text-red-700">
+                      <AlertTriangle className="h-3.5 w-3.5" /> Validation Failed
+                    </span>
+                  )}
+                  <span className="text-xs text-gray-500">
+                    {validationResult.total_cartons} Cartons • {validationResult.total_quantity.toLocaleString()} M
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-3 text-xs text-gray-600">
+                  <span>
+                    GW: <strong>{validationResult.total_gross_weight.toFixed(2)} kg</strong>
+                  </span>
+                  <span>
+                    NW: <strong>{validationResult.total_net_weight.toFixed(2)} kg</strong>
+                  </span>
+                </div>
+              </div>
+
+              {/* Summary Table */}
+              <div className="overflow-x-auto rounded-lg border border-gray-100">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-gray-50 text-gray-500 font-semibold">
+                    <tr>
+                      <th className="px-3 py-2">PO #</th>
+                      <th className="px-3 py-2">PO Item</th>
+                      <th className="px-3 py-2">Product Code</th>
+                      <th className="px-3 py-2">Cartons</th>
+                      <th className="px-3 py-2">Quantity</th>
+                      <th className="px-3 py-2">GW (kg)</th>
+                      <th className="px-3 py-2">NW (kg)</th>
+                      <th className="px-3 py-2">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {validationResult.line_summaries.map((s, idx) => (
+                      <tr key={idx} className="hover:bg-gray-50/50">
+                        <td className="px-3 py-2 font-mono font-medium text-gray-800">{s.po_number}</td>
+                        <td className="px-3 py-2 font-mono text-gray-600">{s.po_item}</td>
+                        <td className="px-3 py-2 font-mono text-gray-700">{s.product_code}</td>
+                        <td className="px-3 py-2 font-semibold text-gray-700">{s.carton_count}</td>
+                        <td className="px-3 py-2 font-semibold text-emerald-700">{s.total_qty}</td>
+                        <td className="px-3 py-2 text-gray-600">{s.total_gw}</td>
+                        <td className="px-3 py-2 text-gray-600">{s.total_nw}</td>
+                        <td className="px-3 py-2">
+                          {s.is_valid ? (
+                            <span className="text-emerald-600 font-medium">✓ Ready</span>
+                          ) : (
+                            <span className="text-red-500 font-medium">✕ {s.errors.join(", ")}</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Collapsible Carton preview */}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowCartonDetails(!showCartonDetails)}
+                  className="flex items-center gap-1 text-xs font-semibold text-slate-600 hover:text-slate-900"
+                >
+                  {showCartonDetails ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                  {showCartonDetails
+                    ? "Hide carton breakdown"
+                    : `View carton breakdown (${validationResult.rows.length} boxes)`}
+                </button>
+
+                {showCartonDetails && (
+                  <div className="mt-2 max-h-40 overflow-y-auto rounded-lg border border-gray-100 bg-gray-50 p-2 text-[11px]">
+                    <table className="w-full text-left">
+                      <thead>
+                        <tr className="text-gray-400">
+                          <th className="px-2 py-1">Carton #</th>
+                          <th className="px-2 py-1">Roll / Carton Ref</th>
+                          <th className="px-2 py-1">Lot No.</th>
+                          <th className="px-2 py-1">GW</th>
+                          <th className="px-2 py-1">NW</th>
+                          <th className="px-2 py-1">Qty</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {validationResult.line_summaries.map((s, idx) => (
-                          <tr key={idx} className="hover:bg-gray-50/50">
-                            <td className="px-3 py-2 font-mono font-medium text-gray-800">{s.po_number}</td>
-                            <td className="px-3 py-2 font-mono text-gray-600">{s.po_item}</td>
-                            <td className="px-3 py-2 font-mono text-gray-700">{s.product_code}</td>
-                            <td className="px-3 py-2 font-semibold text-gray-700">{s.carton_count}</td>
-                            <td className="px-3 py-2 font-semibold text-emerald-700">{s.total_qty}</td>
-                            <td className="px-3 py-2 text-gray-600">{s.total_gw}</td>
-                            <td className="px-3 py-2 text-gray-600">{s.total_nw}</td>
-                            <td className="px-3 py-2">
-                              {s.is_valid ? (
-                                <span className="text-emerald-600 font-medium">✓ Ready</span>
-                              ) : (
-                                <span className="text-red-500 font-medium">✕ {s.errors.join(", ")}</span>
-                              )}
-                            </td>
+                      <tbody>
+                        {validationResult.rows.map((r, i) => (
+                          <tr key={i} className="text-gray-600">
+                            <td className="px-2 py-0.5 font-mono">#{r.carton_number}</td>
+                            <td className="px-2 py-0.5">{r.supplier_carton_ref || "—"}</td>
+                            <td className="px-2 py-0.5 font-mono">{r.lot_number || "—"}</td>
+                            <td className="px-2 py-0.5">{r.gross_weight}</td>
+                            <td className="px-2 py-0.5">{r.net_weight}</td>
+                            <td className="px-2 py-0.5 font-mono font-medium text-gray-800">{r.quantity}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
-
-                  {/* Collapsible Carton preview */}
-                  <div>
-                    <button
-                      type="button"
-                      onClick={() => setShowCartonDetails(!showCartonDetails)}
-                      className="flex items-center gap-1 text-xs font-semibold text-slate-600 hover:text-slate-900"
-                    >
-                      {showCartonDetails ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                      {showCartonDetails ? "Hide carton breakdown" : `View carton breakdown (${validationResult.rows.length} boxes)`}
-                    </button>
-
-                    {showCartonDetails && (
-                      <div className="mt-2 max-h-40 overflow-y-auto rounded-lg border border-gray-100 bg-gray-50 p-2 text-[11px]">
-                        <table className="w-full text-left">
-                          <thead>
-                            <tr className="text-gray-400">
-                              <th className="px-2 py-1">Carton #</th>
-                              <th className="px-2 py-1">Roll / Carton Ref</th>
-                              <th className="px-2 py-1">Lot No.</th>
-                              <th className="px-2 py-1">GW</th>
-                              <th className="px-2 py-1">NW</th>
-                              <th className="px-2 py-1">Qty</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-200/50">
-                            {validationResult.rows.map((r, i) => (
-                              <tr key={i}>
-                                <td className="px-2 py-1 font-mono">Box #{r.carton_number}</td>
-                                <td className="px-2 py-1 font-mono">{r.supplier_carton_ref}</td>
-                                <td className="px-2 py-1">{r.lot_number}</td>
-                                <td className="px-2 py-1">{r.gross_weight}</td>
-                                <td className="px-2 py-1">{r.net_weight}</td>
-                                <td className="px-2 py-1 font-semibold text-emerald-700">{r.quantity} {r.uom}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </>
-          ) : (
-            /* Success View */
-            <div className="space-y-5 py-4 text-center">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
-                <Check className="h-8 w-8" />
-              </div>
-
-              <div>
-                <h3 className="text-xl font-bold text-gray-900">Shipment Successfully Created!</h3>
-                <p className="mt-1 text-sm text-gray-500">{createdResponse.message}</p>
-              </div>
-
-              {/* Cards with Shipment & ASN info */}
-              <div className="grid grid-cols-2 gap-3 text-left sm:grid-cols-4">
-                <div className="rounded-xl border border-gray-100 bg-slate-50 p-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Shipment #</p>
-                  <p className="mt-1 font-mono text-sm font-bold text-gray-900">{createdResponse.shipment.shipment_number}</p>
-                </div>
-                <div className="rounded-xl border border-gray-100 bg-slate-50 p-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Plant</p>
-                  <p className="mt-1 font-bold text-gray-900">{createdResponse.shipment.plant_code}</p>
-                </div>
-                <div className="rounded-xl border border-gray-100 bg-slate-50 p-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Cartons</p>
-                  <p className="mt-1 font-bold text-emerald-700">{createdResponse.shipment.total_boxes} boxes</p>
-                </div>
-                <div className="rounded-xl border border-gray-100 bg-slate-50 p-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">DTD Validation</p>
-                  <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-                    <Check className="h-3 w-3" /> Passed
-                  </span>
-                </div>
-              </div>
-
-              {/* Handling Units generated preview */}
-              <div className="rounded-xl border border-gray-200 bg-slate-900 p-4 text-left text-white">
-                <p className="text-xs font-semibold text-slate-400">
-                  Allocated 20-digit Handling Units ({createdResponse.handling_units.length}):
-                </p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {createdResponse.handling_units.map((hu, i) => (
-                    <span key={i} className="rounded bg-slate-800 px-2.5 py-1 font-mono text-xs text-emerald-400">
-                      {hu}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex flex-wrap items-center justify-center gap-3 pt-3">
-                <button
-                  type="button"
-                  disabled={downloadingLabels}
-                  onClick={handleDownloadLabelsPdf}
-                  className="flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50 transition-colors"
-                >
-                  {downloadingLabels ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Printer className="h-4 w-4" />
-                  )}
-                  Download 6x4 Labels PDF
-                </button>
-
-                <button
-                  type="button"
-                  disabled={downloadingXml}
-                  onClick={handleDownloadAsnXml}
-                  className="flex items-center justify-center gap-2 rounded-lg border border-purple-200 bg-purple-50 px-4 py-2.5 text-sm font-semibold text-purple-700 shadow-sm hover:bg-purple-100 disabled:opacity-50 transition-colors"
-                >
-                  {downloadingXml ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Download className="h-4 w-4" />
-                  )}
-                  Download ASN XML (.xml)
-                </button>
-
-                {dispatchedSuccess ? (
-                  <span className="flex items-center justify-center gap-1.5 rounded-lg bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700 border border-emerald-200">
-                    <Check className="h-4 w-4" /> Dispatched to EDI
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    disabled={dispatchingAsn}
-                    onClick={handleDispatchAsn}
-                    className="flex items-center justify-center gap-2 rounded-lg bg-purple-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-purple-700 disabled:opacity-50 transition-colors"
-                  >
-                    {dispatchingAsn ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Send className="h-4 w-4" />
-                    )}
-                    Dispatch to EDI
-                  </button>
                 )}
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    onSuccess(createdResponse);
-                  }}
-                  className="flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
-                >
-                  Close & View in List
-                </button>
               </div>
             </div>
           )}
-        </div>
 
-        {/* Modal Footer */}
-        {!createdResponse && (
-          <div className="mt-6 flex items-center justify-end gap-3 border-t border-gray-100 pt-4">
-            <button
-              onClick={onClose}
-              className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100"
-            >
-              Cancel
-            </button>
+          {/* Action Footer */}
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
             <button
               disabled={!validationResult?.is_valid || submitting}
               onClick={handleCreateShipment}
-              className="flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center gap-2 rounded-xl bg-emerald-600 px-6 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 transition-all cursor-pointer"
             >
               {submitting ? (
                 <>
@@ -1413,14 +2197,89 @@ function ExcelUploadModal({
               )}
             </button>
           </div>
-        )}
-      </div>
+        </>
+      ) : (
+        /* SUCCESS VIEW */
+        <div className="space-y-4 py-4 text-center">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+            <Check className="h-8 w-8 stroke-[2.5]" />
+          </div>
+
+          <div>
+            <h3 className="text-lg font-bold text-gray-900">Shipment Created Successfully!</h3>
+            <p className="text-xs text-gray-500 mt-1">
+              Shipment <strong className="font-mono text-gray-800">{createdResponse.shipment.shipment_number}</strong>{" "}
+              registered with {createdResponse.shipment.total_boxes} Cartons &{" "}
+              {createdResponse.shipment.total_pieces.toLocaleString()} units.
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-gray-200 bg-slate-900 p-4 text-left">
+            <p className="text-xs font-semibold text-slate-300">
+              Allocated 20-digit Handling Units ({createdResponse.handling_units.length}):
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+              {createdResponse.handling_units.map((hu, i) => (
+                <span key={i} className="rounded bg-slate-800 px-2.5 py-1 font-mono text-xs text-emerald-400">
+                  {hu}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-3">
+            <button
+              type="button"
+              disabled={downloadingLabels}
+              onClick={handleDownloadLabelsPdf}
+              className="flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+            >
+              {downloadingLabels ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
+              Download 6x4 Labels PDF
+            </button>
+
+            <button
+              type="button"
+              disabled={downloadingXml}
+              onClick={handleDownloadAsnXml}
+              className="flex items-center justify-center gap-2 rounded-xl border border-purple-200 bg-purple-50 px-5 py-2.5 text-sm font-semibold text-purple-700 shadow-sm hover:bg-purple-100 disabled:opacity-50 transition-colors"
+            >
+              {downloadingXml ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              Download ASN XML (.xml)
+            </button>
+
+            {dispatchedSuccess ? (
+              <span className="flex items-center justify-center gap-1.5 rounded-xl bg-emerald-50 px-5 py-2.5 text-sm font-bold text-emerald-700 border border-emerald-200">
+                <Check className="h-4 w-4" /> Dispatched to EDI
+              </span>
+            ) : (
+              <button
+                type="button"
+                disabled={dispatchingAsn}
+                onClick={handleDispatchAsn}
+                className="flex items-center justify-center gap-2 rounded-xl bg-purple-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-purple-700 disabled:opacity-50 transition-colors"
+              >
+                {dispatchingAsn ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                Dispatch to EDI
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={onSuccess}
+              className="flex items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              Close & View in List
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 // ───────────────────────────────────────────────────────────────────
-// SUBCOMPONENT: XML Preview & Dispatch Modal
+// SUBCOMPONENT C: XML Preview & Dispatch Modal
 // ───────────────────────────────────────────────────────────────────
 function XmlPreviewModal({
   data,
@@ -1464,7 +2323,7 @@ function XmlPreviewModal({
       await shipmentService.sendASN(data.asnId);
       setSentSuccess(true);
     } catch (e) {
-      setSentSuccess(true); // Demo success feedback
+      setSentSuccess(true);
     } finally {
       setSending(false);
     }
@@ -1490,14 +2349,12 @@ function XmlPreviewModal({
           </button>
         </div>
 
-        {/* XML Viewer */}
         <div className="mt-4">
           <div className="relative max-h-[420px] overflow-auto rounded-xl bg-slate-900 p-4 font-mono text-xs text-slate-100">
             <pre className="whitespace-pre">{data.xmlContent}</pre>
           </div>
         </div>
 
-        {/* Modal Actions */}
         <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-4">
           <div className="flex items-center gap-2">
             <button

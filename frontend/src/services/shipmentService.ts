@@ -119,6 +119,65 @@ export const shipmentService = {
   },
 
   /**
+   * Create shipment directly from Web Packing Wizard (JSON carton payload)
+   */
+  async createDirect(params: {
+    plant_code: string;
+    supplier_code?: string;
+    supplier_name?: string;
+    supplier_id?: string;
+    carrier?: string;
+    tracking_number?: string;
+    estimated_arrival?: string;
+    note?: string;
+    cartons: Array<{
+      po_number: string;
+      po_line: string;
+      product_code: string;
+      description?: string;
+      partner_product_code?: string;
+      lot_number?: string;
+      quantity: number;
+      uom: string;
+      net_weight: number;
+      gross_weight: number;
+      supplier_carton_ref?: string;
+      packaging_type?: string;
+      hu_number?: string;
+    }>;
+  }): Promise<{
+    success: boolean;
+    message: string;
+    shipment: {
+      id: string;
+      shipment_number: string;
+      plant_code: string;
+      status: string;
+      total_boxes: number;
+      total_pieces: number;
+      ship_date?: string;
+      carrier?: string;
+    };
+    asn: {
+      id: string;
+      asn_number: string;
+      status: string;
+      xml_validated: boolean;
+      xml_filename: string;
+      email_subject: string;
+      xml_content?: string;
+    };
+    handling_units: string[];
+    xml_validation: {
+      valid: boolean;
+      errors: Array<{ field: string; message: string }>;
+    };
+  }> {
+    const res = await api.post("/shipments/create-direct", params);
+    return res.data;
+  },
+
+  /**
    * Create shipment from validated Excel file.
    */
   async createFromExcel(params: {
@@ -203,4 +262,23 @@ export const shipmentService = {
     const res = await api.post(url);
     return res.data;
   },
+
+  /**
+   * Fetch next available HU sequence number for supplier.
+   */
+  async getNextHuSequence(supplierCode?: string, supplierId?: string): Promise<{
+    supplier_id: string;
+    supplier_code: string;
+    prefix: string;
+    last_number: number;
+    next_number: number;
+    next_hu: string;
+  }> {
+    const params = new URLSearchParams();
+    if (supplierCode) params.append("supplier_code", supplierCode);
+    if (supplierId) params.append("supplier_id", supplierId);
+    const res = await api.get(`/shipments/next-hu-sequence?${params.toString()}`);
+    return res.data;
+  },
 };
+

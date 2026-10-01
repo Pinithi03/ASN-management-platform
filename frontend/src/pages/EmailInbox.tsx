@@ -56,6 +56,7 @@ export default function EmailInbox() {
         page,
         per_page: 50,
       }),
+    placeholderData: (previousData) => previousData,
     refetchInterval: 5000, // Continuous autonomous polling every 5s
     refetchIntervalInBackground: true,
   });
@@ -64,6 +65,7 @@ export default function EmailInbox() {
     queryKey: ["emailDetail", selectedEmailId],
     queryFn: () => emailApi.getById(selectedEmailId!),
     enabled: !!selectedEmailId,
+    staleTime: 60000,
     refetchInterval: (query) => {
       const status = query.state.data?.status;
       return status === "QUEUED" ? 3000 : false;

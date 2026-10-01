@@ -1,8 +1,7 @@
-# backend/app/email/parsers/__init__.py
 """
-Parser chain orchestrator.
+Email parsing package for the ANS Management Platform.
 
-Receives a DecodedEmail + ClassificationResult and routes to the
+Dispatches decoded email content (attachments and HTML body) to the
 correct parser. Returns a list of ParsedPO dataclasses.
 """
 
@@ -33,24 +32,37 @@ def normalize_po_number(po_str: Optional[str]) -> str:
     if not po_str:
         return ""
     s = str(po_str).strip()
-    # Strip common Oniverse plant order type prefixes: e.g. ZA6A-, ZA6B-, IT01-, etc.
     m = re.match(r"^[A-Z0-9]{2,6}\s*[-–—_]\s*(\d{7,15})$", s, re.IGNORECASE)
     if m:
         return m.group(1)
-    # Strip generic PO- prefix
     m_po = re.match(r"^(?:PO|P\.O\.)\s*[-#:\s]*(\w+)$", s, re.IGNORECASE)
     if m_po:
         return m_po.group(1)
     return s
 
 
+def is_same_po(a: str, b: str) -> bool:
+    if not a or not b:
+        return False
+    clean_a = normalize_po_number(a)
+    clean_b = normalize_po_number(b)
+    if clean_a == clean_b:
+        return True
+    digits_a = "".join(filter(str.isdigit, a))
+    digits_b = "".join(filter(str.isdigit, b))
+    return bool(digits_a and digits_b and (digits_a == digits_b or digits_a in digits_b or digits_b in digits_a))
+
+
 @dataclass
 class POLineItem:
     """Single line item inside a purchase order."""
-    line_number: int = 0
+    line_number: int = 1
+    order_line_number: str = ""
     style: str = ""
+    partner_code: str = ""
     color: str = ""
     size: str = ""
+    uom: str = "M"
     quantity: int = 0
     unit_price: float = 0.0
     description: str = ""
@@ -74,18 +86,25 @@ class ParsedPO:
     total_quantity: int = 0
     total_value: float = 0.0
     line_items: list[POLineItem] = field(default_factory=list)
-    raw_source: str = ""  # "xml" or "html"
+    raw_source: str = "unknown"
     source_filename: str = ""
 
 
+def parse_xml(xml_bytes: bytes, filename: str = "") -> ParsedPO:
+    from app.email.parsers.xml_parser import parse_xml as _parse_xml
+    return _parse_xml(xml_bytes, filename)
+
+
+def parse_xml_all(xml_bytes: bytes, filename: str = "") -> list[ParsedPO]:
+    from app.email.parsers.xml_parser import parse_xml_all as _parse_xml_all
+    return _parse_xml_all(xml_bytes, filename)
+
+
 def parse_html(
-    html: str | bytes,
+    html: str,
     subject: str = "",
     source_name: str = "",
 ) -> list[ParsedPO]:
-    """
-    Wrapper around html_parser.parse_html_document to conform to parser interface.
-    """
     from app.email.parsers.html_parser import parse_html_document
     po = parse_html_document(html, subject=subject, source_name=source_name)
     if po:
@@ -100,21 +119,9 @@ def parse(
     classification: ClassificationResult,
 ) -> list[ParsedPO]:
     """
-    Run the appropriate parser based on classification.
-
-    Parameters
-    ----------
-    decoded : DecodedEmail
-        MIME-decoded email.
-    classification : ClassificationResult
-        Output from classifier.classify().
-
-    Returns
-    -------
-    list[ParsedPO]
-        One ParsedPO per PO found across XML attachments, HTML attachments, and HTML body.
+    Parse a decoded email into structured ParsedPO objects.
     """
-    from app.email.parsers.xml_parser import parse_xml
+    from app.email.parsers.xml_parser import parse_xml_all
     from app.email.parsers.html_parser import parse_html_document
 
     results: list[ParsedPO] = []
@@ -125,11 +132,12 @@ def parse(
         if 0 <= idx < len(decoded.attachments):
             att = decoded.attachments[idx]
             try:
-                po = parse_xml(att.payload, att.filename)
-                po.po_number = normalize_po_number(po.po_number)
-                if po and (po.po_number or po.line_items):
-                    results.append(po)
-                    logger.info("XML parsed PO: %s from %s", po.po_number, att.filename)
+                pos = parse_xml_all(att.payload, att.filename)
+                for po in pos:
+                    po.po_number = normalize_po_number(po.po_number)
+                    if po and (po.po_number or po.line_items):
+                        results.append(po)
+                        logger.info("XML parsed PO: %s from %s", po.po_number, att.filename)
             except Exception:
                 logger.exception("XML parse failed for %s", att.filename)
 
@@ -139,17 +147,17 @@ def parse(
         if 0 <= idx < len(decoded.attachments):
             att = decoded.attachments[idx]
             try:
+                payload = att.payload.decode("utf-8", errors="replace") if isinstance(att.payload, bytes) else att.payload
                 po = parse_html_document(
-                    att.payload,
+                    payload,
                     subject=decoded.subject,
                     source_name=att.filename,
                 )
                 if po:
                     po.po_number = normalize_po_number(po.po_number)
                 if po and (po.po_number or po.line_items):
-                    existing = next((p for p in results if p.po_number and p.po_number == po.po_number), None)
+                    existing = next((p for p in results if is_same_po(p.po_number, po.po_number)), None)
                     if existing:
-                        # Enrich existing XML PO with HTML metadata if missing
                         if not existing.delivery_date and po.delivery_date:
                             existing.delivery_date = po.delivery_date
                         if not existing.buyer_name and po.buyer_name:
@@ -161,9 +169,13 @@ def parse(
                         if not existing.line_items and po.line_items:
                             existing.line_items = po.line_items
                         logger.info("Merged HTML attachment data into existing XML PO %s", existing.po_number)
-                    else:
+                    elif not results:
                         results.append(po)
                         logger.info("HTML attachment parsed PO: %s from %s", po.po_number, att.filename)
+                    else:
+                        if po.line_items and po.total_quantity > 0:
+                            results.append(po)
+                            logger.info("HTML attachment parsed additional PO: %s from %s", po.po_number, att.filename)
             except Exception:
                 logger.exception("HTML attachment parse failed for %s", att.filename)
 
@@ -178,9 +190,8 @@ def parse(
             )
             if body_po:
                 body_po.po_number = normalize_po_number(body_po.po_number)
-            # Only accept body PO if it actually has line items or non-zero quantity
             if body_po and (body_po.line_items or body_po.total_quantity > 0):
-                existing = next((p for p in results if p.po_number and p.po_number == body_po.po_number), None)
+                existing = next((p for p in results if is_same_po(p.po_number, body_po.po_number)), None)
                 if not existing:
                     results.append(body_po)
                     logger.info("HTML body parsed PO: %s", body_po.po_number)
@@ -193,6 +204,6 @@ def parse(
         if po.line_items and po.total_quantity == 0:
             po.total_quantity = sum(li.quantity for li in po.line_items)
         if po.line_items and po.total_value == 0.0:
-            po.total_value = sum(li.quantity * li.unit_price for li in po.line_items)
+            po.total_value = round(sum(li.quantity * li.unit_price for li in po.line_items), 2)
 
     return results

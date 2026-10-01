@@ -70,6 +70,7 @@ export const emailApi = {
   testPipeline: async (companyId: string): Promise<unknown> => {
     const { data } = await api.get("/emails/test-pipeline", {
       params: { company_id: companyId },
+      timeout: 120000,
     });
     return data;
   },
