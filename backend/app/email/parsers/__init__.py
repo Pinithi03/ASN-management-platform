@@ -56,25 +56,17 @@ def is_same_po(a: str, b: str) -> bool:
 @dataclass
 class POLineItem:
     """Single line item inside a purchase order."""
-<<<<<<< HEAD
-    line_number: int = 1
-    order_line_number: str = ""
-    style: str = ""
-    partner_code: str = ""
-    color: str = ""
-    size: str = ""
-    uom: str = "M"
-=======
     line_number: Any = 0
     order_line_number: str = ""       # <OrderLineNumber> from XML
     item_code: str = ""               # <ItemCode> from XML
     partner_item_code: str = ""       # <PartnerItemCode> from XML
+    partner_code: str = ""            # alias
     item_description: str = ""        # <ItemDescription> from XML
     qty_unit: str = ""                # <QtyUnit> from XML
+    uom: str = "M"
     style: str = ""                   # legacy/fallback
     color: str = ""
     size: str = ""                    # legacy/fallback
->>>>>>> 79ee190 (fix(email): filter 0-qty cancelled line items and support PO updates)
     quantity: int = 0
     unit_price: float = 0.0
     description: str = ""             # legacy/fallback

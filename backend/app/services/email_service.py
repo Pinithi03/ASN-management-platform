@@ -10,11 +10,8 @@ from __future__ import annotations
 import email.utils
 import hashlib
 import logging
-<<<<<<< HEAD
 import re
-=======
 import uuid
->>>>>>> 79ee190 (fix(email): filter 0-qty cancelled line items and support PO updates)
 from dataclasses import asdict
 from datetime import datetime, timezone, date as date_type
 from typing import Optional
@@ -400,52 +397,36 @@ async def save_purchase_order(
     items_data = [
         {
             "line_number": getattr(li, "order_line_number", "") or str(li.line_number),
+            "order_line_number": getattr(li, "order_line_number", "") or str(li.line_number),
+            "item_code": getattr(li, "item_code", None) or li.style,
+            "partner_item_code": getattr(li, "partner_item_code", None) or getattr(li, "partner_code", "") or li.style,
+            "partner_code": getattr(li, "partner_code", "") or getattr(li, "partner_item_code", "") or "",
+            "item_description": getattr(li, "item_description", None) or li.description,
+            "qty_unit": getattr(li, "qty_unit", None) or getattr(li, "uom", "") or li.size or "M",
             "material_code": li.style,
-            "partner_code": getattr(li, "partner_code", "") or "",
             "description": li.description,
             "color": li.color,
             "size": li.size,
-            "uom": getattr(li, "uom", "") or li.size or "M",
+            "uom": getattr(li, "uom", "") or getattr(li, "qty_unit", None) or li.size or "M",
             "quantity": li.quantity,
             "unit_price": li.unit_price,
         }
         for li in parsed_po.line_items
+        if getattr(li, "quantity", 0) > 0
     ]
 
     if existing:
-<<<<<<< HEAD
         old_version = existing.version or 1
         new_version = max(old_version + 1, progressive_version) if progressive_version else (old_version + 1)
-
-        # Audit trail of changes
-        old_items = existing.extra_data.get("items", []) if existing.extra_data else []
-        changed_fields = {
-            "version": {"old": old_version, "new": new_version},
-            "status": {"old": existing.status, "new": "UPDATED"},
-            "quantity": {"old": existing.quantity, "new": parsed_po.total_quantity},
-            "total_value": {"old": float(existing.total_value or 0), "new": float(parsed_po.total_value or 0)},
-            "delivery_date": {"old": str(existing.delivery_date), "new": str(_parse_date(parsed_po.delivery_date))},
-            "items_count": {"old": len(old_items), "new": len(items_data)},
-        }
+        old_quantity = existing.quantity
+        old_total_value = existing.total_value
 
         # Update existing PO - ensure canonical normalized number & increment version
         existing.po_number = clean_po
         existing.version = new_version
-        existing.status = "UPDATED"
-        if parsed_po.total_quantity > 0:
-            existing.quantity = parsed_po.total_quantity
-        if parsed_po.total_value > 0:
-            existing.total_value = parsed_po.total_value
-=======
-        # Update existing PO with latest email amounts and items
-        old_quantity = existing.quantity
-        old_total_value = existing.total_value
-        existing.po_number = clean_po
-        existing.version = (existing.version or 1) + 1
         existing.status = "UPDATED" if (parsed_po.total_quantity or 0) > 0 else "CANCELLED"
         existing.quantity = parsed_po.total_quantity
         existing.total_value = parsed_po.total_value
->>>>>>> 79ee190 (fix(email): filter 0-qty cancelled line items and support PO updates)
         existing.destination = parsed_po.destination or existing.destination
         existing.delivery_date = _parse_date(parsed_po.delivery_date) or existing.delivery_date
         existing.currency = parsed_po.currency or existing.currency
@@ -458,16 +439,25 @@ async def save_purchase_order(
             existing.style_number = primary_style
         if primary_desc:
             existing.description = primary_desc
-<<<<<<< HEAD
-        if items_data:
-            existing.extra_data = extra_info
+        existing.extra_data = extra_info
+
+        # Audit trail of changes
+        old_items = existing.extra_data.get("items", []) if existing.extra_data else []
+        changed_fields = {
+            "version": {"old": old_version, "new": new_version},
+            "status": {"old": existing.status, "new": existing.status},
+            "quantity": {"old": old_quantity, "new": existing.quantity},
+            "total_value": {"old": float(old_total_value or 0), "new": float(existing.total_value or 0)},
+            "delivery_date": {"old": str(existing.delivery_date), "new": str(_parse_date(parsed_po.delivery_date))},
+            "items_count": {"old": len(old_items), "new": len(items_data)},
+        }
 
         # Record in po_history
         try:
             hist = POHistory(
                 po_id=existing.id,
                 company_id=existing.company_id,
-                source_email_id=email_record_id,
+                source_email_id=uuid.UUID(str(email_record_id)) if email_record_id else None,
                 version=new_version,
                 changed_fields=changed_fields,
                 change_source="EMAIL_UPDATE",
@@ -476,36 +466,10 @@ async def save_purchase_order(
         except Exception:
             logger.exception("Failed to insert POHistory for %s", existing.po_number)
         po = existing
-        logger.info("Updated PO: %s (v%d, was v%d)", po.po_number, po.version, old_version)
-=======
-        existing.extra_data = extra_info
-        po = existing
         logger.info(
-            "Updated PO: %s (v%d), qty=%s->%s, val=%s->%s",
-            po.po_number, po.version, old_quantity, po.quantity, old_total_value, po.total_value,
+            "Updated PO: %s (v%d, was v%d), qty=%s->%s, val=%s->%s",
+            po.po_number, po.version, old_version, old_quantity, po.quantity, old_total_value, po.total_value,
         )
-
-        # Audit history log
-        try:
-            history_entry = POHistory(
-                po_id=existing.id,
-                company_id=company_id,
-                source_email_id=uuid.UUID(str(email_record_id)) if email_record_id else None,
-                version=existing.version,
-                changed_fields={
-                    "previous_quantity": old_quantity,
-                    "new_quantity": existing.quantity,
-                    "previous_total_value": float(old_total_value) if old_total_value is not None else None,
-                    "new_total_value": float(existing.total_value) if existing.total_value is not None else None,
-                    "status": existing.status,
-                    "line_items_count": len(items_data),
-                },
-                change_source="EMAIL_UPDATE",
-            )
-            db.add(history_entry)
-        except Exception as e:
-            logger.warning("Could not record POHistory for PO %s: %s", clean_po, e)
->>>>>>> 79ee190 (fix(email): filter 0-qty cancelled line items and support PO updates)
     else:
         # Create new PO
         po = PurchaseOrder(
