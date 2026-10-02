@@ -7,8 +7,9 @@ and database persistence for all supplier partner profiles.
 from __future__ import annotations
 
 import uuid
+import logging
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
@@ -16,11 +17,20 @@ from sqlalchemy import desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError
+from app.core.credentials_store import (
+    issue_temporary_credentials,
+    get_credential_info,
+    change_supplier_password,
+    mark_supplier_discovered,
+    get_supplier_discovery_meta,
+)
 from app.db.session import get_db
 from app.models.audit_log import AuditLog
 from app.models.parsed_data import ParsedData
 from app.models.purchase_order import PurchaseOrder
 from app.models.supplier import Supplier
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -41,8 +51,32 @@ class SupplierResponse(BaseModel):
     onboarded_at: str
     total_pos: int = 0
     latest_po_date: Optional[str] = None
+    detected_via: Optional[str] = None
+    is_pending_approval: bool = False
+    has_credentials_issued: bool = False
+    temporary_password: Optional[str] = None
+    temp_password_expires_at: Optional[str] = None
+    requires_password_change: bool = False
 
     model_config = {"from_attributes": True}
+
+
+class SupplierCredentialsResponse(BaseModel):
+    supplier_id: str
+    supplier_code: str
+    name: str
+    email: str
+    temporary_password: str
+    expires_in_hours: int = 6
+    expires_at: str
+    requires_password_change: bool = True
+    message: str = "Temporary credentials generated successfully. Valid for 6 hours."
+
+
+class ChangePasswordRequest(BaseModel):
+    supplier_code_or_email: str
+    current_password: str
+    new_password: str = Field(..., min_length=6)
 
 
 class SupplierCreateRequest(BaseModel):
@@ -192,38 +226,94 @@ async def _ensure_seed_and_email_sync(db: AsyncSession) -> None:
 
     # 2. Sync any suppliers extracted from incoming emails in parsed_data
     try:
+        from app.models.email_message import EmailRecord
+
         raw_supps = await db.execute(
-            select(ParsedData.supplier_id_extracted).distinct().where(
-                ParsedData.supplier_id_extracted.isnot(None),
-                ParsedData.supplier_id_extracted != "",
+            select(ParsedData, EmailRecord)
+            .outerjoin(EmailRecord, ParsedData.email_record_id == EmailRecord.id)
+            .where(
+                (ParsedData.supplier_id_extracted.isnot(None) & (ParsedData.supplier_id_extracted != ""))
+                | (ParsedData.raw_extracted.isnot(None))
             )
         )
-        for row in raw_supps.fetchall():
-            s_code = row[0]
+        for pd, email_rec in raw_supps.all():
+            raw = pd.raw_extracted if isinstance(pd.raw_extracted, dict) else {}
+            s_code = (
+                pd.supplier_id_extracted
+                or raw.get("supplier_code")
+                or raw.get("partner_id")
+                or raw.get("supplier_id")
+            )
             if not s_code:
                 continue
-            s_clean = str(s_code).lstrip("0")
+            s_code_str = str(s_code).strip()
+            s_clean = s_code_str.lstrip("0")
+            s_padded = s_clean.zfill(10) if s_clean.isdigit() else s_code_str
+
             chk = await db.execute(
                 select(Supplier).where(
                     or_(
-                        Supplier.supplier_code == s_code,
+                        Supplier.supplier_code == s_code_str,
                         Supplier.supplier_code == s_clean,
+                        Supplier.supplier_code == s_padded,
                     )
                 )
             )
-            if not chk.scalar_one_or_none():
-                db.add(
-                    Supplier(
-                        supplier_code=s_code,
-                        name=f"Supplier {s_code}",
-                        email=f"supplier_{s_clean or 'partner'}@oniverse.local",
-                        country="Sri Lanka",
-                        category="Textiles & Garments",
-                        is_active=True,
-                    )
+            existing = chk.scalar_one_or_none()
+
+            name_candidate = (
+                raw.get("legal_name")
+                or raw.get("supplier_name")
+                or raw.get("partner_name")
+            )
+            email_candidate = (
+                raw.get("iungo_email_address")
+                or (email_rec.from_address if email_rec else None)
+            )
+            address_candidate = (
+                raw.get("delivery_address")
+                or raw.get("address")
+                or raw.get("destination")
+            )
+            country_candidate = raw.get("country") or "Sri Lanka"
+
+            if not existing:
+                # Option 3: Newly auto-discovered from incoming Iungo email!
+                # Initially is_active=False so admin reviews & clicks "Approve & Issue Credentials"
+                new_s = Supplier(
+                    supplier_code=s_padded,
+                    name=str(name_candidate).strip() if name_candidate else f"Supplier {s_code_str}",
+                    email=str(email_candidate).strip().lower() if email_candidate else f"supplier_{s_clean or 'partner'}@oniverse.local",
+                    contact_name=str(raw.get("contact_person") or raw.get("contact_name") or "").strip() or None,
+                    phone=str(raw.get("phone") or "").strip() or None,
+                    country=country_candidate,
+                    category=str(raw.get("category") or "Textiles & Garments").strip(),
+                    address=str(address_candidate).strip() if address_candidate else None,
+                    is_active=False,
                 )
-    except Exception:
-        pass
+                db.add(new_s)
+                mark_supplier_discovered(
+                    supplier_code=new_s.supplier_code,
+                    detected_via="Iungo System Email",
+                    email_subject=email_rec.subject if email_rec else "Inbound Iungo Order",
+                    extracted_data=raw,
+                )
+            else:
+                # Enrich existing supplier details if missing or placeholder
+                if name_candidate and (not existing.name or existing.name.startswith("Supplier ")):
+                    existing.name = str(name_candidate).strip()
+                if email_candidate and (not existing.email or "oniverse.local" in existing.email):
+                    existing.email = str(email_candidate).strip().lower()
+                if address_candidate and not existing.address:
+                    existing.address = str(address_candidate).strip()
+                mark_supplier_discovered(
+                    supplier_code=existing.supplier_code,
+                    detected_via="Iungo System Email",
+                    email_subject=email_rec.subject if email_rec else "Inbound Iungo Order",
+                    extracted_data=raw,
+                )
+    except Exception as e:
+        logger.warning("Error auto-syncing suppliers from email parsed_data: %s", e)
 
     await db.commit()
 
@@ -275,6 +365,18 @@ async def list_suppliers(
     result = []
     for s in suppliers:
         total_pos, latest_po = po_stats_map.get(s.id, (0, None))
+        discovery = get_supplier_discovery_meta(s.supplier_code)
+        cred = get_credential_info(s.supplier_code)
+
+        # Discovered via Iungo email if tracked or has live POs from Iungo EDI
+        detected_via = (
+            discovery.get("detected_via")
+            if discovery
+            else ("Iungo System Email" if (total_pos > 0 or s.supplier_code in ["0000058376", "0000018194", "0000001122", "0000080589"]) else None)
+        )
+        is_pending = not s.is_active and bool(detected_via)
+        has_creds = bool(cred and cred.get("temporary_password"))
+
         result.append(
             SupplierResponse(
                 id=str(s.id),
@@ -291,6 +393,12 @@ async def list_suppliers(
                 onboarded_at=s.created_at.isoformat() if s.created_at else datetime.now(timezone.utc).isoformat(),
                 total_pos=total_pos,
                 latest_po_date=latest_po.isoformat() if latest_po else None,
+                detected_via=detected_via,
+                is_pending_approval=is_pending,
+                has_credentials_issued=has_creds,
+                temporary_password=cred.get("temporary_password") if cred else None,
+                temp_password_expires_at=cred.get("expires_at") if cred else None,
+                requires_password_change=cred.get("requires_password_change", False) if cred else False,
             )
         )
 
@@ -463,3 +571,164 @@ async def delete_supplier(
     await db.delete(supp)
     await db.commit()
     return {"status": "success", "message": f"Supplier {supp.name} deleted successfully"}
+
+
+def _is_uuid(val: str) -> bool:
+    try:
+        uuid.UUID(str(val))
+        return True
+    except (ValueError, TypeError):
+        return False
+
+
+# ─── CREDENTIALS & 1-CLICK ACTIVATION ENDPOINTS ──────────────────
+
+@router.post("/{supplier_id}/activate-credentials", response_model=SupplierCredentialsResponse)
+async def activate_supplier_credentials(
+    supplier_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> SupplierCredentialsResponse:
+    """
+    1-Click Admin Activation: Approves an auto-discovered or onboarded supplier,
+    activates their account, generates a 6-hour temporary password,
+    and provisions their User entity for immediate Supplier Dashboard access.
+    """
+    from app.models.user import User
+    from app.models.company import Company
+
+    # Find supplier by ID or code
+    supp_uuid = uuid.UUID(supplier_id) if _is_uuid(supplier_id) else None
+    stmt = select(Supplier).where(
+        or_(
+            Supplier.id == supp_uuid if supp_uuid else False,
+            Supplier.supplier_code == supplier_id,
+        )
+    )
+    res = await db.execute(stmt)
+    supplier = res.scalar_one_or_none()
+    if not supplier:
+        raise HTTPException(status_code=404, detail="Supplier not found")
+
+    # 1. Activate supplier status
+    supplier.is_active = True
+
+    # 2. Issue 6-hour temporary credentials
+    cred = issue_temporary_credentials(
+        supplier_code=supplier.supplier_code,
+        email=supplier.email,
+        name=supplier.name,
+        duration_hours=6,
+    )
+
+    # 3. Ensure User entity exists in users table with role SUPPLIER
+    usr_res = await db.execute(select(User).where(User.supplier_id == supplier.id))
+    usr = usr_res.scalar_one_or_none()
+    if not usr:
+        co_res = await db.execute(select(Company).limit(1))
+        company = co_res.scalar_one_or_none()
+        company_id = company.id if company else uuid.UUID("00000000-0000-0000-0000-000000000001")
+
+        usr = User(
+            company_id=company_id,
+            keycloak_id=f"kc-supp-{supplier.supplier_code}",
+            email=supplier.email,
+            full_name=supplier.name,
+            role="SUPPLIER",
+            supplier_id=supplier.id,
+            is_active=True,
+        )
+        db.add(usr)
+    else:
+        usr.is_active = True
+
+    # 4. Log audit event
+    co_id = usr.company_id if usr else uuid.UUID("00000000-0000-0000-0000-000000000001")
+    db.add(
+        AuditLog(
+            company_id=co_id,
+            action="SUPPLIER_ACTIVATED",
+            entity_type="SUPPLIER",
+            entity_id=supplier.id,
+            user_id=usr.id if usr else None,
+            new_values={
+                "supplier_name": supplier.name,
+                "supplier_code": supplier.supplier_code,
+                "expires_at": cred["expires_at"],
+                "expires_in_hours": 6,
+            },
+        )
+    )
+
+    await db.commit()
+
+    return SupplierCredentialsResponse(
+        supplier_id=str(supplier.id),
+        supplier_code=supplier.supplier_code,
+        name=supplier.name,
+        email=supplier.email,
+        temporary_password=cred["temporary_password"],
+        expires_in_hours=6,
+        expires_at=cred["expires_at"],
+        requires_password_change=True,
+        message=f"Supplier {supplier.name} successfully activated. 6-hour temporary password generated.",
+    )
+
+
+@router.get("/{supplier_id}/credentials", response_model=SupplierCredentialsResponse)
+async def get_supplier_credentials(
+    supplier_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> SupplierCredentialsResponse:
+    """Retrieve existing or freshly generated credentials for a supplier."""
+    supp_uuid = uuid.UUID(supplier_id) if _is_uuid(supplier_id) else None
+    stmt = select(Supplier).where(
+        or_(
+            Supplier.id == supp_uuid if supp_uuid else False,
+            Supplier.supplier_code == supplier_id,
+        )
+    )
+    res = await db.execute(stmt)
+    supplier = res.scalar_one_or_none()
+    if not supplier:
+        raise HTTPException(status_code=404, detail="Supplier not found")
+
+    cred = get_credential_info(supplier.supplier_code)
+    if not cred or not cred.get("temporary_password"):
+        cred = issue_temporary_credentials(
+            supplier_code=supplier.supplier_code,
+            email=supplier.email,
+            name=supplier.name,
+            duration_hours=6,
+        )
+
+    return SupplierCredentialsResponse(
+        supplier_id=str(supplier.id),
+        supplier_code=supplier.supplier_code,
+        name=supplier.name,
+        email=supplier.email,
+        temporary_password=cred["temporary_password"],
+        expires_in_hours=6,
+        expires_at=cred["expires_at"],
+        requires_password_change=cred.get("requires_password_change", True),
+        message="Credentials retrieved.",
+    )
+
+
+@router.post("/change-password")
+async def change_password_endpoint(
+    payload: ChangePasswordRequest,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """
+    Allow supplier partner to change their password from temporary to permanent.
+    """
+    success, msg = change_supplier_password(
+        supplier_code_or_email=payload.supplier_code_or_email,
+        current_password=payload.current_password,
+        new_password=payload.new_password,
+    )
+    if not success:
+        raise HTTPException(status_code=400, detail=msg)
+
+    return {"status": "ok", "message": msg}
+

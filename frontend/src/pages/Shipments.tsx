@@ -26,6 +26,7 @@ import {
   Loader2,
   Check,
   ChevronRight,
+  ChevronLeft,
   ArrowLeft,
   Box,
   FileText,
@@ -148,11 +149,18 @@ export default function Shipments() {
   }, [poQuery, searchParams]);
 
   // Dashboard state
+  const PAGE_SIZE = 50;
+  const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [shipments, setShipments] = useState<ShipmentDisplayItem[]>([]);
   const [loadingShipments, setLoadingShipments] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+
+  // Reset page when search or status filter changes
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter]);
 
   // XML Modal
   const [xmlModalData, setXmlModalData] = useState<{
@@ -323,6 +331,17 @@ export default function Shipments() {
     const matchesStatus = statusFilter === "ALL" || s.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+
+  const totalShipments = filteredShipments.length;
+  const totalPages = Math.max(1, Math.ceil(totalShipments / PAGE_SIZE));
+  const paginatedShipments = filteredShipments.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  const startItem = totalShipments === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const endItem = Math.min(page * PAGE_SIZE, totalShipments);
+  const paginationText =
+    totalShipments === 0
+      ? "0 of 0"
+      : `${startItem.toLocaleString()}–${endItem.toLocaleString()} of ${totalShipments.toLocaleString()}`;
 
   return (
     <div className="p-6 space-y-6">
@@ -495,6 +514,36 @@ export default function Shipments() {
           </div>
 
           <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+            {/* Google-Style Top Pagination Toolbar */}
+            <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200/90 bg-white select-none">
+              <div className="text-xs text-gray-500 font-medium">
+                <span className="font-semibold text-gray-700">{totalShipments.toLocaleString()}</span> shipments
+              </div>
+              <div className="flex items-center gap-1 text-xs text-gray-600">
+                <span className="px-2 font-normal tracking-tight text-gray-600">
+                  {paginationText}
+                </span>
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+                  title="Previous page"
+                  aria-label="Previous page"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages}
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+                  title="Next page"
+                  aria-label="Next page"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -510,7 +559,7 @@ export default function Shipments() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {filteredShipments.map((s) => (
+                  {paginatedShipments.map((s) => (
                     <tr key={s.id} className="hover:bg-gray-50/80 transition-colors">
                       <td className="whitespace-nowrap px-5 py-3.5 font-mono text-xs font-bold text-gray-900">
                         {s.shipment_number}
@@ -590,6 +639,38 @@ export default function Shipments() {
                 </tbody>
               </table>
             </div>
+
+            {/* Google-Style Bottom Pagination Footer */}
+            {totalShipments > 0 && (
+              <div className="flex items-center justify-between px-6 py-3 border-t border-gray-200 bg-gray-50/70 select-none text-xs text-gray-600">
+                <div className="font-medium text-gray-500">
+                  <span className="font-semibold text-gray-700">{totalShipments.toLocaleString()} total shipments</span>
+                </div>
+                <div className="flex items-center gap-1 text-xs text-gray-600">
+                  <span className="px-2 font-normal tracking-tight text-gray-600">
+                    {paginationText}
+                  </span>
+                  <button
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page <= 1}
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-200/70 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+                    title="Previous page"
+                    aria-label="Previous page"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={page >= totalPages}
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-200/70 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+                    title="Next page"
+                    aria-label="Next page"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       ) : creationMethod === "web" ? (

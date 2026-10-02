@@ -28,7 +28,10 @@ interface AuthState {
   logout: () => void;
   /** Switch role without logging out */
   switchRole: () => void;
+  /** Clear password change requirement flag after supplier sets permanent password */
+  clearPasswordChangeRequirement: () => void;
 }
+
 
 export const useAuthStore = create<AuthState>()(
   persist(
@@ -151,7 +154,15 @@ export const useAuthStore = create<AuthState>()(
           set({ user: mockAdminUser });
         }
       },
+
+      clearPasswordChangeRequirement: () => {
+        const current = get().user;
+        if (current) {
+          set({ user: { ...current, requires_password_change: false } });
+        }
+      },
     }),
+
     {
       name: "ans-auth-storage",
     }

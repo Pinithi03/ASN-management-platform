@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Search,
   Plus,
@@ -23,10 +24,21 @@ import {
   BellRing,
   FileText,
   Building,
+  Key,
+  ExternalLink,
+  Copy,
+  Check,
+  Eye,
+  EyeOff,
+  Zap,
+  Shield,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { auditApi } from "@/services/auditApi";
 import { useQuery } from "@tanstack/react-query";
-import { supplierApi } from "@/services/supplierApi";
+import { supplierApi, type SupplierCredentials } from "@/services/supplierApi";
+import { useAuthStore } from "@/store/authStore";
 
 export interface SupplierItem {
   id: string;
@@ -45,6 +57,12 @@ export interface SupplierItem {
   last_profile_updated_at?: string;
   total_pos?: number;
   latest_po_date?: string | null;
+  detected_via?: string | null;
+  is_pending_approval?: boolean;
+  has_credentials_issued?: boolean;
+  temporary_password?: string | null;
+  temp_password_expires_at?: string | null;
+  requires_password_change?: boolean;
 }
 
 export const INITIAL_SUPPLIERS: SupplierItem[] = [
@@ -158,9 +176,64 @@ export default function Suppliers() {
   const [editingSupplier, setEditingSupplier] = useState<SupplierItem | null>(null);
   const [deletingSupplier, setDeletingSupplier] = useState<SupplierItem | null>(null);
 
+  // Navigation & Auth Store
+  const navigate = useNavigate();
+  const loginAsSupplier = useAuthStore((s) => s.loginAsSupplier);
+
+  // Credentials & Activation Modal State
+  const [credentialsModalSupplier, setCredentialsModalSupplier] = useState<SupplierItem | null>(null);
+  const [activeCredentials, setActiveCredentials] = useState<SupplierCredentials | null>(null);
+  const [isActivating, setIsActivating] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  const handleActivateAndIssueCredentials = async (supplier: SupplierItem) => {
+    setIsActivating(true);
+    try {
+      const creds = await supplierApi.activateAndGenerateCredentials(supplier.id);
+      setActiveCredentials(creds);
+      setCredentialsModalSupplier(supplier);
+      setShowPassword(true);
+      refetch();
+      showToast(`⚡ Approved & Issued 6-hour credentials for ${supplier.name} (#${supplier.supplier_code})`);
+    } catch (err: any) {
+      showToast(`Error activating supplier credentials: ${err?.message || "Server error"}`);
+    } finally {
+      setIsActivating(false);
+    }
+  };
+
+  const handleViewCredentials = async (supplier: SupplierItem) => {
+    try {
+      const creds = await supplierApi.getCredentials(supplier.id);
+      setActiveCredentials(creds);
+      setCredentialsModalSupplier(supplier);
+      setShowPassword(false);
+    } catch (err: any) {
+      showToast(`Error retrieving credentials: ${err?.message || "Server error"}`);
+    }
+  };
+
+  const handleSimulateLogin = async (supplier: SupplierItem) => {
+    try {
+      await loginAsSupplier(supplier.supplier_code);
+      showToast(`Switched to Supplier Dashboard for ${supplier.name}`);
+      navigate("/");
+    } catch (err: any) {
+      showToast(`Error opening dashboard: ${err?.message}`);
+    }
+  };
+
+  const handleCopyText = (text: string, key: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 2000);
+  };
+
   // Admin Security Verification State for Deletion
   const [adminPasswordInput, setAdminPasswordInput] = useState("");
   const [adminAuthError, setAdminAuthError] = useState<string | null>(null);
+
 
   const handleOpenDeleteModal = (supplier: SupplierItem) => {
     setDeletingSupplier(supplier);
@@ -455,6 +528,29 @@ export default function Suppliers() {
   const activeCount = suppliers.filter((s) => s.is_active).length;
   const inactiveCount = suppliers.length - activeCount;
 
+  // ─── PAGINATION (12 CARDS PER PAGE - GOOGLE EMAIL STYLE) ──────
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 12;
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter]);
+
+  const totalSuppliers = filteredSuppliers.length;
+  const totalPages = Math.ceil(totalSuppliers / PAGE_SIZE) || 1;
+  const startItem = totalSuppliers === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const endItem = Math.min(page * PAGE_SIZE, totalSuppliers);
+  const paginationText =
+    totalSuppliers === 0
+      ? "0 of 0"
+      : `${startItem.toLocaleString()}–${endItem.toLocaleString()} of ${totalSuppliers.toLocaleString()}`;
+
+  const paginatedSuppliers = filteredSuppliers.slice(
+    (page - 1) * PAGE_SIZE,
+    page * PAGE_SIZE
+  );
+
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -580,141 +676,245 @@ export default function Suppliers() {
         </div>
       </div>
 
+      {/* Google-Style Top Pagination Toolbar */}
+      <div className="flex items-center justify-between bg-white px-4 py-2.5 rounded-2xl border border-gray-200 shadow-2xs select-none">
+        <div className="text-xs text-gray-500 font-medium">
+          Showing <span className="font-bold text-gray-800">{startItem}–{endItem}</span> of <span className="font-bold text-gray-800">{totalSuppliers}</span> suppliers
+        </div>
+        <div className="flex items-center gap-1 text-xs text-gray-600">
+          <span className="px-2 font-normal tracking-tight text-gray-600">
+            {paginationText}
+          </span>
+          <button
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page <= 1}
+            className="w-8 h-8 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+            title="Previous page"
+            aria-label="Previous page"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page >= totalPages}
+            className="w-8 h-8 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+            title="Next page"
+            aria-label="Next page"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
       {/* Suppliers Card Grid */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {filteredSuppliers.map((s) => (
-          <div
-            key={s.id}
-            className={`rounded-2xl border bg-white p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between ${
-              s.recently_updated_by_supplier
-                ? "border-amber-300 ring-2 ring-amber-400/20 bg-amber-50/10"
-                : s.is_active
-                ? "border-gray-200"
-                : "border-red-200 bg-red-50/20"
-            }`}
-          >
-            <div>
-              {/* Profile Update Notice Badge */}
-              {s.recently_updated_by_supplier && (
-                <div className="mb-3 p-2 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between shadow-sm animate-in fade-in">
-                  <span className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
-                    <BellRing className="w-3.5 h-3.5 text-amber-600 animate-pulse shrink-0" />
-                    New Profile Changes
-                  </span>
+        {paginatedSuppliers.map((s) => {
+          const isPending = !s.is_active || Boolean(s.is_pending_approval);
+
+          return (
+            <div
+              key={s.id}
+              className={`rounded-2xl border p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between ${
+                s.recently_updated_by_supplier
+                  ? "border-amber-300 ring-2 ring-amber-400/20 bg-amber-50/10"
+                  : isPending
+                  ? "border-blue-300 ring-2 ring-blue-500/20 bg-blue-50/15"
+                  : s.is_active
+                  ? "border-gray-200 bg-white"
+                  : "border-red-200 bg-red-50/20"
+              }`}
+            >
+              <div>
+                {/* Profile Update Notice Badge */}
+                {s.recently_updated_by_supplier && (
+                  <div className="mb-3 p-2 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between shadow-sm animate-in fade-in">
+                    <span className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                      <BellRing className="w-3.5 h-3.5 text-amber-600 animate-pulse shrink-0" />
+                      New Profile Changes
+                    </span>
+                    <button
+                      onClick={() => handleAcknowledgeSupplierUpdate(s)}
+                      className="px-2 py-0.5 text-[11px] font-bold text-amber-900 bg-white hover:bg-amber-100 border border-amber-300 rounded-lg transition-colors shadow-xs"
+                      title="Clear notification and acknowledge update"
+                    >
+                      Acknowledge
+                    </button>
+                  </div>
+                )}
+
+                {/* Card Header */}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="text-base font-bold text-gray-900 truncate">{s.name}</h3>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-xs font-bold px-2 py-0.5 bg-brand-50 text-brand-700 rounded-md border border-brand-200">
+                        #{s.supplier_code}
+                      </span>
+                      {s.category && (
+                        <span className="text-[11px] text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md font-medium">
+                          {s.category}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Active Toggle Badge Button */}
                   <button
-                    onClick={() => handleAcknowledgeSupplierUpdate(s)}
-                    className="px-2 py-0.5 text-[11px] font-bold text-amber-900 bg-white hover:bg-amber-100 border border-amber-300 rounded-lg transition-colors shadow-xs"
-                    title="Clear notification and acknowledge update"
+                    onClick={() => handleToggleActive(s)}
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-lg border transition-all shrink-0 ${
+                      s.is_active
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                        : "bg-red-50 text-red-600 border-red-200 hover:bg-red-100"
+                    }`}
+                    title={s.is_active ? "Click to deactivate partner" : "Click to activate partner"}
                   >
-                    Acknowledge
+                    <Power className="w-3 h-3" />
+                    <span>{s.is_active ? "Active" : "Inactive"}</span>
                   </button>
                 </div>
-              )}
 
-              {/* Card Header */}
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <h3 className="text-base font-bold text-gray-900 truncate">{s.name}</h3>
-                  <div className="mt-1 flex flex-wrap items-center gap-2">
-                    <span className="font-mono text-xs font-bold px-2 py-0.5 bg-brand-50 text-brand-700 rounded-md border border-brand-200">
-                      #{s.supplier_code}
-                    </span>
-                    {s.category && (
-                      <span className="text-[11px] text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md font-medium">
-                        {s.category}
-                      </span>
-                    )}
-                    {s.total_pos !== undefined && s.total_pos > 0 && (
-                      <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 flex items-center gap-1">
-                        <Sparkles className="w-3 h-3 text-emerald-600" />
-                        {s.total_pos} PO{s.total_pos > 1 ? "s" : ""} (Email Ingested)
-                      </span>
-                    )}
+                {/* 1-Click Approval & Credentials Banner for Pending Cards */}
+                {isPending && (
+                  <div className="my-3 p-3 bg-white rounded-xl border border-blue-200 shadow-xs space-y-2.5">
+                    <div className="flex items-start gap-2">
+                      <Shield className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-xs font-bold text-blue-900">New Supplier Discovered via EDI Email</p>
+                        <p className="text-[11px] text-blue-700 mt-0.5">
+                          Zero manual entry. Click below to approve and issue a secure 6-hour temporary password.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleActivateAndIssueCredentials(s)}
+                      disabled={isActivating}
+                      className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-lg shadow-sm transition-all"
+                    >
+                      <Zap className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
+                      {isActivating ? "Activating & Generating..." : "Approve & Issue Credentials"}
+                    </button>
                   </div>
-                </div>
+                )}
 
-                {/* Active Toggle Badge Button */}
-                <button
-                  onClick={() => handleToggleActive(s)}
-                  className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-lg border transition-all shrink-0 ${
-                    s.is_active
-                      ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
-                      : "bg-red-50 text-red-600 border-red-200 hover:bg-red-100"
-                  }`}
-                  title={s.is_active ? "Click to deactivate partner" : "Click to activate partner"}
-                >
-                  <Power className="w-3 h-3" />
-                  <span>{s.is_active ? "Active" : "Inactive"}</span>
-                </button>
-              </div>
-
-              {/* Details Body */}
-              <div className="mt-4 space-y-2 text-xs text-gray-600 border-t border-gray-100 pt-3">
-                <div className="flex items-center gap-2 truncate">
-                  <Mail className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                  <span className="truncate font-medium">{s.email}</span>
-                </div>
-                {s.contact_name && (
-                  <div className="flex items-center gap-2">
-                    <UserCheck className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                    <span>Contact: <strong className="text-gray-800">{s.contact_name}</strong></span>
-                  </div>
-                )}
-                {s.phone && (
-                  <div className="flex items-center gap-2">
-                    <Phone className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                    <span>{s.phone}</span>
-                  </div>
-                )}
-                {s.country && (
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                    <span>{s.country}</span>
-                  </div>
-                )}
-                {s.tax_id && (
-                  <div className="flex items-center gap-2">
-                    <FileText className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                    <span>Tax ID: <strong className="font-mono text-gray-800">{s.tax_id}</strong></span>
-                  </div>
-                )}
-                {s.address && (
+                {/* Details Body */}
+                <div className="mt-4 space-y-2 text-xs text-gray-600 border-t border-gray-100 pt-3">
                   <div className="flex items-center gap-2 truncate">
-                    <Building className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                    <span className="truncate">{s.address}</span>
+                    <Mail className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                    <span className="truncate font-medium">{s.email}</span>
+                  </div>
+                  {s.contact_name && (
+                    <div className="flex items-center gap-2">
+                      <UserCheck className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                      <span>Contact: <strong className="text-gray-800">{s.contact_name}</strong></span>
+                    </div>
+                  )}
+                  {s.phone && (
+                    <div className="flex items-center gap-2">
+                      <Phone className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                      <span>{s.phone}</span>
+                    </div>
+                  )}
+                  {s.country && (
+                    <div className="flex items-center gap-2">
+                      <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                      <span>{s.country}</span>
+                    </div>
+                  )}
+                  {s.tax_id && (
+                    <div className="flex items-center gap-2">
+                      <FileText className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                      <span>Tax ID: <strong className="font-mono text-gray-800">{s.tax_id}</strong></span>
+                    </div>
+                  )}
+                  {s.address && (
+                    <div className="flex items-center gap-2 truncate">
+                      <Building className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                      <span className="truncate">{s.address}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Quick Credentials & Open Dashboard Action Buttons (For Active Cards) */}
+                {s.is_active && (
+                  <div className="mt-3 pt-3 border-t border-gray-100 grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => handleViewCredentials(s)}
+                      className="inline-flex items-center justify-center px-2.5 py-1.5 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors"
+                      title="View Partner ID and 6-hour temporary password"
+                    >
+                      Credentials
+                    </button>
+                    <button
+                      onClick={() => handleSimulateLogin(s)}
+                      className="inline-flex items-center justify-center px-2.5 py-1.5 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors"
+                      title="Open and test the supplier's personalized dashboard"
+                    >
+                      Open Dashboard
+                    </button>
                   </div>
                 )}
               </div>
-            </div>
 
-            {/* Card Footer Actions (Edit & Delete) */}
-            <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-xs">
-              <span className="flex items-center gap-1 text-[11px] text-gray-400">
-                <Clock className="w-3 h-3" />
-                {new Date(s.onboarded_at).toLocaleDateString()}
-              </span>
+              {/* Card Footer Actions (Edit & Delete) */}
+              <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-xs">
+                <span className="flex items-center gap-1 text-[11px] text-gray-400">
+                  <Clock className="w-3 h-3" />
+                  {new Date(s.onboarded_at).toLocaleDateString()}
+                </span>
 
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handleOpenEdit(s)}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-                  title="Edit Supplier Details"
-                >
-                  <Edit2 className="w-3 h-3 text-gray-500" />
-                  Edit
-                </button>
-                <button
-                  onClick={() => handleOpenDeleteModal(s)}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
-                  title="Delete Supplier"
-                >
-                  <Trash2 className="w-3 h-3 text-red-500" />
-                  Delete
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleOpenEdit(s)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                    title="Edit Supplier Details"
+                  >
+                    <Edit2 className="w-3 h-3 text-gray-500" />
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleOpenDeleteModal(s)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+                    title="Delete Supplier"
+                  >
+                    <Trash2 className="w-3 h-3 text-red-500" />
+                    Delete
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
+      </div>
+
+      {/* Google-Style Bottom Pagination Footer */}
+      <div className="flex items-center justify-between px-4 py-3 bg-white rounded-2xl border border-gray-200 shadow-2xs select-none">
+        <div className="text-xs text-gray-500 font-medium">
+          <span className="font-semibold text-gray-700">{totalSuppliers.toLocaleString()} total suppliers</span>
+        </div>
+
+        <div className="flex items-center gap-1 text-xs text-gray-600">
+          <span className="px-2 font-normal tracking-tight text-gray-600">
+            {paginationText}
+          </span>
+          <button
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page <= 1}
+            className="w-8 h-8 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+            title="Previous page"
+            aria-label="Previous page"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page >= totalPages}
+            className="w-8 h-8 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+            title="Next page"
+            aria-label="Next page"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* ─── CREATE / ONBOARD MODAL ─────────────────────────────────── */}
@@ -1133,6 +1333,191 @@ export default function Suppliers() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── SUPPLIER CREDENTIALS & 1-CLICK ACCESS MODAL ──────── */}
+      {credentialsModalSupplier && activeCredentials && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl w-full max-w-lg overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-5 border-b border-gray-100 bg-gradient-to-r from-blue-50/70 to-indigo-50/70">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-sm">
+                  <Key className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-gray-900">Supplier Access Credentials</h3>
+                  <p className="text-xs text-gray-500">
+                    {credentialsModalSupplier.name} • <span className="font-mono font-bold text-blue-700">#{credentialsModalSupplier.supplier_code}</span>
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setCredentialsModalSupplier(null);
+                  setActiveCredentials(null);
+                }}
+                className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {/* Notice Banner */}
+              <div className="p-3.5 bg-amber-50/90 border border-amber-200 rounded-xl flex items-start gap-2.5">
+                <Clock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                <div className="text-xs text-amber-900 leading-relaxed">
+                  <span className="font-bold">6-Hour Temporary Password Window:</span>
+                  <p className="text-amber-800 mt-0.5">
+                    This temporary password is valid for 6 hours. Upon their first login, the supplier partner will be prompted to create their own permanent, easy-to-remember password.
+                  </p>
+                </div>
+              </div>
+
+              {/* Credential Fields */}
+              <div className="space-y-3 bg-gray-50/80 p-4 rounded-xl border border-gray-200/80">
+                {/* Partner ID */}
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                    Partner ID (Username)
+                  </label>
+                  <div className="flex items-center justify-between bg-white px-3 py-2 rounded-lg border border-gray-200">
+                    <span className="font-mono text-sm font-bold text-gray-900">
+                      {activeCredentials.supplier_code}
+                    </span>
+                    <button
+                      onClick={() => handleCopyText(activeCredentials.supplier_code, "code")}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-800"
+                    >
+                      {copiedKey === "code" ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-emerald-600" />
+                          <span className="text-emerald-600">Copied</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>Copy</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Temporary Password */}
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                    Temporary Password (Valid 6h)
+                  </label>
+                  <div className="flex items-center justify-between bg-white px-3 py-2 rounded-lg border border-gray-200">
+                    <span className="font-mono text-sm font-bold text-blue-700">
+                      {showPassword ? activeCredentials.temporary_password : "••••••••••••••"}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="p-1 text-gray-400 hover:text-gray-600 rounded"
+                        title={showPassword ? "Hide password" : "Show password"}
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                      <button
+                        onClick={() => handleCopyText(activeCredentials.temporary_password, "pwd")}
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-800"
+                      >
+                        {copiedKey === "pwd" ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-600" />
+                            <span className="text-emerald-600">Copied</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5" />
+                            <span>Copy</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Registered Email */}
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                    Contact Email Address
+                  </label>
+                  <div className="flex items-center justify-between bg-white px-3 py-2 rounded-lg border border-gray-200">
+                    <span className="text-xs font-medium text-gray-800 truncate">
+                      {activeCredentials.email}
+                    </span>
+                    <button
+                      onClick={() => handleCopyText(activeCredentials.email, "email")}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-800"
+                    >
+                      {copiedKey === "email" ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-emerald-600" />
+                          <span className="text-emerald-600">Copied</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>Copy</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Expiration Time */}
+                <div className="pt-1 flex items-center justify-between text-[11px] text-gray-500">
+                  <span>Expires at:</span>
+                  <span className="font-semibold text-gray-700">
+                    {activeCredentials.expires_at ? new Date(activeCredentials.expires_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "In 6 hours"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-2 flex flex-col sm:flex-row items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const fullText = `Oniverse / Calzedonia ASN Platform — Supplier Credentials\n\nLogin URL: ${window.location.origin}/login\nPartner ID / Username: ${activeCredentials.supplier_code}\nTemporary Password: ${activeCredentials.temporary_password}\nValidity: 6 Hours (Expires: ${new Date(activeCredentials.expires_at).toLocaleString()})\n\nNote: You will be asked to set your permanent password upon your first login.`;
+                    handleCopyText(fullText, "all");
+                  }}
+                  className="w-full sm:flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold text-gray-800 bg-gray-100 hover:bg-gray-200 active:bg-gray-300 rounded-xl transition-all shadow-xs"
+                >
+                  {copiedKey === "all" ? (
+                    <>
+                      <Check className="w-4 h-4 text-emerald-600" />
+                      <span className="text-emerald-700">All Details Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4 text-gray-600" />
+                      <span>Copy Login Details</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleSimulateLogin(credentialsModalSupplier);
+                    setCredentialsModalSupplier(null);
+                    setActiveCredentials(null);
+                  }}
+                  className="w-full sm:flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 rounded-xl transition-all shadow-sm"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  <span>Open Supplier Dashboard</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

@@ -19,8 +19,9 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/store/authStore";
+import { supplierApi } from "@/services/supplierApi";
 import { cn } from "@/utils/cn";
 
 interface HeaderProps {
@@ -142,10 +143,39 @@ export default function Header({ onMenuToggle }: HeaderProps) {
   const [notifOpen, setNotifOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
 
-  const isAdmin = user?.role === "COMPANY_ADMIN";
+  const isAdmin = user?.role === "COMPANY_ADMIN" || user?.role === "SUPER_ADMIN";
+
+  // Dynamic live supplier accounts from database
+  const { data: dbSuppliers } = useQuery({
+    queryKey: ["suppliers"],
+    queryFn: () => supplierApi.list(),
+    staleTime: 10000,
+  });
+
+  const dynamicAccounts = [
+    {
+      type: "admin",
+      code: "admin",
+      title: "Sirio Central Admin",
+      sub: "Plant Management",
+      role: "COMPANY_ADMIN",
+      icon: ShieldCheck,
+    },
+    ...(dbSuppliers && dbSuppliers.length > 0
+      ? dbSuppliers.map((s) => ({
+          type: "supplier",
+          code: s.supplier_code,
+          title: s.name,
+          sub: `Partner #${s.supplier_code}${s.total_pos !== undefined && s.total_pos > 0 ? ` • ${s.total_pos} POs` : ""}`,
+          role: "SUPPLIER",
+          icon: Building2,
+        }))
+      : ACCOUNTS.filter((a) => a.type === "supplier")),
+  ];
 
   const initialNotifs = isAdmin ? ADMIN_NOTIFICATIONS : SUPPLIER_NOTIFICATIONS;
   const [notifications, setNotifications] = useState(initialNotifs);
+
 
   // Sync notifications when user role switches
   useEffect(() => {
@@ -247,8 +277,8 @@ export default function Header({ onMenuToggle }: HeaderProps) {
                 <p className="text-[11px] text-gray-500">Test RBAC isolation per supplier</p>
               </div>
 
-              <div className="py-1">
-                {ACCOUNTS.map((acc) => {
+              <div className="py-1 max-h-80 overflow-y-auto">
+                {dynamicAccounts.map((acc) => {
                   const isCurrent =
                     (acc.code === "admin" && isAdmin) ||
                     (user?.supplier_code === acc.code);

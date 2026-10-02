@@ -5,7 +5,13 @@
 
 // ── Enums ──────────────────────────────────────────────────
 
-export type UserRole = "COMPANY_ADMIN" | "SUPPLIER";
+export type UserRole =
+  | "SUPER_ADMIN"
+  | "COMPANY_ADMIN"
+  | "OPERATOR"
+  | "REVIEWER"
+  | "VIEWER"
+  | "SUPPLIER";
 
 export type EmailDirection = "INBOUND" | "OUTBOUND";
 
@@ -93,6 +99,8 @@ export interface User {
   supplier_name?: string;  // e.g. "COATS THREAD EXPORTS (PRIVATE) LIMITED"
   is_active: boolean;
   last_login_at?: string;
+  requires_password_change?: boolean;
+  permissions?: string[];
 }
 
 export interface SupplierSummary {
