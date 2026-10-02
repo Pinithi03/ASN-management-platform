@@ -28,4 +28,15 @@ export const authService = {
     const res = await api.get<SupplierSummary[]>("/auth/suppliers");
     return res.data;
   },
+
+  /** Change password from temporary to permanent */
+  changePassword: async (identifier: string, currentPassword: string, newPassword: string): Promise<{ success: boolean; message: string }> => {
+    const res = await api.post<{ success: boolean; message: string }>("/auth/change-password", {
+      supplier_code_or_email: identifier,
+      current_password: currentPassword,
+      new_password: newPassword,
+    });
+    return res.data;
+  },
 };
+
