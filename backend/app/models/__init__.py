@@ -17,7 +17,6 @@ from app.models.enums import (
     ShipmentStatus,
     ASNStatus,
     ChangeSource,
-    AuditAction,
 )
 
 # Domain models — import order follows FK dependency chain
@@ -36,7 +35,6 @@ from app.models.shipment_line import ShipmentLine
 from app.models.packing_slip import PackingSlip
 from app.models.asn import ASNRecord
 from app.models.parser_template import ParserTemplate
-from app.models.audit_log import AuditLog
 from app.models.hu_sequence import HUSequence
 
 __all__ = [
@@ -56,7 +54,6 @@ __all__ = [
     "ShipmentStatus",
     "ASNStatus",
     "ChangeSource",
-    "AuditAction",
     # Models
     "Company",
     "Supplier",
@@ -73,6 +70,5 @@ __all__ = [
     "PackingSlip",
     "ASNRecord",
     "ParserTemplate",
-    "AuditLog",
     "HUSequence",
 ]

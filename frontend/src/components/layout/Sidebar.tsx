@@ -18,7 +18,6 @@ import {
   Package,
   PackagePlus,
   UserCircle,
-  ScrollText,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -44,7 +43,6 @@ const adminMainNav: NavItem[] = [
 const adminSettingsNav: NavItem[] = [
   { to: "/settings", icon: Settings, label: "Settings" },
   { to: "/settings/users", icon: Users, label: "Users" },
-  { to: "/audit-logs", icon: ScrollText, label: "Audit Trail" },
 ];
 
 // Supplier portal navigation

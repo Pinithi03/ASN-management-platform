@@ -546,7 +546,7 @@ export default function UserManagement() {
                     <option value="COMPANY_ADMIN">Plant Administrator</option>
                     <option value="SUPER_ADMIN">Super Administrator (HQ)</option>
                     <option value="OPERATOR">Plant Operator</option>
-                    <option value="REVIEWER">Audit Reviewer</option>
+                    <option value="REVIEWER">System Reviewer</option>
                   </select>
                 </div>
 
@@ -654,7 +654,7 @@ export default function UserManagement() {
                     <option value="COMPANY_ADMIN">Plant Administrator</option>
                     <option value="SUPER_ADMIN">Super Administrator (HQ)</option>
                     <option value="OPERATOR">Plant Operator</option>
-                    <option value="REVIEWER">Audit Reviewer</option>
+                    <option value="REVIEWER">System Reviewer</option>
                   </select>
                 </div>
 

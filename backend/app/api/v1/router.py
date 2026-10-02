@@ -6,7 +6,6 @@ from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
     asn,
-    audit_logs,
     auth,
     emails,
     health,
@@ -32,11 +31,6 @@ api_router.include_router(
     users.router,
     prefix="/users",
     tags=["User Management"],
-)
-api_router.include_router(
-    audit_logs.router,
-    prefix="/audit-logs",
-    tags=["Audit Logs"],
 )
 api_router.include_router(
     emails.router,

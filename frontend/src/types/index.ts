@@ -258,16 +258,6 @@ export interface ASNRecord {
   updated_at: string;
 }
 
-export interface AuditLog {
-  id: string;
-  company_id: string;
-  user_id?: string;
-  action: string;
-  entity_type: string;
-  entity_id?: string;
-  created_at: string;
-}
-
 // ── Health Check ───────────────────────────────────────────
 
 export interface HealthCheck {
