@@ -9,9 +9,44 @@ import enum
 
 
 class UserRole(str, enum.Enum):
-    """Two roles only: plant admin or external supplier."""
+    """RBAC Roles for Oniverse Multi-tenant Platform."""
+    SUPER_ADMIN = "SUPER_ADMIN"
     COMPANY_ADMIN = "COMPANY_ADMIN"
+    OPERATOR = "OPERATOR"
+    REVIEWER = "REVIEWER"
+    VIEWER = "VIEWER"
     SUPPLIER = "SUPPLIER"
+
+
+ROLE_PERMISSIONS: dict[str, list[str]] = {
+    "SUPER_ADMIN": ["*"],
+    "COMPANY_ADMIN": [
+        "po:read", "po:write",
+        "supplier:read", "supplier:write", "supplier:credentials",
+        "email:read", "email:reprocess",
+        "asn:read", "asn:write",
+        "user:read", "user:write",
+        "audit:read",
+    ],
+    "OPERATOR": [
+        "po:read", "po:write",
+        "supplier:read",
+        "asn:read", "asn:write",
+        "shipment:read", "shipment:write",
+    ],
+    "REVIEWER": [
+        "po:read", "email:read", "asn:read", "audit:read",
+    ],
+    "VIEWER": [
+        "po:read", "shipment:read", "asn:read",
+    ],
+    "SUPPLIER": [
+        "supplier:own_po",
+        "supplier:own_shipment",
+        "supplier:own_asn",
+        "supplier:own_profile",
+    ],
+}
 
 
 class EmailDirection(str, enum.Enum):

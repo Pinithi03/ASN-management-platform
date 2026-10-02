@@ -80,3 +80,6 @@ GEMINI.md
 
 # Local agent knowledge base (not committed)
 .agents/skills/project-architecture/references/
+
+# Runtime local cache
+backend/app/data/
