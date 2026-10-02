@@ -21,7 +21,6 @@ if TYPE_CHECKING:
     from app.models.client import Client
     from app.models.purchase_order import PurchaseOrder
     from app.models.shipment import Shipment
-    from app.models.audit_log import AuditLog
 
 
 class Company(Base, TimestampMixin, SoftDeleteMixin):
@@ -76,9 +75,6 @@ class Company(Base, TimestampMixin, SoftDeleteMixin):
     )
     shipments: Mapped[list[Shipment]] = relationship(
         "Shipment", back_populates="company"
-    )
-    audit_logs: Mapped[list[AuditLog]] = relationship(
-        "AuditLog", back_populates="company"
     )
 
     def __repr__(self) -> str:

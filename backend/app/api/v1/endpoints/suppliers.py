@@ -25,7 +25,6 @@ from app.core.credentials_store import (
     get_supplier_discovery_meta,
 )
 from app.db.session import get_db
-from app.models.audit_log import AuditLog
 from app.models.parsed_data import ParsedData
 from app.models.purchase_order import PurchaseOrder
 from app.models.supplier import Supplier
@@ -640,24 +639,6 @@ async def activate_supplier_credentials(
         db.add(usr)
     else:
         usr.is_active = True
-
-    # 4. Log audit event
-    co_id = usr.company_id if usr else uuid.UUID("00000000-0000-0000-0000-000000000001")
-    db.add(
-        AuditLog(
-            company_id=co_id,
-            action="SUPPLIER_ACTIVATED",
-            entity_type="SUPPLIER",
-            entity_id=supplier.id,
-            user_id=usr.id if usr else None,
-            new_values={
-                "supplier_name": supplier.name,
-                "supplier_code": supplier.supplier_code,
-                "expires_at": cred["expires_at"],
-                "expires_in_hours": 6,
-            },
-        )
-    )
 
     await db.commit()
 

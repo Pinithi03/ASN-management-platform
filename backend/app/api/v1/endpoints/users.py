@@ -17,7 +17,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.models.user import User
-from app.services.audit_service import create_audit_log
 
 router = APIRouter()
 
@@ -195,22 +194,6 @@ async def create_user(
     await db.commit()
     await db.refresh(new_user)
 
-    await create_audit_log(
-        db=db,
-        company_id=str(comp_uuid),
-        action="ADMIN_USER_CREATED",
-        entity_type="USER",
-        entity_id=str(new_user.id),
-        new_values={
-            "email": new_user.email,
-            "full_name": new_user.full_name,
-            "role": new_user.role,
-            "plant_code": body.plant_code,
-        },
-        metadata={"created_via": "Admin Users Hub"},
-    )
-    await db.commit()
-
     res = to_user_response(new_user)
     res.plant_code = body.plant_code
     res.plant_name = get_plant_name(body.plant_code)
@@ -257,12 +240,6 @@ async def update_user(
             detail=f"User '{user_id}' not found.",
         )
 
-    old_vals = {
-        "full_name": usr.full_name,
-        "role": usr.role,
-        "is_active": usr.is_active,
-    }
-
     if body.full_name is not None:
         usr.full_name = body.full_name.strip()
 
@@ -274,23 +251,6 @@ async def update_user(
 
     await db.commit()
     await db.refresh(usr)
-
-    action = "ADMIN_STATUS_TOGGLED" if body.is_active is not None and len(body.model_dump(exclude_unset=True)) == 1 else "ADMIN_USER_UPDATED"
-    await create_audit_log(
-        db=db,
-        company_id=str(usr.company_id),
-        action=action,
-        entity_type="USER",
-        entity_id=str(usr.id),
-        old_values=old_vals,
-        new_values={
-            "full_name": usr.full_name,
-            "role": usr.role,
-            "is_active": usr.is_active,
-        },
-        metadata={"updated_via": "Admin Users Hub"},
-    )
-    await db.commit()
 
     res = to_user_response(usr)
     if body.plant_code:
@@ -320,17 +280,6 @@ async def delete_user(
     usr.is_active = False
     await db.commit()
 
-    await create_audit_log(
-        db=db,
-        company_id=str(usr.company_id),
-        action="ADMIN_USER_DELETED",
-        entity_type="USER",
-        entity_id=str(usr.id),
-        old_values={"email": usr.email, "full_name": usr.full_name},
-        metadata={"deleted_via": "Admin Users Hub"},
-    )
-    await db.commit()
-
     return {"message": f"Admin user {usr.email} removed successfully."}
 
 
@@ -351,16 +300,6 @@ async def reset_user_password(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"User '{user_id}' not found.",
         )
-
-    await create_audit_log(
-        db=db,
-        company_id=str(usr.company_id),
-        action="ADMIN_PASSWORD_RESET_TRIGGERED",
-        entity_type="USER",
-        entity_id=str(usr.id),
-        metadata={"reset_email": usr.email},
-    )
-    await db.commit()
 
     return {
         "message": f"Password reset instructions dispatched to {usr.email}.",

@@ -15,7 +15,6 @@ import {
   Clock,
   Sparkles,
   CheckCheck,
-  ScrollText,
   ArrowRight,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -86,12 +85,12 @@ const ADMIN_NOTIFICATIONS = [
   },
   {
     id: "n-3",
-    title: "System Audit Event Recorded",
-    desc: "SUPPLIER_ACTIVATED logged for Prym Intimates Lanka Ltd",
+    title: "Outbound ASN Dispatched",
+    desc: "Shipment #01852145 marked as DISPATCHED for Plant PPC1",
     time: "1 hour ago",
     unread: false,
-    to: "/audit-logs",
-    icon: ScrollText,
+    to: "/shipments",
+    icon: PackagePlus,
     color: "bg-indigo-700 text-white border border-indigo-800 shadow-xs",
   },
 ];
@@ -395,11 +394,11 @@ export default function Header({ onMenuToggle }: HeaderProps) {
                 <button
                   onClick={() => {
                     setNotifOpen(false);
-                    navigate(isAdmin ? "/audit-logs" : "/emails");
+                    navigate("/emails");
                   }}
                   className="text-xs font-semibold text-brand-600 hover:text-brand-700 inline-flex items-center gap-1"
                 >
-                  {isAdmin ? "View System Audit Trail" : "View All Inbox Emails"} <ArrowRight className="w-3 h-3" />
+                  View All System Emails <ArrowRight className="w-3 h-3" />
                 </button>
               </div>
             </div>
