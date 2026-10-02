@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from datetime import datetime, timezone
 from typing import Optional
 from urllib.parse import quote
@@ -103,6 +104,10 @@ class EmailDetailResponse(BaseModel):
     retry_count: int = 0
     attachments: list[EmailAttachmentResponse] = []
     parsed_data: list[ParsedDataResponse] = []
+    # XML company info (extracted from first parsed_data entry)
+    xml_legal_name: Optional[str] = None
+    xml_iungo_email_address: Optional[str] = None
+    xml_transmission_date: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -134,6 +139,45 @@ class EmailStatsResponse(BaseModel):
     committed: int = 0
     rejected: int = 0
     error: int = 0
+
+
+# ─── Helpers ────────────────────────────────────────────────────
+
+
+def _extract_xml_field(
+    parsed_items: list,
+    field_name: str,
+    record: Optional[EmailRecord] = None,
+) -> Optional[str]:
+    """Extract a named field from the first parsed_data entry's raw_extracted JSON.
+    
+    For 'legal_name', also falls back to 'buyer_name' for backward compatibility.
+    For 'iungo_email_address', also checks the email body text/html for @iungomail.com if missing.
+    """
+    fallbacks = {"legal_name": ["buyer_name"]}
+    keys_to_try = [field_name] + fallbacks.get(field_name, [])
+    
+    for pd in parsed_items:
+        raw = getattr(pd, "raw_extracted", None)
+        if isinstance(raw, dict):
+            for key in keys_to_try:
+                val = raw.get(key)
+                if val and isinstance(val, str) and val.strip():
+                    return val.strip()
+
+    if field_name == "iungo_email_address" and record:
+        text = f"{record.body_text or ''} {record.body_html or ''}"
+        m = re.search(r'([a-zA-Z0-9._%+-]+@(?:[a-zA-Z0-9-]+\.)?iungomail\.com)', text, re.IGNORECASE)
+        if m:
+            return m.group(1).strip()
+
+    if field_name == "transmission_date" and record:
+        text = f"{record.body_text or ''} {record.body_html or ''}"
+        m = re.search(r'<TransmissionDate>(.*?)</TransmissionDate>', text, re.IGNORECASE)
+        if m:
+            return m.group(1).strip()
+
+    return None
 
 
 # ─── GET / — List Emails ────────────────────────────────────────
@@ -575,6 +619,9 @@ async def get_email(
             )
             for pd in parsed_items
         ],
+        xml_legal_name=_extract_xml_field(parsed_items, "legal_name", record),
+        xml_iungo_email_address=_extract_xml_field(parsed_items, "iungo_email_address", record),
+        xml_transmission_date=_extract_xml_field(parsed_items, "transmission_date", record),
     )
 
 

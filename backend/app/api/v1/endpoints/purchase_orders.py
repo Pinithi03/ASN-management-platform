@@ -53,6 +53,7 @@ class POListItem(BaseModel):
     destination: Optional[str] = None
     status: Optional[str] = None
     version: Optional[int] = None
+    extra_data: Optional[dict] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -206,6 +207,7 @@ async def list_purchase_orders(
                 destination=r.destination,
                 status=r.status,
                 version=r.version,
+                extra_data=r.extra_data,
                 created_at=r.created_at,
                 updated_at=r.updated_at,
             )
@@ -315,15 +317,18 @@ async def list_open_po_lines(
             for item in items:
                 line_num = str(item.get("line_number", "00100")).split("-")[0].zfill(5)
                 ordered = float(item.get("quantity", 0))
+                material = item.get("material_code") or item.get("item_code") or po.style_number or ""
+                partner = item.get("partner_code") or item.get("partner_item_code", "")
+                desc = item.get("description") or item.get("item_description", po.description or "")
                 open_lines.append({
                     "po_id": str(po.id),
                     "po_number": po.po_number,
                     "po_item": line_num,
-                    "material_code": item.get("material_code", ""),
-                    "partner_code": item.get("partner_code", ""),
-                    "material_description": item.get("description", po.description or ""),
+                    "material_code": material,
+                    "partner_code": partner,
+                    "material_description": desc,
                     "ordered_qty": ordered,
-                    "uom": item.get("uom", "M"),
+                    "uom": item.get("uom") or item.get("qty_unit", "M"),
                     "destination": po.destination,
                     "delivery_date": str(po.delivery_date) if po.delivery_date else None,
                     "order_date": str(getattr(po, "order_date", None) or (po.created_at.date() if po.created_at else "")),

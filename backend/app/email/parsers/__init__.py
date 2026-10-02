@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Any
 
 from app.email.classifier import ClassificationResult, EmailFormat
 from app.email.mime_decoder import DecodedEmail
@@ -56,16 +56,20 @@ def is_same_po(a: str, b: str) -> bool:
 @dataclass
 class POLineItem:
     """Single line item inside a purchase order."""
-    line_number: int = 1
-    order_line_number: str = ""
-    style: str = ""
-    partner_code: str = ""
-    color: str = ""
-    size: str = ""
+    line_number: Any = 0
+    order_line_number: str = ""       # <OrderLineNumber> from XML
+    item_code: str = ""               # <ItemCode> from XML
+    partner_item_code: str = ""       # <PartnerItemCode> from XML
+    partner_code: str = ""            # alias
+    item_description: str = ""        # <ItemDescription> from XML
+    qty_unit: str = ""                # <QtyUnit> from XML
     uom: str = "M"
+    style: str = ""                   # legacy/fallback
+    color: str = ""
+    size: str = ""                    # legacy/fallback
     quantity: int = 0
     unit_price: float = 0.0
-    description: str = ""
+    description: str = ""             # legacy/fallback
 
 
 DEFAULT_CURRENCY = "USD"
@@ -77,17 +81,31 @@ class ParsedPO:
     po_number: str = ""
     order_type: str = ""
     supplier_code: str = ""
+    partner_id: str = ""           # <PartnerId> from XML
     supplier_name: str = ""
     buyer_name: str = ""
     order_date: str = ""
     delivery_date: str = ""
     destination: str = ""
+    contact_person: str = ""       # <ContactPerson> from XML
+    delivery_address: str = ""     # <DeliveryAddress> from XML
+    payment: str = ""              # <Payment> from XML
+    # Supplier address fields (from SdPartner)
+    address: str = ""              # <Address> from SdPartner
+    zipcode: str = ""              # <ZIPCode> from SdPartner
+    city: str = ""                 # <City> from SdPartner
+    town: str = ""                 # <Town> from SdPartner
+    country: str = ""              # <Country> from SdPartner
     currency: str = DEFAULT_CURRENCY
     total_quantity: int = 0
     total_value: float = 0.0
     line_items: list[POLineItem] = field(default_factory=list)
     raw_source: str = "unknown"
     source_filename: str = ""
+    # XML company info fields (from SdCompanyHeader / SdPartner)
+    legal_name: str = ""           # <LegalName> from SdCompanyHeader
+    iungo_email_address: str = ""  # <IungoEmailAddress> from XML root/header
+    transmission_date: str = ""    # <TransmissionDate> from SdCompanyHeader / XML
 
 
 def parse_xml(xml_bytes: bytes, filename: str = "") -> ParsedPO:

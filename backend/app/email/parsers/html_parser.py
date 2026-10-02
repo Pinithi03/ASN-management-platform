@@ -237,9 +237,8 @@ def parse_html_document(
             po.delivery_date = dates[1]
 
     po.line_items = _extract_line_items(soup)
-    if not po.total_quantity and po.line_items:
+    if po.line_items:
         po.total_quantity = sum(item.quantity for item in po.line_items)
-    if not po.total_value and po.line_items:
         po.total_value = round(sum(item.quantity * item.unit_price for item in po.line_items), 2)
 
     logger.info(
@@ -490,6 +489,11 @@ def _extract_line_items(soup: BeautifulSoup) -> list[POLineItem]:
 
         item = POLineItem(
             line_number=len(items) + 1,
+            order_line_number=str(len(items) + 1),
+            item_code=style,
+            partner_item_code=style,
+            item_description=description,
+            qty_unit=size,
             style=style,
             color=color,
             size=size,

@@ -11,6 +11,7 @@ import email.utils
 import hashlib
 import logging
 import re
+import uuid
 from dataclasses import asdict
 from datetime import datetime, timezone, date as date_type
 from typing import Optional
@@ -24,6 +25,7 @@ from app.models.po_history import POHistory
 from app.models.parsed_data import ParsedData
 from app.models.email_attachment import EmailAttachment
 from app.models.supplier import Supplier
+from app.models.po_history import POHistory
 from app.email.mime_decoder import DecodedEmail
 from app.email.classifier import ClassificationResult
 from app.email.parsers import ParsedPO, normalize_po_number
@@ -243,6 +245,16 @@ async def save_parsed_data(
     -------
     ParsedData
     """
+    # Filter out 0 or negative quantity line items defensively
+    parsed_po.line_items = [
+        li for li in parsed_po.line_items if getattr(li, "quantity", 0) > 0
+    ]
+    if parsed_po.line_items:
+        parsed_po.total_quantity = sum(li.quantity for li in parsed_po.line_items)
+        parsed_po.total_value = round(
+            sum(li.quantity * getattr(li, "unit_price", 0.0) for li in parsed_po.line_items), 2
+        )
+
     # Convert dataclass to dict for JSONB storage
     raw_dict = asdict(parsed_po)
 
@@ -342,7 +354,9 @@ async def save_purchase_order(
             await db.flush()
             resolved_supplier_id = new_supp.id
 
-    first_item = parsed_po.line_items[0] if parsed_po.line_items else None
+    # Filter out any non-positive line items
+    active_line_items = [li for li in parsed_po.line_items if getattr(li, "quantity", 0) > 0]
+    first_item = active_line_items[0] if active_line_items else (parsed_po.line_items[0] if parsed_po.line_items else None)
     primary_style = first_item.style[:50] if first_item and first_item.style else None
     primary_desc = first_item.description if first_item and first_item.description else None
     buyer_code = (parsed_po.buyer_name or "CALZ")[:50]
@@ -350,6 +364,11 @@ async def save_purchase_order(
     items_data = [
         {
             "line_number": li.line_number,
+            "order_line_number": getattr(li, "order_line_number", None) or str(li.line_number),
+            "item_code": getattr(li, "item_code", None) or li.style,
+            "partner_item_code": getattr(li, "partner_item_code", None) or li.style,
+            "item_description": getattr(li, "item_description", None) or li.description,
+            "qty_unit": getattr(li, "qty_unit", None) or li.size,
             "material_code": li.style,
             "description": li.description,
             "color": li.color,
@@ -357,7 +376,7 @@ async def save_purchase_order(
             "quantity": li.quantity,
             "unit_price": li.unit_price,
         }
-        for li in parsed_po.line_items
+        for li in active_line_items
     ]
     order_type_str = getattr(parsed_po, "order_type", "") or "ZA6A"
     extra_info = {
@@ -378,41 +397,36 @@ async def save_purchase_order(
     items_data = [
         {
             "line_number": getattr(li, "order_line_number", "") or str(li.line_number),
+            "order_line_number": getattr(li, "order_line_number", "") or str(li.line_number),
+            "item_code": getattr(li, "item_code", None) or li.style,
+            "partner_item_code": getattr(li, "partner_item_code", None) or getattr(li, "partner_code", "") or li.style,
+            "partner_code": getattr(li, "partner_code", "") or getattr(li, "partner_item_code", "") or "",
+            "item_description": getattr(li, "item_description", None) or li.description,
+            "qty_unit": getattr(li, "qty_unit", None) or getattr(li, "uom", "") or li.size or "M",
             "material_code": li.style,
-            "partner_code": getattr(li, "partner_code", "") or "",
             "description": li.description,
             "color": li.color,
             "size": li.size,
-            "uom": getattr(li, "uom", "") or li.size or "M",
+            "uom": getattr(li, "uom", "") or getattr(li, "qty_unit", None) or li.size or "M",
             "quantity": li.quantity,
             "unit_price": li.unit_price,
         }
         for li in parsed_po.line_items
+        if getattr(li, "quantity", 0) > 0
     ]
 
     if existing:
         old_version = existing.version or 1
         new_version = max(old_version + 1, progressive_version) if progressive_version else (old_version + 1)
-
-        # Audit trail of changes
-        old_items = existing.extra_data.get("items", []) if existing.extra_data else []
-        changed_fields = {
-            "version": {"old": old_version, "new": new_version},
-            "status": {"old": existing.status, "new": "UPDATED"},
-            "quantity": {"old": existing.quantity, "new": parsed_po.total_quantity},
-            "total_value": {"old": float(existing.total_value or 0), "new": float(parsed_po.total_value or 0)},
-            "delivery_date": {"old": str(existing.delivery_date), "new": str(_parse_date(parsed_po.delivery_date))},
-            "items_count": {"old": len(old_items), "new": len(items_data)},
-        }
+        old_quantity = existing.quantity
+        old_total_value = existing.total_value
 
         # Update existing PO - ensure canonical normalized number & increment version
         existing.po_number = clean_po
         existing.version = new_version
-        existing.status = "UPDATED"
-        if parsed_po.total_quantity > 0:
-            existing.quantity = parsed_po.total_quantity
-        if parsed_po.total_value > 0:
-            existing.total_value = parsed_po.total_value
+        existing.status = "UPDATED" if (parsed_po.total_quantity or 0) > 0 else "CANCELLED"
+        existing.quantity = parsed_po.total_quantity
+        existing.total_value = parsed_po.total_value
         existing.destination = parsed_po.destination or existing.destination
         existing.delivery_date = _parse_date(parsed_po.delivery_date) or existing.delivery_date
         existing.currency = parsed_po.currency or existing.currency
@@ -425,15 +439,25 @@ async def save_purchase_order(
             existing.style_number = primary_style
         if primary_desc:
             existing.description = primary_desc
-        if items_data:
-            existing.extra_data = extra_info
+        existing.extra_data = extra_info
+
+        # Audit trail of changes
+        old_items = existing.extra_data.get("items", []) if existing.extra_data else []
+        changed_fields = {
+            "version": {"old": old_version, "new": new_version},
+            "status": {"old": existing.status, "new": existing.status},
+            "quantity": {"old": old_quantity, "new": existing.quantity},
+            "total_value": {"old": float(old_total_value or 0), "new": float(existing.total_value or 0)},
+            "delivery_date": {"old": str(existing.delivery_date), "new": str(_parse_date(parsed_po.delivery_date))},
+            "items_count": {"old": len(old_items), "new": len(items_data)},
+        }
 
         # Record in po_history
         try:
             hist = POHistory(
                 po_id=existing.id,
                 company_id=existing.company_id,
-                source_email_id=email_record_id,
+                source_email_id=uuid.UUID(str(email_record_id)) if email_record_id else None,
                 version=new_version,
                 changed_fields=changed_fields,
                 change_source="EMAIL_UPDATE",
@@ -442,7 +466,10 @@ async def save_purchase_order(
         except Exception:
             logger.exception("Failed to insert POHistory for %s", existing.po_number)
         po = existing
-        logger.info("Updated PO: %s (v%d, was v%d)", po.po_number, po.version, old_version)
+        logger.info(
+            "Updated PO: %s (v%d, was v%d), qty=%s->%s, val=%s->%s",
+            po.po_number, po.version, old_version, old_quantity, po.quantity, old_total_value, po.total_value,
+        )
     else:
         # Create new PO
         po = PurchaseOrder(
