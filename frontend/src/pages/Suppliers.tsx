@@ -32,6 +32,8 @@ import {
   EyeOff,
   Zap,
   Shield,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { auditApi } from "@/services/auditApi";
 import { useQuery } from "@tanstack/react-query";
@@ -526,6 +528,29 @@ export default function Suppliers() {
   const activeCount = suppliers.filter((s) => s.is_active).length;
   const inactiveCount = suppliers.length - activeCount;
 
+  // ─── PAGINATION (12 CARDS PER PAGE - GOOGLE EMAIL STYLE) ──────
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 12;
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter]);
+
+  const totalSuppliers = filteredSuppliers.length;
+  const totalPages = Math.ceil(totalSuppliers / PAGE_SIZE) || 1;
+  const startItem = totalSuppliers === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const endItem = Math.min(page * PAGE_SIZE, totalSuppliers);
+  const paginationText =
+    totalSuppliers === 0
+      ? "0 of 0"
+      : `${startItem.toLocaleString()}–${endItem.toLocaleString()} of ${totalSuppliers.toLocaleString()}`;
+
+  const paginatedSuppliers = filteredSuppliers.slice(
+    (page - 1) * PAGE_SIZE,
+    page * PAGE_SIZE
+  );
+
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -651,9 +676,39 @@ export default function Suppliers() {
         </div>
       </div>
 
+      {/* Google-Style Top Pagination Toolbar */}
+      <div className="flex items-center justify-between bg-white px-4 py-2.5 rounded-2xl border border-gray-200 shadow-2xs select-none">
+        <div className="text-xs text-gray-500 font-medium">
+          Showing <span className="font-bold text-gray-800">{startItem}–{endItem}</span> of <span className="font-bold text-gray-800">{totalSuppliers}</span> suppliers
+        </div>
+        <div className="flex items-center gap-1 text-xs text-gray-600">
+          <span className="px-2 font-normal tracking-tight text-gray-600">
+            {paginationText}
+          </span>
+          <button
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page <= 1}
+            className="w-8 h-8 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+            title="Previous page"
+            aria-label="Previous page"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page >= totalPages}
+            className="w-8 h-8 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+            title="Next page"
+            aria-label="Next page"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
       {/* Suppliers Card Grid */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {filteredSuppliers.map((s) => {
+        {paginatedSuppliers.map((s) => {
           const isPending = !s.is_active || Boolean(s.is_pending_approval);
 
           return (
@@ -791,7 +846,7 @@ export default function Suppliers() {
                     </button>
                     <button
                       onClick={() => handleSimulateLogin(s)}
-                      className="inline-flex items-center justify-center px-2.5 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors"
+                      className="inline-flex items-center justify-center px-2.5 py-1.5 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors"
                       title="Open and test the supplier's personalized dashboard"
                     >
                       Open Dashboard
@@ -829,6 +884,37 @@ export default function Suppliers() {
             </div>
           );
         })}
+      </div>
+
+      {/* Google-Style Bottom Pagination Footer */}
+      <div className="flex items-center justify-between px-4 py-3 bg-white rounded-2xl border border-gray-200 shadow-2xs select-none">
+        <div className="text-xs text-gray-500 font-medium">
+          <span className="font-semibold text-gray-700">{totalSuppliers.toLocaleString()} total suppliers</span>
+        </div>
+
+        <div className="flex items-center gap-1 text-xs text-gray-600">
+          <span className="px-2 font-normal tracking-tight text-gray-600">
+            {paginationText}
+          </span>
+          <button
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page <= 1}
+            className="w-8 h-8 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+            title="Previous page"
+            aria-label="Previous page"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page >= totalPages}
+            className="w-8 h-8 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+            title="Next page"
+            aria-label="Next page"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* ─── CREATE / ONBOARD MODAL ─────────────────────────────────── */}

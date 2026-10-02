@@ -118,7 +118,16 @@ export default function PurchaseOrders() {
   const activePO: PurchaseOrder | null = fullPODetail || selectedPOForPreview;
 
   const orders: PurchaseOrder[] = data?.items || [];
+  const totalOrders = data?.total || 0;
   const totalPages = data?.pages || 1;
+
+  const startItem = totalOrders === 0 ? 0 : (page - 1) * 50 + 1;
+  const endItem = Math.min(page * 50, totalOrders);
+  const paginationText =
+    totalOrders === 0
+      ? "0 of 0"
+      : `${startItem.toLocaleString()}–${endItem.toLocaleString()} of ${totalOrders.toLocaleString()}`;
+
 
   const togglePOSelection = (poNumber: string) => {
     const newSelection = new Set(selectedPOs);
@@ -389,6 +398,35 @@ export default function PurchaseOrders() {
 
       {/* Main Table */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        {/* Google-Style Top Pagination Toolbar */}
+        <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200/90 bg-white select-none">
+          <div className="text-xs text-gray-500 font-medium">
+            <span className="font-semibold text-gray-700">{totalOrders.toLocaleString()}</span> purchase orders
+          </div>
+          <div className="flex items-center gap-1 text-xs text-gray-600">
+            <span className="px-2 font-normal tracking-tight text-gray-600">
+              {paginationText}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="w-8 h-8 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+              title="Previous page"
+              aria-label="Previous page"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              className="w-8 h-8 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+              title="Next page"
+              aria-label="Next page"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
         {isLoading ? (
           <div className="flex items-center justify-center py-24 text-gray-400">
             <RefreshCw className="w-6 h-6 animate-spin mr-2 text-blue-500" />
@@ -571,27 +609,31 @@ export default function PurchaseOrders() {
           </div>
         )}
 
-        {/* Pagination Toolbar */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-6 py-3 border-t border-gray-200 bg-gray-50/50 text-xs text-gray-600">
-            <p className="font-normal">
-              Page <span className="font-semibold text-gray-900">{page}</span> of{" "}
-              <span className="font-semibold text-gray-900">{totalPages}</span>
-            </p>
-            <div className="flex items-center gap-1">
+        {/* Google-Style Bottom Pagination Footer */}
+        {totalOrders > 0 && (
+          <div className="flex items-center justify-between px-6 py-3 border-t border-gray-200 bg-gray-50/70 select-none text-xs text-gray-600">
+            <div className="font-medium text-gray-500">
+              <span className="font-semibold text-gray-700">{totalOrders.toLocaleString()} total orders</span>
+            </div>
+            <div className="flex items-center gap-1 text-xs text-gray-600">
+              <span className="px-2 font-normal tracking-tight text-gray-600">
+                {paginationText}
+              </span>
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page <= 1}
-                className="w-8 h-8 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                className="w-8 h-8 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-200/70 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
                 title="Previous page"
+                aria-label="Previous page"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
               <button
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page >= totalPages}
-                className="w-8 h-8 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                className="w-8 h-8 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-200/70 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
                 title="Next page"
+                aria-label="Next page"
               >
                 <ChevronRight className="w-4 h-4" />
               </button>
