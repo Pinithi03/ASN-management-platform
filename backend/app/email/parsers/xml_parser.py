@@ -98,7 +98,7 @@ def _parse_sd_data_slice_all(root: etree._Element, filename: str) -> list[Parsed
     if not transmission_date:
         transmission_date = _xpath_text(root, ".//TransmissionDate") or ""
 
-    # Common Partner info (supplier)
+    # Common Partner info (supplier) from <SdPartner>
     global_supplier_name = ""
     global_supplier_code = ""
     global_destination = ""
@@ -107,18 +107,63 @@ def _parse_sd_data_slice_all(root: etree._Element, filename: str) -> list[Parsed
     partner_city = ""
     partner_town = ""
     partner_country = ""
+    partner_phone = ""
+    partner_tax_id = ""
+    partner_category = ""
+    partner_email = ""
+    partner_contact = ""
 
     partner = root.xpath(".//SdPartner")
     if partner:
         p = partner[0]
-        global_supplier_name = _xpath_text(p, ".//LegalName") or ""
-        global_supplier_code = _xpath_text(p, ".//PartnerId") or ""
-        global_destination = _xpath_text(p, ".//Address") or ""
+        global_supplier_name = (
+            _xpath_text(p, ".//LegalName")
+            or _xpath_text(p, ".//SupplierName")
+            or _xpath_text(p, ".//PartnerName")
+            or ""
+        ).strip()
+        global_supplier_code = (
+            _xpath_text(p, ".//PartnerId")
+            or _xpath_text(p, ".//SupplierCode")
+            or _xpath_text(p, ".//PartnerCode")
+            or ""
+        ).strip()
+        global_destination = (_xpath_text(p, ".//Address") or "").strip()
         partner_address = (_xpath_text(p, ".//Address") or "").strip()
         partner_zipcode = (_xpath_text(p, ".//ZIPCode") or _xpath_text(p, ".//Zipcode") or "").strip()
         partner_city = (_xpath_text(p, ".//City") or "").strip()
         partner_town = (_xpath_text(p, ".//Town") or "").strip()
-        partner_country = (_xpath_text(p, ".//Country") or "").strip()
+        partner_country = (_xpath_text(p, ".//Country") or "Sri Lanka").strip()
+        partner_phone = (
+            _xpath_text(p, ".//Telephone")
+            or _xpath_text(p, ".//Phone")
+            or _xpath_text(p, ".//Tel")
+            or ""
+        ).strip()
+        partner_tax_id = (
+            _xpath_text(p, ".//FiscalCode")
+            or _xpath_text(p, ".//TaxId")
+            or _xpath_text(p, ".//TaxID")
+            or _xpath_text(p, ".//VatRegistration")
+            or _xpath_text(p, ".//VATNumber")
+            or ""
+        ).strip()
+        partner_category = (
+            _xpath_text(p, ".//Category")
+            or _xpath_text(p, ".//ProductCategory")
+            or ""
+        ).strip()
+        partner_email = (
+            _xpath_text(p, ".//Email")
+            or _xpath_text(p, ".//IungoEmailAddress")
+            or _xpath_text(p, ".//ContactEmail")
+            or ""
+        ).strip()
+        partner_contact = (
+            _xpath_text(p, ".//ContactPerson")
+            or _xpath_text(p, ".//ContactName")
+            or ""
+        ).strip()
 
     # ─── Format A: SdOrder + SdOrderLine (Purchase Orders from Iungo/Calzedonia) ───
     order_elements = root.xpath(".//SdOrder")
@@ -132,7 +177,7 @@ def _parse_sd_data_slice_all(root: etree._Element, filename: str) -> list[Parsed
             po.po_number = normalize_po_number(po_num)
             po.buyer_name = buyer_name or "Calzedonia Group"
             po.legal_name = legal_name or po.buyer_name
-            po.iungo_email_address = iungo_email_address
+            po.iungo_email_address = iungo_email_address or partner_email
             po.transmission_date = transmission_date
             po.order_date = _xpath_text(order_elem, ".//OrderDate") or ""
             po.currency = (
@@ -141,11 +186,20 @@ def _parse_sd_data_slice_all(root: etree._Element, filename: str) -> list[Parsed
                 or "EUR"
             )
 
-            order_partner = _xpath_text(order_elem, ".//PartnerId") or global_supplier_code or "0000058376"
+            order_partner = (
+                _xpath_text(order_elem, ".//PartnerId")
+                or global_supplier_code
+                or "0000058376"
+            ).strip()
             po.supplier_code = order_partner
             po.partner_id = order_partner
             po.supplier_name = global_supplier_name or "CALZEDONIA CENTRAL HUB"
-            po.contact_person = (_xpath_text(order_elem, ".//ContactPerson") or _xpath_text(root, ".//ContactPerson") or "").strip()
+            po.contact_person = (
+                _xpath_text(order_elem, ".//ContactPerson")
+                or partner_contact
+                or _xpath_text(root, ".//ContactPerson")
+                or ""
+            ).strip()
             po.payment = (_xpath_text(order_elem, ".//Payment") or _xpath_text(root, ".//Payment") or "").strip()
 
             order_deliv = _xpath_text(order_elem, ".//DeliveryAddress")
@@ -157,6 +211,9 @@ def _parse_sd_data_slice_all(root: etree._Element, filename: str) -> list[Parsed
             po.city = partner_city
             po.town = partner_town
             po.country = partner_country
+            po.phone = partner_phone
+            po.tax_id = partner_tax_id
+            po.category = partner_category
 
             lines = order_elem.xpath(".//SdOrderLine")
             for i, line_elem in enumerate(lines, start=1):
@@ -267,7 +324,7 @@ def _parse_sd_data_slice_all(root: etree._Element, filename: str) -> list[Parsed
                 po.supplier_name = global_supplier_name or "CALZEDONIA CENTRAL HUB"
                 po.buyer_name = buyer_name or "Sirio Ltd"
                 po.legal_name = legal_name or po.buyer_name
-                po.iungo_email_address = iungo_email_address
+                po.iungo_email_address = iungo_email_address or partner_email
                 po.transmission_date = transmission_date
                 po.delivery_date = slip_delivery
                 po.currency = "EUR"
@@ -276,6 +333,10 @@ def _parse_sd_data_slice_all(root: etree._Element, filename: str) -> list[Parsed
                 po.city = partner_city
                 po.town = partner_town
                 po.country = partner_country
+                po.phone = partner_phone
+                po.tax_id = partner_tax_id
+                po.category = partner_category
+                po.contact_person = partner_contact or ""
 
                 first_order_date = ""
                 for le in lines:

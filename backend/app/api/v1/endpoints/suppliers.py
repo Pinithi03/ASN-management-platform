@@ -13,7 +13,7 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import desc, func, or_, select
+from sqlalchemy import desc, func, or_, select, update, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError
@@ -48,6 +48,8 @@ class SupplierResponse(BaseModel):
     category: Optional[str] = None
     is_active: bool = True
     onboarded_at: str
+    updated_at: Optional[str] = None
+    last_profile_updated_at: Optional[str] = None
     total_pos: int = 0
     latest_po_date: Optional[str] = None
     detected_via: Optional[str] = None
@@ -167,63 +169,79 @@ INITIAL_PARTNERS = [
         "is_active": True,
     },
     {
-        "supplier_code": "SUP-001",
-        "name": "YKK Lanka Private Ltd",
-        "email": "sales@ykk.lk",
-        "contact_name": "Takahiro Sato",
-        "phone": "+94 11 2489100",
+        "supplier_code": "0000058376",
+        "name": "Prym Intimates Lanka Ltd",
+        "email": "onboarding@prym-intimates.lk",
+        "contact_name": "Saman Kumara",
+        "phone": "+94 11 4567890",
         "country": "Sri Lanka",
-        "category": "Zippers & Fasteners",
-        "tax_id": "PV-77182901",
-        "address": "Phase 1, EPZ, Seethawaka, Avissawella",
+        "category": "Elastics & Fasteners",
+        "tax_id": "PV-55291048",
+        "address": "Export Processing Zone, Biyagama",
         "is_active": True,
     },
 ]
 
+# Buyer plant names to never confuse with suppliers
+BUYER_PLANT_NAMES = {
+    "sirio",
+    "sirio ltd",
+    "sirio s.p.a.",
+    "sirio spa",
+    "benji",
+    "benji ltd",
+    "omega line",
+    "omega line ltd",
+    "alpha apparels",
+    "alpha apparels ltd",
+    "vavuniya apparels",
+    "calzedonia",
+    "calzedonia spa",
+    "calzedonia s.p.a.",
+    "calzedonia group",
+    "oniverse",
+    "oniverse group",
+}
+
+
+# ─── In-Memory Tracking for Deleted Suppliers & Seed State ───────
+_DELETED_SUPPLIER_CODES: set[str] = set()
+_INITIAL_SEEDED: bool = False
+
 
 async def _ensure_seed_and_email_sync(db: AsyncSession) -> None:
-    """Ensure initial partners exist and auto-import any new suppliers found in parsed email data."""
-    # 1. Seed initial partners
-    for p in INITIAL_PARTNERS:
-        code = p["supplier_code"]
-        clean_code = code.lstrip("0")
-        stmt = select(Supplier).where(
-            or_(
-                Supplier.supplier_code == code,
-                Supplier.supplier_code == clean_code,
-                Supplier.email == p["email"],
-            )
-        )
-        res = await db.execute(stmt)
-        supp = res.scalar_one_or_none()
-        if not supp:
-            new_s = Supplier(
-                supplier_code=code,
-                name=p["name"],
-                email=p["email"],
-                contact_name=p["contact_name"],
-                phone=p["phone"],
-                country=p["country"],
-                category=p["category"],
-                tax_id=p["tax_id"],
-                address=p["address"],
-                is_active=p["is_active"],
-            )
-            db.add(new_s)
-        else:
-            # Backfill missing tax_id, category, contact_name, address
-            if not supp.tax_id and p.get("tax_id"):
-                supp.tax_id = p["tax_id"]
-            if not supp.category and p.get("category"):
-                supp.category = p["category"]
-            if not supp.address and p.get("address"):
-                supp.address = p["address"]
-            if not supp.contact_name and p.get("contact_name"):
-                supp.contact_name = p["contact_name"]
-            if not supp.phone and p.get("phone"):
-                supp.phone = p["phone"]
+    """Ensure initial partners exist only on initial startup, and auto-import new suppliers from parsed email data."""
+    global _INITIAL_SEEDED
 
-    # 2. Sync any suppliers extracted from incoming emails in parsed_data
+    # 1. Seed initial partners ONLY ONCE if the database table is completely empty
+    if not _INITIAL_SEEDED:
+        count_res = await db.execute(select(func.count(Supplier.id)))
+        supplier_count = count_res.scalar() or 0
+
+        if supplier_count == 0:
+            for p in INITIAL_PARTNERS:
+                code = p["supplier_code"]
+                clean_code = code.lstrip("0")
+                if code in _DELETED_SUPPLIER_CODES or clean_code in _DELETED_SUPPLIER_CODES:
+                    continue
+
+                new_s = Supplier(
+                    supplier_code=code,
+                    name=p["name"],
+                    email=p["email"],
+                    contact_name=p["contact_name"],
+                    phone=p["phone"],
+                    country=p["country"],
+                    category=p["category"],
+                    tax_id=p["tax_id"],
+                    address=p["address"],
+                    is_active=p["is_active"],
+                )
+                db.add(new_s)
+            await db.commit()
+        _INITIAL_SEEDED = True
+
+    # 2. Sync any suppliers extracted strictly with a valid <PartnerId>
     try:
         from app.models.email_message import EmailRecord
 
@@ -239,15 +257,30 @@ async def _ensure_seed_and_email_sync(db: AsyncSession) -> None:
             raw = pd.raw_extracted if isinstance(pd.raw_extracted, dict) else {}
             s_code = (
                 pd.supplier_id_extracted
-                or raw.get("supplier_code")
                 or raw.get("partner_id")
+                or raw.get("supplier_code")
                 or raw.get("supplier_id")
             )
             if not s_code:
                 continue
             s_code_str = str(s_code).strip()
+            # Do NOT create or fetch any dummy supplier codes without real <PartnerId>
+            if (
+                not s_code_str
+                or s_code_str.upper().startswith("SUP-")
+                or s_code_str.upper() in ["UNKNOWN", "NONE", "NULL", "0"]
+            ):
+                continue
+
             s_clean = s_code_str.lstrip("0")
             s_padded = s_clean.zfill(10) if s_clean.isdigit() else s_code_str
+
+            if (
+                s_code_str in _DELETED_SUPPLIER_CODES
+                or s_clean in _DELETED_SUPPLIER_CODES
+                or s_padded in _DELETED_SUPPLIER_CODES
+            ):
+                continue
 
             chk = await db.execute(
                 select(Supplier).where(
@@ -258,35 +291,45 @@ async def _ensure_seed_and_email_sync(db: AsyncSession) -> None:
                     )
                 )
             )
-            existing = chk.scalar_one_or_none()
+            existing = chk.scalars().first()
 
             name_candidate = (
                 raw.get("legal_name")
                 or raw.get("supplier_name")
                 or raw.get("partner_name")
             )
+            # Prevent buyer plant names from ever being used as a supplier name
+            if name_candidate and str(name_candidate).strip().lower() in BUYER_PLANT_NAMES:
+                name_candidate = raw.get("supplier_name") or raw.get("partner_name") or None
+
             email_candidate = (
                 raw.get("iungo_email_address")
+                or raw.get("email")
                 or (email_rec.from_address if email_rec else None)
             )
             address_candidate = (
-                raw.get("delivery_address")
-                or raw.get("address")
+                raw.get("address")
+                or raw.get("delivery_address")
                 or raw.get("destination")
             )
             country_candidate = raw.get("country") or "Sri Lanka"
+            tax_id_candidate = raw.get("tax_id") or raw.get("fiscal_code") or raw.get("vat_registration") or None
+            phone_candidate = raw.get("phone") or raw.get("telephone") or None
+            contact_candidate = raw.get("contact_person") or raw.get("contact_name") or None
+            category_candidate = raw.get("category") or "Textiles & Garments"
 
             if not existing:
                 # Option 3: Newly auto-discovered from incoming Iungo email!
                 # Initially is_active=False so admin reviews & clicks "Approve & Issue Credentials"
                 new_s = Supplier(
                     supplier_code=s_padded,
-                    name=str(name_candidate).strip() if name_candidate else f"Supplier {s_code_str}",
+                    name=str(name_candidate).strip() if name_candidate else f"Supplier #{s_code_str}",
                     email=str(email_candidate).strip().lower() if email_candidate else f"supplier_{s_clean or 'partner'}@oniverse.local",
-                    contact_name=str(raw.get("contact_person") or raw.get("contact_name") or "").strip() or None,
-                    phone=str(raw.get("phone") or "").strip() or None,
-                    country=country_candidate,
-                    category=str(raw.get("category") or "Textiles & Garments").strip(),
+                    contact_name=str(contact_candidate).strip() if contact_candidate else None,
+                    phone=str(phone_candidate).strip() if phone_candidate else None,
+                    country=str(country_candidate).strip(),
+                    category=str(category_candidate).strip(),
+                    tax_id=str(tax_id_candidate).strip() if tax_id_candidate else None,
                     address=str(address_candidate).strip() if address_candidate else None,
                     is_active=False,
                 )
@@ -305,6 +348,12 @@ async def _ensure_seed_and_email_sync(db: AsyncSession) -> None:
                     existing.email = str(email_candidate).strip().lower()
                 if address_candidate and not existing.address:
                     existing.address = str(address_candidate).strip()
+                if tax_id_candidate and not existing.tax_id:
+                    existing.tax_id = str(tax_id_candidate).strip()
+                if phone_candidate and not existing.phone:
+                    existing.phone = str(phone_candidate).strip()
+                if contact_candidate and not existing.contact_name:
+                    existing.contact_name = str(contact_candidate).strip()
                 mark_supplier_discovered(
                     supplier_code=existing.supplier_code,
                     detected_via="Iungo System Email",
@@ -332,10 +381,10 @@ async def list_suppliers(
     await _ensure_seed_and_email_sync(db)
 
     query = select(Supplier).order_by(Supplier.name.asc())
-    if active_only is not None:
+    if isinstance(active_only, bool):
         query = query.where(Supplier.is_active == active_only)
-    if search:
-        s_term = f"%{search}%"
+    if isinstance(search, str) and search.strip():
+        s_term = f"%{search.strip()}%"
         query = query.where(
             or_(
                 Supplier.name.ilike(s_term),
@@ -390,6 +439,8 @@ async def list_suppliers(
                 category=s.category or "Textiles & Garments",
                 is_active=s.is_active,
                 onboarded_at=s.created_at.isoformat() if s.created_at else datetime.now(timezone.utc).isoformat(),
+                updated_at=s.updated_at.isoformat() if s.updated_at else None,
+                last_profile_updated_at=s.updated_at.isoformat() if s.updated_at else None,
                 total_pos=total_pos,
                 latest_po_date=latest_po.isoformat() if latest_po else None,
                 detected_via=detected_via,
@@ -534,6 +585,8 @@ async def update_supplier(
         category=supp.category,
         is_active=supp.is_active,
         onboarded_at=supp.created_at.isoformat() if supp.created_at else datetime.now(timezone.utc).isoformat(),
+        updated_at=supp.updated_at.isoformat() if supp.updated_at else datetime.now(timezone.utc).isoformat(),
+        last_profile_updated_at=supp.updated_at.isoformat() if supp.updated_at else datetime.now(timezone.utc).isoformat(),
         total_pos=po_cnt,
         latest_po_date=None,
     )
@@ -567,7 +620,23 @@ async def delete_supplier(
             detail=f"Supplier with ID or code '{supplier_id}' not found.",
         )
 
-    await db.delete(supp)
+    code = supp.supplier_code.strip()
+    _DELETED_SUPPLIER_CODES.add(code)
+    _DELETED_SUPPLIER_CODES.add(code.lstrip("0"))
+
+    # Detach POs and Users before deleting so foreign keys don't block
+    from app.models.user import User
+
+    await db.execute(
+        update(PurchaseOrder).where(PurchaseOrder.supplier_id == supp.id).values(supplier_id=None)
+    )
+    await db.execute(
+        update(User).where(User.supplier_id == supp.id).values(supplier_id=None)
+    )
+
+    await db.execute(
+        delete(Supplier).where(Supplier.id == supp.id)
+    )
     await db.commit()
     return {"status": "success", "message": f"Supplier {supp.name} deleted successfully"}
 

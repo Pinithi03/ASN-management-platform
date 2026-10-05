@@ -35,9 +35,14 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supplierApi, type SupplierCredentials } from "@/services/supplierApi";
 import { useAuthStore } from "@/store/authStore";
+import {
+  recordSupplierFieldChanges,
+  recordSupplierCreateEvent,
+  recordSupplierDeleteEvent,
+} from "@/utils/supplierFieldUpdates";
 
 export interface SupplierItem {
   id: string;
@@ -52,6 +57,7 @@ export interface SupplierItem {
   address?: string;
   is_active: boolean;
   onboarded_at: string;
+  updated_at?: string;
   recently_updated_by_supplier?: boolean;
   last_profile_updated_at?: string;
   total_pos?: number;
@@ -121,23 +127,10 @@ export const INITIAL_SUPPLIERS: SupplierItem[] = [
     is_active: true,
     onboarded_at: "2026-04-05T09:15:00Z",
   },
-  {
-    id: "sup-5",
-    name: "YKK Lanka Private Ltd",
-    supplier_code: "SUP-001",
-    email: "sales@ykk.lk",
-    contact_name: "Takahiro Sato",
-    phone: "+94 11 2489100",
-    country: "Sri Lanka",
-    category: "Zippers & Fasteners",
-    tax_id: "PV-77182901",
-    address: "Phase 1, EPZ, Seethawaka, Avissawella",
-    is_active: true,
-    onboarded_at: "2026-05-12T11:45:00Z",
-  },
 ];
 
 export default function Suppliers() {
+  const queryClient = useQueryClient();
   const [suppliers, setSuppliers] = useState<SupplierItem[]>(() => {
     const saved = localStorage.getItem("asn_onboarded_suppliers");
     if (saved) {
@@ -160,7 +153,7 @@ export default function Suppliers() {
   });
 
   useEffect(() => {
-    if (serverSuppliers && serverSuppliers.length > 0) {
+    if (serverSuppliers) {
       setSuppliers(serverSuppliers);
       localStorage.setItem("asn_onboarded_suppliers", JSON.stringify(serverSuppliers));
     }
@@ -259,12 +252,23 @@ export default function Suppliers() {
 
     try {
       await supplierApi.delete(deletingSupplier.id);
+      await queryClient.invalidateQueries({ queryKey: ["suppliers"] });
       refetch();
     } catch (err) {
       console.warn("Backend delete warning:", err);
     }
 
-    setSuppliers((prev) => prev.filter((s) => s.id !== deletingSupplier.id));
+    recordSupplierDeleteEvent({
+      id: deletingSupplier.id,
+      supplier_code: code,
+      name,
+    });
+
+    setSuppliers((prev) => {
+      const remaining = prev.filter((s) => s.id !== deletingSupplier.id);
+      localStorage.setItem("asn_onboarded_suppliers", JSON.stringify(remaining));
+      return remaining;
+    });
     showToast(`Verified Admin Action: Deleted supplier ${name} (#${code})`);
     setDeletingSupplier(null);
     setAdminPasswordInput("");
@@ -341,6 +345,11 @@ export default function Suppliers() {
         address: formData.address.trim() || undefined,
         is_active: formData.is_active,
       });
+      recordSupplierCreateEvent({
+        id: created.id,
+        supplier_code: created.supplier_code,
+        name: created.name,
+      });
       setSuppliers((prev) => [created, ...prev.filter((s) => s.supplier_code !== created.supplier_code)]);
       refetch();
       showToast(`Successfully onboarded ${created.name} (#${created.supplier_code})!`);
@@ -359,6 +368,11 @@ export default function Suppliers() {
         is_active: formData.is_active,
         onboarded_at: new Date().toISOString(),
       };
+      recordSupplierCreateEvent({
+        id: newSupplier.id,
+        supplier_code: newSupplier.supplier_code,
+        name: newSupplier.name,
+      });
       setSuppliers((prev) => [newSupplier, ...prev]);
       showToast(`Successfully onboarded ${newSupplier.name} (#${newSupplier.supplier_code})!`);
     }
@@ -393,24 +407,42 @@ export default function Suppliers() {
     e.preventDefault();
     if (!editingSupplier) return;
 
+    // Detect and log granular field changes for live notifications & sync
+    const changedFields = recordSupplierFieldChanges(editingSupplier, {
+      name: formData.name.trim(),
+      supplier_code: formData.supplier_code.trim().toUpperCase(),
+      email: formData.email.trim().toLowerCase(),
+      contact_name: formData.contact_name.trim(),
+      phone: formData.phone.trim(),
+      country: formData.country.trim(),
+      category: formData.category,
+      tax_id: formData.tax_id.trim(),
+      address: formData.address.trim(),
+      is_active: formData.is_active,
+    });
+
     try {
       const updated = await supplierApi.update(editingSupplier.id, {
         name: formData.name.trim(),
         supplier_code: formData.supplier_code.trim().toUpperCase(),
         email: formData.email.trim().toLowerCase(),
-        contact_name: formData.contact_name.trim() || undefined,
-        phone: formData.phone.trim() || undefined,
-        country: formData.country.trim() || undefined,
+        contact_name: formData.contact_name.trim(),
+        phone: formData.phone.trim(),
+        country: formData.country.trim(),
         category: formData.category,
-        tax_id: formData.tax_id.trim() || undefined,
-        address: formData.address.trim() || undefined,
+        tax_id: formData.tax_id.trim(),
+        address: formData.address.trim(),
         is_active: formData.is_active,
       });
       setSuppliers((prev) =>
         prev.map((s) => (s.id === editingSupplier.id ? { ...s, ...updated } : s))
       );
       refetch();
-      showToast(`Updated details for ${updated.name} (#${updated.supplier_code})`);
+      const changeMsg =
+        changedFields.length > 0
+          ? ` (${changedFields.map((c) => c.field_label).join(", ")})`
+          : "";
+      showToast(`Updated details for ${updated.name} (#${updated.supplier_code})${changeMsg}`);
     } catch (err) {
       setSuppliers((prev) =>
         prev.map((s) =>
@@ -424,8 +456,8 @@ export default function Suppliers() {
                 phone: formData.phone.trim(),
                 country: formData.country.trim(),
                 category: formData.category,
-                tax_id: formData.tax_id.trim() || s.tax_id || "PV-10293847",
-                address: formData.address.trim() || s.address || "Sri Lanka Manufacturing Plant",
+                tax_id: formData.tax_id.trim(),
+                address: formData.address.trim(),
                 is_active: formData.is_active,
               }
             : s
@@ -441,6 +473,7 @@ export default function Suppliers() {
   // ─── TOGGLE ACTIVE / INACTIVE ─────────────────────────────────
   const handleToggleActive = async (supplier: SupplierItem) => {
     const nextStatus = !supplier.is_active;
+    recordSupplierFieldChanges(supplier, { is_active: nextStatus });
     setSuppliers((prev) =>
       prev.map((s) => (s.id === supplier.id ? { ...s, is_active: nextStatus } : s))
     );

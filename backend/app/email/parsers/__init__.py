@@ -90,12 +90,15 @@ class ParsedPO:
     contact_person: str = ""       # <ContactPerson> from XML
     delivery_address: str = ""     # <DeliveryAddress> from XML
     payment: str = ""              # <Payment> from XML
-    # Supplier address fields (from SdPartner)
+    # Supplier address & contact details (from SdPartner / SdCompanyHeader)
     address: str = ""              # <Address> from SdPartner
     zipcode: str = ""              # <ZIPCode> from SdPartner
     city: str = ""                 # <City> from SdPartner
     town: str = ""                 # <Town> from SdPartner
     country: str = ""              # <Country> from SdPartner
+    phone: str = ""                # <Telephone> / <Phone> from SdPartner
+    tax_id: str = ""               # <FiscalCode> / <TaxId> / <VatRegistration> from SdPartner
+    category: str = ""             # <Category> / Product Category
     currency: str = DEFAULT_CURRENCY
     total_quantity: int = 0
     total_value: float = 0.0
@@ -103,7 +106,7 @@ class ParsedPO:
     raw_source: str = "unknown"
     source_filename: str = ""
     # XML company info fields (from SdCompanyHeader / SdPartner)
-    legal_name: str = ""           # <LegalName> from SdCompanyHeader
+    legal_name: str = ""           # <LegalName> from SdCompanyHeader / SdPartner
     iungo_email_address: str = ""  # <IungoEmailAddress> from XML root/header
     transmission_date: str = ""    # <TransmissionDate> from SdCompanyHeader / XML
 
