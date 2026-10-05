@@ -31,6 +31,10 @@ import { cn } from "@/utils/cn";
 import { INITIAL_SUPPLIERS, SupplierItem } from "@/pages/Suppliers";
 import { useQuery } from "@tanstack/react-query";
 import { supplierApi } from "@/services/supplierApi";
+import {
+  getSupplierFieldChanges,
+  FIELD_ICONS,
+} from "@/utils/supplierFieldUpdates";
 
 // Removed manual plant constants in favor of automated PO destination detection
 
@@ -182,6 +186,73 @@ export default function Profile() {
           </div>
         </div>
       </div>
+
+      {/* ─── LIVE PROFILE UPDATES SYNCHRONIZED BANNER ─── */}
+      {matchedSupplier.updated_at && (
+        <div className="bg-emerald-50/90 border border-emerald-200 rounded-2xl p-5 shadow-xs space-y-3 animate-in fade-in">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-emerald-100 border border-emerald-300 flex items-center justify-center shrink-0 text-emerald-700">
+                <Sparkles className="w-4 h-4 text-emerald-700" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-xs font-bold text-emerald-950">
+                    Profile Details Updated & Synchronized
+                  </h4>
+                  <span className="text-[10px] font-semibold px-2 py-0.5 bg-emerald-200/80 text-emerald-900 rounded-full">
+                    Live Synced
+                  </span>
+                </div>
+                <p className="text-[11px] text-emerald-900/80 mt-0.5">
+                  Your official organization details, address, and contact credentials are up to date and synchronized with Central Plant Administration.
+                </p>
+              </div>
+            </div>
+            <div className="text-left sm:text-right shrink-0 font-mono text-[11px] text-emerald-700 font-semibold bg-emerald-100/60 px-2.5 py-1 rounded-lg border border-emerald-200/60">
+              Last Updated:{" "}
+              {new Date(matchedSupplier.updated_at).toLocaleDateString("en-GB", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </div>
+          </div>
+
+          {/* Granular Field Updates Chips (if available) */}
+          {(() => {
+            const recentFieldChanges = getSupplierFieldChanges(
+              matchedSupplier.supplier_code || matchedSupplier.id
+            );
+            if (recentFieldChanges.length === 0) return null;
+
+            return (
+              <div className="pt-2 border-t border-emerald-200/60">
+                <p className="text-[10px] font-bold text-emerald-900 uppercase tracking-wider mb-2">
+                  Recently Updated Attributes:
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {recentFieldChanges.map((chg) => {
+                    const IconCmp = FIELD_ICONS[chg.field_key] || Sparkles;
+                    return (
+                      <span
+                        key={chg.id}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/90 border border-emerald-200 text-emerald-950 text-xs shadow-2xs font-medium"
+                      >
+                        <IconCmp className="w-3.5 h-3.5 text-emerald-700" />
+                        <span className="font-semibold text-emerald-800">{chg.field_label}:</span>
+                        <span className="truncate max-w-[200px] text-gray-800">{chg.new_value}</span>
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
 
       {/* Tabs Header Navigation */}
       <div className="flex items-center justify-between border-b border-gray-200 overflow-x-auto pb-1 scrollbar-none">
