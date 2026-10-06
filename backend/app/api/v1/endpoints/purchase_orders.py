@@ -302,6 +302,33 @@ async def list_open_po_lines(
         res = await db.execute(stmt)
         pos = res.scalars().all()
 
+        from sqlalchemy import func
+        from app.models.shipment import Shipment
+        from app.models.shipment_line import ShipmentLine
+
+        # Query all shipped quantities per PO line
+        shipped_stmt = select(
+            ShipmentLine.po_number,
+            ShipmentLine.po_line_number,
+            func.sum(ShipmentLine.quantity).label("shipped_total")
+        ).join(
+            Shipment, ShipmentLine.shipment_id == Shipment.id
+        ).where(
+            Shipment.status != "CANCELLED"
+        ).group_by(
+            ShipmentLine.po_number,
+            ShipmentLine.po_line_number
+        )
+        shipped_res = await db.execute(shipped_stmt)
+        
+        # Map: (po_number, po_line_number) -> shipped_qty
+        shipped_map = {}
+        for row in shipped_res.all():
+            po_num = row.po_number or ""
+            line_num = str(row.po_line_number or "")
+            # The line_num from ShipmentLine might be integer, convert to string and strip like we do for items
+            shipped_map[(po_num.strip(), line_num.strip())] = float(row.shipped_total or 0)
+
         open_lines = []
         for po in pos:
             items = (po.extra_data or {}).get("items", [])
@@ -315,11 +342,32 @@ async def list_open_po_lines(
                     "uom": "M",
                 }]
             for item in items:
-                line_num = str(item.get("order_line_number") or item.get("line_number", "1")).strip()
+                # Get order line number safely handling int or str
+                line_val = item.get("order_line_number") or item.get("line_number", "1")
+                # When line_num comes from XML, it might have leading zeros e.g. "00100"
+                # Sometimes ShipmentLine.po_line_number stores it as integer 100. Let's normalize by parsing int.
+                try:
+                    line_int = int(str(line_val).strip())
+                except ValueError:
+                    line_int = str(line_val).strip()
+
+                line_num = str(line_val).strip()
                 ordered = float(item.get("quantity", 0))
                 material = item.get("material_code") or item.get("item_code") or po.style_number or ""
                 partner = item.get("partner_code") or item.get("partner_item_code", "")
                 desc = item.get("description") or item.get("item_description", po.description or "")
+                
+                # Retrieve shipped quantity for this line
+                shipped = 0.0
+                po_n = (po.po_number or "").strip()
+                # Check both raw string key and integer converted string key just in case
+                if (po_n, line_num) in shipped_map:
+                    shipped = shipped_map[(po_n, line_num)]
+                elif (po_n, str(line_int)) in shipped_map:
+                    shipped = shipped_map[(po_n, str(line_int))]
+
+                remaining = max(0.0, ordered - shipped)
+
                 open_lines.append({
                     "po_id": str(po.id),
                     "po_number": po.po_number,
@@ -328,6 +376,8 @@ async def list_open_po_lines(
                     "partner_code": partner,
                     "material_description": desc,
                     "ordered_qty": ordered,
+                    "shipped_qty": shipped,
+                    "remaining_qty": remaining,
                     "uom": item.get("uom") or item.get("qty_unit", "M"),
                     "destination": po.destination,
                     "delivery_date": str(po.delivery_date) if po.delivery_date else None,
