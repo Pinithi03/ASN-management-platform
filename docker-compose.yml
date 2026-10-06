@@ -165,6 +165,8 @@ services:
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-ans_minio}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
       KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_PUBLIC_URL: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8080/auth}
+      KEYCLOAK_INTERNAL_URL: http://keycloak:8080/auth
       KEYCLOAK_REALM: ${KEYCLOAK_REALM:-oniverse}
       KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-ans-backend}
       KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-}

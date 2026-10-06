@@ -32,9 +32,9 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
 
-    # Tenant scope
-    company_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("companies.id"), nullable=False, index=True
+    # Tenant scope (nullable: admins are not tied to a single plant)
+    company_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("companies.id"), nullable=True, index=True
     )
 
     # Keycloak identity
