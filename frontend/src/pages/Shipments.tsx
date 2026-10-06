@@ -5,10 +5,9 @@
  * 2. Calzedonia 12-Column Excel Drop (Tailored template generation, drag & drop ingestion, weight rule verification)
  */
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { format } from "date-fns";
 import {
   Search,
   PackagePlus,
@@ -889,12 +888,38 @@ function WebPackingWizard({
     }
   }, [openLinesData]);
 
+  const distinctPoNumbers = useMemo(() => {
+    return Array.from(new Set(items.map((i) => i.po_number).filter(Boolean)));
+  }, [items]);
+
   const handleSetGlobalPackagingType = (type: "BOX" | "ROLL") => {
     setItems((prev) => prev.map((item) => ({ ...item, packaging_type: type })));
   };
 
-  const allBoxes = items.length > 0 && items.every((i) => (i.packaging_type || "BOX") === "BOX");
-  const allRolls = items.length > 0 && items.every((i) => i.packaging_type === "ROLL");
+  const handleSetPoPackagingType = (poNo: string, type: "BOX" | "ROLL") => {
+    setItems((prev) =>
+      prev.map((item) => (item.po_number === poNo ? { ...item, packaging_type: type } : item))
+    );
+  };
+
+  const handleToggleItemPackagingType = (id: string) => {
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === id
+          ? { ...item, packaging_type: item.packaging_type === "ROLL" ? "BOX" : "ROLL" }
+          : item
+      )
+    );
+  };
+
+  const formatSummary = useMemo(() => {
+    if (items.length === 0) return "All Boxes";
+    const hasRolls = items.some((i) => i.packaging_type === "ROLL");
+    const hasBoxes = items.some((i) => (i.packaging_type || "BOX") === "BOX");
+    if (hasRolls && hasBoxes) return "Mixed (Box & Roll)";
+    if (hasRolls) return "All Rolls";
+    return "All Boxes";
+  }, [items]);
 
   const handleShippingNowChange = (id: string, val: number) => {
     setItems((prev) =>
@@ -1213,89 +1238,100 @@ function WebPackingWizard({
               <span
                 className={cn(
                   "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold shadow-xs border",
-                  allRolls
-                    ? isSupplier
-                      ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                      : "bg-blue-50 text-blue-800 border-blue-200"
+                  formatSummary.includes("Roll") && !formatSummary.includes("Mixed")
+                    ? "bg-amber-50 text-amber-800 border-amber-200"
+                    : formatSummary.includes("Mixed")
+                    ? "bg-purple-50 text-purple-800 border-purple-200"
                     : isSupplier
-                      ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                      : "bg-blue-50 text-blue-800 border-blue-200"
+                    ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                    : "bg-blue-50 text-blue-800 border-blue-200"
                 )}
               >
-                {allRolls ? "📜 All Line Items are Rolls" : "📦 All Line Items are Boxes"}
+                {formatSummary.includes("Mixed")
+                  ? "📦/📜 Mixed (Box & Roll)"
+                  : formatSummary === "All Rolls"
+                  ? "📜 All Rolls"
+                  : "📦 All Boxes"}
               </span>
             </div>
           </div>
 
-          {/* Order & Delivery Details Card (Mirroring XL Drop Step 1 format with Global Pack Type) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-3.5 bg-gray-50/80 border border-gray-200 rounded-xl text-xs">
-            <div>
-              <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider block">
-                {poNumbers.length > 1 ? "Selected Orders (Batch)" : "Purchase Order"}
-              </span>
-              <p className="font-mono font-bold text-gray-900 mt-1 truncate" title={poNumbers.join(", ")}>
-                {poNumbers.length > 0 ? poNumbers.map((p) => `#${p}`).join(", ") : "All Active Lines"}
-              </p>
-            </div>
-            <div>
-              <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider block">
-                Delivering Plant (Auto-Detected)
-              </span>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="font-bold text-gray-800">
-                  {PLANT_NAMES[matchPlant(items[0]?.destination)] || "Omega Line Ltd (PPA1)"}
+          {/* PO-wise Packaging Format Controls Bar */}
+          {items.length > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-gray-50/80 border border-gray-200 rounded-xl text-xs">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-semibold text-gray-700 flex items-center gap-1.5">
+                  <Box className="w-4 h-4 text-gray-500" />
+                  PO Packaging Format:
                 </span>
-                <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded border border-emerald-200">
-                  Auto
-                </span>
+                {distinctPoNumbers.map((poNo) => {
+                  const poItems = items.filter((i) => i.po_number === poNo);
+                  const isRoll = poItems.length > 0 && poItems.every((i) => i.packaging_type === "ROLL");
+                  const isBox = !isRoll;
+                  return (
+                    <div
+                      key={poNo}
+                      className="inline-flex items-center gap-2 bg-white px-2.5 py-1 rounded-lg border border-gray-200 shadow-2xs"
+                    >
+                      <span className="font-mono font-bold text-gray-900">PO #{poNo}</span>
+                      <div className="flex items-center gap-0.5 bg-gray-100 p-0.5 rounded-md">
+                        <button
+                          type="button"
+                          onClick={() => handleSetPoPackagingType(poNo, "BOX")}
+                          className={cn(
+                            "px-2.5 py-0.5 rounded text-[11px] font-bold transition-all cursor-pointer",
+                            isBox
+                              ? isSupplier
+                                ? "bg-emerald-600 text-white shadow-xs"
+                                : "bg-blue-600 text-white shadow-xs"
+                              : "text-gray-600 hover:text-gray-900"
+                          )}
+                          title={`Set all line items for PO #${poNo} to Boxes`}
+                        >
+                          📦 Box
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSetPoPackagingType(poNo, "ROLL")}
+                          className={cn(
+                            "px-2.5 py-0.5 rounded text-[11px] font-bold transition-all cursor-pointer",
+                            isRoll
+                              ? isSupplier
+                                ? "bg-emerald-600 text-white shadow-xs"
+                                : "bg-blue-600 text-white shadow-xs"
+                              : "text-gray-600 hover:text-gray-900"
+                          )}
+                          title={`Set all line items for PO #${poNo} to Rolls`}
+                        >
+                          📜 Roll
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
+
+              {distinctPoNumbers.length > 1 && (
+                <div className="flex items-center gap-1.5 text-[11px] text-gray-500">
+                  <span className="font-medium">All:</span>
+                  <button
+                    type="button"
+                    onClick={() => handleSetGlobalPackagingType("BOX")}
+                    className="px-2 py-0.5 rounded border border-gray-200 bg-white hover:bg-gray-100 font-semibold text-gray-700 transition-colors cursor-pointer"
+                  >
+                    📦 All Boxes
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSetGlobalPackagingType("ROLL")}
+                    className="px-2 py-0.5 rounded border border-gray-200 bg-white hover:bg-gray-100 font-semibold text-gray-700 transition-colors cursor-pointer"
+                  >
+                    📜 All Rolls
+                  </button>
+                </div>
+              )}
             </div>
-            <div>
-              <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider block">
-                Est. Delivery Schedule
-              </span>
-              <p className="font-semibold text-gray-800 mt-1">
-                {items[0]?.delivery_date ? format(new Date(items[0].delivery_date), "MMM d, yyyy") : "Standard Shipping Schedule"}
-              </p>
-            </div>
-            <div>
-              <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider block">
-                Packaging Format (All Line Items)
-              </span>
-              <div className="flex items-center gap-1.5 mt-1 bg-white p-0.5 rounded-lg border border-gray-200 w-fit">
-                <button
-                  type="button"
-                  onClick={() => handleSetGlobalPackagingType("BOX")}
-                  className={cn(
-                    "flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer",
-                    allBoxes
-                      ? isSupplier
-                        ? "bg-emerald-600 text-white shadow-xs"
-                        : "bg-blue-600 text-white shadow-xs"
-                      : "text-gray-600 hover:text-gray-900 bg-gray-50 hover:bg-gray-100"
-                  )}
-                  title="Apply Box packaging format to all line items"
-                >
-                  📦 All Boxes
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSetGlobalPackagingType("ROLL")}
-                  className={cn(
-                    "flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer",
-                    allRolls
-                      ? isSupplier
-                        ? "bg-emerald-600 text-white shadow-xs"
-                        : "bg-blue-600 text-white shadow-xs"
-                      : "text-gray-600 hover:text-gray-900 bg-gray-50 hover:bg-gray-100"
-                  )}
-                  title="Apply Roll packaging format to all line items"
-                >
-                  📜 All Rolls
-                </button>
-              </div>
-            </div>
-          </div>
+          )}
 
           {isLoading ? (
             <div className="py-16 flex justify-center text-gray-400">
@@ -1325,6 +1361,7 @@ function WebPackingWizard({
                     <th className="px-3.5 py-2.5">Description</th>
                     <th className="px-3.5 py-2.5 text-right">Ordered</th>
                     <th className="px-3.5 py-2.5 text-right">Open Balance</th>
+                    <th className="px-3.5 py-2.5 text-center">Format</th>
                     <th className="px-3.5 py-2.5 text-right w-44">Shipping Qty</th>
                   </tr>
                 </thead>
@@ -1338,6 +1375,21 @@ function WebPackingWizard({
                       <td className="px-3.5 py-2 text-right font-mono text-gray-500">{item.ordered_qty}</td>
                       <td className="px-3.5 py-2 text-right font-mono font-bold text-gray-900">
                         {item.remaining_qty}
+                      </td>
+                      <td className="px-3.5 py-2 text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleItemPackagingType(item.id)}
+                          className={cn(
+                            "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold border transition-all cursor-pointer",
+                            item.packaging_type === "ROLL"
+                              ? "bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100"
+                              : "bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100"
+                          )}
+                          title="Click to toggle Box / Roll for this line"
+                        >
+                          {item.packaging_type === "ROLL" ? "📜 Roll" : "📦 Box"}
+                        </button>
                       </td>
                       <td className="px-3.5 py-2 text-right">
                         <div className="flex items-center justify-end gap-1.5">
