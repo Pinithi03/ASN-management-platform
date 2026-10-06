@@ -2,7 +2,7 @@
 // frontend/src/pages/EmailInbox.tsx
 
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Mail,
@@ -11,10 +11,6 @@ import {
   Eye,
   ChevronLeft,
   ChevronRight,
-  X,
-  ExternalLink,
-  Paperclip,
-  Download,
   FileCheck2,
   Filter,
   FileText,
@@ -26,6 +22,7 @@ import { useAuthStore } from "@/store/authStore";
 import { format } from "date-fns";
 
 export default function EmailInbox() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.role === "COMPANY_ADMIN";
@@ -34,8 +31,6 @@ export default function EmailInbox() {
   const [poNumberFilter, setPoNumberFilter] = useState("");
   const [vendorCodeFilter, setVendorCodeFilter] = useState("");
   const [page, setPage] = useState(1);
-  const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null);
-  const [previewTab, setPreviewTab] = useState<"html" | "parsed" | "attachments">("html");
 
   // Effective vendor filter — automatically enforced for Supplier Role users
   const effectiveVendorCode = !isAdmin ? user?.supplier_code : vendorCodeFilter;
@@ -61,16 +56,7 @@ export default function EmailInbox() {
     refetchIntervalInBackground: true,
   });
 
-  const { data: selectedEmail, isLoading: isDetailLoading } = useQuery({
-    queryKey: ["emailDetail", selectedEmailId],
-    queryFn: () => emailApi.getById(selectedEmailId!),
-    enabled: !!selectedEmailId,
-    staleTime: 60000,
-    refetchInterval: (query) => {
-      const status = query.state.data?.status;
-      return status === "QUEUED" ? 3000 : false;
-    },
-  });
+
 
   // ─── Instant Mailbox Sync ────────────────────────────────────
   const [isSyncing, setIsSyncing] = useState(false);
@@ -247,10 +233,8 @@ export default function EmailInbox() {
         </div>
       </div>
 
-      {/* Main Content Split Layout */}
-      <div className="flex flex-col lg:flex-row gap-6">
-        {/* Email List Table */}
-        <div className={`transition-all duration-200 ${selectedEmailId ? "w-full lg:w-1/2" : "w-full"}`}>
+      {/* Email List Table */}
+      <div className="w-full">
           {isLoading ? (
             <div className="flex items-center justify-center py-20 text-gray-400 bg-white rounded-xl border border-gray-200">
               <RefreshCw className="w-6 h-6 animate-spin mr-2 text-blue-500" />
@@ -298,29 +282,25 @@ export default function EmailInbox() {
                     <tr className="bg-gray-50/80 border-b border-gray-200">
                       <th className="text-left px-4 py-3 font-medium text-gray-500 w-1/4 sm:w-1/5">Sender</th>
                       <th className="text-left px-4 py-3 font-medium text-gray-500">Subject</th>
-                      {!selectedEmailId && <th className="text-left px-4 py-3 font-medium text-gray-500 w-36 whitespace-nowrap">Received</th>}
+                      <th className="text-left px-4 py-3 font-medium text-gray-500 w-36 whitespace-nowrap">Received</th>
                       <th className="text-right px-4 py-3 font-medium text-gray-500 w-16">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {emails.map((email) => {
-                      const isSelected = email.id === selectedEmailId;
                       const isUnread = email.status === "QUEUED" || email.status === "PROCESSING" || email.status === "PARSED";
 
                       return (
                         <tr
                           key={email.id}
-                          onClick={() => setSelectedEmailId(email.id)}
-                          className={`cursor-pointer transition-all ${isSelected
+                          onClick={() => navigate(`/emails/${email.id}`)}
+                          className={`cursor-pointer transition-all hover:bg-gray-50/80 ${
+                            isUnread
                               ? isAdmin
-                                ? "bg-blue-100/90 border-l-4 border-blue-800 font-extrabold text-blue-950 shadow-xs"
-                                : "bg-emerald-100/90 border-l-4 border-emerald-700 font-extrabold text-emerald-950 shadow-xs"
-                              : isUnread
-                                ? isAdmin
-                                  ? "bg-blue-50/90 border-l-4 border-blue-600 font-semibold text-blue-950 hover:bg-blue-100/70"
-                                  : "bg-emerald-50/90 border-l-4 border-emerald-500 font-semibold text-emerald-950 hover:bg-emerald-100/70"
-                                : "hover:bg-gray-50/80"
-                            }`}
+                                ? "bg-blue-50/90 border-l-4 border-blue-600 font-semibold text-blue-950 hover:bg-blue-100/70"
+                                : "bg-emerald-50/90 border-l-4 border-emerald-500 font-semibold text-emerald-950 hover:bg-emerald-100/70"
+                              : ""
+                          }`}
                         >
                           <td className="px-4 py-3 max-w-[180px] sm:max-w-[220px] truncate text-gray-900 font-bold" title={email.from_address || ""}>
                             {isAdmin ? (
@@ -353,28 +333,23 @@ export default function EmailInbox() {
                           <td className="px-4 py-3 max-w-xs sm:max-w-md lg:max-w-xl xl:max-w-3xl truncate text-gray-800 font-medium" title={email.subject || ""}>
                             {email.subject || " "}
                           </td>
-                          {!selectedEmailId && (
-                            <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
-                              {email.received_at
-                                ? format(new Date(email.received_at), "MMM d, HH:mm")
-                                : " "}
-                            </td>
-                          )}
+                          <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
+                            {email.received_at
+                              ? format(new Date(email.received_at), "MMM d, HH:mm")
+                              : " "}
+                          </td>
                           <td className="px-4 py-3 text-right">
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setSelectedEmailId(email.id);
+                                navigate(`/emails/${email.id}`);
                               }}
-                              className={`p-1.5 rounded-lg transition-colors ${isSelected
-                                  ? isAdmin
-                                    ? "text-blue-800 bg-blue-200/90 font-bold"
-                                    : "text-emerald-800 bg-emerald-200/90 font-bold"
-                                  : isAdmin
-                                    ? "text-gray-400 hover:text-blue-700 hover:bg-blue-100/50"
-                                    : "text-gray-400 hover:text-emerald-700 hover:bg-emerald-100/50"
-                                }`}
-                              title="Preview Email"
+                              className={`p-1.5 rounded-lg transition-colors ${
+                                isAdmin
+                                  ? "text-gray-400 hover:text-blue-700 hover:bg-blue-100/50"
+                                  : "text-gray-400 hover:text-emerald-700 hover:bg-emerald-100/50"
+                              }`}
+                              title="View Email Details"
                             >
                               <Eye className="w-4 h-4" />
                             </button>
@@ -419,318 +394,6 @@ export default function EmailInbox() {
             </div>
           )}
         </div>
-
-        {/* Email Preview Panel (Side Drawer) */}
-        {selectedEmailId && (
-          <div className="w-full lg:w-1/2 bg-white rounded-xl border border-gray-200 shadow-lg flex flex-col h-[75vh] sticky top-6 overflow-hidden">
-            {isDetailLoading || !selectedEmail ? (
-              <div className="flex flex-col items-center justify-center h-full text-gray-400">
-                <RefreshCw className="w-6 h-6 animate-spin mb-2 text-blue-500" />
-                <span>Loading email details...</span>
-              </div>
-            ) : (
-              <>
-                {/* Preview Header */}
-                <div className="p-4 border-b border-gray-200 bg-gray-50 flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span
-                        className={`px-2 py-0.5 text-xs font-semibold rounded ${isAdmin
-                            ? "bg-blue-100 text-blue-800 border border-blue-200"
-                            : "bg-emerald-100 text-emerald-800 border border-emerald-200"
-                          }`}
-                      >
-                        AUTO-PARSED
-                      </span>
-                    </div>
-                    <h2 className="text-base font-bold text-gray-900 truncate">
-                      {selectedEmail.subject || "No Subject"}
-                    </h2>
-                  </div>
-
-                  <div className="flex items-center gap-1">
-                    <Link
-                      to={`/emails/${selectedEmail.id}`}
-                      className="p-1.5 text-gray-500 hover:text-blue-600 rounded-lg hover:bg-gray-200 transition-colors"
-                      title="Open full page view"
-                    >
-                      <ExternalLink className="w-4 h-4" />
-                    </Link>
-                    <button
-                      onClick={() => setSelectedEmailId(null)}
-                      className="p-1.5 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-                      title="Close Preview"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Compact Details Strip */}
-                <div className="px-4 py-2.5 border-b border-gray-100 bg-white text-xs space-y-1.5">
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                    <div><span className="text-gray-400">From:</span> <span className="text-gray-700 font-medium">{selectedEmail.from_address || " "}</span></div>
-                    <div><span className="text-gray-400">To:</span> <span className="text-gray-700 font-medium">{selectedEmail.to_address || " "}</span></div>
-                    <div><span className="text-gray-400">Received:</span> <span className="text-gray-700">{selectedEmail.received_at ? format(new Date(selectedEmail.received_at), "MMM d, yyyy HH:mm") : " "}</span></div>
-                    <div><span className="text-gray-400">Fetched:</span> <span className="text-gray-700">{selectedEmail.fetched_at ? format(new Date(selectedEmail.fetched_at), "MMM d, yyyy HH:mm") : " "}</span></div>
-                    <div><span className="text-gray-400">LegalName:</span> <span className="text-gray-800 font-semibold">{selectedEmail.xml_legal_name || " "}</span></div>
-                    <div><span className="text-gray-400">IungoEmailAddress:</span> <span className="text-gray-800 font-semibold">{selectedEmail.xml_iungo_email_address || " "}</span></div>
-                    <div><span className="text-gray-400">TransmissionDate:</span> <span className="text-gray-800 font-semibold">{selectedEmail.xml_transmission_date || " "}</span></div>
-                  </div>
-                  <div className="text-gray-400">Message-ID: <span className="text-gray-600 font-mono break-all">{selectedEmail.message_id || " "}</span></div>
-                </div>
-
-                {/* Sub-tabs bar */}
-                <div className="px-4 py-2 border-b border-gray-200 bg-white flex items-center justify-between">
-                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                    Email Content & Data
-                  </span>
-                  <div className="flex bg-gray-100 p-1 rounded-lg text-xs font-medium">
-                    <button
-                      onClick={() => setPreviewTab("html")}
-                      className={`px-3 py-1 rounded-md transition-colors ${previewTab === "html"
-                          ? isAdmin
-                            ? "bg-white text-blue-700 font-semibold shadow-sm"
-                            : "bg-white text-emerald-700 font-semibold shadow-sm"
-                          : "text-gray-600 hover:text-gray-900"
-                        }`}
-                    >
-                      HTML Body
-                    </button>
-                    <button
-                      onClick={() => setPreviewTab("parsed")}
-                      className={`px-3 py-1 rounded-md transition-colors ${previewTab === "parsed"
-                          ? isAdmin
-                            ? "bg-white text-blue-700 font-semibold shadow-sm"
-                            : "bg-white text-emerald-700 font-semibold shadow-sm"
-                          : "text-gray-600 hover:text-gray-900"
-                        }`}
-                    >
-                      Parsed PO ({selectedEmail.parsed_data?.length ?? 0})
-                    </button>
-                    <button
-                      onClick={() => setPreviewTab("attachments")}
-                      className={`px-3 py-1 rounded-md transition-colors ${previewTab === "attachments"
-                          ? isAdmin
-                            ? "bg-white text-blue-700 font-semibold shadow-sm"
-                            : "bg-white text-emerald-700 font-semibold shadow-sm"
-                          : "text-gray-600 hover:text-gray-900"
-                        }`}
-                    >
-                      Files ({selectedEmail.attachments?.length ?? 0})
-                    </button>
-                  </div>
-                </div>
-
-                {/* Tab Content Area */}
-                <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
-                  {previewTab === "html" && (
-                    selectedEmail.body_html ? (
-                      <iframe
-                        title="Email Body Preview"
-                        srcDoc={`<base target="_blank">${selectedEmail.body_html}`}
-                        sandbox="allow-popups allow-popups-to-escape-sandbox"
-                        className="w-full h-full min-h-[420px] bg-white border border-gray-200 rounded-xl shadow-inner"
-                      />
-                    ) : (
-                      <div className="p-4 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 whitespace-pre-wrap font-sans">
-                        {selectedEmail.body_text || "No email body content available."}
-                      </div>
-                    )
-                  )}
-
-                  {previewTab === "parsed" && (
-                    <div className="space-y-4">
-                      {selectedEmail.parsed_data?.length === 0 ? (
-                        <div className="p-6 bg-white border border-gray-200 rounded-xl text-center text-sm text-gray-500">
-                          No parsed purchase order data extracted for this email.
-                        </div>
-                      ) : (
-                        selectedEmail.parsed_data?.map((data) => (
-                          <div key={data.id} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
-                            <div className="flex items-center justify-between border-b pb-2">
-                              <span className="font-bold text-gray-900 text-sm">
-                                PO: {data.po_number_extracted || "Unknown"}
-                              </span>
-                              <span
-                                className={`text-xs px-2 py-0.5 rounded font-medium ${isAdmin
-                                    ? "bg-blue-100 text-blue-800 border border-blue-200"
-                                    : "bg-emerald-100 text-emerald-800 border border-emerald-200"
-                                  }`}
-                              >
-                                Parser: {data.parser_used}
-                              </span>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-2 text-xs">
-                              <div>
-                                <span className="text-gray-400">PartnerId:</span>{" "}
-                                <span className="text-gray-800 font-medium">
-                                  {String(data.raw_extracted?.partner_id || data.raw_extracted?.supplier_code || " ")}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-gray-400">Buyer:</span>{" "}
-                                <span className="text-gray-800 font-medium">
-                                  {String(data.raw_extracted?.buyer_name || " ")}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-gray-400">ContactPerson:</span>{" "}
-                                <span className="text-gray-800 font-medium">
-                                  {String(data.raw_extracted?.contact_person || " ")}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-gray-400">Delivery Date:</span>{" "}
-                                <span className="text-gray-800 font-medium">
-                                  {String(data.raw_extracted?.delivery_date || " ")}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-gray-400">DeliveryAddress:</span>{" "}
-                                <span className="text-gray-800 font-medium">
-                                  {String(data.raw_extracted?.delivery_address || " ")}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-gray-400">Payment:</span>{" "}
-                                <span className="text-gray-800 font-medium">
-                                  {String(data.raw_extracted?.payment || " ")}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-gray-400">Address:</span>{" "}
-                                <span className="text-gray-800 font-medium">
-                                  {String(data.raw_extracted?.address || data.raw_extracted?.supplier_address || " ")}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-gray-400">City / Country:</span>{" "}
-                                <span className="text-gray-800 font-medium">
-                                  {[data.raw_extracted?.city, data.raw_extracted?.country].filter(Boolean).join(", ") || " "}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-gray-400">Total Qty:</span>{" "}
-                                <span className="text-gray-800 font-medium">
-                                  {Number(data.raw_extracted?.total_quantity || 0).toLocaleString()}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-gray-400">Total Value:</span>{" "}
-                                <span className="text-gray-800 font-bold">
-                                  {data.raw_extracted?.currency === "USD"
-                                    ? `$${Number(data.raw_extracted?.total_value || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
-                                    : `${Number(data.raw_extracted?.total_value || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} ${data.raw_extracted?.currency || "USD"}`}
-                                </span>
-                              </div>
-                            </div>
-
-                            {/* Line items snippet */}
-                            {(() => {
-                              const rawItems = Array.isArray(data.raw_extracted?.line_items)
-                                ? (data.raw_extracted?.line_items as Record<string, unknown>[])
-                                : [];
-                              const activeItems = rawItems.filter(
-                                (item) => Number(item.quantity ?? item.qty ?? 0) > 0
-                              );
-                              if (activeItems.length === 0) return null;
-
-                              return (
-                                <div className="mt-2">
-                                  <p className="text-xs font-semibold text-gray-500 mb-1">
-                                    Line Items ({activeItems.length}):
-                                  </p>
-                                  <div className="max-h-40 overflow-y-auto border border-gray-100 rounded-lg">
-                                    <table className="w-full text-xs text-left">
-                                      <thead className="bg-gray-50 text-gray-500">
-                                        <tr>
-                                          <th className="p-1.5">OrderLineNumber</th>
-                                          <th className="p-1.5">PartnerItemCode</th>
-                                          <th className="p-1.5">QtyUnit</th>
-                                          <th className="p-1.5">Qty</th>
-                                          <th className="p-1.5">
-                                            {data.raw_extracted?.currency ? `Price (${data.raw_extracted.currency})` : "Price"}
-                                          </th>
-                                        </tr>
-                                      </thead>
-                                      <tbody className="divide-y divide-gray-100">
-                                        {activeItems.map((item, idx) => (
-                                          <tr key={idx}>
-                                            <td className="p-1.5 font-mono">{String(item.order_line_number || item.line_number || idx + 1)}</td>
-                                            <td className="p-1.5 font-medium">{String(item.partner_item_code || item.item_code || item.style || " ")}</td>
-                                            <td className="p-1.5">{String(item.qty_unit || item.size || " ")}</td>
-                                            <td className="p-1.5">{Number(item.quantity || 0).toLocaleString()}</td>
-                                            <td className="p-1.5 font-semibold text-gray-900">
-                                              {data.raw_extracted?.currency === "USD"
-                                                ? `$${Number(item.unit_price || 0).toFixed(2)}`
-                                                : `${Number(item.unit_price || 0).toFixed(2)} ${data.raw_extracted?.currency || ""}`}
-                                            </td>
-                                          </tr>
-                                        ))}
-                                      </tbody>
-                                    </table>
-                                  </div>
-                                </div>
-                              );
-                            })()}
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  )}
-
-                  {previewTab === "attachments" && (
-                    <div className="space-y-2">
-                      {selectedEmail.attachments?.length === 0 ? (
-                        <div className="p-6 bg-white border border-gray-200 rounded-xl text-center text-sm text-gray-500">
-                          No attachments found in this email.
-                        </div>
-                      ) : (
-                        selectedEmail.attachments?.map((att) => (
-                          <div
-                            key={att.id}
-                            className="bg-white border border-gray-200 rounded-xl p-3 flex items-center justify-between text-xs shadow-sm"
-                          >
-                            <div className="flex items-center gap-2 truncate">
-                              <Paperclip className="w-4 h-4 text-blue-500 shrink-0" />
-                              <span className="font-medium text-gray-800 truncate">
-                                {att.filename || "Attachment"}
-                              </span>
-                              {att.is_original && (
-                                <span className="px-1.5 py-0.5 text-[10px] bg-purple-100 text-purple-700 rounded font-semibold">
-                                  Original .eml
-                                </span>
-                              )}
-                            </div>
-                            <button
-                              onClick={async () => {
-                                const blob = await emailApi.getAttachment(selectedEmail.id, att.id);
-                                const url = URL.createObjectURL(blob);
-                                const link = document.createElement("a");
-                                link.href = url;
-                                link.download = att.filename || "attachment";
-                                link.click();
-                                URL.revokeObjectURL(url);
-                              }}
-                              className="p-1.5 text-gray-600 hover:text-blue-600 rounded-lg hover:bg-gray-100 flex items-center gap-1 font-medium transition-colors"
-                              title="Download Attachment"
-                            >
-                              <Download className="w-3.5 h-3.5" />
-                              <span>Download</span>
-                            </button>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-        )}
-      </div>
     </div>
   );
 }
