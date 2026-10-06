@@ -23,8 +23,9 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy import desc, select
+from sqlalchemy import desc, distinct, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.db.session import get_db
 from app.models.asn import ASNRecord
@@ -48,10 +49,54 @@ from app.services.packing_excel_service import (
     generate_packing_template,
     validate_packing_excel,
 )
+from app.services.po_service import update_po_statuses
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+async def generate_po_shipment_number(db: AsyncSession, po_number: Optional[str]) -> str:
+    """
+    Generate unique shipment number based on PO number and dispatch sequence:
+    e.g. 2001614890-01, 2001614890-02
+    """
+    if not po_number or not str(po_number).strip():
+        today_str = datetime.now().strftime("%Y%m%d")
+        base = f"SHP-{today_str}"
+        seq = 1
+        candidate = f"{base}-{str(seq).zfill(2)}"
+        while True:
+            exists = await db.scalar(
+                select(func.count()).select_from(Shipment).where(Shipment.shipment_number == candidate)
+            )
+            if not exists:
+                return candidate
+            seq += 1
+            candidate = f"{base}-{str(seq).zfill(2)}"
+
+    po_clean = str(po_number).strip()
+
+    # Count existing shipments linked to this PO number via ShipmentLine
+    stmt = (
+        select(func.count(distinct(Shipment.id)))
+        .join(ShipmentLine, ShipmentLine.shipment_id == Shipment.id)
+        .where(ShipmentLine.po_number == po_clean)
+    )
+    existing_count = (await db.scalar(stmt)) or 0
+
+    seq = existing_count + 1
+    candidate = f"{po_clean}-{str(seq).zfill(2)}"
+
+    # Ensure strict uniqueness against shipments table
+    while True:
+        exists = await db.scalar(
+            select(func.count()).select_from(Shipment).where(Shipment.shipment_number == candidate)
+        )
+        if not exists:
+            return candidate
+        seq += 1
+        candidate = f"{po_clean}-{str(seq).zfill(2)}"
 
 
 @router.get("/next-hu-sequence")
@@ -422,10 +467,9 @@ async def create_shipment_from_excel(
         except ValueError:
             pass
 
-    # Generate sequential shipment / packing slip number (8 digits)
-    import random
-    random_suffix = str(random.randint(100000, 999999))
-    shipment_number = f"01{random_suffix}"
+    # Generate sequential shipment / packing slip number based on PO (e.g. 2001614890-01)
+    first_po_num = validation_res.rows[0].po_number if validation_res.rows else None
+    shipment_number = await generate_po_shipment_number(db, first_po_num)
 
     shipment = Shipment(
         id=uuid.uuid4(),
@@ -571,6 +615,12 @@ async def create_shipment_from_excel(
         for sl in shipment_lines:
             db.add(sl)
         db.add(asn_record)
+        await db.flush()
+
+        # Update PO statuses (PARTIAL / COMPLETED)
+        affected_pos = list({row.po_number for row in validation_res.rows if row.po_number})
+        await update_po_statuses(db, affected_pos)
+
         await db.commit()
     except Exception as e:
         logger.error("DB commit failed for shipment: %s", e)
@@ -788,9 +838,8 @@ async def create_direct_shipment(
         except ValueError:
             pass
 
-    import random
-    random_suffix = str(random.randint(100000, 999999))
-    shipment_number = f"01{random_suffix}"
+    # Generate sequential shipment / packing slip number based on PO (e.g. 2001614890-01)
+    shipment_number = await generate_po_shipment_number(db, first_po_num)
 
     total_units = int(sum(c.quantity for c in req.cartons))
 
@@ -953,6 +1002,12 @@ async def create_direct_shipment(
         for sl in shipment_lines:
             db.add(sl)
         db.add(asn_record)
+        await db.flush()
+
+        # Update PO statuses (PARTIAL / COMPLETED)
+        affected_pos = list({c.po_number for c in req.cartons if c.po_number})
+        await update_po_statuses(db, affected_pos)
+
         await db.commit()
     except Exception as e:
         logger.error("DB commit failed for direct shipment: %s", e)
@@ -998,11 +1053,12 @@ async def list_shipments(
     limit: int = Query(50, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
 ) -> list[dict[str, Any]]:
-    """List all shipments with carton and status details."""
+    """List all shipments with carton, PO, and status details."""
     try:
         stmt = (
             select(Shipment, ASNRecord.id.label("asn_id"))
             .outerjoin(ASNRecord, ASNRecord.shipment_id == Shipment.id)
+            .options(selectinload(Shipment.lines), selectinload(Shipment.packing_slips))
             .order_by(desc(Shipment.created_at))
             .limit(limit)
         )
@@ -1014,13 +1070,37 @@ async def list_shipments(
         if status and status != "ALL":
             stmt = stmt.where(Shipment.status == status)
         if search:
-            stmt = stmt.where(Shipment.shipment_number.ilike(f"%{search}%"))
+            search_clean = search.strip()
+            po_subq = select(ShipmentLine.shipment_id).where(
+                ShipmentLine.po_number.ilike(f"%{search_clean}%")
+            )
+            stmt = stmt.where(
+                Shipment.shipment_number.ilike(f"%{search_clean}%")
+                | Shipment.plant_code.ilike(f"%{search_clean}%")
+                | Shipment.id.in_(po_subq)
+            )
 
         res = await db.execute(stmt)
         rows = res.all()
 
-        return [
-            {
+        results = []
+        for s, asn_id in rows:
+            po_set = {line.po_number for line in (s.lines or []) if line.po_number}
+            for ps in (s.packing_slips or []):
+                if ps.dimensions and isinstance(ps.dimensions, dict) and ps.dimensions.get("po_number"):
+                    po_set.add(str(ps.dimensions["po_number"]))
+
+            primary_uom = s.lines[0].unit_of_measure if (s.lines and s.lines[0].unit_of_measure) else "M"
+            if not s.lines and s.packing_slips:
+                for ps in s.packing_slips:
+                    if ps.dimensions and isinstance(ps.dimensions, dict) and ps.dimensions.get("uom"):
+                        primary_uom = str(ps.dimensions["uom"])
+                        break
+
+            gw = sum(float(ps.gross_weight or 0) for ps in (s.packing_slips or []))
+            nw = sum(float(ps.net_weight or 0) for ps in (s.packing_slips or []))
+
+            results.append({
                 "id": str(s.id),
                 "shipment_number": s.shipment_number,
                 "plant_code": s.plant_code,
@@ -1028,14 +1108,17 @@ async def list_shipments(
                 "status": s.status,
                 "total_boxes": s.total_boxes,
                 "total_pieces": s.total_pieces,
+                "uom": primary_uom,
+                "po_numbers": sorted(list(po_set)),
+                "gross_weight": round(gw, 2) if gw > 0 else None,
+                "net_weight": round(nw, 2) if nw > 0 else None,
                 "ship_date": s.ship_date.isoformat() if s.ship_date else None,
                 "carrier": s.carrier,
                 "tracking_number": s.tracking_number,
                 "created_at": s.created_at.isoformat() if s.created_at else None,
                 "asn_id": str(asn_id) if asn_id else None,
-            }
-            for s, asn_id in rows
-        ]
+            })
+        return results
     except Exception as e:
         logger.warning("DB query for shipments failed: %s", e)
         return []
@@ -1048,7 +1131,11 @@ async def get_shipment_detail(
 ) -> dict[str, Any]:
     """Retrieve full shipment details including lines and cartons."""
     try:
-        stmt = select(Shipment).where(Shipment.id == id)
+        stmt = (
+            select(Shipment)
+            .where(Shipment.id == id)
+            .options(selectinload(Shipment.lines))
+        )
         res = await db.execute(stmt)
         s = res.scalar_one_or_none()
         if not s:
@@ -1064,6 +1151,21 @@ async def get_shipment_detail(
         asn_res = await db.execute(asn_stmt)
         asn = asn_res.scalar_one_or_none()
 
+        po_set = {line.po_number for line in (s.lines or []) if line.po_number}
+        for c in cartons:
+            if c.dimensions and isinstance(c.dimensions, dict) and c.dimensions.get("po_number"):
+                po_set.add(str(c.dimensions["po_number"]))
+
+        primary_uom = s.lines[0].unit_of_measure if (s.lines and s.lines[0].unit_of_measure) else "M"
+        if not s.lines and cartons:
+            for c in cartons:
+                if c.dimensions and isinstance(c.dimensions, dict) and c.dimensions.get("uom"):
+                    primary_uom = str(c.dimensions["uom"])
+                    break
+
+        gw = sum(float(c.gross_weight or 0) for c in cartons)
+        nw = sum(float(c.net_weight or 0) for c in cartons)
+
         return {
             "id": str(s.id),
             "shipment_number": s.shipment_number,
@@ -1072,9 +1174,14 @@ async def get_shipment_detail(
             "status": s.status,
             "total_boxes": s.total_boxes,
             "total_pieces": s.total_pieces,
+            "uom": primary_uom,
+            "po_numbers": sorted(list(po_set)),
+            "gross_weight": round(gw, 2) if gw > 0 else None,
+            "net_weight": round(nw, 2) if nw > 0 else None,
             "ship_date": s.ship_date.isoformat() if s.ship_date else None,
             "carrier": s.carrier,
             "tracking_number": s.tracking_number,
+            "created_at": s.created_at.isoformat() if s.created_at else None,
             "cartons": [
                 {
                     "box_number": c.box_number,
@@ -1090,6 +1197,7 @@ async def get_shipment_detail(
                 "asn_number": asn.asn_number if asn else None,
                 "status": asn.status if asn else None,
                 "xml_validated": asn.xml_validated if asn else False,
+                "xml_content": asn.xml_content if asn else None,
             } if asn else None,
         }
     except HTTPException:

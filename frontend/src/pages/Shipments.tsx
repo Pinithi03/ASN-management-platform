@@ -62,6 +62,7 @@ export const PLANT_NAMES: Record<string, string> = {
   PPC1: "Benji Ltd (PPC1)",
   PPD1: "Sirio Ltd (PPD1)",
   PPE1: "Vavuniya Apparels Ltd (PPE1)",
+  "1001": "Omega Line Ltd (1001)",
 };
 
 // Helper to accurately match plant code from client_code or destination automatically
@@ -82,9 +83,14 @@ interface ShipmentDisplayItem {
   plant_code?: string;
   total_boxes: number;
   total_pieces: number;
+  uom?: string;
+  po_numbers?: string[];
+  gross_weight?: number;
+  net_weight?: number;
   carrier?: string;
   status: string;
   ship_date?: string;
+  created_at?: string;
   asn_id?: string;
 }
 
@@ -155,6 +161,7 @@ export default function Shipments() {
   const [shipments, setShipments] = useState<ShipmentDisplayItem[]>([]);
   const [loadingShipments, setLoadingShipments] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [inspectShipmentId, setInspectShipmentId] = useState<string | null>(null);
 
   // Reset page when search or status filter changes
   useEffect(() => {
@@ -189,9 +196,14 @@ export default function Shipments() {
             plant_code: d.plant_code,
             total_boxes: d.total_boxes,
             total_pieces: d.total_pieces,
+            uom: d.uom || "M",
+            po_numbers: d.po_numbers || [],
+            gross_weight: d.gross_weight,
+            net_weight: d.net_weight,
             carrier: d.carrier,
             status: d.status,
             ship_date: d.ship_date,
+            created_at: d.created_at,
             asn_id: d.asn_id,
           }))
         );
@@ -248,69 +260,34 @@ export default function Shipments() {
   };
 
   // Preview ASN XML
-  const handlePreviewXml = async (shipment: ShipmentDisplayItem) => {
+  const handlePreviewXml = async (shipment: any) => {
     setActionLoadingId(`xml-${shipment.id}`);
     try {
-      if (shipment.asn_id) {
-        const data = await shipmentService.getASNXmlPreview(shipment.asn_id);
+      if (shipment.asn?.xml_content) {
+        setXmlModalData({
+          open: true,
+          title: `ASN XML — Shipment ${shipment.shipment_number}`,
+          xmlContent: shipment.asn.xml_content,
+          asnId: shipment.asn?.id,
+          validated: shipment.asn.xml_validated ?? true,
+        });
+        return;
+      }
+      const asnId = shipment.asn_id || shipment.asn?.id;
+      if (asnId) {
+        const data = await shipmentService.getASNXmlPreview(asnId);
         setXmlModalData({
           open: true,
           title: `ASN XML — Shipment ${shipment.shipment_number}`,
           xmlContent: data.xml_content,
-          asnId: shipment.asn_id,
+          asnId: asnId,
           validated: data.xml_validated,
         });
       } else {
-        throw new Error("No linked ASN");
+        alert("This shipment does not have a generated ASN XML yet. Finalize packing to generate the Calzedonia ASN.");
       }
-    } catch (err) {
-      // Fallback preview
-      const sampleXml = `<?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE SdDataSlice SYSTEM "m2Data_Partner.dtd">
-<SdDataSlice>
-  <SdCompanyHeader>
-    <LegalName>Sirio Ltd</LegalName>
-    <Group>SIRIONEW</Group>
-    <TransmissionDate>${new Date().toLocaleDateString("en-GB")} 14:00</TransmissionDate>
-  </SdCompanyHeader>
-  <SdPackingSlip>
-    <PartnerId>0000058376</PartnerId>
-    <PackingSlipNumber>${shipment.shipment_number}</PackingSlipNumber>
-    <FgOutbound>false</FgOutbound>
-    <PackingSlipDate>${shipment.ship_date || "2026-09-11"}</PackingSlipDate>
-    <DeliveryDate>2026-09-15</DeliveryDate>
-    <Note>Shipment for plant ${shipment.plant_code || "PPC1"}</Note>
-    <SdPackingSlipLine>
-      <PackingSlipLineNumber>1-1</PackingSlipLineNumber>
-      <OrderTypeName>ZA6A</OrderTypeName>
-      <OrderNumber>2001297727</OrderNumber>
-      <OrderDate>10-02-2025</OrderDate>
-      <OrderLineNumber>00100-0001</OrderLineNumber>
-      <Qty>${shipment.total_pieces || 245}</Qty>
-      <ProductCode>ELST1K 000615</ProductCode>
-      <ProductCodePartner>SK104546-015.0-61851</ProductCodePartner>
-      <ProductDescription>Elastic tape 15mm black</ProductDescription>
-      <ProductUnitOfMeasure>M</ProductUnitOfMeasure>
-      <ProductBatchCode>LOT-2025-01</ProductBatchCode>
-      <AuxRow1>1</AuxRow1>
-      <AuxRow2>10000583760000000001</AuxRow2>
-      <AuxRow3>BOX</AuxRow3>
-      <AuxRow4>SK104546-015.0-61851</AuxRow4>
-      <AuxRow5>M</AuxRow5>
-      <AuxRowNum1>1</AuxRowNum1>
-      <AuxRowNum2>25.50</AuxRowNum2>
-      <AuxRowNum3>24.00</AuxRowNum3>
-      <AuxRowNum4>${shipment.total_pieces || 245}</AuxRowNum4>
-    </SdPackingSlipLine>
-  </SdPackingSlip>
-</SdDataSlice>`;
-      setXmlModalData({
-        open: true,
-        title: `ASN XML — Shipment ${shipment.shipment_number}`,
-        xmlContent: sampleXml,
-        asnId: shipment.asn_id || `asn-${shipment.id}`,
-        validated: true,
-      });
+    } catch (err: any) {
+      alert(`Failed to load ASN XML: ${err?.response?.data?.detail || err?.message || "Unknown error"}`);
     } finally {
       setActionLoadingId(null);
     }
@@ -322,9 +299,11 @@ export default function Shipments() {
 
   const filteredShipments = shipments.filter((s) => {
     const q = search.toLowerCase();
+    const plantName = (s.plant_code ? PLANT_NAMES[s.plant_code] || s.plant_code : "").toLowerCase();
     const matchesSearch = !search || (
       s.shipment_number.toLowerCase().includes(q) ||
-      (s.plant_code && s.plant_code.toLowerCase().includes(q)) ||
+      plantName.includes(q) ||
+      (s.po_numbers && s.po_numbers.some((p) => p.toLowerCase().includes(q))) ||
       (s.carrier && s.carrier.toLowerCase().includes(q))
     );
     const matchesStatus = statusFilter === "ALL" || s.status === statusFilter;
@@ -451,7 +430,7 @@ export default function Shipments() {
                 iconColor: "text-amber-500",
               },
               {
-                label: "Total Pieces (M)",
+                label: "Total Quantity / Pieces",
                 value: totalPieces,
                 icon: PackageCheck,
                 iconBg: "bg-purple-50",
@@ -548,73 +527,128 @@ export default function Shipments() {
                 <thead>
                   <tr className="border-b border-gray-200 bg-gray-50/80 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
                     <th className="px-5 py-3.5">Shipment #</th>
-                    <th className="px-5 py-3.5">Plant</th>
-                    <th className="px-5 py-3.5">Boxes (Cartons)</th>
-                    <th className="px-5 py-3.5">Total Pieces</th>
+                    <th className="px-5 py-3.5">PO #</th>
+                    <th className="px-5 py-3.5">Destination Plant</th>
+                    <th className="px-5 py-3.5">Cartons / Rolls</th>
+                    <th className="px-5 py-3.5">Total Quantity</th>
                     <th className="px-5 py-3.5">Status</th>
                     <th className="px-5 py-3.5">Ship Date</th>
                     <th className="px-5 py-3.5 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {paginatedShipments.map((s) => (
-                    <tr key={s.id} className="hover:bg-gray-50/80 transition-colors">
-                      <td className="whitespace-nowrap px-5 py-3.5 font-mono text-xs font-bold text-gray-900">
-                        {s.shipment_number}
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">
-                          {s.plant_code || "PPC1"}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3.5 font-semibold text-gray-700">{s.total_boxes}</td>
-                      <td className="px-5 py-3.5 text-gray-700 font-mono">{s.total_pieces?.toLocaleString()} M</td>
-                      <td className="px-5 py-3.5">
-                        <span
-                          className={cn(
-                            "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border",
-                            statusColor[s.status] || "bg-gray-50 text-gray-700 border-gray-200"
+                  {paginatedShipments.map((s) => {
+                    const plantLabel = s.plant_code ? (PLANT_NAMES[s.plant_code] || s.plant_code) : "—";
+                    const uomLabel = s.uom || "M";
+                    return (
+                      <tr
+                        key={s.id}
+                        onClick={() => setInspectShipmentId(s.id)}
+                        className="hover:bg-blue-50/40 transition-colors cursor-pointer group"
+                      >
+                        <td className="whitespace-nowrap px-5 py-3.5">
+                          <div className="font-mono text-xs font-bold text-gray-900 group-hover:text-blue-600 transition-colors flex items-center gap-1.5">
+                            {s.shipment_number}
+                          </div>
+                          {s.asn_id && (
+                            <span className="text-[10px] font-mono text-emerald-600 block mt-0.5 font-medium">
+                              ASN Linked
+                            </span>
                           )}
-                        >
-                          {s.status.replace(/_/g, " ")}
-                        </span>
-                      </td>
-                      <td className="whitespace-nowrap px-5 py-3.5 text-gray-500">
-                        {s.ship_date ? new Date(s.ship_date).toLocaleDateString("en-GB") : "—"}
-                      </td>
-                      <td className="whitespace-nowrap px-5 py-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => handleDownloadLabels(s.id, s.shipment_number)}
-                            disabled={actionLoadingId === `labels-${s.id}`}
-                            title="Download 6x4 Code 39 Barcode PDF Labels"
-                            className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 hover:text-emerald-700 shadow-sm transition-colors disabled:opacity-50"
-                          >
-                            {actionLoadingId === `labels-${s.id}` ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-600" />
-                            ) : (
-                              <Printer className="h-3.5 w-3.5 text-emerald-600" />
+                        </td>
+                        <td className="whitespace-nowrap px-5 py-3.5">
+                          {s.po_numbers && s.po_numbers.length > 0 ? (
+                            <div className="flex flex-wrap gap-1 max-w-[160px]">
+                              {s.po_numbers.slice(0, 2).map((po) => (
+                                <span
+                                  key={po}
+                                  className="inline-flex items-center rounded-md bg-blue-50 border border-blue-200 px-2 py-0.5 text-xs font-mono font-semibold text-blue-700"
+                                >
+                                  {po}
+                                </span>
+                              ))}
+                              {s.po_numbers.length > 2 && (
+                                <span className="inline-flex items-center rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600">
+                                  +{s.po_numbers.length - 2}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-gray-400 text-xs">—</span>
+                          )}
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <span className="inline-flex items-center rounded-md bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-800">
+                            {plantLabel}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <span className="font-semibold text-gray-800 font-mono text-xs">
+                            {s.total_boxes} {s.total_boxes === 1 ? "Carton" : "Cartons"}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3.5 whitespace-nowrap">
+                          <span className="text-gray-900 font-bold font-mono text-xs">
+                            {s.total_pieces?.toLocaleString()}
+                          </span>{" "}
+                          <span className="text-gray-500 text-xs font-medium">{uomLabel}</span>
+                        </td>
+                        <td className="px-5 py-3.5 whitespace-nowrap">
+                          <span
+                            className={cn(
+                              "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border",
+                              statusColor[s.status] || "bg-gray-50 text-gray-700 border-gray-200"
                             )}
-                            6x4 Labels
-                          </button>
+                          >
+                            {s.status.replace(/_/g, " ")}
+                          </span>
+                        </td>
+                        <td className="whitespace-nowrap px-5 py-3.5 text-gray-500 text-xs">
+                          {s.ship_date ? new Date(s.ship_date).toLocaleDateString("en-GB") : "—"}
+                        </td>
+                        <td className="whitespace-nowrap px-5 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => setInspectShipmentId(s.id)}
+                              title="Inspect Cartons & Shipment Details"
+                              className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200 shadow-2xs transition-colors cursor-pointer"
+                            >
+                              <Eye className="h-3.5 w-3.5 text-blue-600" />
+                              Inspect
+                            </button>
 
-                          <button
-                            onClick={() => handlePreviewXml(s)}
-                            disabled={actionLoadingId === `xml-${s.id}`}
-                            title="View SdDataSlice EDI XML"
-                            className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 hover:text-purple-700 shadow-sm transition-colors disabled:opacity-50"
-                          >
-                            {actionLoadingId === `xml-${s.id}` ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-600" />
-                            ) : (
-                              <FileCode className="h-3.5 w-3.5 text-purple-600" />
-                            )}
-                            ASN XML
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                            <button
+                              onClick={() => handleDownloadLabels(s.id, s.shipment_number)}
+                              disabled={actionLoadingId === `labels-${s.id}`}
+                              title="Download 6x4 Code 39 Barcode PDF Labels"
+                              className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 shadow-2xs transition-colors disabled:opacity-50 cursor-pointer"
+                            >
+                              {actionLoadingId === `labels-${s.id}` ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-600" />
+                              ) : (
+                                <Printer className="h-3.5 w-3.5 text-emerald-600" />
+                              )}
+                              Labels
+                            </button>
+
+                            <button
+                              onClick={() => handlePreviewXml(s)}
+                              disabled={actionLoadingId === `xml-${s.id}`}
+                              title="View SdDataSlice EDI XML"
+                              className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-purple-50 hover:text-purple-700 hover:border-purple-200 shadow-2xs transition-colors disabled:opacity-50 cursor-pointer"
+                            >
+                              {actionLoadingId === `xml-${s.id}` ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-600" />
+                              ) : (
+                                <FileCode className="h-3.5 w-3.5 text-purple-600" />
+                              )}
+                              ASN XML
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                   {loadingShipments ? (
                     <tr>
                       <td colSpan={8} className="px-5 py-16 text-center text-gray-400">
@@ -691,6 +725,16 @@ export default function Shipments() {
             setSearchParams({});
             loadShipments();
           }}
+        />
+      )}
+
+      {/* SHIPMENT DETAIL & CARTON INSPECTION MODAL */}
+      {inspectShipmentId && (
+        <ShipmentDetailModal
+          shipmentId={inspectShipmentId}
+          onClose={() => setInspectShipmentId(null)}
+          onDownloadLabels={handleDownloadLabels}
+          onPreviewXml={handlePreviewXml}
         />
       )}
 
@@ -2565,6 +2609,273 @@ function XmlPreviewModal({
               </button>
             )}
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ───────────────────────────────────────────────────────────────────
+// SUBCOMPONENT D: Full Shipment & Carton Inspection Modal
+// ───────────────────────────────────────────────────────────────────
+function ShipmentDetailModal({
+  shipmentId,
+  onClose,
+  onDownloadLabels,
+  onPreviewXml,
+}: {
+  shipmentId: string;
+  onClose: () => void;
+  onDownloadLabels: (id: string, num: string) => void;
+  onPreviewXml: (shipment: any) => void;
+}) {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [copiedHu, setCopiedHu] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    shipmentService
+      .getShipmentDetail(shipmentId)
+      .then((res) => {
+        if (active) setData(res);
+      })
+      .catch((err) => {
+        if (active) setError(err?.response?.data?.detail || err?.message || "Failed to load shipment details");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [shipmentId]);
+
+  const handleCopyHu = (hu: string) => {
+    navigator.clipboard.writeText(hu);
+    setCopiedHu(hu);
+    setTimeout(() => setCopiedHu(null), 2000);
+  };
+
+  const plantName = data?.plant_code ? (PLANT_NAMES[data.plant_code] || data.plant_code) : "N/A";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4 backdrop-blur-sm">
+      <div className="relative w-full max-w-5xl rounded-2xl bg-white shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[90vh]">
+        {/* Modal Header */}
+        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 bg-gray-50/70">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold shadow-xs">
+              <Box className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-gray-900">
+                  Shipment #{data?.shipment_number || "..."}
+                </h2>
+                {data?.status && (
+                  <span
+                    className={cn(
+                      "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold border",
+                      statusColor[data.status] || "bg-gray-100 text-gray-700 border-gray-200"
+                    )}
+                  >
+                    {data.status.replace(/_/g, " ")}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Destination: <strong className="text-gray-800">{plantName}</strong>
+                {data?.ship_date && (
+                  <> • Ship Date: <strong className="text-gray-800">{new Date(data.ship_date).toLocaleDateString("en-GB")}</strong></>
+                )}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-lg p-2 text-gray-400 hover:bg-gray-200 hover:text-gray-700 transition-colors cursor-pointer"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Modal Body */}
+        <div className="p-6 overflow-y-auto space-y-5 flex-1">
+          {loading ? (
+            <div className="py-20 text-center text-gray-500">
+              <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-3" />
+              <p className="font-semibold text-sm">Loading carton details...</p>
+            </div>
+          ) : error ? (
+            <div className="py-12 text-center text-red-600 bg-red-50 rounded-xl border border-red-200">
+              <AlertTriangle className="w-8 h-8 mx-auto mb-2" />
+              <p className="font-semibold text-sm">{error}</p>
+            </div>
+          ) : data ? (
+            <>
+              {/* Stat Summary Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="p-3.5 bg-gray-50 rounded-xl border border-gray-200">
+                  <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">Total Cartons</span>
+                  <span className="text-lg font-black text-gray-900 font-mono mt-0.5 block">{data.total_boxes}</span>
+                </div>
+                <div className="p-3.5 bg-gray-50 rounded-xl border border-gray-200">
+                  <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">Total Quantity</span>
+                  <span className="text-lg font-black text-gray-900 font-mono mt-0.5 block">
+                    {data.total_pieces?.toLocaleString()} <span className="text-xs font-semibold text-gray-600">{data.uom || "M"}</span>
+                  </span>
+                </div>
+                <div className="p-3.5 bg-gray-50 rounded-xl border border-gray-200">
+                  <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">Total Gross Weight</span>
+                  <span className="text-lg font-black text-gray-900 font-mono mt-0.5 block">
+                    {data.gross_weight != null ? data.gross_weight : "—"} <span className="text-xs font-semibold text-gray-600">kg</span>
+                  </span>
+                </div>
+                <div className="p-3.5 bg-gray-50 rounded-xl border border-gray-200">
+                  <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">Total Net Weight</span>
+                  <span className="text-lg font-black text-gray-900 font-mono mt-0.5 block">
+                    {data.net_weight != null ? data.net_weight : "—"} <span className="text-xs font-semibold text-gray-600">kg</span>
+                  </span>
+                </div>
+              </div>
+
+              {/* Associated POs & ASN Info */}
+              <div className="p-3.5 bg-blue-50/60 rounded-xl border border-blue-100 flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-blue-900">Purchase Orders:</span>
+                  <div className="flex flex-wrap gap-1">
+                    {data.po_numbers && data.po_numbers.length > 0 ? (
+                      data.po_numbers.map((po: string) => (
+                        <span key={po} className="px-2 py-0.5 bg-white border border-blue-200 rounded text-blue-800 font-mono font-bold">
+                          {po}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-gray-500">None linked</span>
+                    )}
+                  </div>
+                </div>
+
+                {data.asn && (
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-blue-900">Calzedonia ASN:</span>
+                    <span className="px-2 py-0.5 bg-purple-100 text-purple-800 font-mono font-bold rounded border border-purple-200">
+                      {data.asn.asn_number}
+                    </span>
+                    {data.asn.xml_validated && (
+                      <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-semibold rounded text-[11px] border border-emerald-200">
+                        ✓ XML Validated
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Cartons Table */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">
+                    Carton & Handling Unit (SSCC) Breakdown ({data.cartons?.length || 0})
+                  </h3>
+                  <span className="text-xs text-gray-400">
+                    Click HU to copy
+                  </span>
+                </div>
+                <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-2xs">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-gray-100 text-gray-600 font-bold uppercase tracking-wider border-b border-gray-200">
+                      <tr>
+                        <th className="px-3.5 py-2.5">Box #</th>
+                        <th className="px-3.5 py-2.5">Handling Unit (20-digit SSCC)</th>
+                        <th className="px-3.5 py-2.5">PO # / Line</th>
+                        <th className="px-3.5 py-2.5">Product Code</th>
+                        <th className="px-3.5 py-2.5">Lot / Batch</th>
+                        <th className="px-3.5 py-2.5 text-right">Quantity</th>
+                        <th className="px-3.5 py-2.5 text-right">GW (kg)</th>
+                        <th className="px-3.5 py-2.5 text-right">NW (kg)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 bg-white font-mono">
+                      {(data.cartons || []).map((c: any, idx: number) => {
+                        const meta = c.details || {};
+                        return (
+                          <tr key={idx} className="hover:bg-gray-50/80 transition-colors">
+                            <td className="px-3.5 py-2.5 font-bold text-gray-700">#{c.box_number || idx + 1}</td>
+                            <td className="px-3.5 py-2.5 font-bold text-gray-900">
+                              <button
+                                type="button"
+                                onClick={() => handleCopyHu(c.hu_number)}
+                                title="Click to copy 20-digit HU"
+                                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-800 cursor-pointer font-bold transition-colors"
+                              >
+                                {c.hu_number}
+                                {copiedHu === c.hu_number ? (
+                                  <Check className="w-3 h-3 text-emerald-600" />
+                                ) : null}
+                              </button>
+                            </td>
+                            <td className="px-3.5 py-2.5 text-gray-700">
+                              {meta.po_number || "—"}{meta.po_line ? ` / ${meta.po_line}` : ""}
+                            </td>
+                            <td className="px-3.5 py-2.5 font-semibold text-gray-800">
+                              {meta.product_code || "—"}
+                            </td>
+                            <td className="px-3.5 py-2.5 text-gray-500">
+                              {meta.lot_number || "—"}
+                            </td>
+                            <td className="px-3.5 py-2.5 text-right font-bold text-blue-700">
+                              {meta.quantity?.toLocaleString() || meta.quantity || 0} {meta.uom || data.uom || "M"}
+                            </td>
+                            <td className="px-3.5 py-2.5 text-right text-gray-800">
+                              {c.gross_weight?.toFixed(2) || "0.00"}
+                            </td>
+                            <td className="px-3.5 py-2.5 text-right text-gray-600">
+                              {c.net_weight?.toFixed(2) || "0.00"}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          ) : null}
+        </div>
+
+        {/* Modal Footer Actions */}
+        <div className="flex items-center justify-between border-t border-gray-200 px-6 py-4 bg-gray-50/70">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer shadow-xs"
+          >
+            Close
+          </button>
+
+          {data && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => onDownloadLabels(data.id, data.shipment_number)}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                Download 6x4 Labels PDF
+              </button>
+
+              <button
+                onClick={() => {
+                  onPreviewXml(data);
+                }}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+              >
+                <FileCode className="w-3.5 h-3.5" />
+                View ASN XML
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

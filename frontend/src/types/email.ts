@@ -10,6 +10,7 @@ export type EmailStatus =
 
 export type POStatus =
   | "ACTIVE"
+  | "PARTIAL"
   | "UPDATED"
   | "XML_SENT"
   | "SHIPMENT_RECEIVED"
@@ -121,6 +122,7 @@ export interface POStats {
   total: number;
   active: number;
   updated: number;
+  partial?: number;
   shipped: number;
   cancelled: number;
   completed: number;

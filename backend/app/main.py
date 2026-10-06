@@ -118,6 +118,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         print(f"ERROR during database auto-migration: {exc}")
         raise exc
 
+    # Auto-sync PO lifecycle statuses against shipments
+    try:
+        from app.db.session import async_session_factory
+        from app.services.po_service import update_po_statuses
+        async with async_session_factory() as db:
+            await update_po_statuses(db)
+            await db.commit()
+    except Exception as exc:
+        print(f"Warning: Could not auto-sync PO statuses: {exc}")
+
     # Start continuous background IMAP email poller
     poller_task = asyncio.create_task(_continuous_imap_poller())
 

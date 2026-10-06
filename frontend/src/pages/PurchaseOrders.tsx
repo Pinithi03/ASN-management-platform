@@ -33,8 +33,8 @@ import { cn } from "@/utils/cn";
 const STATUS_OPTIONS = [
   { label: "All Statuses", value: "" },
   { label: "Active", value: "ACTIVE" },
+  { label: "Partial", value: "PARTIAL" },
   { label: "Updated", value: "UPDATED" },
-  { label: "Shipped", value: "SHIPPED" },
   { label: "Completed", value: "COMPLETED" },
   { label: "Cancelled", value: "CANCELLED" },
 ];
@@ -42,7 +42,8 @@ const STATUS_OPTIONS = [
 const STATUS_BADGES: Record<string, string> = {
   ACTIVE: "bg-blue-50 text-blue-700 border border-blue-200",
   UPDATED: "bg-amber-50 text-amber-700 border border-amber-200",
-  SHIPPED: "bg-purple-50 text-purple-700 border border-purple-200",
+  PARTIAL: "bg-orange-50 text-orange-700 border border-orange-200",
+  SHIPPED: "bg-orange-50 text-orange-700 border border-orange-200",
   COMPLETED: "bg-emerald-50 text-emerald-700 border border-emerald-200",
   CANCELLED: "bg-red-50 text-red-700 border border-red-200",
 };
@@ -322,7 +323,7 @@ export default function PurchaseOrders() {
               iconColor: "text-blue-500",
             },
             {
-              label: "Updated Orders",
+              label: "Amended Orders",
               value: stats.updated || 0,
               icon: RefreshCw,
               iconBg: "bg-amber-50",
@@ -330,10 +331,10 @@ export default function PurchaseOrders() {
             },
             {
               label: "Partially Shipped",
-              value: stats.shipped || 0,
+              value: stats ? ((stats.partial ?? 0) + (stats.shipped ?? 0)) : 0,
               icon: Package,
-              iconBg: "bg-purple-50",
-              iconColor: "text-purple-500",
+              iconBg: "bg-orange-50",
+              iconColor: "text-orange-500",
             },
             {
               label: "Completed Orders",
@@ -519,11 +520,6 @@ export default function PurchaseOrders() {
                           )}
                         >
                           <span>{po.po_number || "—"}</span>
-                          {po.version && po.version > 1 ? (
-                            <span className="px-1.5 py-0.5 text-[10px] font-bold bg-amber-100 text-amber-800 rounded border border-amber-200">
-                              v{po.version}
-                            </span>
-                          ) : null}
                         </div>
                       </td>
 
@@ -557,14 +553,24 @@ export default function PurchaseOrders() {
                       </td>
 
                       {/* Status */}
-                      <td className="px-4 py-3">
-                        <span
-                          className={`px-2.5 py-1 text-xs font-semibold rounded-full inline-flex items-center ${
-                            STATUS_BADGES[po.status] || "bg-gray-100 text-gray-700 border border-gray-200"
-                          }`}
-                        >
-                          {po.status}
-                        </span>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className={`px-2.5 py-1 text-xs font-semibold rounded-full inline-flex items-center ${
+                              STATUS_BADGES[po.status] || "bg-gray-100 text-gray-700 border border-gray-200"
+                            }`}
+                          >
+                            {po.status}
+                          </span>
+                          {po.version && po.version > 1 ? (
+                            <span
+                              className="px-1.5 py-0.5 text-[10px] font-bold bg-amber-100 text-amber-800 rounded border border-amber-200 inline-flex items-center shadow-2xs"
+                              title={`Order revised/amended by customer (Version ${po.version})`}
+                            >
+                              v{po.version}
+                            </span>
+                          ) : null}
+                        </div>
                       </td>
 
                       {/* Actions */}
