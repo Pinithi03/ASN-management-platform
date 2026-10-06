@@ -90,12 +90,10 @@ export const shipmentService = {
    * Download tailored Excel packing template based on supplier packing setup (Box vs Roll & units count).
    */
   async downloadConfiguredTemplate(payload: {
-    po_number: string;
-    lines: Array<{
-      po_item: string;
+    configs: Array<{
+      po_number: string;
       pack_type: "BOX" | "ROLL";
-      units_count: number;
-      quantity?: number;
+      selected_lines?: string[];
     }>;
   }): Promise<Blob> {
     const res = await api.post("/shipments/template/configured", payload, {
