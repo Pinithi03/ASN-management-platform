@@ -66,25 +66,25 @@ type PreviewKind = "html" | "xml" | "text" | "image" | "pdf" | "none";
 // ─── Helpers ────────────────────────────────────────────────────
 
 function formatDate(value: string | null): string {
-  return value ? format(new Date(value), "MMM d yyyy, HH:mm:ss") : "—";
+  return value ? format(new Date(value), "MMM d yyyy, HH:mm:ss") : " ";
 }
 
 function formatBytes(bytes: number | null): string {
-  if (bytes === null) return "—";
+  if (bytes === null) return " ";
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function displayValue(value: unknown): string {
-  if (value === null || value === undefined || value === "") return "—";
+  if (value === null || value === undefined || value === "") return " ";
   if (typeof value === "number") return value.toLocaleString();
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
 }
 
 function formatMoney(value: unknown, currency?: string): string {
-  if (value === null || value === undefined || value === "") return "—";
+  if (value === null || value === undefined || value === "") return " ";
   const num = typeof value === "number" ? value : parseFloat(String(value));
   if (isNaN(num)) return String(value);
 
@@ -260,7 +260,7 @@ function ParsedDataSection({ data }: { data: ParsedData }) {
     <div className="px-5 py-4 space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <span className="px-2 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-700 rounded">
-          {data.parser_used || "—"}
+          {data.parser_used || " "}
         </span>
         {data.po_number_extracted && (
           <span className="text-sm font-medium text-gray-900">PO# {data.po_number_extracted}</span>

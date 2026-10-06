@@ -349,10 +349,10 @@ export default function EmailInbox() {
                                 />
                               )
                             )}
-                            {email.from_address || "—"}
+                            {email.from_address || " "}
                           </td>
                           <td className="px-4 py-3 max-w-[200px] truncate text-gray-800 font-medium">
-                            {email.subject || "—"}
+                            {email.subject || " "}
                           </td>
                           {!selectedEmailId && (
                             <td className="px-4 py-3">
@@ -370,7 +370,7 @@ export default function EmailInbox() {
                             <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
                               {email.received_at
                                 ? format(new Date(email.received_at), "MMM d, HH:mm")
-                                : "—"}
+                                : " "}
                             </td>
                           )}
                           <td className="px-4 py-3 text-right">
@@ -482,15 +482,15 @@ export default function EmailInbox() {
                 {/* Compact Details Strip */}
                 <div className="px-4 py-2.5 border-b border-gray-100 bg-white text-xs space-y-1.5">
                   <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                    <div><span className="text-gray-400">From:</span> <span className="text-gray-700 font-medium">{selectedEmail.from_address || "—"}</span></div>
-                    <div><span className="text-gray-400">To:</span> <span className="text-gray-700 font-medium">{selectedEmail.to_address || "—"}</span></div>
-                    <div><span className="text-gray-400">Received:</span> <span className="text-gray-700">{selectedEmail.received_at ? format(new Date(selectedEmail.received_at), "MMM d, yyyy HH:mm") : "—"}</span></div>
-                    <div><span className="text-gray-400">Fetched:</span> <span className="text-gray-700">{selectedEmail.fetched_at ? format(new Date(selectedEmail.fetched_at), "MMM d, yyyy HH:mm") : "—"}</span></div>
-                    <div><span className="text-gray-400">LegalName:</span> <span className="text-gray-800 font-semibold">{selectedEmail.xml_legal_name || "—"}</span></div>
-                    <div><span className="text-gray-400">IungoEmailAddress:</span> <span className="text-gray-800 font-semibold">{selectedEmail.xml_iungo_email_address || "—"}</span></div>
-                    <div><span className="text-gray-400">TransmissionDate:</span> <span className="text-gray-800 font-semibold">{selectedEmail.xml_transmission_date || "—"}</span></div>
+                    <div><span className="text-gray-400">From:</span> <span className="text-gray-700 font-medium">{selectedEmail.from_address || " "}</span></div>
+                    <div><span className="text-gray-400">To:</span> <span className="text-gray-700 font-medium">{selectedEmail.to_address || " "}</span></div>
+                    <div><span className="text-gray-400">Received:</span> <span className="text-gray-700">{selectedEmail.received_at ? format(new Date(selectedEmail.received_at), "MMM d, yyyy HH:mm") : " "}</span></div>
+                    <div><span className="text-gray-400">Fetched:</span> <span className="text-gray-700">{selectedEmail.fetched_at ? format(new Date(selectedEmail.fetched_at), "MMM d, yyyy HH:mm") : " "}</span></div>
+                    <div><span className="text-gray-400">LegalName:</span> <span className="text-gray-800 font-semibold">{selectedEmail.xml_legal_name || " "}</span></div>
+                    <div><span className="text-gray-400">IungoEmailAddress:</span> <span className="text-gray-800 font-semibold">{selectedEmail.xml_iungo_email_address || " "}</span></div>
+                    <div><span className="text-gray-400">TransmissionDate:</span> <span className="text-gray-800 font-semibold">{selectedEmail.xml_transmission_date || " "}</span></div>
                   </div>
-                  <div className="text-gray-400">Message-ID: <span className="text-gray-600 font-mono break-all">{selectedEmail.message_id || "—"}</span></div>
+                  <div className="text-gray-400">Message-ID: <span className="text-gray-600 font-mono break-all">{selectedEmail.message_id || " "}</span></div>
                 </div>
 
                 {/* Sub-tabs bar */}
@@ -579,49 +579,49 @@ export default function EmailInbox() {
                               <div>
                                 <span className="text-gray-400">PartnerId:</span>{" "}
                                 <span className="text-gray-800 font-medium">
-                                  {String(data.raw_extracted?.partner_id || data.raw_extracted?.supplier_code || "—")}
+                                  {String(data.raw_extracted?.partner_id || data.raw_extracted?.supplier_code || " ")}
                                 </span>
                               </div>
                               <div>
                                 <span className="text-gray-400">Buyer:</span>{" "}
                                 <span className="text-gray-800 font-medium">
-                                  {String(data.raw_extracted?.buyer_name || "—")}
+                                  {String(data.raw_extracted?.buyer_name || " ")}
                                 </span>
                               </div>
                               <div>
                                 <span className="text-gray-400">ContactPerson:</span>{" "}
                                 <span className="text-gray-800 font-medium">
-                                  {String(data.raw_extracted?.contact_person || "—")}
+                                  {String(data.raw_extracted?.contact_person || " ")}
                                 </span>
                               </div>
                               <div>
                                 <span className="text-gray-400">Delivery Date:</span>{" "}
                                 <span className="text-gray-800 font-medium">
-                                  {String(data.raw_extracted?.delivery_date || "—")}
+                                  {String(data.raw_extracted?.delivery_date || " ")}
                                 </span>
                               </div>
                               <div>
                                 <span className="text-gray-400">DeliveryAddress:</span>{" "}
                                 <span className="text-gray-800 font-medium">
-                                  {String(data.raw_extracted?.delivery_address || "—")}
+                                  {String(data.raw_extracted?.delivery_address || " ")}
                                 </span>
                               </div>
                               <div>
                                 <span className="text-gray-400">Payment:</span>{" "}
                                 <span className="text-gray-800 font-medium">
-                                  {String(data.raw_extracted?.payment || "—")}
+                                  {String(data.raw_extracted?.payment || " ")}
                                 </span>
                               </div>
                               <div>
                                 <span className="text-gray-400">Address:</span>{" "}
                                 <span className="text-gray-800 font-medium">
-                                  {String(data.raw_extracted?.address || data.raw_extracted?.supplier_address || "—")}
+                                  {String(data.raw_extracted?.address || data.raw_extracted?.supplier_address || " ")}
                                 </span>
                               </div>
                               <div>
                                 <span className="text-gray-400">City / Country:</span>{" "}
                                 <span className="text-gray-800 font-medium">
-                                  {[data.raw_extracted?.city, data.raw_extracted?.country].filter(Boolean).join(", ") || "—"}
+                                  {[data.raw_extracted?.city, data.raw_extracted?.country].filter(Boolean).join(", ") || " "}
                                 </span>
                               </div>
                               <div>
@@ -672,8 +672,8 @@ export default function EmailInbox() {
                                         {activeItems.map((item, idx) => (
                                           <tr key={idx}>
                                             <td className="p-1.5 font-mono">{String(item.order_line_number || item.line_number || idx + 1)}</td>
-                                            <td className="p-1.5 font-medium">{String(item.partner_item_code || item.item_code || item.style || "—")}</td>
-                                            <td className="p-1.5">{String(item.qty_unit || item.size || "—")}</td>
+                                            <td className="p-1.5 font-medium">{String(item.partner_item_code || item.item_code || item.style || " ")}</td>
+                                            <td className="p-1.5">{String(item.qty_unit || item.size || " ")}</td>
                                             <td className="p-1.5">{Number(item.quantity || 0).toLocaleString()}</td>
                                             <td className="p-1.5 font-semibold text-gray-900">
                                               {data.raw_extracted?.currency === "USD"

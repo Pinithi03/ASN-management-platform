@@ -244,7 +244,7 @@ def parse_html_document(
     logger.info(
         "HTML parsed (%s): PO=%s, %d fields, %d tables, %d line items",
         source_name or "html",
-        po.po_number or "—",
+        po.po_number or " ",
         len(details["fields"]),
         len(details["tables"]),
         len(po.line_items),
