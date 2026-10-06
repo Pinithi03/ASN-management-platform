@@ -14,7 +14,6 @@ import {
   Square,
   Calendar,
   X,
-  Eye,
   ArrowRight,
   Copy,
   Check,
@@ -402,7 +401,6 @@ export default function PurchaseOrders() {
                   <th className="px-4 py-3.5 text-right">Quantity</th>
                   <th className="px-4 py-3.5">Delivery Date</th>
                   <th className="px-4 py-3.5">Status</th>
-                  <th className="px-4 py-3.5 text-center w-28">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -508,40 +506,7 @@ export default function PurchaseOrders() {
                         </div>
                       </td>
 
-                      {/* Actions */}
-                      <td
-                        className="px-4 py-3 text-center"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <div className="flex items-center justify-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedPOForPreview(po)}
-                            title="Preview PO Details"
-                            className={cn(
-                              "p-1.5 text-gray-500 rounded-lg transition-colors cursor-pointer",
-                              isSupplier
-                                ? "hover:text-emerald-600 hover:bg-emerald-50"
-                                : "hover:text-blue-600 hover:bg-blue-50"
-                            )}
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => po.po_number && handleCreateShipment("web", po.po_number)}
-                            title="Create Delivery for this PO"
-                            className={cn(
-                              "p-1.5 text-gray-500 rounded-lg transition-colors cursor-pointer",
-                              isSupplier
-                                ? "hover:text-emerald-600 hover:bg-emerald-50"
-                                : "hover:text-blue-600 hover:bg-blue-50"
-                            )}
-                          >
-                            <PackagePlus className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
+
                     </tr>
                   );
                 })}
