@@ -892,23 +892,9 @@ function WebPackingWizard({
     return Array.from(new Set(items.map((i) => i.po_number).filter(Boolean)));
   }, [items]);
 
-  const handleSetGlobalPackagingType = (type: "BOX" | "ROLL") => {
-    setItems((prev) => prev.map((item) => ({ ...item, packaging_type: type })));
-  };
-
   const handleSetPoPackagingType = (poNo: string, type: "BOX" | "ROLL") => {
     setItems((prev) =>
-      prev.map((item) => (item.po_number === poNo ? { ...item, packaging_type: type } : item))
-    );
-  };
-
-  const handleToggleItemPackagingType = (id: string) => {
-    setItems((prev) =>
-      prev.map((item) =>
-        item.id === id
-          ? { ...item, packaging_type: item.packaging_type === "ROLL" ? "BOX" : "ROLL" }
-          : item
-      )
+      prev.map((item) => ((item.po_number || "Default") === poNo ? { ...item, packaging_type: type } : item))
     );
   };
 
@@ -1256,83 +1242,6 @@ function WebPackingWizard({
             </div>
           </div>
 
-          {/* PO-wise Packaging Format Controls Bar */}
-          {items.length > 0 && (
-            <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-gray-50/80 border border-gray-200 rounded-xl text-xs">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-semibold text-gray-700 flex items-center gap-1.5">
-                  <Box className="w-4 h-4 text-gray-500" />
-                  PO Packaging Format:
-                </span>
-                {distinctPoNumbers.map((poNo) => {
-                  const poItems = items.filter((i) => i.po_number === poNo);
-                  const isRoll = poItems.length > 0 && poItems.every((i) => i.packaging_type === "ROLL");
-                  const isBox = !isRoll;
-                  return (
-                    <div
-                      key={poNo}
-                      className="inline-flex items-center gap-2 bg-white px-2.5 py-1 rounded-lg border border-gray-200 shadow-2xs"
-                    >
-                      <span className="font-mono font-bold text-gray-900">PO #{poNo}</span>
-                      <div className="flex items-center gap-0.5 bg-gray-100 p-0.5 rounded-md">
-                        <button
-                          type="button"
-                          onClick={() => handleSetPoPackagingType(poNo, "BOX")}
-                          className={cn(
-                            "px-2.5 py-0.5 rounded text-[11px] font-bold transition-all cursor-pointer",
-                            isBox
-                              ? isSupplier
-                                ? "bg-emerald-600 text-white shadow-xs"
-                                : "bg-blue-600 text-white shadow-xs"
-                              : "text-gray-600 hover:text-gray-900"
-                          )}
-                          title={`Set all line items for PO #${poNo} to Boxes`}
-                        >
-                          📦 Box
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleSetPoPackagingType(poNo, "ROLL")}
-                          className={cn(
-                            "px-2.5 py-0.5 rounded text-[11px] font-bold transition-all cursor-pointer",
-                            isRoll
-                              ? isSupplier
-                                ? "bg-emerald-600 text-white shadow-xs"
-                                : "bg-blue-600 text-white shadow-xs"
-                              : "text-gray-600 hover:text-gray-900"
-                          )}
-                          title={`Set all line items for PO #${poNo} to Rolls`}
-                        >
-                          📜 Roll
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {distinctPoNumbers.length > 1 && (
-                <div className="flex items-center gap-1.5 text-[11px] text-gray-500">
-                  <span className="font-medium">All:</span>
-                  <button
-                    type="button"
-                    onClick={() => handleSetGlobalPackagingType("BOX")}
-                    className="px-2 py-0.5 rounded border border-gray-200 bg-white hover:bg-gray-100 font-semibold text-gray-700 transition-colors cursor-pointer"
-                  >
-                    📦 All Boxes
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleSetGlobalPackagingType("ROLL")}
-                    className="px-2 py-0.5 rounded border border-gray-200 bg-white hover:bg-gray-100 font-semibold text-gray-700 transition-colors cursor-pointer"
-                  >
-                    📜 All Rolls
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
           {isLoading ? (
             <div className="py-16 flex justify-center text-gray-400">
               <Loader2 className={cn("w-6 h-6 animate-spin", isSupplier ? "text-emerald-600" : "text-blue-600")} />
@@ -1351,79 +1260,99 @@ function WebPackingWizard({
               </button>
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-xl border border-gray-200">
-              <table className="w-full text-xs text-left">
-                <thead>
-                  <tr className="bg-gray-50/80 text-gray-500 border-b border-gray-200 font-semibold uppercase tracking-wider text-[11px]">
-                    <th className="px-3.5 py-2.5">PO Number</th>
-                    <th className="px-3.5 py-2.5">Item</th>
-                    <th className="px-3.5 py-2.5">Material Code</th>
-                    <th className="px-3.5 py-2.5">Description</th>
-                    <th className="px-3.5 py-2.5 text-right">Ordered</th>
-                    <th className="px-3.5 py-2.5 text-right">Open Balance</th>
-                    <th className="px-3.5 py-2.5 text-center">Format</th>
-                    <th className="px-3.5 py-2.5 text-right w-44">Shipping Qty</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {items.map((item) => (
-                    <tr key={item.id} className="hover:bg-gray-50/80 transition-colors">
-                      <td className="px-3.5 py-2 font-mono font-semibold text-gray-900">{item.po_number}</td>
-                      <td className="px-3.5 py-2 font-mono text-gray-500">{item.po_item}</td>
-                      <td className="px-3.5 py-2 font-mono font-semibold text-gray-800">{item.item_code}</td>
-                      <td className="px-3.5 py-2 text-gray-600 max-w-xs truncate">{item.description}</td>
-                      <td className="px-3.5 py-2 text-right font-mono text-gray-500">{item.ordered_qty}</td>
-                      <td className="px-3.5 py-2 text-right font-mono font-bold text-gray-900">
-                        {item.remaining_qty}
-                      </td>
-                      <td className="px-3.5 py-2 text-center">
-                        <button
-                          type="button"
-                          onClick={() => handleToggleItemPackagingType(item.id)}
-                          className={cn(
-                            "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold border transition-all cursor-pointer",
-                            item.packaging_type === "ROLL"
-                              ? "bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100"
-                              : "bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100"
-                          )}
-                          title="Click to toggle Box / Roll for this line"
+            <div className="space-y-4">
+              {distinctPoNumbers.map((poNo) => {
+                const poItems = items.filter((l) => (l.po_number || "Default") === poNo);
+                const poPackType = poItems.length > 0 && poItems.every((i) => i.packaging_type === "ROLL") ? "ROLL" : "BOX";
+
+                return (
+                  <div key={poNo} className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
+                    {/* PO Card Header (Matching Excel Drop layout) */}
+                    <div className="flex items-center justify-between bg-gray-50/80 px-4 py-3 border-b border-gray-200">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-sm text-gray-800">PO #{poNo}</span>
+                        <span className="text-xs text-gray-400 font-medium font-mono">({poItems.length} {poItems.length === 1 ? "line" : "lines"})</span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Pack Type</label>
+                        <select
+                          value={poPackType}
+                          onChange={(e) => handleSetPoPackagingType(poNo, e.target.value as "BOX" | "ROLL")}
+                          className="text-xs font-bold bg-white border border-gray-300 rounded-md px-2.5 py-1 outline-none focus:border-emerald-500 shadow-sm cursor-pointer"
                         >
-                          {item.packaging_type === "ROLL" ? "📜 Roll" : "📦 Box"}
-                        </button>
-                      </td>
-                      <td className="px-3.5 py-2 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <input
-                            type="number"
-                            min="0"
-                            max={item.remaining_qty}
-                            value={item.shipping_now || 0}
-                            onChange={(e) => handleShippingNowChange(item.id, parseInt(e.target.value) || 0)}
-                            className={cn(
-                              "w-24 h-7 px-2 border border-gray-300 rounded-lg text-right font-mono text-xs font-bold outline-none",
-                              isSupplier
-                                ? "focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-                                : "focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                            )}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleShippingNowChange(item.id, item.remaining_qty)}
-                            className={cn(
-                              "text-[11px] font-semibold px-2 py-1 rounded-md border transition-colors cursor-pointer",
-                              isSupplier
-                                ? "text-emerald-700 bg-emerald-50/80 border-emerald-300 hover:bg-emerald-100"
-                                : "text-blue-700 bg-blue-50/80 border-blue-300 hover:bg-blue-100"
-                            )}
-                          >
-                            Max
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                          <option value="BOX">📦 Box</option>
+                          <option value="ROLL">📜 Roll</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Lines Table for this PO */}
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs text-left">
+                        <thead>
+                          <tr className="bg-gray-50/40 text-gray-500 border-b border-gray-100 font-semibold uppercase tracking-wider text-[11px]">
+                            <th className="px-4 py-2.5 w-24">Item</th>
+                            <th className="px-4 py-2.5">Material Code</th>
+                            <th className="px-4 py-2.5">Description</th>
+                            <th className="px-4 py-2.5 text-right">Ordered</th>
+                            <th className="px-4 py-2.5 text-right">Open Balance</th>
+                            <th className="px-4 py-2.5 text-right w-44">Shipping Qty</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 bg-white">
+                          {poItems.map((item) => (
+                            <tr key={item.id} className="hover:bg-gray-50/80 transition-colors">
+                              <td className="px-4 py-2 font-mono text-gray-600">
+                                <span className="bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border border-gray-200">
+                                  #{item.po_item}
+                                </span>
+                              </td>
+                              <td className="px-4 py-2 font-mono font-bold text-gray-800">{item.item_code}</td>
+                              <td className="px-4 py-2 text-gray-600 max-w-xs truncate">{item.description}</td>
+                              <td className="px-4 py-2 text-right font-mono text-gray-500">
+                                {item.ordered_qty} {item.uom || "M"}
+                              </td>
+                              <td className="px-4 py-2 text-right font-mono font-bold text-gray-900">
+                                {item.remaining_qty} {item.uom || "M"}
+                              </td>
+                              <td className="px-4 py-2 text-right">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max={item.remaining_qty}
+                                    value={item.shipping_now || 0}
+                                    onChange={(e) => handleShippingNowChange(item.id, parseInt(e.target.value) || 0)}
+                                    className={cn(
+                                      "w-24 h-7 px-2 border border-gray-300 rounded-lg text-right font-mono text-xs font-bold outline-none",
+                                      isSupplier
+                                        ? "focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                                        : "focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                    )}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => handleShippingNowChange(item.id, item.remaining_qty)}
+                                    className={cn(
+                                      "text-[11px] font-semibold px-2 py-1 rounded-md border transition-colors cursor-pointer",
+                                      isSupplier
+                                        ? "text-emerald-700 bg-emerald-50/80 border-emerald-300 hover:bg-emerald-100"
+                                        : "text-blue-700 bg-blue-50/80 border-blue-300 hover:bg-blue-100"
+                                    )}
+                                  >
+                                    Max
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
