@@ -9,37 +9,26 @@ import enum
 
 
 class UserRole(str, enum.Enum):
-    """RBAC Roles for Oniverse Multi-tenant Platform."""
-    SUPER_ADMIN = "SUPER_ADMIN"
-    COMPANY_ADMIN = "COMPANY_ADMIN"
-    OPERATOR = "OPERATOR"
-    REVIEWER = "REVIEWER"
-    VIEWER = "VIEWER"
+    """Two portal roles — matches the Keycloak realm roles exactly."""
+    ADMIN = "ADMIN"
     SUPPLIER = "SUPPLIER"
+
+    # Legacy aliases for migration (old DB rows may still have these)
+    @classmethod
+    def _missing_(cls, value: str):
+        """Map old six-role names to the new two-role scheme."""
+        _LEGACY = {
+            "SUPER_ADMIN": cls.ADMIN,
+            "COMPANY_ADMIN": cls.ADMIN,
+            "OPERATOR": cls.ADMIN,
+            "REVIEWER": cls.ADMIN,
+            "VIEWER": cls.ADMIN,
+        }
+        return _LEGACY.get(value)
 
 
 ROLE_PERMISSIONS: dict[str, list[str]] = {
-    "SUPER_ADMIN": ["*"],
-    "COMPANY_ADMIN": [
-        "po:read", "po:write",
-        "supplier:read", "supplier:write", "supplier:credentials",
-        "email:read", "email:reprocess",
-        "asn:read", "asn:write",
-        "user:read", "user:write",
-        "audit:read",
-    ],
-    "OPERATOR": [
-        "po:read", "po:write",
-        "supplier:read",
-        "asn:read", "asn:write",
-        "shipment:read", "shipment:write",
-    ],
-    "REVIEWER": [
-        "po:read", "email:read", "asn:read", "audit:read",
-    ],
-    "VIEWER": [
-        "po:read", "shipment:read", "asn:read",
-    ],
+    "ADMIN": ["*"],
     "SUPPLIER": [
         "supplier:own_po",
         "supplier:own_shipment",
@@ -84,8 +73,8 @@ class POStatus(str, enum.Enum):
     """Purchase order lifecycle status."""
     ACTIVE = "ACTIVE"
     UPDATED = "UPDATED"
-    XML_SENT = "XML_SENT"              # PO update XML sent to supplier
-    SHIPMENT_RECEIVED = "SHIPMENT_RECEIVED"  # Supplier shipment XML received
+    XML_SENT = "XML_SENT"
+    SHIPMENT_RECEIVED = "SHIPMENT_RECEIVED"
     SHIPPED = "SHIPPED"
     CANCELLED = "CANCELLED"
     COMPLETED = "COMPLETED"
@@ -96,26 +85,26 @@ class ShipmentStatus(str, enum.Enum):
     DRAFT = "DRAFT"
     PACKING = "PACKING"
     PACKED = "PACKED"
-    XML_SENT = "XML_SENT"      # Shipment XML emailed to admin
-    RECEIVED = "RECEIVED"      # Admin received the XML
-    ACCEPTED = "ACCEPTED"      # Admin accepted
-    REJECTED = "REJECTED"      # Admin rejected
+    XML_SENT = "XML_SENT"
+    RECEIVED = "RECEIVED"
+    ACCEPTED = "ACCEPTED"
+    REJECTED = "REJECTED"
     DISPATCHED = "DISPATCHED"
     DELIVERED = "DELIVERED"
 
 
 class ASNStatus(str, enum.Enum):
     """ASN record lifecycle status (per KB 09)."""
-    DRAFT = "DRAFT"            # Supplier created, not yet validated
-    VALIDATED = "VALIDATED"    # Passed schema/business validation
-    XML_SENT = "XML_SENT"     # ASN XML emailed to admin
-    SUBMITTED = "SUBMITTED"   # Admin forwarded to IUNGO/SAP
-    RECEIVED = "RECEIVED"     # Admin acknowledged receipt
-    ACCEPTED = "ACCEPTED"     # Accepted by admin/IUNGO
-    REJECTED = "REJECTED"     # Rejected by admin/IUNGO
-    FAILED = "FAILED"         # System failure during processing
-    COMPLETED = "COMPLETED"   # IUNGO/SAP confirmed, goods shipped
-    CANCELLED = "CANCELLED"   # Cancelled by supplier or admin
+    DRAFT = "DRAFT"
+    VALIDATED = "VALIDATED"
+    XML_SENT = "XML_SENT"
+    SUBMITTED = "SUBMITTED"
+    RECEIVED = "RECEIVED"
+    ACCEPTED = "ACCEPTED"
+    REJECTED = "REJECTED"
+    FAILED = "FAILED"
+    COMPLETED = "COMPLETED"
+    CANCELLED = "CANCELLED"
 
 
 class ChangeSource(str, enum.Enum):
