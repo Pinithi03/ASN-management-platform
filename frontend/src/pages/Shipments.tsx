@@ -879,12 +879,11 @@ function WebPackingWizard({
 
   useEffect(() => {
     if (openLinesData) {
-      const shouldAutoFill = poNumbers.length > 0;
       setItems(
         openLinesData.map((line) => ({
           ...line,
           packaging_type: line.packaging_type || "BOX",
-          shipping_now: shouldAutoFill ? line.remaining_qty : (line.shipping_now || 0),
+          shipping_now: 0, // Always default to 0 — user enters qty or clicks Max
         }))
       );
     }
