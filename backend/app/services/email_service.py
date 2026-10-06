@@ -424,7 +424,10 @@ async def save_purchase_order(
         # Update existing PO - ensure canonical normalized number & increment version
         existing.po_number = clean_po
         existing.version = new_version
-        existing.status = "UPDATED" if (parsed_po.total_quantity or 0) > 0 else "CANCELLED"
+        if (parsed_po.total_quantity or 0) <= 0:
+            existing.status = "CANCELLED"
+        elif existing.status in ("ACTIVE", "UPDATED", "CANCELLED", None):
+            existing.status = "ACTIVE"
         existing.quantity = parsed_po.total_quantity
         existing.total_value = parsed_po.total_value
         existing.destination = parsed_po.destination or existing.destination
@@ -493,6 +496,11 @@ async def save_purchase_order(
         logger.info("Created PO: %s (v%d)", po.po_number, po.version)
 
     await db.flush()
+    try:
+        from app.services.po_service import update_po_statuses
+        await update_po_statuses(db, [po.po_number])
+    except Exception:
+        logger.exception("Failed to update status for PO %s after email processing", po.po_number)
     return po
 
 

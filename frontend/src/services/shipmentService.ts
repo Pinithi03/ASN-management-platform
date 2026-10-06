@@ -219,6 +219,14 @@ export const shipmentService = {
   },
 
   /**
+   * Get full shipment details with cartons and ASN data.
+   */
+  async getShipmentDetail(shipmentId: string) {
+    const res = await api.get(`/shipments/${shipmentId}`);
+    return res.data;
+  },
+
+  /**
    * Download 6"x4" barcode label PDF.
    */
   async downloadLabelsPdf(shipmentId: string): Promise<Blob> {

@@ -72,6 +72,7 @@ class ParserType(str, enum.Enum):
 class POStatus(str, enum.Enum):
     """Purchase order lifecycle status."""
     ACTIVE = "ACTIVE"
+    PARTIAL = "PARTIAL"
     UPDATED = "UPDATED"
     XML_SENT = "XML_SENT"
     SHIPMENT_RECEIVED = "SHIPMENT_RECEIVED"

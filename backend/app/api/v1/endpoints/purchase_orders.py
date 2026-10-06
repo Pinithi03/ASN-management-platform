@@ -109,6 +109,7 @@ class POStatsResponse(BaseModel):
     total: int = 0
     active: int = 0
     updated: int = 0
+    partial: int = 0
     shipped: int = 0
     cancelled: int = 0
     completed: int = 0
@@ -232,8 +233,9 @@ async def po_stats(
     query = select(
         func.count().label("total"),
         func.count().filter(PurchaseOrder.status == "ACTIVE").label("active"),
-        func.count().filter(PurchaseOrder.status == "UPDATED").label("updated"),
-        func.count().filter(PurchaseOrder.status == "SHIPPED").label("shipped"),
+        func.count().filter(PurchaseOrder.version > 1).label("updated"),
+        func.count().filter(PurchaseOrder.status == "PARTIAL").label("partial"),
+        func.count().filter(or_(PurchaseOrder.status == "SHIPPED", PurchaseOrder.status == "PARTIAL")).label("shipped"),
         func.count().filter(PurchaseOrder.status == "CANCELLED").label("cancelled"),
         func.count().filter(PurchaseOrder.status == "COMPLETED").label("completed"),
     )
@@ -272,10 +274,20 @@ async def po_stats(
         total=row.total,
         active=row.active,
         updated=row.updated,
+        partial=row.partial,
         shipped=row.shipped,
         cancelled=row.cancelled,
         completed=row.completed,
     )
+
+
+@router.post("/sync-statuses")
+async def sync_po_statuses(db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
+    """Manually trigger recalculation and update of all PO statuses based on existing shipments."""
+    from app.services.po_service import update_po_statuses
+    updated = await update_po_statuses(db)
+    await db.commit()
+    return {"success": True, "updated_count": len(updated), "updated": updated}
 
 
 # ─── GET /open-lines — Open PO Lines for Shipping ───────────────
@@ -289,7 +301,7 @@ async def list_open_po_lines(
     """Return open PO lines across active purchase orders for shipping dropdowns or Excel generation."""
     try:
         stmt = select(PurchaseOrder).where(
-            PurchaseOrder.status.in_(["ACTIVE", "UPDATED", "XML_SENT"])
+            PurchaseOrder.status.in_(["ACTIVE", "UPDATED", "XML_SENT", "PARTIAL", "SHIPPED"])
         )
         if company_id:
             stmt = stmt.where(PurchaseOrder.company_id == company_id)
@@ -344,10 +356,11 @@ async def list_open_po_lines(
             for item in items:
                 # Get order line number safely handling int or str
                 line_val = item.get("order_line_number") or item.get("line_number", "1")
-                # When line_num comes from XML, it might have leading zeros e.g. "00100"
-                # Sometimes ShipmentLine.po_line_number stores it as integer 100. Let's normalize by parsing int.
+                # When line_num comes from XML, it might have leading zeros e.g. "00100" or suffixes e.g. "00100-0001"
+                # ShipmentLine stores it as integer of the first part, so split by "-"
                 try:
-                    line_int = int(str(line_val).strip())
+                    line_int_str = str(line_val).strip().split("-")[0]
+                    line_int = int(line_int_str)
                 except ValueError:
                     line_int = str(line_val).strip()
 
@@ -386,7 +399,7 @@ async def list_open_po_lines(
                 })
         return open_lines
     except Exception as e:
-        logger.warning("Failed to query open PO lines: %s", e)
+        logger.exception("Failed to query open PO lines")
         return []
 
 

@@ -119,8 +119,21 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         raise exc
 
     # Pre-fetch Keycloak signing keys so the first API request is fast
-    from app.core.security import warmup_jwks
-    await warmup_jwks()
+    try:
+        from app.core.security import warmup_jwks
+        await warmup_jwks()
+    except Exception as exc:
+        print(f"Warning: Could not warmup JWKS: {exc}")
+
+    # Auto-sync PO lifecycle statuses against shipments
+    try:
+        from app.db.session import async_session_factory
+        from app.services.po_service import update_po_statuses
+        async with async_session_factory() as db:
+            await update_po_statuses(db)
+            await db.commit()
+    except Exception as exc:
+        print(f"Warning: Could not auto-sync PO statuses: {exc}")
 
     # Start continuous background IMAP email poller
     poller_task = asyncio.create_task(_continuous_imap_poller())
