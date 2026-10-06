@@ -344,10 +344,11 @@ async def list_open_po_lines(
             for item in items:
                 # Get order line number safely handling int or str
                 line_val = item.get("order_line_number") or item.get("line_number", "1")
-                # When line_num comes from XML, it might have leading zeros e.g. "00100"
-                # Sometimes ShipmentLine.po_line_number stores it as integer 100. Let's normalize by parsing int.
+                # When line_num comes from XML, it might have leading zeros e.g. "00100" or suffixes e.g. "00100-0001"
+                # ShipmentLine stores it as integer of the first part, so split by "-"
                 try:
-                    line_int = int(str(line_val).strip())
+                    line_int_str = str(line_val).strip().split("-")[0]
+                    line_int = int(line_int_str)
                 except ValueError:
                     line_int = str(line_val).strip()
 
