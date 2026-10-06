@@ -31,9 +31,8 @@ import {
   Box,
   FileText,
   Eye,
-  RefreshCw,
-  Truck,
-  PackageCheck,
+
+
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { cn } from "@/utils/cn";
@@ -293,9 +292,7 @@ export default function Shipments() {
     }
   };
 
-  const totalBoxes = shipments.reduce((sum, s) => sum + (s.total_boxes || 0), 0);
-  const totalPieces = shipments.reduce((sum, s) => sum + (s.total_pieces || 0), 0);
-  const deliveredCount = shipments.filter((s) => s.status === "DELIVERED" || s.status === "ACCEPTED").length;
+
 
   const filteredShipments = shipments.filter((s) => {
     const q = search.toLowerCase();
@@ -335,13 +332,7 @@ export default function Shipments() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => loadShipments()}
-              className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-xs transition-colors cursor-pointer"
-            >
-              <RefreshCw className="h-4 w-4 text-gray-500" />
-              Refresh
-            </button>
+
             <button
               onClick={handleDownloadBlankTemplate}
               className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-xs transition-colors cursor-pointer"
@@ -412,58 +403,7 @@ export default function Shipments() {
       {!isCreating ? (
         /* SHIPMENTS TABLE VIEW */
         <div className="space-y-6">
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {[
-              {
-                label: "Total Shipments",
-                value: shipments.length,
-                icon: Truck,
-                iconBg: "bg-blue-50",
-                iconColor: "text-blue-500",
-              },
-              {
-                label: "Total Cartons",
-                value: totalBoxes,
-                icon: Box,
-                iconBg: "bg-amber-50",
-                iconColor: "text-amber-500",
-              },
-              {
-                label: "Total Quantity / Pieces",
-                value: totalPieces,
-                icon: PackageCheck,
-                iconBg: "bg-purple-50",
-                iconColor: "text-purple-500",
-              },
-              {
-                label: "Delivered / Confirmed",
-                value: deliveredCount,
-                icon: CheckCircle2,
-                iconBg: "bg-emerald-50",
-                iconColor: "text-emerald-500",
-              },
-            ].map((stat) => (
-              <div
-                key={stat.label}
-                className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition-shadow"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">{stat.label}</p>
-                    <p className="text-2xl font-bold text-gray-900 mt-1">
-                      {stat.value.toLocaleString()}
-                    </p>
-                  </div>
-                  <div
-                    className={`w-12 h-12 ${stat.iconBg} rounded-xl flex items-center justify-center`}
-                  >
-                    <stat.icon className={`w-6 h-6 ${stat.iconColor}`} />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+
 
           {/* Search & Filter Bar */}
           <div className="flex flex-col sm:flex-row gap-3">
@@ -939,12 +879,11 @@ function WebPackingWizard({
 
   useEffect(() => {
     if (openLinesData) {
-      const shouldAutoFill = poNumbers.length > 0;
       setItems(
         openLinesData.map((line) => ({
           ...line,
           packaging_type: line.packaging_type || "BOX",
-          shipping_now: shouldAutoFill ? line.remaining_qty : (line.shipping_now || 0),
+          shipping_now: 0, // Always default to 0 — user enters qty or clicks Max
         }))
       );
     }

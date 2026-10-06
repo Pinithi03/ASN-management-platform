@@ -88,7 +88,7 @@ export default function PurchaseOrders() {
   const [selectedPOForPreview, setSelectedPOForPreview] = useState<PurchaseOrder | null>(null);
   const [copiedPO, setCopiedPO] = useState(false);
 
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["purchaseOrders", page, search, statusFilter, supplierId],
     queryFn: () =>
       poApi.list({
@@ -103,11 +103,7 @@ export default function PurchaseOrders() {
     refetchIntervalInBackground: true,
   });
 
-  const { data: stats } = useQuery({
-    queryKey: ["poStats", supplierId],
-    queryFn: () => poApi.getStats(supplierId),
-    refetchInterval: 5000,
-  });
+
 
   // Query to fetch complete details for the previewed PO (including history & source email)
   const { data: fullPODetail, isLoading: isLoadingDetail } = useQuery({
@@ -242,15 +238,7 @@ export default function PurchaseOrders() {
             Calzedonia Group incoming purchase orders. Select an order to preview details or proceed directly to outbound shipment.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => refetch()}
-            className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-xs transition-colors cursor-pointer"
-          >
-            <RefreshCw className="w-4 h-4 text-gray-500" />
-            Refresh
-          </button>
-        </div>
+
       </div>
 
       {/* Selected Action Banner */}
@@ -311,60 +299,7 @@ export default function PurchaseOrders() {
         </div>
       )}
 
-      {/* Stats Cards */}
-      {stats && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[
-            {
-              label: "Active Orders",
-              value: stats.active || 0,
-              icon: FileText,
-              iconBg: "bg-blue-50",
-              iconColor: "text-blue-500",
-            },
-            {
-              label: "Amended Orders",
-              value: stats.updated || 0,
-              icon: RefreshCw,
-              iconBg: "bg-amber-50",
-              iconColor: "text-amber-500",
-            },
-            {
-              label: "Partially Shipped",
-              value: stats ? ((stats.partial ?? 0) + (stats.shipped ?? 0)) : 0,
-              icon: Package,
-              iconBg: "bg-orange-50",
-              iconColor: "text-orange-500",
-            },
-            {
-              label: "Completed Orders",
-              value: stats.completed || 0,
-              icon: PackagePlus,
-              iconBg: "bg-emerald-50",
-              iconColor: "text-emerald-500",
-            },
-          ].map((stat) => (
-            <div
-              key={stat.label}
-              className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition-shadow"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-500">{stat.label}</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">
-                    {stat.value.toLocaleString()}
-                  </p>
-                </div>
-                <div
-                  className={`w-12 h-12 ${stat.iconBg} rounded-xl flex items-center justify-center`}
-                >
-                  <stat.icon className={`w-6 h-6 ${stat.iconColor}`} />
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+
 
       {/* Search & Filter Bar */}
       <div className="flex flex-col sm:flex-row gap-3">
