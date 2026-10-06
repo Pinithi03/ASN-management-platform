@@ -263,7 +263,7 @@ function ParsedDataSection({ data }: { data: ParsedData }) {
           {data.parser_used || " "}
         </span>
         {data.po_number_extracted && (
-          <span className="text-sm font-medium text-gray-900">PO# {data.po_number_extracted}</span>
+          <span className="text-sm font-medium text-gray-900">PO {data.po_number_extracted}</span>
         )}
         <span className="text-xs text-gray-500">Parsed {formatDate(data.created_at)}</span>
       </div>

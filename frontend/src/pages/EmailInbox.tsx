@@ -563,7 +563,7 @@ export default function EmailInbox() {
                           <div key={data.id} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
                             <div className="flex items-center justify-between border-b pb-2">
                               <span className="font-bold text-gray-900 text-sm">
-                                PO#: {data.po_number_extracted || "Unknown"}
+                                PO: {data.po_number_extracted || "Unknown"}
                               </span>
                               <span
                                 className={`text-xs px-2 py-0.5 rounded font-medium ${isAdmin

@@ -466,7 +466,7 @@ export default function Shipments() {
                 <thead>
                   <tr className="border-b border-gray-200 bg-gray-50/80 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
                     <th className="px-5 py-3.5">Shipment #</th>
-                    <th className="px-5 py-3.5">PO #</th>
+                    <th className="px-5 py-3.5">PO Number</th>
                     <th className="px-5 py-3.5">Destination Plant</th>
                     <th className="px-5 py-3.5">Cartons / Rolls</th>
                     <th className="px-5 py-3.5">Total Quantity</th>
@@ -1092,7 +1092,7 @@ function WebPackingWizard({
                   Outbound Delivery Workbench
                 </span>
                 <span className="text-[11px] font-mono text-gray-500">
-                  {poNumbers.length > 0 ? `PO #${poNumbers.join(", ")}` : "All Line Items"}
+                  {poNumbers.length > 0 ? `PO ${poNumbers.join(", ")}` : "All Line Items"}
                 </span>
               </div>
               <span className="text-[11px] text-gray-500 block">
@@ -1270,7 +1270,7 @@ function WebPackingWizard({
                     {/* PO Card Header (Matching Excel Drop layout) */}
                     <div className="flex items-center justify-between bg-gray-50/80 px-4 py-3 border-b border-gray-200">
                       <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-sm text-gray-800">PO #{poNo}</span>
+                        <span className="font-mono font-bold text-sm text-gray-800">PO {poNo}</span>
                         <span className="text-xs text-gray-400 font-medium font-mono">({poItems.length} {poItems.length === 1 ? "line" : "lines"})</span>
                       </div>
 
@@ -1292,7 +1292,7 @@ function WebPackingWizard({
                       <table className="w-full text-xs text-left">
                         <thead>
                           <tr className="bg-gray-50/40 text-gray-500 border-b border-gray-100 font-semibold uppercase tracking-wider text-[11px]">
-                            <th className="px-4 py-2.5 w-24">Item</th>
+                            <th className="px-4 py-2.5 min-w-[130px] whitespace-nowrap">Item</th>
                             <th className="px-4 py-2.5">Material Code</th>
                             <th className="px-4 py-2.5">Description</th>
                             <th className="px-4 py-2.5 text-right">Ordered</th>
@@ -1303,9 +1303,9 @@ function WebPackingWizard({
                         <tbody className="divide-y divide-gray-100 bg-white">
                           {poItems.map((item) => (
                             <tr key={item.id} className="hover:bg-gray-50/80 transition-colors">
-                              <td className="px-4 py-2 font-mono text-gray-600">
-                                <span className="bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border border-gray-200">
-                                  #{item.po_item}
+                              <td className="px-4 py-2 font-mono text-gray-600 whitespace-nowrap">
+                                <span className="bg-gray-100 text-gray-700 px-2 py-0.5 rounded text-xs font-mono font-bold border border-gray-200 whitespace-nowrap inline-block">
+                                  {item.po_item}
                                 </span>
                               </td>
                               <td className="px-4 py-2 font-mono font-bold text-gray-800">{item.item_code}</td>
@@ -1382,7 +1382,7 @@ function WebPackingWizard({
                   {/* Line item header toolbar */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-gray-100 bg-gray-50/60 -mx-4 -mt-4 p-4 rounded-t-xl">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-bold text-gray-900 text-xs font-mono">PO #{item.po_number}</span>
+                      <span className="font-bold text-gray-900 text-xs font-mono">PO {item.po_number}</span>
                       <span className="text-gray-300">•</span>
                       <span className="font-mono text-xs font-semibold text-gray-800">{item.item_code}</span>
                       <span className="text-gray-300">•</span>
@@ -2174,7 +2174,7 @@ function ExcelPackingWorkflow({
                        <table className="w-full text-left text-xs">
                           <thead className="bg-gray-100 text-gray-600 font-bold uppercase tracking-wider">
                              <tr>
-                                <th className="px-4 py-3 border-b border-gray-200">PO #</th>
+                                <th className="px-4 py-3 border-b border-gray-200">PO Number</th>
                                 <th className="px-4 py-3 border-b border-gray-200">Line</th>
                                 <th className="px-4 py-3 border-b border-gray-200">Product</th>
                                 <th className="px-4 py-3 border-b border-gray-200">Cartons/Rolls</th>
@@ -2275,7 +2275,7 @@ function ExcelPackingWorkflow({
                                          onChange={() => togglePo(po)}
                                          className="w-4 h-4 text-emerald-600 rounded border-gray-300 cursor-pointer" 
                                       />
-                                      <span className="font-mono font-bold text-sm text-gray-800">PO #{po}</span>
+                                      <span className="font-mono font-bold text-sm text-gray-800">PO {po}</span>
                                    </div>
                                    <div className="flex items-center gap-2">
                                       <label className="text-[10px] font-bold text-gray-500 uppercase">Pack Type</label>
@@ -2301,7 +2301,7 @@ function ExcelPackingWorkflow({
                                          />
                                          <div className="flex-1 min-w-0 flex items-center justify-between">
                                             <div className="flex items-center gap-2">
-                                               <span className="bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border border-gray-200">#{line.po_item}</span>
+                                               <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-xs font-mono font-bold border border-gray-200 whitespace-nowrap inline-block">{line.po_item}</span>
                                                <span className="text-xs font-bold text-gray-800 font-mono">{line.material_code}</span>
                                                <span className="text-xs text-gray-500 truncate max-w-sm">{line.description}</span>
                                             </div>
@@ -2710,7 +2710,7 @@ function ShipmentDetailModal({
                       <tr>
                         <th className="px-3.5 py-2.5">Box #</th>
                         <th className="px-3.5 py-2.5">Handling Unit (20-digit SSCC)</th>
-                        <th className="px-3.5 py-2.5">PO # / Line</th>
+                        <th className="px-3.5 py-2.5">PO / Line Item</th>
                         <th className="px-3.5 py-2.5">Product Code</th>
                         <th className="px-3.5 py-2.5">Lot / Batch</th>
                         <th className="px-3.5 py-2.5 text-right">Quantity</th>

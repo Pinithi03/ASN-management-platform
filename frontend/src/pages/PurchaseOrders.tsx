@@ -307,7 +307,7 @@ export default function PurchaseOrders() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             type="text"
-            placeholder="Search PO#, client, style..."
+            placeholder="Search PO, client, style..."
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
@@ -596,7 +596,7 @@ export default function PurchaseOrders() {
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="text-xl font-bold font-mono text-gray-900 tracking-tight">
-                      PO# {activePO.po_number || " "}
+                      PO {activePO.po_number || " "}
                     </h2>
                     {activePO.version && activePO.version > 1 ? (
                       <span className="px-2 py-0.5 text-xs font-bold bg-amber-100 text-amber-800 rounded-md border border-amber-200">
