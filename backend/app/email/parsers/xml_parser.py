@@ -396,7 +396,7 @@ def _parse_sd_data_slice_all(root: etree._Element, filename: str) -> list[Parsed
 
                 for i, (_, agg) in enumerate(line_aggregates.items(), start=1):
                     li = POLineItem(
-                        line_number=i,
+                        line_number=agg["order_line_number"],
                         order_line_number=agg["order_line_number"],
                         item_code=agg["style"],
                         partner_item_code=agg["partner_code"],

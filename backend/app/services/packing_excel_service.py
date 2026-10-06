@@ -151,15 +151,7 @@ def _parse_int(val: Any) -> int:
 
 
 def _normalize_item_num(val: Any) -> str:
-    raw = _clean_str(val)
-    if not raw:
-        return ""
-    # Strip schedule suffix if present e.g. 00100-0001 -> 00100
-    if "-" in raw:
-        raw = raw.split("-")[0]
-    # Pad to 5 digits if purely numeric e.g. 100 -> 00100
-    if raw.isdigit():
-        return raw.zfill(5)
+    return _clean_str(val).zfill(5)
     return raw
 
 
@@ -219,10 +211,10 @@ async def parse_and_validate_packing_excel(
                     col_map["po_number"] = c_idx
                 elif "pack" in val or "slip" in val:
                     col_map["pack_number"] = c_idx
-                elif "cart" in val or "box" in val:
-                    col_map["carton_number"] = c_idx
                 elif "ref" in val or "roll" in val or "barcode" in val:
                     col_map["supplier_carton_ref"] = c_idx
+                elif "cart" in val or "box" in val:
+                    col_map["carton_number"] = c_idx
                 elif "product" in val or "material" in val or "style" in val or "item code" in val:
                     col_map["product_code"] = c_idx
                 elif "lot" in val or "batch" in val:
@@ -283,8 +275,9 @@ async def parse_and_validate_packing_excel(
 
         row_errors: List[str] = []
 
-        if not po_item:
-            row_errors.append("PO item is required")
+        # PO item can be empty and auto-detected later
+        # if not po_item:
+        #     row_errors.append("PO item is required")
         if qty <= 0:
             row_errors.append(f"Quantity must be greater than 0 (got {qty})")
         if gw < nw:
@@ -313,7 +306,47 @@ async def parse_and_validate_packing_excel(
         parsed_rows.append(parsed_row)
 
         carton_id = (po_num, pack_num, carton_num or carton_ref or row_idx)
-        unique_carton_ids.add(carton_id)
+    unique_carton_ids = set()
+
+    # Database validation if session provided - fetch EARLY so we can auto-detect missing PO items
+    db_pos: Dict[str, PurchaseOrder] = {}
+    db_available = False
+    if db is not None:
+        try:
+            po_numbers = list({r.po_number for r in parsed_rows if r.po_number})
+            if po_numbers:
+                stmt = select(PurchaseOrder).where(PurchaseOrder.po_number.in_(po_numbers))
+                res = await db.execute(stmt)
+                for po_obj in res.scalars().all():
+                    db_pos[po_obj.po_number] = po_obj
+                db_available = True
+        except Exception:
+            db_available = False
+
+    # Auto-detect missing po_item based on product_code and default other missing fields
+    for r in parsed_rows:
+        if not r.po_item and db_available and r.po_number in db_pos:
+            po_obj = db_pos[r.po_number]
+            po_items = (po_obj.extra_data or {}).get("items", []) if isinstance(po_obj.extra_data, dict) else []
+            # Find matching item by product_code
+            matching_items = [it for it in po_items if _clean_str(it.get("material_code", "")) == r.product_code or _clean_str(it.get("item_code", "")) == r.product_code]
+            if len(matching_items) == 1:
+                r.po_item = str(matching_items[0].get("order_line_number") or matching_items[0].get("line_number", "")).strip()
+            elif len(matching_items) > 1:
+                r.errors.append(f"Multiple lines found for product {r.product_code}. Please specify PO item.")
+            else:
+                r.errors.append(f"No line found for product {r.product_code} in PO {r.po_number}.")
+        
+        if not r.po_item and not r.errors:
+             r.errors.append("PO item is required and could not be auto-detected.")
+
+        # If empty, just keep them empty instead of generating fake references
+        if not r.pack_number:
+            r.pack_number = ""
+        if not r.supplier_carton_ref:
+            r.supplier_carton_ref = ""
+        if not r.lot_number:
+            r.lot_number = ""
 
     # Group by (po_number, po_item)
     groups: Dict[Tuple[str, str], List[ParsedCartonRow]] = {}
@@ -323,22 +356,6 @@ async def parse_and_validate_packing_excel(
 
     line_summaries: List[LineItemSummary] = []
     overall_valid = True
-
-    # Database validation if session provided
-    db_pos: Dict[str, PurchaseOrder] = {}
-    db_available = False
-    if db is not None:
-        try:
-            po_numbers = list({k[0] for k in groups.keys()})
-            if po_numbers:
-                stmt = select(PurchaseOrder).where(PurchaseOrder.po_number.in_(po_numbers))
-                res = await db.execute(stmt)
-                for po_obj in res.scalars().all():
-                    db_pos[po_obj.po_number] = po_obj
-                db_available = True
-        except Exception:
-            # In offline or dev testing, proceed without DB lookup
-            db_available = False
 
     for (po_num, po_item), rows in groups.items():
         total_line_qty = sum(r.quantity for r in rows)
@@ -366,7 +383,7 @@ async def parse_and_validate_packing_excel(
                 # Match line item in extra_data for accurate line-level quantity check
                 po_items = (po_obj.extra_data or {}).get("items", []) if isinstance(po_obj.extra_data, dict) else []
                 item_info = next(
-                    (it for it in po_items if str(it.get("line_number", "")).split("-")[0].zfill(5) == po_item.split("-")[0].zfill(5)),
+                    (it for it in po_items if str(it.get("order_line_number") or it.get("line_number", "")).strip() == po_item.strip()),
                     None
                 )
                 if item_info and item_info.get("quantity") is not None:
@@ -438,8 +455,8 @@ def generate_open_lines_template(open_lines: List[Dict[str, Any]]) -> bytes:
     ws.title = "Packing Sheet"
 
     headers = [
-        "P/O #", "PO item", "Pack No.", "Cart No", "Supplier_Carton_ref",
-        "ProductCode", "Lot No.", "Width", "GW", "NW", "Quantity", "UOM"
+        "P/O # *", "PO item *", "Pack No.", "Cart No *", "Supplier_Carton_ref",
+        "ProductCode *", "Lot No.", "Width", "GW *", "NW *", "Quantity *", "UOM *"
     ]
     ws.append(headers)
 

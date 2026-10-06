@@ -43,7 +43,6 @@ import {
   CreateShipmentResponse,
 } from "@/services/shipmentService";
 import { poApi } from "@/services/poApi";
-import type { PurchaseOrder } from "@/types/email";
 
 const statusColor: Record<string, string> = {
   DRAFT: "bg-gray-50 text-gray-700 border-gray-200",
@@ -494,7 +493,7 @@ export default function Shipments() {
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search shipment #, plant, carrier…"
+                placeholder="Search shipment #, plant..."
                 className="w-full pl-10 pr-4 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 shadow-xs"
               />
             </div>
@@ -552,7 +551,6 @@ export default function Shipments() {
                     <th className="px-5 py-3.5">Plant</th>
                     <th className="px-5 py-3.5">Boxes (Cartons)</th>
                     <th className="px-5 py-3.5">Total Pieces</th>
-                    <th className="px-5 py-3.5">Carrier</th>
                     <th className="px-5 py-3.5">Status</th>
                     <th className="px-5 py-3.5">Ship Date</th>
                     <th className="px-5 py-3.5 text-right">Actions</th>
@@ -571,7 +569,6 @@ export default function Shipments() {
                       </td>
                       <td className="px-5 py-3.5 font-semibold text-gray-700">{s.total_boxes}</td>
                       <td className="px-5 py-3.5 text-gray-700 font-mono">{s.total_pieces?.toLocaleString()} M</td>
-                      <td className="px-5 py-3.5 text-gray-600">{s.carrier || "—"}</td>
                       <td className="px-5 py-3.5">
                         <span
                           className={cn(
@@ -694,7 +691,6 @@ export default function Shipments() {
             setSearchParams({});
             loadShipments();
           }}
-          onDownloadBlankTemplate={handleDownloadBlankTemplate}
         />
       )}
 
@@ -839,7 +835,7 @@ function WebPackingWizard({
             return matched.map((m: any, idx: number) => ({
               id: `${m.po_number}-${m.po_item || idx}`,
               po_number: m.po_number,
-              po_item: m.po_item ? String(m.po_item).split("-")[0].padStart(5, "0") : String((idx + 1) * 100).padStart(5, "0"),
+              po_item: m.po_item ? String(m.po_item).trim() : String(idx + 1),
               item_code: m.material_code || "ITEM-" + idx,
               partner_product_code: m.partner_code || m.partner_product_code || "",
               description: m.material_description || "PO Line Item",
@@ -1808,15 +1804,12 @@ function ExcelPackingWorkflow({
   targetPo,
   targetPos,
   onSuccess,
-  onDownloadBlankTemplate,
 }: {
   targetPo?: string;
   targetPos?: string[];
   onSuccess: () => void;
-  onDownloadBlankTemplate: () => void;
 }) {
   const user = useAuthStore((s) => s.user);
-  const isSupplier = user?.role === "SUPPLIER";
   const [dragActive, setDragActive] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [validating, setValidating] = useState(false);
@@ -1824,23 +1817,14 @@ function ExcelPackingWorkflow({
   const [showCartonDetails, setShowCartonDetails] = useState(false);
 
   // Metadata
-  const [selectedPoNumber, setSelectedPoNumber] = useState<string>(targetPo || "");
-  const [availablePOs, setAvailablePOs] = useState<PurchaseOrder[]>([]);
+  const activePos = (targetPos && targetPos.length > 0) ? targetPos : targetPo ? [targetPo] : [];
   const [plantCode, setPlantCode] = useState("PPA1");
   const [estimatedArrival, setEstimatedArrival] = useState("");
-
-  interface PackingLineItemState {
-    line_number: number | string;
-    po_item: string;
-    material_code: string;
-    description: string;
-    quantity: number;
-    uom: string;
-    pack_type: "BOX" | "ROLL";
-    units_count: number;
-  }
-
-  const [packingLines, setPackingLines] = useState<PackingLineItemState[]>([]);
+  
+  // PO specific configurations
+  const [poLines, setPoLines] = useState<any[]>([]);
+  const [poConfigs, setPoConfigs] = useState<Record<string, "BOX" | "ROLL">>({});
+  const [selectedLines, setSelectedLines] = useState<Record<string, boolean>>({});
   const [downloadingTailored, setDownloadingTailored] = useState(false);
 
   // Submission state
@@ -1856,117 +1840,118 @@ function ExcelPackingWorkflow({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (targetPo) setSelectedPoNumber(targetPo);
-  }, [targetPo]);
+    if (activePos.length === 0) return;
 
-  // Load available POs for dropdown
-  useEffect(() => {
-    const supplierId = user?.role === "SUPPLIER" ? user.supplier_id : undefined;
-    poApi
-      .list({ supplier_id: supplierId, per_page: 50 })
-      .then((res) => {
-        const items = res.items || [];
-        setAvailablePOs(items);
-        if (!targetPo && items.length > 0 && !selectedPoNumber && items[0].po_number) {
-          setSelectedPoNumber(items[0].po_number);
+    let minDate = "";
+    let pCode = "PPA1";
+
+    const fetchAll = async () => {
+      let fetchedLines: any[] = [];
+      const newConfigs: Record<string, "BOX" | "ROLL"> = {};
+      const newSelected: Record<string, boolean> = {};
+
+      for (const po of activePos) {
+        newConfigs[po] = "BOX";
+        try {
+          const res = await poApi.list({ search: po });
+          const found = res.items?.find((p) => p.po_number === po) || res.items?.[0];
+          if (found) {
+             if (!minDate || (found.delivery_date && found.delivery_date < minDate)) {
+                 minDate = found.delivery_date || "";
+                 pCode = matchPlant(found.client_code || found.destination);
+             }
+             
+             const fullPo = await poApi.getById(found.id);
+             if (fullPo && (fullPo as any).extra_data && Array.isArray((fullPo as any).extra_data.items)) {
+                (fullPo as any).extra_data.items.forEach((it: any) => {
+                   if (Number(it.quantity || 0) > 0) {
+                      const poItem = String(it.order_line_number || it.line_number || 1).trim();
+                      fetchedLines.push({
+                         po_number: po,
+                         po_item: poItem,
+                         material_code: it.material_code || "",
+                         description: it.description || "",
+                         ordered_qty: Number(it.quantity || 0),
+                         uom: it.size || it.uom || "M",
+                      });
+                      newSelected[`${po}|${poItem}`] = true;
+                   }
+                });
+             } else {
+                 const poItem = "00100";
+                 fetchedLines.push({
+                     po_number: po,
+                     po_item: poItem,
+                     material_code: found.style_number || "ELST1K 000615",
+                     description: found.description || "Elastic Tape",
+                     ordered_qty: found.quantity || 500,
+                     uom: "M",
+                 });
+                 newSelected[`${po}|${poItem}`] = true;
+             }
+          }
+        } catch(e) {
+           console.warn("Could not fetch PO details:", e);
         }
-      })
-      .catch((err) => console.warn("Failed to load POs:", err));
-  }, [user, targetPo]);
-
-  // When PO changes, auto-select Plant and fetch items
-  useEffect(() => {
-    if (!selectedPoNumber) return;
-
-    const foundInAvailable = availablePOs.find((p) => p.po_number === selectedPoNumber);
-    if (foundInAvailable) {
-      setPlantCode(matchPlant(foundInAvailable.client_code || foundInAvailable.destination));
-      if (foundInAvailable.delivery_date) {
-        setEstimatedArrival(foundInAvailable.delivery_date.split("T")[0]);
-      } else {
-        setEstimatedArrival(new Date(Date.now() + 86400000).toISOString().split("T")[0]);
       }
-    }
 
-    poApi
-      .list({ search: selectedPoNumber })
-      .then(async (res) => {
-        const found = res.items?.find((p) => p.po_number === selectedPoNumber) || foundInAvailable || res.items?.[0];
-        if (found) {
-          setPlantCode(matchPlant(found.client_code || found.destination));
-          if (found.delivery_date) {
-            setEstimatedArrival(found.delivery_date.split("T")[0]);
-          } else {
-            setEstimatedArrival(new Date(Date.now() + 86400000).toISOString().split("T")[0]);
-          }
+      setPlantCode(pCode);
+      if (minDate) {
+         setEstimatedArrival(minDate.split("T")[0]);
+      } else {
+         setEstimatedArrival(new Date(Date.now() + 86400000).toISOString().split("T")[0]);
+      }
+      
+      setPoLines(fetchedLines);
+      setPoConfigs(newConfigs);
+      setSelectedLines(newSelected);
+    };
 
-          // Fetch full PO items
-          try {
-            const fullPo = await poApi.getById(found.id);
-            if (
-              fullPo &&
-              (fullPo as any).extra_data &&
-              Array.isArray((fullPo as any).extra_data.items) &&
-              (fullPo as any).extra_data.items.length > 0
-            ) {
-              const lines: PackingLineItemState[] = (fullPo as any).extra_data.items
-                .filter((it: any) => Number(it.quantity || 0) > 0)
-                .map((it: any) => ({
-                line_number: it.line_number || 1,
-                po_item: String(it.line_number || 1).split("-")[0].padStart(5, "0"),
-                material_code: it.material_code || "",
-                description: it.description || "",
-                quantity: Number(it.quantity || 0),
-                uom: it.size || it.uom || "M",
-                pack_type: "BOX" as const,
-                units_count: 1,
-              }));
-              setPackingLines(lines);
-            } else {
-              setPackingLines([
-                {
-                  line_number: 1,
-                  po_item: "00100",
-                  material_code: found.style_number || "ELST1K 000615",
-                  description: found.description || "Elastic Tape 15mm Black",
-                  quantity: found.quantity || 500,
-                  uom: "M",
-                  pack_type: "BOX",
-                  units_count: 1,
-                },
-              ]);
-            }
-          } catch (detailErr) {
-            console.warn("Could not fetch full PO items:", detailErr);
-          }
-        }
-      })
-      .catch((err) => console.warn("Could not fetch PO details:", err));
-  }, [selectedPoNumber]);
+    fetchAll();
+  }, [activePos.join(",")]);
 
-  const updateLine = (index: number, patch: Partial<PackingLineItemState>) => {
-    setPackingLines((prev) => prev.map((item, i) => (i === index ? { ...item, ...patch } : item)));
+  const toggleLine = (po: string, line: string) => {
+    setSelectedLines(prev => ({
+       ...prev,
+       [`${po}|${line}`]: !prev[`${po}|${line}`]
+    }));
+  };
+
+  const togglePo = (po: string) => {
+    const linesForPo = poLines.filter(l => l.po_number === po);
+    const allSelected = linesForPo.every(l => selectedLines[`${po}|${l.po_item}`]);
+    const newState = { ...selectedLines };
+    linesForPo.forEach(l => {
+       newState[`${po}|${l.po_item}`] = !allSelected;
+    });
+    setSelectedLines(newState);
   };
 
   const handleDownloadTailoredTemplate = async () => {
-    const poNum = selectedPoNumber || targetPo;
-    if (!poNum) return;
+    if (activePos.length === 0) return;
     setDownloadingTailored(true);
     try {
       const payload = {
-        po_number: poNum,
-        lines: packingLines.map((l) => ({
-          po_item: l.po_item,
-          pack_type: l.pack_type,
-          units_count: l.units_count,
-          quantity: l.quantity,
-        })),
+        configs: activePos.map((po) => ({
+          po_number: po,
+          pack_type: poConfigs[po] || "BOX",
+          selected_lines: poLines
+              .filter(l => l.po_number === po && selectedLines[`${po}|${l.po_item}`])
+              .map(l => l.po_item),
+        })).filter(cfg => cfg.selected_lines.length > 0),
       };
+      
+      if (payload.configs.length === 0) {
+        alert("Please select at least one line item to generate the template.");
+        setDownloadingTailored(false);
+        return;
+      }
+      
       const blob = await shipmentService.downloadConfiguredTemplate(payload);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `Packing_List_${poNum}_Tailored.xlsx`;
+      a.download = `Packing_List_Tailored.xlsx`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -2141,533 +2126,335 @@ function ExcelPackingWorkflow({
   };
 
   return (
-    <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 space-y-6">
+    <div
+      onDragEnter={!createdResponse && !validationResult ? handleDrag : undefined}
+      onDragLeave={!createdResponse && !validationResult ? handleDrag : undefined}
+      onDragOver={!createdResponse && !validationResult ? handleDrag : undefined}
+      onDrop={!createdResponse && !validationResult ? handleDrop : undefined}
+      className={cn("bg-white rounded-2xl shadow-sm border flex flex-col h-full min-h-[600px] transition-all", dragActive ? "border-emerald-500 bg-emerald-50/10" : "border-gray-100")}
+    >
       {!createdResponse ? (
         <>
-          {/* ── STEP 1: PO & DELIVERY DETAILS ── */}
-          <div className="rounded-xl border border-gray-200 bg-gray-50/70 p-4 space-y-3">
-            <div className="flex items-center gap-2">
-              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-white text-xs font-bold shadow-xs">
-                1
-              </div>
-              <div>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-gray-900">
-                  Step 1: Order & Delivery Details
-                </h3>
-                <p className="text-[11px] text-gray-500">
-                  Select your PO. Destination Plant and Delivery Date are automatically matched from the order.
-                </p>
-              </div>
-            </div>
-
-            {targetPos && targetPos.length > 1 && (
-              <div className="flex flex-wrap items-center gap-2 pt-1 pb-1">
-                <span className="text-xs font-semibold text-gray-700">Selected Batch POs:</span>
-                <div className="flex flex-wrap gap-1.5">
-                  {targetPos.map((p) => (
-                    <button
-                      key={p}
-                      type="button"
-                      onClick={() => {
-                        setSelectedPoNumber(p);
-                        const poObj = availablePOs.find((item) => item.po_number === p);
-                        if (poObj) {
-                          setPlantCode(matchPlant(poObj.client_code || poObj.destination));
-                          if (poObj.delivery_date) {
-                            setEstimatedArrival(poObj.delivery_date.split("T")[0]);
-                          }
-                        }
-                      }}
-                      className={cn(
-                        "px-2.5 py-1 text-xs font-mono font-semibold rounded-lg border transition-all cursor-pointer",
-                        selectedPoNumber === p
-                          ? isSupplier
-                            ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
-                            : "bg-blue-600 text-white border-blue-600 shadow-xs"
-                          : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
-                      )}
-                    >
-                      PO #{p}
+           {/* Header / Actions Bar */}
+           <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-t-2xl bg-gray-50 border-b border-gray-200">
+              <div className="flex flex-wrap items-center gap-4">
+                 {/* 1. Upload Button */}
+                 <div>
+                    <input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => { if(e.target.files?.[0]) { processFile(e.target.files[0]); } e.target.value = ''; }} />
+                    <button onClick={() => fileInputRef.current?.click()} className={cn("flex items-center gap-2 px-4 py-2 rounded-lg font-bold shadow-sm transition-all text-sm cursor-pointer", selectedFile ? "bg-emerald-100 text-emerald-800 border border-emerald-300" : "bg-emerald-600 text-white hover:bg-emerald-700")}>
+                       <UploadCloud className="w-4 h-4"/>
+                       {selectedFile ? selectedFile.name : "Upload Excel List"}
                     </button>
-                  ))}
-                </div>
-              </div>
-            )}
+                 </div>
+                 
+                 <div className="w-px h-8 bg-gray-300 hidden sm:block"></div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-              {/* PO Selector */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  Purchase Order (PO #)
-                </label>
-                {availablePOs.length > 0 ? (
-                  <select
-                    value={selectedPoNumber}
-                    onChange={(e) => {
-                      const poNum = e.target.value;
-                      setSelectedPoNumber(poNum);
-                      const poObj = availablePOs.find((p) => p.po_number === poNum);
-                      if (poObj) {
-                        setPlantCode(matchPlant(poObj.client_code || poObj.destination));
-                        if (poObj.delivery_date) {
-                          setEstimatedArrival(poObj.delivery_date.split("T")[0]);
-                        }
-                      }
-                    }}
-                    className="h-9 w-full rounded-lg border border-gray-300 bg-white px-2.5 text-xs font-mono font-bold text-gray-900 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
-                  >
-                    {availablePOs.map((p) => (
-                      <option key={p.id || p.po_number} value={p.po_number || ""}>
-                        PO #{p.po_number} {p.client_code ? `(${p.client_code})` : ""} - {p.quantity?.toLocaleString() || ""} pcs
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    value={selectedPoNumber}
-                    onChange={(e) => setSelectedPoNumber(e.target.value)}
-                    placeholder="e.g. 2001606986"
-                    className="h-9 w-full rounded-lg border border-gray-300 bg-white px-2.5 text-xs font-mono font-bold text-gray-900 focus:border-emerald-500 focus:outline-none"
-                  />
-                )}
-              </div>
-
-              {/* Destination Plant (Automatically Detected from PO) */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  Delivering Plant (Auto-Detected)
-                </label>
-                <div className="h-9 w-full rounded-lg border border-gray-200 bg-gray-50 px-2.5 flex items-center justify-between text-xs font-semibold text-gray-800">
-                  <span className="truncate">{PLANT_NAMES[plantCode] || plantCode}</span>
-                  <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-200 ml-1">
-                    Auto
-                  </span>
-                </div>
-              </div>
-
-              {/* Est. Delivery Date */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  Est. Delivery Date
-                </label>
-                <input
-                  type="date"
-                  value={estimatedArrival}
-                  onChange={(e) => setEstimatedArrival(e.target.value)}
-                  className="h-9 w-full rounded-lg border border-gray-300 bg-white px-2.5 text-xs font-semibold text-gray-900 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* ── STEP 2: SMART PACKING SETUP & TEMPLATE DOWNLOAD ── */}
-          <div className="rounded-xl border border-emerald-200/90 bg-gradient-to-br from-emerald-50/80 via-white to-gray-50 p-4 shadow-xs space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-100 pb-3">
-              <div className="flex items-center gap-2">
-                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-white text-xs font-bold shadow-xs">
-                  2
-                </div>
-                <div>
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-950">
-                    Step 2: Smart Packing Setup (Choose Box / Roll & Units)
-                  </h3>
-                  <p className="text-[11px] text-gray-500">
-                    Configure packaging type. The tailored sheet will automatically pre-generate locked columns and carton numbers!
-                  </p>
-                </div>
+                 {/* 2. Delivery Date */}
+                 <div className="flex items-center gap-2">
+                    <label className="text-xs font-semibold text-gray-700">Delivery Date:</label>
+                    <input type="date" value={estimatedArrival} onChange={(e) => setEstimatedArrival(e.target.value)} className="h-9 px-2 text-xs border border-gray-300 bg-white rounded-md focus:border-emerald-500 outline-none font-medium" />
+                 </div>
               </div>
 
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  disabled={downloadingTailored || packingLines.length === 0}
-                  onClick={handleDownloadTailoredTemplate}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 transition-all disabled:opacity-50 cursor-pointer"
-                >
-                  {downloadingTailored ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                  ⚡ Download Tailored Sheet ({packingLines.reduce((acc, l) => acc + l.units_count, 0)} Rows)
-                </button>
-
-                <button
-                  type="button"
-                  onClick={onDownloadBlankTemplate}
-                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-gray-600 hover:text-emerald-700 underline px-1 cursor-pointer"
-                  title="Download blank template"
-                >
-                  Standard Blank Template
-                </button>
+                 <button onClick={handleDownloadTailoredTemplate} disabled={downloadingTailored || activePos.length === 0} className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-3.5 py-2 rounded-lg transition-colors border border-emerald-200 flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50">
+                    {downloadingTailored ? <Loader2 className="w-4 h-4 animate-spin"/> : <Download className="w-4 h-4"/>} Tailored Sheet
+                 </button>
+                 {validationResult?.is_valid && !validating && (
+                   <button
+                     disabled={submitting}
+                     onClick={handleCreateShipment}
+                     className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 hover:shadow-md transition-all cursor-pointer disabled:opacity-50"
+                   >
+                     {submitting ? <><Loader2 className="w-4 h-4 animate-spin"/> Processing...</> : <><PackagePlus className="w-4 h-4"/> Create Shipment & Generate HUs</>}
+                   </button>
+                 )}
               </div>
-            </div>
+           </div>
 
-            {/* Line items list */}
-            {packingLines.length > 0 ? (
-              <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-                {packingLines.map((line, idx) => (
-                  <div
-                    key={idx}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white p-2.5 text-xs transition-all hover:border-emerald-300 shadow-xs"
-                  >
-                    <div className="min-w-[190px] flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[10px] font-bold text-gray-700">
-                          Line #{line.po_item}
-                        </span>
-                        <span className="font-mono font-semibold text-gray-900 text-[11px]">
-                          {line.material_code}
-                        </span>
-                      </div>
-                      <p className="mt-0.5 truncate text-[11px] text-gray-500 max-w-[280px]">{line.description}</p>
-                      <p className="mt-0.5 text-[11px] font-medium text-emerald-800">
-                        Ordered: <strong>{line.quantity.toLocaleString()} {line.uom}</strong>
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg">
-                      <button
-                        type="button"
-                        onClick={() => updateLine(idx, { pack_type: "BOX" })}
-                        className={cn(
-                          "flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold transition-all cursor-pointer",
-                          line.pack_type === "BOX"
-                            ? "bg-white text-emerald-700 shadow-sm"
-                            : "text-gray-600 hover:text-gray-900"
-                        )}
-                      >
-                        📦 Box
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => updateLine(idx, { pack_type: "ROLL" })}
-                        className={cn(
-                          "flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold transition-all cursor-pointer",
-                          line.pack_type === "ROLL"
-                            ? "bg-white text-emerald-700 shadow-sm"
-                            : "text-gray-600 hover:text-gray-900"
-                        )}
-                      >
-                        📜 Roll
-                      </button>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <span className="text-[11px] text-gray-500 font-medium">
-                        {line.pack_type === "BOX" ? "Boxes:" : "Rolls:"}
-                      </span>
-                      <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden bg-white">
-                        <button
-                          type="button"
-                          onClick={() => updateLine(idx, { units_count: Math.max(1, line.units_count - 1) })}
-                          className="px-2.5 py-1 bg-gray-50 hover:bg-gray-100 text-gray-600 font-bold cursor-pointer"
-                        >
-                          -
-                        </button>
-                        <input
-                          type="number"
-                          min="1"
-                          max="500"
-                          value={line.units_count}
-                          onChange={(e) =>
-                            updateLine(idx, { units_count: Math.max(1, parseInt(e.target.value) || 1) })
-                          }
-                          className="w-12 text-center text-xs font-bold text-gray-800 focus:outline-none"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => updateLine(idx, { units_count: line.units_count + 1 })}
-                          className="px-2.5 py-1 bg-gray-50 hover:bg-gray-100 text-gray-600 font-bold cursor-pointer"
-                        >
-                          +
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </div>
-
-          {/* ── STEP 3: EXCEL DROP & LIVE VALIDATION ── */}
-          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-xs space-y-3">
-            <div className="flex items-center gap-2">
-              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-white text-xs font-bold shadow-xs">
-                3
-              </div>
-              <div>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-gray-900">
-                  Step 3: Drop Completed Packing List (.xlsx)
-                </h3>
-                <p className="text-[11px] text-gray-500">
-                  Fill scale weights (GW & NW) into the downloaded sheet and drop it here for live verification.
-                </p>
-              </div>
-            </div>
-
-            <div
-              onDragEnter={handleDrag}
-              onDragLeave={handleDrag}
-              onDragOver={handleDrag}
-              onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
-              className={cn(
-                "flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 text-center transition-all",
-                dragActive
-                  ? "border-emerald-500 bg-emerald-50/50"
-                  : selectedFile
-                  ? "border-emerald-300 bg-emerald-50/20"
-                  : "border-gray-200 bg-gray-50/50 hover:bg-gray-50"
-              )}
-            >
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".xlsx,.xls"
-                className="hidden"
-                onChange={(e) => {
-                  if (e.target.files?.[0]) processFile(e.target.files[0]);
-                }}
-              />
-
-              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-white shadow-sm">
-                {selectedFile ? (
-                  <CheckCircle2 className="h-6 w-6 text-emerald-600" />
-                ) : (
-                  <UploadCloud className="h-6 w-6 text-emerald-600" />
-                )}
-              </div>
-
-              <div className="mt-2.5">
-                <p className="text-xs font-semibold text-gray-800">
-                  {selectedFile ? selectedFile.name : "Drop factory packing list (.xlsx) here"}
-                </p>
-                <p className="mt-0.5 text-[11px] text-gray-500">
-                  {selectedFile
-                    ? `${(selectedFile.size / 1024).toFixed(1)} KB — Click or drop another to replace`
-                    : "or browse file from your computer (Standard 12-column layout)"}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Validation Result Box */}
-          {validating && (
-            <div className="flex items-center justify-center gap-2 rounded-xl bg-gray-50 py-6 text-sm text-gray-500 border border-gray-100">
-              <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
-              Verifying lines, quantities, and weight rules (GW ≥ NW &gt; 0)…
-            </div>
-          )}
-
-          {validationResult && (
-            <div className="space-y-3 rounded-xl border border-gray-200 bg-white p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  {validationResult.is_valid ? (
-                    <span className="flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-700">
-                      <CheckCircle2 className="h-3.5 w-3.5" /> Validation Passed
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-bold text-red-700">
-                      <AlertTriangle className="h-3.5 w-3.5" /> Validation Failed
-                    </span>
-                  )}
-                  <span className="text-xs text-gray-500">
-                    {validationResult.total_cartons} Cartons • {validationResult.total_quantity.toLocaleString()} M
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-3 text-xs text-gray-600">
-                  <span>
-                    GW: <strong>{validationResult.total_gross_weight.toFixed(2)} kg</strong>
-                  </span>
-                  <span>
-                    NW: <strong>{validationResult.total_net_weight.toFixed(2)} kg</strong>
-                  </span>
-                </div>
-              </div>
-
-              {/* Summary Table */}
-              <div className="overflow-x-auto rounded-lg border border-gray-100">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-gray-50 text-gray-500 font-semibold">
-                    <tr>
-                      <th className="px-3 py-2">PO #</th>
-                      <th className="px-3 py-2">PO Item</th>
-                      <th className="px-3 py-2">Product Code</th>
-                      <th className="px-3 py-2">Cartons</th>
-                      <th className="px-3 py-2">Quantity</th>
-                      <th className="px-3 py-2">GW (kg)</th>
-                      <th className="px-3 py-2">NW (kg)</th>
-                      <th className="px-3 py-2">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {validationResult.line_summaries.map((s, idx) => (
-                      <tr key={idx} className="hover:bg-gray-50/50">
-                        <td className="px-3 py-2 font-mono font-medium text-gray-800">{s.po_number}</td>
-                        <td className="px-3 py-2 font-mono text-gray-600">{s.po_item}</td>
-                        <td className="px-3 py-2 font-mono text-gray-700">{s.product_code}</td>
-                        <td className="px-3 py-2 font-semibold text-gray-700">{s.carton_count}</td>
-                        <td className="px-3 py-2 font-semibold text-emerald-700">{s.total_qty}</td>
-                        <td className="px-3 py-2 text-gray-600">{s.total_gw}</td>
-                        <td className="px-3 py-2 text-gray-600">{s.total_nw}</td>
-                        <td className="px-3 py-2">
-                          {s.is_valid ? (
-                            <span className="text-emerald-600 font-medium">✓ Ready</span>
+           {/* Content Area */}
+           <div className="flex-1 flex flex-col p-4 bg-gray-50/30 overflow-hidden">
+              {validating ? (
+                 <div className="flex-1 flex flex-col items-center justify-center rounded-xl border border-gray-200 bg-gray-50 text-sm text-gray-500 shadow-xs">
+                    <Loader2 className="h-8 w-8 animate-spin text-emerald-600 mb-3" />
+                    <p className="font-semibold text-gray-700">Verifying Excel lines...</p>
+                    <p className="text-xs mt-1">Checking quantities and weight rules (GW ≥ NW &gt; 0)</p>
+                 </div>
+              ) : validationResult ? (
+                 <div className="flex-1 space-y-4 rounded-xl border border-gray-200 bg-white p-5 shadow-xs overflow-y-auto">
+                    <div className="flex items-center justify-between">
+                       <div className="flex items-center gap-3">
+                          {validationResult.is_valid ? (
+                             <span className="flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-sm font-bold text-emerald-700 border border-emerald-200">
+                                <CheckCircle2 className="h-4 w-4" /> Validation Passed
+                             </span>
                           ) : (
-                            <span className="text-red-500 font-medium">✕ {s.errors.join(", ")}</span>
+                             <span className="flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1 text-sm font-bold text-red-700 border border-red-200">
+                                <AlertTriangle className="h-4 w-4" /> Validation Failed
+                             </span>
                           )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                          <span className="text-sm font-medium text-gray-500">
+                             {validationResult.total_cartons} Cartons/Rolls • {validationResult.total_quantity.toLocaleString()} units
+                          </span>
+                       </div>
 
-              {/* Collapsible Carton preview */}
-              <div>
-                <button
-                  type="button"
-                  onClick={() => setShowCartonDetails(!showCartonDetails)}
-                  className="flex items-center gap-1 text-xs font-semibold text-gray-600 hover:text-gray-900 cursor-pointer"
-                >
-                  {showCartonDetails ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                  {showCartonDetails
-                    ? "Hide carton breakdown"
-                    : `View carton breakdown (${validationResult.rows.length} boxes)`}
-                </button>
+                       <div className="flex items-center gap-4 text-sm text-gray-700 bg-gray-50 px-4 py-1.5 rounded-lg border border-gray-100">
+                          <span>GW: <strong className="font-mono">{validationResult.total_gross_weight.toFixed(2)} kg</strong></span>
+                          <span className="text-gray-300">|</span>
+                          <span>NW: <strong className="font-mono">{validationResult.total_net_weight.toFixed(2)} kg</strong></span>
+                       </div>
+                    </div>
 
-                {showCartonDetails && (
-                  <div className="mt-2 max-h-40 overflow-y-auto rounded-lg border border-gray-100 bg-gray-50 p-2 text-[11px]">
-                    <table className="w-full text-left">
-                      <thead>
-                        <tr className="text-gray-400">
-                          <th className="px-2 py-1">Carton #</th>
-                          <th className="px-2 py-1">Roll / Carton Ref</th>
-                          <th className="px-2 py-1">Lot No.</th>
-                          <th className="px-2 py-1">GW</th>
-                          <th className="px-2 py-1">NW</th>
-                          <th className="px-2 py-1">Qty</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {validationResult.rows.map((r, i) => (
-                          <tr key={i} className="text-gray-600">
-                            <td className="px-2 py-0.5 font-mono">#{r.carton_number}</td>
-                            <td className="px-2 py-0.5">{r.supplier_carton_ref || "—"}</td>
-                            <td className="px-2 py-0.5 font-mono">{r.lot_number || "—"}</td>
-                            <td className="px-2 py-0.5">{r.gross_weight}</td>
-                            <td className="px-2 py-0.5">{r.net_weight}</td>
-                            <td className="px-2 py-0.5 font-mono font-medium text-gray-800">{r.quantity}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
+                    {/* Summary Table */}
+                    <div className="overflow-x-auto rounded-lg border border-gray-200 shadow-xs">
+                       <table className="w-full text-left text-xs">
+                          <thead className="bg-gray-100 text-gray-600 font-bold uppercase tracking-wider">
+                             <tr>
+                                <th className="px-4 py-3 border-b border-gray-200">PO #</th>
+                                <th className="px-4 py-3 border-b border-gray-200">Line</th>
+                                <th className="px-4 py-3 border-b border-gray-200">Product</th>
+                                <th className="px-4 py-3 border-b border-gray-200">Cartons/Rolls</th>
+                                <th className="px-4 py-3 border-b border-gray-200">Qty</th>
+                                <th className="px-4 py-3 border-b border-gray-200">GW (kg)</th>
+                                <th className="px-4 py-3 border-b border-gray-200">NW (kg)</th>
+                                <th className="px-4 py-3 border-b border-gray-200">Status</th>
+                             </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100 bg-white">
+                             {validationResult.line_summaries.map((s, idx) => (
+                                <tr key={idx} className="hover:bg-gray-50/80 transition-colors">
+                                   <td className="px-4 py-2.5 font-mono font-bold text-gray-800">{s.po_number}</td>
+                                   <td className="px-4 py-2.5 font-mono text-gray-600">{s.po_item}</td>
+                                   <td className="px-4 py-2.5 font-mono font-medium text-gray-700">{s.product_code}</td>
+                                   <td className="px-4 py-2.5 font-semibold text-gray-700">{s.carton_count}</td>
+                                   <td className="px-4 py-2.5 font-bold text-emerald-700 bg-emerald-50/50">{s.total_qty}</td>
+                                   <td className="px-4 py-2.5 text-gray-600 font-mono">{s.total_gw}</td>
+                                   <td className="px-4 py-2.5 text-gray-600 font-mono">{s.total_nw}</td>
+                                   <td className="px-4 py-2.5">
+                                      {s.is_valid ? (
+                                         <span className="text-emerald-600 font-semibold flex items-center gap-1"><Check className="w-3.5 h-3.5"/> Ready</span>
+                                      ) : (
+                                         <span className="text-red-600 font-medium text-[11px] leading-tight flex items-start gap-1"><X className="w-3.5 h-3.5 shrink-0 mt-0.5"/> {s.errors.join(", ")}</span>
+                                      )}
+                                   </td>
+                                </tr>
+                             ))}
+                          </tbody>
+                       </table>
+                    </div>
 
-          {/* Action Footer */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
-            <button
-              disabled={!validationResult?.is_valid || submitting}
-              onClick={handleCreateShipment}
-              className="flex items-center gap-2 rounded-xl bg-emerald-600 px-6 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 transition-all cursor-pointer"
-            >
-              {submitting ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Generating HUs & XML…
-                </>
+                    {/* Collapsible Carton preview */}
+                    <div>
+                       <button
+                          type="button"
+                          onClick={() => setShowCartonDetails(!showCartonDetails)}
+                          className="flex items-center gap-1.5 text-xs font-bold text-gray-600 hover:text-gray-900 cursor-pointer bg-gray-50 hover:bg-gray-100 px-3 py-1.5 rounded-lg border border-gray-200 transition-colors"
+                       >
+                          {showCartonDetails ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                          {showCartonDetails
+                             ? "Hide breakdown"
+                             : `View ${validationResult.rows.length} cartons/rolls breakdown`}
+                       </button>
+
+                       {showCartonDetails && (
+                          <div className="mt-3 max-h-48 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 p-0 text-[11px] shadow-inner">
+                             <table className="w-full text-left">
+                                <thead className="sticky top-0 bg-gray-200 text-gray-700 font-bold uppercase tracking-wider">
+                                   <tr>
+                                      <th className="px-3 py-2 border-b border-gray-300">Unit #</th>
+                                      <th className="px-3 py-2 border-b border-gray-300">Ref</th>
+                                      <th className="px-3 py-2 border-b border-gray-300">Lot No.</th>
+                                      <th className="px-3 py-2 border-b border-gray-300">GW</th>
+                                      <th className="px-3 py-2 border-b border-gray-300">NW</th>
+                                      <th className="px-3 py-2 border-b border-gray-300">Qty</th>
+                                   </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200 bg-white">
+                                   {validationResult.rows.map((r, i) => (
+                                      <tr key={i} className="text-gray-600 hover:bg-gray-50">
+                                         <td className="px-3 py-1.5 font-mono font-semibold">#{r.carton_number}</td>
+                                         <td className="px-3 py-1.5">{r.supplier_carton_ref || "—"}</td>
+                                         <td className="px-3 py-1.5 font-mono">{r.lot_number || "—"}</td>
+                                         <td className="px-3 py-1.5 font-mono">{r.gross_weight}</td>
+                                         <td className="px-3 py-1.5 font-mono">{r.net_weight}</td>
+                                         <td className="px-3 py-1.5 font-mono font-bold text-gray-900 bg-gray-50">{r.quantity}</td>
+                                      </tr>
+                                   ))}
+                                </tbody>
+                             </table>
+                          </div>
+                       )}
+                    </div>
+                 </div>
               ) : (
-                <>
-                  <PackagePlus className="h-4 w-4" />
-                  Create Shipment & Generate HUs
-                </>
+                 <div className="flex-1 flex flex-col rounded-xl border border-dashed border-gray-300 bg-white shadow-xs p-6 overflow-hidden">
+                    <div className="w-full h-full flex flex-col">
+                       <h3 className="text-sm font-bold text-gray-800 mb-4 flex items-center justify-between border-b pb-2 shrink-0">
+                          <span>Purchase Orders & Lines Selection</span>
+                          <span className="text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-500 font-mono">{activePos.length} Selected</span>
+                       </h3>
+                       
+                       <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-4">
+                          {activePos.map(po => {
+                             const lines = poLines.filter(l => l.po_number === po);
+                             const isAllSelected = lines.length > 0 && lines.every(l => selectedLines[`${po}|${l.po_item}`]);
+                             const isIndeterminate = !isAllSelected && lines.some(l => selectedLines[`${po}|${l.po_item}`]);
+                             
+                             return (
+                             <div key={po} className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
+                                <div className="flex items-center justify-between bg-gray-50 p-3 border-b border-gray-200">
+                                   <div className="flex items-center gap-3">
+                                      <input 
+                                         type="checkbox" 
+                                         checked={isAllSelected}
+                                         ref={input => { if(input) input.indeterminate = isIndeterminate; }}
+                                         onChange={() => togglePo(po)}
+                                         className="w-4 h-4 text-emerald-600 rounded border-gray-300 cursor-pointer" 
+                                      />
+                                      <span className="font-mono font-bold text-sm text-gray-800">PO #{po}</span>
+                                   </div>
+                                   <div className="flex items-center gap-2">
+                                      <label className="text-[10px] font-bold text-gray-500 uppercase">Pack Type</label>
+                                      <select
+                                         value={poConfigs[po] || "BOX"}
+                                         onChange={(e) => setPoConfigs(prev => ({ ...prev, [po]: e.target.value as "BOX"|"ROLL" }))}
+                                         className="text-xs font-bold bg-white border border-gray-300 rounded-md px-2 py-1 outline-none focus:border-emerald-500 shadow-sm cursor-pointer"
+                                      >
+                                         <option value="BOX">📦 Box</option>
+                                         <option value="ROLL">📜 Roll</option>
+                                      </select>
+                                   </div>
+                                </div>
+                                
+                                <div className="divide-y divide-gray-100 bg-white">
+                                   {lines.map((line) => (
+                                      <label key={line.po_item} className="flex items-center gap-4 px-4 py-2 hover:bg-gray-50 transition-colors cursor-pointer">
+                                         <input 
+                                            type="checkbox" 
+                                            checked={selectedLines[`${po}|${line.po_item}`] || false}
+                                            onChange={() => toggleLine(po, line.po_item)}
+                                            className="w-4 h-4 text-emerald-600 rounded border-gray-300 cursor-pointer"
+                                         />
+                                         <div className="flex-1 min-w-0 flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                               <span className="bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border border-gray-200">#{line.po_item}</span>
+                                               <span className="text-xs font-bold text-gray-800 font-mono">{line.material_code}</span>
+                                               <span className="text-xs text-gray-500 truncate max-w-sm">{line.description}</span>
+                                            </div>
+                                            <div className="text-xs font-mono font-bold text-gray-600 bg-gray-50 border border-gray-100 px-2 py-1 rounded shadow-inner">
+                                               {line.ordered_qty} {line.uom}
+                                            </div>
+                                         </div>
+                                      </label>
+                                   ))}
+                                   {lines.length === 0 && (
+                                      <div className="px-4 py-3 text-xs text-gray-400 italic">No line items found.</div>
+                                   )}
+                                </div>
+                             </div>
+                          )})}
+                          
+                          {activePos.length === 0 && (
+                             <div className="flex flex-col items-center justify-center h-32 text-gray-400">
+                                 <p className="text-sm font-semibold">No Purchase Orders selected.</p>
+                                 <p className="text-xs">Please go back and select POs first.</p>
+                             </div>
+                          )}
+                       </div>
+                       
+                       <div className="mt-4 pt-3 border-t border-gray-200 shrink-0">
+                          <p className="text-[11px] text-gray-500 text-center">
+                             Uncheck the lines you do not wish to include in the Tailored Sheet.<br/> Configure the Pack Type for each PO, download the template, fill it locally, and upload it above.
+                          </p>
+                       </div>
+                    </div>
+                 </div>
               )}
-            </button>
-          </div>
+           </div>
+           
+
         </>
       ) : (
         /* SUCCESS VIEW */
-        <div className="space-y-4 py-4 text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
-            <Check className="h-8 w-8 stroke-[2.5]" />
+        <div className="flex-1 flex flex-col items-center justify-center p-8 space-y-6 text-center">
+          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 shadow-inner">
+            <Check className="h-10 w-10 stroke-[3]" />
           </div>
 
           <div>
-            <h3 className="text-lg font-bold text-gray-900">Shipment Created Successfully!</h3>
-            <p className="text-xs text-gray-500 mt-1">
-              Shipment <strong className="font-mono text-gray-800">{createdResponse.shipment.shipment_number}</strong>{" "}
-              registered with {createdResponse.shipment.total_boxes} Cartons &{" "}
+            <h3 className="text-2xl font-black text-gray-900 tracking-tight">Shipment Created Successfully!</h3>
+            <p className="text-sm text-gray-500 mt-2 max-w-md mx-auto">
+              Shipment <strong className="font-mono text-gray-800 bg-gray-100 px-1.5 py-0.5 rounded">{createdResponse.shipment.shipment_number}</strong>{" "}
+              registered with {createdResponse.shipment.total_boxes} Cartons/Rolls &{" "}
               {createdResponse.shipment.total_pieces.toLocaleString()} units.
             </p>
           </div>
 
-          <div className="rounded-xl border border-gray-200 bg-gray-900 p-4 text-left">
-            <p className="text-xs font-semibold text-gray-300">
-              Allocated 20-digit Handling Units ({createdResponse.handling_units.length}):
+          <div className="rounded-2xl border border-gray-200 bg-gray-900 p-5 text-left w-full max-w-2xl shadow-xl">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">
+              Allocated 20-digit Handling Units ({createdResponse.handling_units.length})
             </p>
-            <div className="mt-2 flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+            <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
               {createdResponse.handling_units.map((hu, i) => (
-                <span key={i} className="rounded bg-gray-800 px-2.5 py-1 font-mono text-xs text-emerald-400">
+                <span key={i} className="rounded-lg bg-gray-800 px-3 py-1.5 font-mono text-sm font-bold text-emerald-400 border border-gray-700 shadow-inner">
                   {hu}
                 </span>
               ))}
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-3 pt-3">
+          <div className="flex flex-wrap items-center justify-center gap-4 pt-4 w-full max-w-3xl">
             <button
               type="button"
               disabled={downloadingLabels}
               onClick={handleDownloadLabelsPdf}
-              className="flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50 transition-colors cursor-pointer"
+              className="flex-1 min-w-[200px] flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3.5 text-sm font-bold text-white shadow-lg hover:bg-emerald-700 hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0 transition-all cursor-pointer"
             >
-              {downloadingLabels ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
-              Download 6x4 Labels PDF
+              {downloadingLabels ? <Loader2 className="h-5 w-5 animate-spin" /> : <Printer className="h-5 w-5" />}
+              6x4 Labels PDF
             </button>
 
             <button
               type="button"
               disabled={downloadingXml}
               onClick={handleDownloadAsnXml}
-              className="flex items-center justify-center gap-2 rounded-xl border border-purple-200 bg-purple-50 px-5 py-2.5 text-sm font-semibold text-purple-700 shadow-sm hover:bg-purple-100 disabled:opacity-50 transition-colors"
+              className="flex-1 min-w-[200px] flex items-center justify-center gap-2 rounded-xl border-2 border-purple-200 bg-purple-50 px-5 py-3 text-sm font-bold text-purple-700 shadow-sm hover:bg-purple-100 disabled:opacity-50 transition-colors cursor-pointer"
             >
-              {downloadingXml ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-              Download ASN XML (.xml)
+              {downloadingXml ? <Loader2 className="h-5 w-5 animate-spin" /> : <Download className="h-5 w-5" />}
+              ASN XML (.xml)
             </button>
 
             {dispatchedSuccess ? (
-              <span className="flex items-center justify-center gap-1.5 rounded-xl bg-emerald-50 px-5 py-2.5 text-sm font-bold text-emerald-700 border border-emerald-200">
-                <Check className="h-4 w-4" /> Dispatched to EDI
+              <span className="flex-1 min-w-[200px] flex items-center justify-center gap-2 rounded-xl bg-emerald-50 px-5 py-3.5 text-sm font-black text-emerald-700 border-2 border-emerald-200 shadow-sm">
+                <Check className="h-5 w-5 stroke-[3]" /> Dispatched to EDI
               </span>
             ) : (
               <button
                 type="button"
                 disabled={dispatchingAsn}
                 onClick={handleDispatchAsn}
-                className="flex items-center justify-center gap-2 rounded-xl bg-purple-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-purple-700 disabled:opacity-50 transition-colors"
+                className="flex-1 min-w-[200px] flex items-center justify-center gap-2 rounded-xl bg-purple-600 px-5 py-3.5 text-sm font-bold text-white shadow-lg hover:bg-purple-700 hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0 transition-all cursor-pointer"
               >
-                {dispatchingAsn ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                {dispatchingAsn ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
                 Dispatch to EDI
               </button>
             )}
-
-            <button
-              type="button"
-              onClick={onSuccess}
-              className="flex items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              Close & View in List
-            </button>
+          </div>
+          
+          <div className="pt-2">
+             <button
+                type="button"
+                onClick={onSuccess}
+                className="text-sm font-bold text-gray-500 hover:text-gray-800 transition-colors underline cursor-pointer"
+             >
+                Close & View in List
+             </button>
           </div>
         </div>
       )}
     </div>
   );
 }
-
 // ───────────────────────────────────────────────────────────────────
 // SUBCOMPONENT C: XML Preview & Dispatch Modal
 // ───────────────────────────────────────────────────────────────────

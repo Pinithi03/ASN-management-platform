@@ -315,7 +315,7 @@ async def list_open_po_lines(
                     "uom": "M",
                 }]
             for item in items:
-                line_num = str(item.get("line_number", "00100")).split("-")[0].zfill(5)
+                line_num = str(item.get("order_line_number") or item.get("line_number", "1")).strip()
                 ordered = float(item.get("quantity", 0))
                 material = item.get("material_code") or item.get("item_code") or po.style_number or ""
                 partner = item.get("partner_code") or item.get("partner_item_code", "")
