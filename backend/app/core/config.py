@@ -64,6 +64,21 @@ class Settings(BaseSettings):
     KEYCLOAK_CLIENT_ID: str = "ans-backend"
     KEYCLOAK_CLIENT_SECRET: str = ""
 
+    # Public URL as the browser sees it (must match the token's "iss")
+    KEYCLOAK_PUBLIC_URL: str = "http://localhost:8080/auth"
+    # Internal URL for backend → Keycloak calls (Docker network)
+    KEYCLOAK_INTERNAL_URL: str = "http://keycloak:8080/auth"
+
+    @property
+    def keycloak_issuer(self) -> str:
+        """Token issuer — must match the 'iss' claim exactly."""
+        return f"{self.KEYCLOAK_PUBLIC_URL}/realms/{self.KEYCLOAK_REALM}"
+
+    @property
+    def keycloak_jwks_url(self) -> str:
+        """JWKS endpoint — fetched over the internal network in Docker."""
+        return f"{self.KEYCLOAK_INTERNAL_URL}/realms/{self.KEYCLOAK_REALM}/protocol/openid-connect/certs"
+
     # CORS
     CORS_ORIGINS: list[str] | str = [
         "http://localhost:3000",

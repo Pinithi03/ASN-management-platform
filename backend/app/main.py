@@ -118,6 +118,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         print(f"ERROR during database auto-migration: {exc}")
         raise exc
 
+    # Pre-fetch Keycloak signing keys so the first API request is fast
+    try:
+        from app.core.security import warmup_jwks
+        await warmup_jwks()
+    except Exception as exc:
+        print(f"Warning: Could not warmup JWKS: {exc}")
+
     # Auto-sync PO lifecycle statuses against shipments
     try:
         from app.db.session import async_session_factory

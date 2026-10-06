@@ -24,9 +24,11 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-ans_platform}
       POSTGRES_USER: ${POSTGRES_USER:-ans_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?Set KEYCLOAK_DB_PASSWORD in .env}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - ./docker/postgres/02-keycloak-db.sh:/docker-entrypoint-initdb.d/02-keycloak-db.sh:ro
       - ./docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
     command: postgres -c config_file=/etc/postgresql/postgresql.conf
     healthcheck:
@@ -98,26 +100,54 @@ services:
 
   # ── Identity Provider ─────────────────────────────────────
   keycloak:
-    image: quay.io/keycloak/keycloak:25.0
+    # Pinned to an exact version: Keycloak only patches its newest release,
+    # so bump this tag when a security release comes out (test in staging first).
+    image: quay.io/keycloak/keycloak:26.8.0
     container_name: ans-keycloak
     restart: unless-stopped
-    command: start --optimized
+    command: ["start", "--import-realm"]
     environment:
+      # Own database (created by docker/postgres/02-keycloak-db.sh)
       KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-ans_platform}
-      KC_DB_USERNAME: ${POSTGRES_USER:-ans_user}
-      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
-      KC_HOSTNAME_STRICT: false
-      KC_HTTP_ENABLED: true
-      KC_HEALTH_ENABLED: true
-      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Set KEYCLOAK_ADMIN_PASSWORD in .env}
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?Set KEYCLOAK_DB_PASSWORD in .env}
+      # Served at https://<portal-host>/auth behind Nginx (TLS ends at Nginx)
+      KC_HOSTNAME: ${KEYCLOAK_PUBLIC_URL:?Set KEYCLOAK_PUBLIC_URL in .env}
+      KC_HTTP_RELATIVE_PATH: /auth
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+      # First start only: create named admins, then delete this bootstrap account
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME:?Set KC_BOOTSTRAP_ADMIN_USERNAME in .env}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:?Set KC_BOOTSTRAP_ADMIN_PASSWORD in .env}
+      # Placeholders read by docker/keycloak/realm-oniverse.json at import
+      PORTAL_URL: ${PORTAL_URL:?Set PORTAL_URL in .env}
+      ANS_BACKEND_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:?Set KEYCLOAK_CLIENT_SECRET in .env}
+      SMTP_HOST: ${KEYCLOAK_SMTP_HOST:-mailpit}
+      SMTP_PORT: ${KEYCLOAK_SMTP_PORT:-1025}
+      SMTP_FROM: ${KEYCLOAK_SMTP_FROM:-noreply@localhost}
+      SMTP_REPLY_TO: ${KEYCLOAK_SMTP_REPLY_TO:-}
+      SMTP_STARTTLS: ${KEYCLOAK_SMTP_STARTTLS:-false}
+      SMTP_AUTH: ${KEYCLOAK_SMTP_AUTH:-false}
+      SMTP_USER: ${KEYCLOAK_SMTP_USER:-}
+      SMTP_SECRET: ${KEYCLOAK_SMTP_SECRET:-}
+    volumes:
+      - ./docker/keycloak/realm-oniverse.json:/opt/keycloak/data/import/realm-oniverse.json:ro
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      # The image has no curl; health is served on the management port 9000.
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /auth/health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '200 OK' <&3"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
+    mem_limit: 1g
     networks:
       - ans-network
-
   # ── Backend API ───────────────────────────────────────────
   backend:
     build:
@@ -135,6 +165,8 @@ services:
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-ans_minio}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
       KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_PUBLIC_URL: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8080/auth}
+      KEYCLOAK_INTERNAL_URL: http://keycloak:8080/auth
       KEYCLOAK_REALM: ${KEYCLOAK_REALM:-oniverse}
       KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-ans-backend}
       KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-}
@@ -248,6 +280,7 @@ services:
     depends_on:
       - backend
       - frontend
+      - keycloak
     networks:
       - ans-network
 
