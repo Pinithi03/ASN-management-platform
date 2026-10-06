@@ -296,11 +296,10 @@ export default function EmailInbox() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-gray-50/80 border-b border-gray-200">
-                      <th className="text-left px-4 py-3 font-medium text-gray-500">Sender</th>
+                      <th className="text-left px-4 py-3 font-medium text-gray-500 w-1/4 sm:w-1/5">Sender</th>
                       <th className="text-left px-4 py-3 font-medium text-gray-500">Subject</th>
-                      {!selectedEmailId && <th className="text-left px-4 py-3 font-medium text-gray-500">Format</th>}
-                      {!selectedEmailId && <th className="text-left px-4 py-3 font-medium text-gray-500">Received</th>}
-                      <th className="text-right px-4 py-3 font-medium text-gray-500">Action</th>
+                      {!selectedEmailId && <th className="text-left px-4 py-3 font-medium text-gray-500 w-36 whitespace-nowrap">Received</th>}
+                      <th className="text-right px-4 py-3 font-medium text-gray-500 w-16">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -323,7 +322,7 @@ export default function EmailInbox() {
                                 : "hover:bg-gray-50/80"
                             }`}
                         >
-                          <td className="px-4 py-3 max-w-[140px] truncate text-gray-900 font-bold">
+                          <td className="px-4 py-3 max-w-[180px] sm:max-w-[220px] truncate text-gray-900 font-bold" title={email.from_address || ""}>
                             {isAdmin ? (
                               isUnread ? (
                                 <span
@@ -351,21 +350,9 @@ export default function EmailInbox() {
                             )}
                             {email.from_address || " "}
                           </td>
-                          <td className="px-4 py-3 max-w-[200px] truncate text-gray-800 font-medium">
+                          <td className="px-4 py-3 max-w-xs sm:max-w-md lg:max-w-xl xl:max-w-3xl truncate text-gray-800 font-medium" title={email.subject || ""}>
                             {email.subject || " "}
                           </td>
-                          {!selectedEmailId && (
-                            <td className="px-4 py-3">
-                              <span
-                                className={`px-2.5 py-0.5 text-xs font-bold rounded-md border shadow-xs ${isAdmin
-                                    ? "bg-blue-100 text-blue-800 border-blue-300"
-                                    : "bg-emerald-100 text-emerald-800 border-emerald-300"
-                                  }`}
-                              >
-                                {email.email_type || "PO Email"}
-                              </span>
-                            </td>
-                          )}
                           {!selectedEmailId && (
                             <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
                               {email.received_at
