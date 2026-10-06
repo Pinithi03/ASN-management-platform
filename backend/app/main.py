@@ -118,6 +118,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         print(f"ERROR during database auto-migration: {exc}")
         raise exc
 
+    # Pre-fetch Keycloak signing keys so the first API request is fast
+    from app.core.security import warmup_jwks
+    await warmup_jwks()
+
     # Start continuous background IMAP email poller
     poller_task = asyncio.create_task(_continuous_imap_poller())
 
