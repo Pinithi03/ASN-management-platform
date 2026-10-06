@@ -11,7 +11,8 @@
         worker-start beat-start flower-start \
         docker-up docker-down docker-logs docker-build infra-up \
         db-migrate db-upgrade db-downgrade db-seed \
-        test lint clean healthcheck
+        test lint clean healthcheck \
+        keycloak-db keycloak-seed keycloak-logs
 
 # ── Colors ──────────────────────────────────────────────────
 BLUE  := \033[0;34m
@@ -86,6 +87,16 @@ docker-build: ## Rebuild all Docker images
 
 infra-up: ## Start only infrastructure (DB, Redis, RabbitMQ, MinIO, Keycloak)
 	docker compose up -d postgres redis rabbitmq minio keycloak
+
+# ── Keycloak ────────────────────────────────────────────────
+keycloak-db: ## Create Keycloak's database on an EXISTING Postgres volume (new volumes do it automatically)
+	docker compose exec -T postgres bash /docker-entrypoint-initdb.d/02-keycloak-db.sh
+
+keycloak-seed: ## Create dev test users in Keycloak (dev.admin + suppliers; dev only)
+	python scripts/seed_keycloak_dev.py
+
+keycloak-logs: ## Tail Keycloak logs
+	docker compose logs -f keycloak
 
 # ── Database ────────────────────────────────────────────────
 db-migrate: ## Create new Alembic migration (MSG="description")

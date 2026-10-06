@@ -29,9 +29,22 @@ services:
       - "9001:9001"      # Console
 
   keycloak:
-    command: start-dev
+    # Dev mode: no TLS checks, theme caching off. Realm still imported from
+    # docker/keycloak/realm-oniverse.json on first start (empty keycloak DB).
+    command: ["start-dev", "--import-realm"]
     ports:
-      - "8080:8080"
+      - "8080:8080"      # Keycloak (login pages + admin console at /auth)
+
+  # Catches every email Keycloak sends in dev (setup, reset password).
+  # Web UI: http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:v1.27.0
+    container_name: ans-mailpit
+    restart: unless-stopped
+    ports:
+      - "8025:8025"      # Mailpit web UI
+    networks:
+      - ans-network
 
   backend:
     env_file:
