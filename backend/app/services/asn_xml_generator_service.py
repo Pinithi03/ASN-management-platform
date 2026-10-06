@@ -141,7 +141,7 @@ def generate_asn_xml(
         po_num = str(box.get("po_number", ""))
         po_line_raw = str(box.get("po_line", ""))
         # Normalize to base line (e.g. '00100' from '00100-0001' or '100')
-        base_line = po_line_raw.split("-")[0].strip().zfill(5)
+        base_line = po_line_raw.strip()
         key = (po_num, base_line)
         if key not in group_map:
             group_map[key] = []
@@ -182,7 +182,7 @@ def generate_asn_xml(
     for line_idx, box in enumerate(boxes, start=1):
         po_num = str(box.get("po_number", ""))
         po_line_raw = str(box.get("po_line", ""))
-        base_line = po_line_raw.split("-")[0].strip().zfill(5)
+        base_line = po_line_raw.strip()
         key = (po_num, base_line)
 
         group_id = group_ids[key]
@@ -191,7 +191,7 @@ def generate_asn_xml(
         group_total_qty = group_totals[key]
 
         # Standard schedule line representation: '00100-0001'
-        full_line_num = po_line_raw if "-" in po_line_raw else f"{base_line}-0001"
+        full_line_num = po_line_raw.strip()
         order_date_str = format_date(box.get("order_date") or packing_slip_date)
 
         qty_val = float(box.get("quantity") or 0.0)

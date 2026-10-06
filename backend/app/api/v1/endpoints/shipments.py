@@ -131,10 +131,10 @@ async def download_packing_template(
                 for idx, item in enumerate(po.extra_data["items"], start=1):
                     sample_lines.append({
                         "po_number": po.po_number,
-                        "po_item": str(item.get("line_number", "00100")).split("-")[0].zfill(5),
+                        "po_item": str(item.get("order_line_number") or item.get("line_number", "1")).strip(),
                         "pack_number": "PACK-01",
                         "carton_number": idx,
-                        "supplier_carton_ref": f"CTN-{str(idx).zfill(2)}",
+                        "supplier_carton_ref": "",
                         "product_code": item.get("material_code", "ELST1K 000615"),
                         "lot_number": "LOT-01",
                         "width": "",
@@ -158,17 +158,13 @@ async def download_packing_template(
     )
 
 
-class PackingLineConfig(BaseModel):
-    po_item: str
-    pack_type: str = "BOX"  # "BOX" or "ROLL"
-    units_count: int = 1
-    quantity: Optional[float] = None
-
+class PoPackConfig(BaseModel):
+    po_number: str
+    pack_type: str = "BOX"
+    selected_lines: Optional[list[str]] = None
 
 class ConfigureTemplateRequest(BaseModel):
-    po_number: str
-    lines: list[PackingLineConfig]
-
+    configs: list[PoPackConfig]
 
 @router.post("/template/configured")
 async def download_configured_packing_template(
@@ -177,75 +173,56 @@ async def download_configured_packing_template(
 ) -> StreamingResponse:
     """
     Generate a tailored Calzedonia packing list Excel template based on supplier's
-    packaging setup (Box vs Roll and units count per PO item).
+    packaging setup (Box vs Roll per PO).
     """
-    stmt = select(PurchaseOrder).where(PurchaseOrder.po_number == payload.po_number)
-    res = await db.execute(stmt)
-    po = res.scalar_one_or_none()
-    if not po:
-        raise HTTPException(status_code=404, detail=f"PO #{payload.po_number} not found")
-
-    raw_items = po.extra_data.get("items") if (po.extra_data and isinstance(po.extra_data, dict)) else None
-    if not raw_items:
-        raw_items = [{
-            "line_number": "00100",
-            "material_code": po.style_number or "ELST1K 000615",
-            "description": po.description or "PO Line Item",
-            "quantity": float(po.quantity or 500),
-            "uom": "M",
-        }]
-
-    po_items_map = {}
-    for it in raw_items:
-        norm_key = str(it.get("line_number", "00100")).split("-")[0].zfill(5)
-        po_items_map[norm_key] = it
-
     sample_lines = []
     running_carton_idx = 1
+    
+    for cfg in payload.configs:
+        stmt = select(PurchaseOrder).where(PurchaseOrder.po_number == cfg.po_number)
+        res = await db.execute(stmt)
+        po = res.scalar_one_or_none()
+        if not po:
+            continue
 
-    configured_items = {l.po_item.split("-")[0].zfill(5): l for l in payload.lines}
+        raw_items = po.extra_data.get("items") if (po.extra_data and isinstance(po.extra_data, dict)) else None
+        if not raw_items:
+            raw_items = [{
+                "line_number": "00100",
+                "material_code": po.style_number or "ELST1K 000615",
+                "description": po.description or "PO Line Item",
+                "quantity": float(po.quantity or 500),
+                "uom": "M",
+            }]
 
-    for norm_key, it in po_items_map.items():
-        cfg = configured_items.get(norm_key)
-        pack_type = cfg.pack_type.upper() if cfg and cfg.pack_type else "BOX"
-        units_count = max(1, cfg.units_count if cfg and cfg.units_count else 1)
-        total_qty = cfg.quantity if (cfg and cfg.quantity is not None and cfg.quantity > 0) else float(it.get("quantity", 0))
-
-        # Distribute quantity across units
-        if units_count <= 1:
-            unit_quantities = [total_qty]
-        else:
-            if total_qty == int(total_qty):
-                base = int(total_qty) // units_count
-                rem = int(total_qty) % units_count
-                unit_quantities = [base + 1 if i < rem else base for i in range(units_count)]
-            else:
-                base = round(total_qty / units_count, 2)
-                unit_quantities = [base] * units_count
-                diff = round(total_qty - sum(unit_quantities), 2)
-                unit_quantities[-1] = round(unit_quantities[-1] + diff, 2)
-
-        ref_prefix = "RL" if pack_type == "ROLL" else "CTN"
-        for unit_qty in unit_quantities:
+        for it in raw_items:
+            norm_key = str(it.get("order_line_number") or it.get("line_number", "1")).strip()
+            if cfg.selected_lines is not None and norm_key not in cfg.selected_lines:
+                continue
+            pack_type = cfg.pack_type.upper()
+            ref_prefix = "RL" if pack_type == "ROLL" else "CTN"
             carton_ref = f"{ref_prefix}-{str(running_carton_idx).zfill(2)}"
+            
             sample_lines.append({
                 "po_number": po.po_number,
                 "po_item": norm_key,
-                "pack_number": "PACK-01",
+                "pack_number": "",
                 "carton_number": running_carton_idx,
-                "supplier_carton_ref": carton_ref,
+                "supplier_carton_ref": "",
                 "product_code": it.get("material_code", "ELST1K 000615"),
-                "lot_number": "LOT-01",
-                "width": 1.5 if pack_type == "ROLL" else "",
+                "lot_number": "",
+                "width": "",
                 "gw": "",
                 "nw": "",
-                "quantity": unit_qty,
+                "quantity": float(it.get("quantity", 0)),
                 "uom": it.get("uom") or it.get("size") or "M",
             })
             running_carton_idx += 1
 
     excel_bytes = generate_packing_template(sample_lines)
-    filename = f"Packing_List_{po.po_number}_Tailored.xlsx"
+    filename = "Packing_List_Tailored.xlsx"
+    if len(payload.configs) == 1:
+        filename = f"Packing_List_{payload.configs[0].po_number}_Tailored.xlsx"
 
     return StreamingResponse(
         io.BytesIO(excel_bytes),
@@ -506,7 +483,7 @@ async def create_shipment_from_excel(
 
         clean_row_item = str(row.po_item).split("-")[0].zfill(5)
         po_item_info = next(
-            (it for it in po_items_list if str(it.get("line_number", "")).split("-")[0].zfill(5) == clean_row_item),
+            (it for it in po_items_list if str(it.get("order_line_number") or it.get("line_number", "")).strip() == clean_row_item),
             None
         )
         mat_desc = (po_item_info.get("description") if po_item_info else None) or f"Item {row.product_code}"
@@ -853,7 +830,7 @@ async def create_direct_shipment(
 
         clean_c_line = str(c.po_line).split("-")[0].zfill(5)
         po_item_info = next(
-            (it for it in c_po_items if str(it.get("line_number", "")).split("-")[0].zfill(5) == clean_c_line),
+            (it for it in c_po_items if str(it.get("order_line_number") or it.get("line_number", "")).strip() == clean_c_line),
             None
         )
         mat_desc = c.description or (po_item_info.get("description") if po_item_info else None) or f"Item {c.product_code}"
@@ -864,7 +841,7 @@ async def create_direct_shipment(
             "po_line": c.po_line,
             "product_code": c.product_code,
             "lot_number": c.lot_number,
-            "supplier_carton_ref": c.supplier_carton_ref or f"CTN-{idx + 1}",
+            "supplier_carton_ref": c.supplier_carton_ref,
             "quantity": c.quantity,
             "uom": c.uom,
             "box_index": idx + 1,
@@ -896,7 +873,7 @@ async def create_direct_shipment(
             "material_desc": mat_desc,
             "partner_product_code": partner_code,
             "lot_number": c.lot_number or "DEFAULT",
-            "supplier_carton_ref": c.supplier_carton_ref or f"CTN-{idx + 1}",
+            "supplier_carton_ref": c.supplier_carton_ref,
             "quantity": c.quantity,
             "uom": c.uom or "M",
             "gross_weight": c.gross_weight,
