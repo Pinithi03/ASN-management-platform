@@ -17,13 +17,34 @@ from sqlalchemy import desc, func, or_, select, update, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError
-from app.core.credentials_store import (
-    issue_temporary_credentials,
-    get_credential_info,
-    change_supplier_password,
-    mark_supplier_discovered,
-    get_supplier_discovery_meta,
-)
+# Phase 4 replaces this with Keycloak Admin API calls (keycloak_admin.py).
+# For now, credential endpoints return 501 Not Implemented.
+# from app.core.credentials_store import (
+#     issue_temporary_credentials,
+#     get_credential_info,
+#     change_supplier_password,
+#     mark_supplier_discovered,
+#     get_supplier_discovery_meta,
+# )
+
+# Stubs for credential functions removed in Phase 2.
+# Phase 4 replaces these with Keycloak Admin API calls.
+def issue_temporary_credentials(**kwargs):
+    return {"status": "not_implemented", "message": "Credential management moved to Keycloak (Phase 4)"}
+
+def get_credential_info(code):
+    return None
+
+def change_supplier_password(**kwargs):
+    return False, "Password management moved to Keycloak. Use the 'Forgot password' link on the login page."
+
+def mark_supplier_discovered(code, **kwargs):
+    pass
+
+def get_supplier_discovery_meta(code):
+    return None
+
+
 from app.db.session import get_db
 from app.models.parsed_data import ParsedData
 from app.models.purchase_order import PurchaseOrder
