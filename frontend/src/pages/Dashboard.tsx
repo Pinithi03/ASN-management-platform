@@ -7,7 +7,7 @@ import SupplierDashboard from "./SupplierDashboard";
 
 export default function Dashboard() {
   const user = useAuthStore((s) => s.user);
-  const isAdmin = user?.role === "COMPANY_ADMIN";
+  const isAdmin = user?.role === "ADMIN";
 
   return isAdmin ? <AdminDashboard /> : <SupplierDashboard />;
 }

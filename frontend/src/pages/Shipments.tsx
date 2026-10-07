@@ -184,7 +184,7 @@ export default function Shipments() {
   const loadShipments = async () => {
     setLoadingShipments(true);
     try {
-      const supplierId = user?.role === "SUPPLIER" ? user.supplier_id : undefined;
+      const supplierId = user?.role === "SUPPLIER" ? (user.supplier_id || undefined) : undefined;
       const data = await shipmentService.getShipments(undefined, undefined, supplierId);
       if (Array.isArray(data) && data.length > 0) {
         setShipments(
@@ -741,7 +741,7 @@ function WebPackingWizard({
     const fetchSeq = async () => {
       try {
         const suppCode = user?.supplier_code || "0000018194";
-        const suppId = user?.supplier_id;
+        const suppId = user?.supplier_id || undefined;
         const res = await shipmentService.getNextHuSequence(suppCode, suppId);
         if (isMounted && res && typeof res.next_number === "number") {
           setStartingSeq(res.next_number);
@@ -798,7 +798,7 @@ function WebPackingWizard({
         plant_code: targetPlant,
         supplier_code: activeSupplierCode,
         supplier_name: activeSupplierName,
-        supplier_id: user?.supplier_id,
+        supplier_id: user?.supplier_id || undefined,
         carrier: "EXPRESS FREIGHT",
         note: `Online Web Packing Wizard dispatch for PO ${poNumbers.join(", ")}`,
         cartons: cartonsPayload,
@@ -1975,7 +1975,7 @@ function ExcelPackingWorkflow({
     setValidationResult(null);
 
     try {
-      const supplierId = user?.role === "SUPPLIER" ? user.supplier_id : undefined;
+      const supplierId = user?.role === "SUPPLIER" ? (user.supplier_id || undefined) : undefined;
       const res = await shipmentService.validateExcel(file, supplierId);
       setValidationResult(res);
     } catch (e: any) {

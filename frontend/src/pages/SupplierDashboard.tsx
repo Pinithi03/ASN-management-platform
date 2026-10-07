@@ -21,7 +21,7 @@ export default function SupplierDashboard() {
 
   const { data: poStats, isLoading: poLoading } = useQuery({
     queryKey: ["poStats", user?.supplier_code],
-    queryFn: () => poApi.getStats(user?.supplier_code),
+    queryFn: () => poApi.getStats(user?.supplier_code || undefined),
     refetchInterval: 5000,
   });
 
@@ -29,7 +29,7 @@ export default function SupplierDashboard() {
     queryKey: ["recentEmails", user?.supplier_code],
     queryFn: () =>
       emailApi.list({
-        vendor_code: user?.supplier_code,
+        vendor_code: user?.supplier_code || undefined,
         per_page: 5,
       }),
     refetchInterval: 5000,
@@ -48,7 +48,7 @@ export default function SupplierDashboard() {
           </span>
         </div>
         <p className="text-sm text-gray-500 mt-1">
-          Welcome back, <span className="font-semibold text-gray-700">{user?.supplier_name || user?.full_name}</span>. Scoped partner overview for Oniverse Group Sri Lanka.
+          Welcome back, <span className="font-semibold text-gray-700">{user?.supplier_name || user?.name}</span>. Scoped partner overview for Oniverse Group Sri Lanka.
         </p>
       </div>
 
@@ -230,7 +230,7 @@ export default function SupplierDashboard() {
                 <div className="space-y-3 bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
                   <div>
                     <span className="text-xs text-gray-400 font-medium">Partner Name</span>
-                    <p className="text-sm font-bold text-gray-900">{user?.supplier_name || user?.full_name}</p>
+                    <p className="text-sm font-bold text-gray-900">{user?.supplier_name || user?.name}</p>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div>

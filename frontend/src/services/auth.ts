@@ -1,42 +1,16 @@
 /**
  * Authentication service.
- * Connects to /api/v1/auth/login and /api/v1/auth/suppliers.
+ * Only GET /auth/me remains — login and password changes are
+ * handled by Keycloak directly.
  */
 
 import { api } from "./api";
-import type { User, SupplierSummary } from "@/types";
-
-export interface LoginResponse {
-  success: boolean;
-  message: string;
-  token: string;
-  user: User;
-}
+import type { AuthUser } from "@/store/authStore";
 
 export const authService = {
-  /** Authenticate with Partner ID or Admin username */
-  login: async (username: string, password: string = "Abc123@#"): Promise<LoginResponse> => {
-    const res = await api.post<LoginResponse>("/auth/login", {
-      username,
-      password,
-    });
-    return res.data;
-  },
-
-  /** Get list of available registered supplier portals */
-  getSuppliers: async (): Promise<SupplierSummary[]> => {
-    const res = await api.get<SupplierSummary[]>("/auth/suppliers");
-    return res.data;
-  },
-
-  /** Change password from temporary to permanent */
-  changePassword: async (identifier: string, currentPassword: string, newPassword: string): Promise<{ success: boolean; message: string }> => {
-    const res = await api.post<{ success: boolean; message: string }>("/auth/change-password", {
-      supplier_code_or_email: identifier,
-      current_password: currentPassword,
-      new_password: newPassword,
-    });
+  /** Fetch the current user's profile from the backend. */
+  getMe: async (): Promise<AuthUser> => {
+    const res = await api.get<AuthUser>("/auth/me");
     return res.data;
   },
 };
-

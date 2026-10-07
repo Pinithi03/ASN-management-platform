@@ -8,7 +8,6 @@ import {
   UserPlus,
   Search,
   RefreshCw,
-  ShieldCheck,
   CheckCircle2,
   XCircle,
   KeyRound,
@@ -18,7 +17,6 @@ import {
   Mail,
   AlertCircle,
   Factory,
-  Crown,
   UserCheck,
 } from "lucide-react";
 import { userApi, UserItem, CreateUserPayload, UpdateUserPayload } from "@/services/userApi";
@@ -38,7 +36,6 @@ export default function UserManagement() {
 
   // State
   const [search, setSearch] = useState("");
-  const [roleFilter, setRoleFilter] = useState<string>("ALL");
   const [plantFilter, setPlantFilter] = useState<string>("ALL");
 
   // Modals state
@@ -138,30 +135,27 @@ export default function UserManagement() {
     setActionError(null);
   };
 
-  // Filtered Users
+  // Filtered users
   const filteredUsers = useMemo(() => {
     return users.filter((u) => {
-      const q = search.toLowerCase().trim();
+      const q = search.trim().toLowerCase();
       const matchSearch =
         !q ||
         (u.full_name || "").toLowerCase().includes(q) ||
         u.email.toLowerCase().includes(q) ||
         (u.plant_name || "").toLowerCase().includes(q);
 
-      const matchRole = roleFilter === "ALL" || u.role === roleFilter;
       const matchPlant = plantFilter === "ALL" || u.plant_code === plantFilter;
 
-      return matchSearch && matchRole && matchPlant;
+      return matchSearch && matchPlant;
     });
-  }, [users, search, roleFilter, plantFilter]);
+  }, [users, search, plantFilter]);
 
   // Statistics
   const stats = useMemo(() => {
     const total = users.length;
-    const superAdmins = users.filter((u) => u.role === "SUPER_ADMIN").length;
-    const plantAdmins = users.filter((u) => u.role === "COMPANY_ADMIN").length;
-    const operators = users.filter((u) => u.role === "OPERATOR" || u.role === "REVIEWER").length;
-    return { total, superAdmins, plantAdmins, operators };
+    const active = users.filter((u) => u.is_active).length;
+    return { total, active };
   }, [users]);
 
   return (
@@ -174,7 +168,7 @@ export default function UserManagement() {
             Plant Administrators & System Users
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            Manage administrative accounts, plant-level access, and super admin permissions across Oniverse manufacturing plants.
+            Manage administrative accounts, plant-level access, and credentials across Oniverse manufacturing plants.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -200,7 +194,7 @@ export default function UserManagement() {
       </div>
 
       {/* KPI Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4">
           <div className="p-3 bg-brand-50 rounded-xl text-brand-600">
             <Users className="w-6 h-6" />
@@ -212,32 +206,22 @@ export default function UserManagement() {
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4">
-          <div className="p-3 bg-purple-50 rounded-xl text-purple-600">
-            <Crown className="w-6 h-6" />
+          <div className="p-3 bg-emerald-50 rounded-xl text-emerald-600">
+            <UserCheck className="w-6 h-6" />
           </div>
           <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Super Admins (HQ)</p>
-            <p className="text-2xl font-bold text-gray-900 mt-0.5">{stats.superAdmins}</p>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Active Accounts</p>
+            <p className="text-2xl font-bold text-gray-900 mt-0.5">{stats.active}</p>
           </div>
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4">
           <div className="p-3 bg-blue-50 rounded-xl text-blue-600">
-            <ShieldCheck className="w-6 h-6" />
+            <Factory className="w-6 h-6" />
           </div>
           <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Plant Administrators</p>
-            <p className="text-2xl font-bold text-gray-900 mt-0.5">{stats.plantAdmins}</p>
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4">
-          <div className="p-3 bg-emerald-50 rounded-xl text-emerald-600">
-            <UserCheck className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Operators & Reviewers</p>
-            <p className="text-2xl font-bold text-gray-900 mt-0.5">{stats.operators}</p>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Manufacturing Plants</p>
+            <p className="text-2xl font-bold text-gray-900 mt-0.5">5 Plants</p>
           </div>
         </div>
       </div>
@@ -275,34 +259,6 @@ export default function UserManagement() {
                 ))}
               </select>
             </div>
-
-            {/* Role filter */}
-            <div className="flex bg-gray-100 p-1 rounded-lg text-xs font-semibold">
-              <button
-                onClick={() => setRoleFilter("ALL")}
-                className={`px-3 py-1.5 rounded-md transition-all ${
-                  roleFilter === "ALL" ? "bg-white text-brand-600 shadow-sm" : "text-gray-600 hover:text-gray-900"
-                }`}
-              >
-                All Roles
-              </button>
-              <button
-                onClick={() => setRoleFilter("SUPER_ADMIN")}
-                className={`px-3 py-1.5 rounded-md transition-all ${
-                  roleFilter === "SUPER_ADMIN" ? "bg-white text-purple-700 shadow-sm" : "text-gray-600 hover:text-gray-900"
-                }`}
-              >
-                Super Admin
-              </button>
-              <button
-                onClick={() => setRoleFilter("COMPANY_ADMIN")}
-                className={`px-3 py-1.5 rounded-md transition-all ${
-                  roleFilter === "COMPANY_ADMIN" ? "bg-white text-brand-600 shadow-sm" : "text-gray-600 hover:text-gray-900"
-                }`}
-              >
-                Plant Admin
-              </button>
-            </div>
           </div>
         </div>
       </div>
@@ -326,7 +282,6 @@ export default function UserManagement() {
               <thead>
                 <tr className="bg-gray-50/80 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-500">
                   <th className="px-6 py-3.5">Administrator Name & Email</th>
-                  <th className="px-6 py-3.5">Permission Role</th>
                   <th className="px-6 py-3.5">Assigned Oniverse Plant</th>
                   <th className="px-6 py-3.5">Account Status</th>
                   <th className="px-6 py-3.5">Last Login</th>
@@ -335,7 +290,6 @@ export default function UserManagement() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {filteredUsers.map((usr) => {
-                  const isSuper = usr.role === "SUPER_ADMIN";
                   const initial = usr.full_name?.charAt(0) || usr.email.charAt(0).toUpperCase();
 
                   return (
@@ -343,11 +297,7 @@ export default function UserManagement() {
                       {/* Name & Email */}
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div
-                            className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-white shadow-xs shrink-0 ${
-                              isSuper ? "bg-purple-600" : "bg-brand-600"
-                            }`}
-                          >
+                          <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-white shadow-xs shrink-0 bg-brand-600">
                             {initial}
                           </div>
                           <div className="min-w-0">
@@ -360,31 +310,6 @@ export default function UserManagement() {
                             </p>
                           </div>
                         </div>
-                      </td>
-
-                      {/* Role Badge */}
-                      <td className="px-6 py-4">
-                        <span
-                          className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-extrabold rounded-full border shadow-xs ${
-                            isSuper
-                              ? "bg-purple-100 text-purple-900 border-purple-300"
-                              : usr.role === "COMPANY_ADMIN"
-                              ? "bg-brand-100 text-brand-800 border-brand-300"
-                              : "bg-emerald-100 text-emerald-800 border-emerald-300"
-                          }`}
-                        >
-                          {isSuper ? (
-                            <>
-                              <Crown className="w-3.5 h-3.5 text-purple-700" />
-                              SUPER ADMIN
-                            </>
-                          ) : (
-                            <>
-                              <ShieldCheck className="w-3.5 h-3.5 text-brand-600" />
-                              {usr.role === "OPERATOR" ? "OPERATOR" : "PLANT ADMIN"}
-                            </>
-                          )}
-                        </span>
                       </td>
 
                       {/* Assigned Plant */}
