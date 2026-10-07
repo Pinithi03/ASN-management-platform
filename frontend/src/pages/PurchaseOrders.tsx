@@ -234,9 +234,6 @@ export default function PurchaseOrders() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Purchase Orders</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Calzedonia Group incoming purchase orders. Select an order to preview details or proceed directly to outbound shipment.
-          </p>
         </div>
 
       </div>
