@@ -46,15 +46,10 @@ export default function App() {
         <Route path="/review" element={<Navigate to="/shipments" replace />} />
         <Route path="/shipments" element={<Shipments />} />
 
+        <Route path="/emails" element={<EmailInbox />} />
+        <Route path="/emails/:emailId" element={<EmailDetailPage />} />
+
         {/* Admin-only pages */}
-        <Route
-          path="/emails"
-          element={<RequirePermission permissions={["*"]}><EmailInbox /></RequirePermission>}
-        />
-        <Route
-          path="/emails/:emailId"
-          element={<RequirePermission permissions={["*"]}><EmailDetailPage /></RequirePermission>}
-        />
         <Route
           path="/suppliers"
           element={<RequirePermission permissions={["*"]}><Suppliers /></RequirePermission>}
