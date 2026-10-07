@@ -261,6 +261,39 @@ async def save_parsed_data(
     clean_po = normalize_po_number(parsed_po.po_number)
     parsed_po.po_number = clean_po
 
+    # Check if a ParsedData record already exists for this email and PO to prevent duplicate entries
+    stmt = select(ParsedData).where(
+        ParsedData.email_record_id == email_record_id,
+    )
+    if clean_po:
+        stmt = stmt.where(
+            (ParsedData.po_number_extracted == clean_po) |
+            (ParsedData.po_number_extracted == parsed_po.po_number)
+        )
+    result = await db.execute(stmt)
+    existing_pd = result.scalar_one_or_none()
+
+    if existing_pd:
+        existing_pd.parser_used = parsed_po.raw_source.upper() or "XML"
+        existing_pd.raw_extracted = raw_dict
+        existing_pd.normalized = {
+            "po_number": clean_po,
+            "supplier_code": parsed_po.supplier_code,
+            "supplier_name": parsed_po.supplier_name,
+            "currency": parsed_po.currency,
+            "total_quantity": parsed_po.total_quantity,
+            "total_value": parsed_po.total_value,
+            "line_count": len(parsed_po.line_items),
+        }
+        existing_pd.po_number_extracted = clean_po or None
+        existing_pd.supplier_id_extracted = parsed_po.supplier_code or None
+        await db.flush()
+        logger.info(
+            "Updated existing parsed data: id=%s, parser=%s, po=%s",
+            existing_pd.id, existing_pd.parser_used, existing_pd.po_number_extracted,
+        )
+        return existing_pd
+
     parsed = ParsedData(
         email_record_id=email_record_id,
         company_id=company_id,
