@@ -318,6 +318,7 @@ async def validate_excel_packing_list(
 @router.post("/create-from-excel")
 async def create_shipment_from_excel(
     file: UploadFile = File(...),
+    packing_slip_number: str = Form(...),
     supplier_code: str = Form("0000058376"),
     supplier_name: str = Form("Sirio Ltd"),
     supplier_id: Optional[str] = Form(None),
@@ -339,6 +340,23 @@ async def create_shipment_from_excel(
     """
     if not file.filename or not (file.filename.endswith(".xlsx") or file.filename.endswith(".xls")):
         raise HTTPException(status_code=400, detail="Only Excel files (.xlsx) are accepted")
+
+    ps_clean = str(packing_slip_number or "").strip()
+    if not ps_clean:
+        raise HTTPException(
+            status_code=422,
+            detail="Packing Slip / Delivery Note Number is required",
+        )
+
+    # Check for duplicate shipment / packing slip number
+    existing_shipment = await db.scalar(
+        select(Shipment.id).where(Shipment.shipment_number == ps_clean)
+    )
+    if existing_shipment:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Packing slip / Shipment number '{ps_clean}' already exists. Please enter a unique number.",
+        )
 
     file_bytes = await file.read()
     if not file_bytes:
@@ -467,9 +485,8 @@ async def create_shipment_from_excel(
         except ValueError:
             pass
 
-    # Generate sequential shipment / packing slip number based on PO (e.g. 2001614890-01)
-    first_po_num = validation_res.rows[0].po_number if validation_res.rows else None
-    shipment_number = await generate_po_shipment_number(db, first_po_num)
+    # Use supplier-provided packing slip / delivery note number as shipment number
+    shipment_number = ps_clean
 
     shipment = Shipment(
         id=uuid.uuid4(),
@@ -674,6 +691,7 @@ class DirectCartonItem(BaseModel):
 
 
 class CreateDirectShipmentRequest(BaseModel):
+    packing_slip_number: str
     plant_code: str = "PPD1"
     supplier_code: Optional[str] = "0000058376"
     supplier_name: Optional[str] = "CALZEDONIA CENTRAL HUB"
@@ -698,6 +716,23 @@ async def create_direct_shipment(
     """
     if not req.cartons:
         raise HTTPException(status_code=400, detail="At least one carton is required.")
+
+    ps_clean = str(req.packing_slip_number or "").strip()
+    if not ps_clean:
+        raise HTTPException(
+            status_code=422,
+            detail="Packing Slip / Delivery Note Number is required",
+        )
+
+    # Check for duplicate shipment / packing slip number
+    existing_shipment = await db.scalar(
+        select(Shipment.id).where(Shipment.shipment_number == ps_clean)
+    )
+    if existing_shipment:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Packing slip / Shipment number '{ps_clean}' already exists. Please enter a unique number.",
+        )
 
     # 1. Validate weights and quantities
     for idx, c in enumerate(req.cartons):
@@ -838,8 +873,8 @@ async def create_direct_shipment(
         except ValueError:
             pass
 
-    # Generate sequential shipment / packing slip number based on PO (e.g. 2001614890-01)
-    shipment_number = await generate_po_shipment_number(db, first_po_num)
+    # Use supplier-provided packing slip / delivery note number as shipment number
+    shipment_number = ps_clean
 
     total_units = int(sum(c.quantity for c in req.cartons))
 

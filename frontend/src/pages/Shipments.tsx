@@ -712,6 +712,7 @@ function WebPackingWizard({
   const [submitSuccessResult, setSubmitSuccessResult] = useState<any>(null);
   const [previewXmlModal, setPreviewXmlModal] = useState<string | null>(null);
   const [startingSeq, setStartingSeq] = useState<number>(1);
+  const [packingSlipNumber, setPackingSlipNumber] = useState("");
 
   const getHuPrefix = () => {
     const suppCodeClean = (user?.supplier_code || "0000018194").replace(/^0+/, "");
@@ -762,6 +763,11 @@ function WebPackingWizard({
   }, [user?.supplier_code, user?.supplier_id]);
 
   const handleDispatchASN = async () => {
+    const trimmedPs = packingSlipNumber.trim();
+    if (!trimmedPs) {
+      alert("Please enter Packing Slip / Delivery Note Number before dispatching.");
+      return;
+    }
     setIsSubmitting(true);
     try {
       const firstItem = packedItems[0];
@@ -788,6 +794,7 @@ function WebPackingWizard({
       );
 
       const res = await shipmentService.createDirect({
+        packing_slip_number: trimmedPs,
         plant_code: targetPlant,
         supplier_code: activeSupplierCode,
         supplier_name: activeSupplierName,
@@ -1192,8 +1199,9 @@ function WebPackingWizard({
               <button
                 type="button"
                 onClick={handleDispatchASN}
-                disabled={isSubmitting}
+                disabled={isSubmitting || !packingSlipNumber.trim()}
                 className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
+                title={!packingSlipNumber.trim() ? "Please enter Packing Slip Number before dispatching" : "Dispatch to IUNGO EDI"}
               >
                 {isSubmitting ? (
                   <>
@@ -1668,8 +1676,38 @@ function WebPackingWizard({
                   Dispatch Verification & Summary
                 </h2>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Review consignment metrics before final EDI transmission. Transmit using the top toolbar.
+                  Review consignment metrics and enter the official Delivery Note / Packing Slip number before EDI transmission.
                 </p>
+              </div>
+
+              {/* Required Packing Slip / Delivery Note No Card */}
+              <div className="p-4 bg-emerald-50/50 border border-emerald-200/80 rounded-xl">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <label htmlFor="wizard-ps-number" className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
+                      Packing Slip / Delivery Note No <span className="text-red-500 font-bold">*</span>
+                    </label>
+                    <p className="text-[11px] text-gray-500 mt-0.5">
+                      Supplier Dispatch Note / Delivery Note number. Embedded into IUNGO XML as &lt;PackingSlipNumber&gt; and used as Shipment No.
+                    </p>
+                  </div>
+                  <div className="w-full sm:w-auto">
+                    <input
+                      id="wizard-ps-number"
+                      type="text"
+                      required
+                      placeholder="e.g. 01007907 / DN-2026-001"
+                      value={packingSlipNumber}
+                      onChange={(e) => setPackingSlipNumber(e.target.value)}
+                      className={cn(
+                        "w-full sm:w-64 h-10 px-3.5 text-xs font-mono font-bold rounded-lg border outline-none shadow-2xs transition-colors",
+                        !packingSlipNumber.trim()
+                          ? "bg-white border-amber-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
+                          : "bg-white border-emerald-400 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200"
+                      )}
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* 4 Neutral KPI Cards */}
@@ -1780,10 +1818,10 @@ function ExcelPackingWorkflow({
   const [validationResult, setValidationResult] = useState<ExcelValidationResult | null>(null);
   const [showCartonDetails, setShowCartonDetails] = useState(false);
 
-  // Metadata
   const activePos = (targetPos && targetPos.length > 0) ? targetPos : targetPo ? [targetPo] : [];
   const [plantCode, setPlantCode] = useState("PPA1");
   const [estimatedArrival, setEstimatedArrival] = useState("");
+  const [packingSlipNumber, setPackingSlipNumber] = useState("");
   
   // PO specific configurations
   const [poLines, setPoLines] = useState<any[]>([]);
@@ -1995,10 +2033,16 @@ function ExcelPackingWorkflow({
 
   const handleCreateShipment = async () => {
     if (!selectedFile) return;
+    const trimmedPs = packingSlipNumber.trim();
+    if (!trimmedPs) {
+      alert("Please enter Packing Slip / Delivery Note Number before creating shipment.");
+      return;
+    }
     setSubmitting(true);
     try {
       const res = await shipmentService.createFromExcel({
         file: selectedFile,
+        packing_slip_number: trimmedPs,
         plant_code: plantCode,
         supplier_code: user?.supplier_code || undefined,
         supplier_name: user?.supplier_name || undefined,
@@ -2113,7 +2157,29 @@ function ExcelPackingWorkflow({
                  
                  <div className="w-px h-8 bg-gray-300 hidden sm:block"></div>
 
-                 {/* 2. Delivery Date */}
+                 {/* 2. Packing Slip / Delivery Note No */}
+                 <div className="flex items-center gap-2">
+                    <label className="text-xs font-bold text-gray-700 flex items-center gap-1">
+                       Packing Slip No <span className="text-red-500 font-bold">*</span>:
+                    </label>
+                    <input
+                       type="text"
+                       required
+                       placeholder="e.g. 01007907 / DN-2026-001"
+                       value={packingSlipNumber}
+                       onChange={(e) => setPackingSlipNumber(e.target.value)}
+                       className={cn(
+                          "h-9 px-3 text-xs border bg-white rounded-md outline-none font-mono font-bold w-48 shadow-2xs transition-colors",
+                          !packingSlipNumber.trim()
+                             ? "border-amber-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                             : "border-gray-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                       )}
+                    />
+                 </div>
+
+                 <div className="w-px h-8 bg-gray-300 hidden sm:block"></div>
+
+                 {/* 3. Delivery Date */}
                  <div className="flex items-center gap-2">
                     <label className="text-xs font-semibold text-gray-700">Delivery Date:</label>
                     <input type="date" value={estimatedArrival} onChange={(e) => setEstimatedArrival(e.target.value)} className="h-9 px-2 text-xs border border-gray-300 bg-white rounded-md focus:border-emerald-500 outline-none font-medium" />
@@ -2126,9 +2192,10 @@ function ExcelPackingWorkflow({
                  </button>
                  {validationResult?.is_valid && !validating && (
                    <button
-                     disabled={submitting}
+                     disabled={submitting || !packingSlipNumber.trim()}
                      onClick={handleCreateShipment}
                      className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 hover:shadow-md transition-all cursor-pointer disabled:opacity-50"
+                     title={!packingSlipNumber.trim() ? "Please enter Packing Slip Number before creating shipment" : "Create Shipment & Generate HUs"}
                    >
                      {submitting ? <><Loader2 className="w-4 h-4 animate-spin"/> Processing...</> : <><PackagePlus className="w-4 h-4"/> Create Shipment & Generate HUs</>}
                    </button>
@@ -2168,6 +2235,15 @@ function ExcelPackingWorkflow({
                           <span>NW: <strong className="font-mono">{validationResult.total_net_weight.toFixed(2)} kg</strong></span>
                        </div>
                     </div>
+
+                    {validationResult.is_valid && !packingSlipNumber.trim() && (
+                      <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span>
+                          <strong>Required:</strong> Please enter the official <strong>Packing Slip No</strong> in the toolbar above to enable shipment creation.
+                        </span>
+                      </div>
+                    )}
 
                     {/* Summary Table */}
                     <div className="overflow-x-auto rounded-lg border border-gray-200 shadow-xs">

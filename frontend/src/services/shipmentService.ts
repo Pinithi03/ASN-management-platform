@@ -120,6 +120,7 @@ export const shipmentService = {
    * Create shipment directly from Web Packing Wizard (JSON carton payload)
    */
   async createDirect(params: {
+    packing_slip_number: string;
     plant_code: string;
     supplier_code?: string;
     supplier_name?: string;
@@ -180,6 +181,7 @@ export const shipmentService = {
    */
   async createFromExcel(params: {
     file: File;
+    packing_slip_number: string;
     plant_code: string;
     supplier_code?: string;
     supplier_name?: string;
@@ -191,6 +193,7 @@ export const shipmentService = {
   }): Promise<CreateShipmentResponse> {
     const formData = new FormData();
     formData.append("file", params.file);
+    formData.append("packing_slip_number", params.packing_slip_number);
     formData.append("plant_code", params.plant_code);
     if (params.supplier_code) formData.append("supplier_code", params.supplier_code);
     if (params.supplier_name) formData.append("supplier_name", params.supplier_name);
