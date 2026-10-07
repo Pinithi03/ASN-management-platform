@@ -556,9 +556,15 @@ async def create_shipment_from_excel(
             if po_item_info else ""
         ) or ""
 
+        official_line = (
+            str(po_item_info.get("order_line_number") or po_item_info.get("line_number", "")).strip()
+            if po_item_info
+            else str(row.po_item).strip()
+        ) or str(row.po_item).strip()
+
         boxes_for_xml.append({
             "po_number": row.po_number,
-            "po_line": row.po_item,
+            "po_line": official_line,
             "order_date": po_order_date,
             "order_type": "ZA6A",
             "hu_number": hu_num,
@@ -963,9 +969,15 @@ async def create_direct_shipment(
         )
         packing_slips.append(ps)
 
+        official_line = (
+            str(po_item_info.get("order_line_number") or po_item_info.get("line_number", "")).strip()
+            if po_item_info
+            else str(c.po_line).strip()
+        ) or str(c.po_line).strip()
+
         boxes_for_xml.append({
             "po_number": c.po_number,
-            "po_line": c.po_line,
+            "po_line": official_line,
             "order_date": c_order_date,
             "order_type": "ZA6A",
             "hu_number": hu_num,
