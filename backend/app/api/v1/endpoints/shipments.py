@@ -544,11 +544,17 @@ async def create_shipment_from_excel(
 
         clean_row_item = str(row.po_item).split("-")[0].zfill(5)
         po_item_info = next(
-            (it for it in po_items_list if str(it.get("order_line_number") or it.get("line_number", "")).strip() == clean_row_item),
+            (
+                it for it in po_items_list
+                if str(it.get("order_line_number") or it.get("line_number", "")).split("-")[0].zfill(5) == clean_row_item
+            ),
             None
         )
-        mat_desc = (po_item_info.get("description") if po_item_info else None) or f"Item {row.product_code}"
-        partner_code = (po_item_info.get("partner_code") if po_item_info else None) or ""
+        mat_desc = (po_item_info.get("description") or po_item_info.get("item_description") or "") if po_item_info else ""
+        partner_code = (
+            (po_item_info.get("partner_item_code") or po_item_info.get("partner_code") or po_item_info.get("partner_product_code"))
+            if po_item_info else ""
+        ) or ""
 
         boxes_for_xml.append({
             "po_number": row.po_number,
@@ -914,11 +920,21 @@ async def create_direct_shipment(
 
         clean_c_line = str(c.po_line).split("-")[0].zfill(5)
         po_item_info = next(
-            (it for it in c_po_items if str(it.get("order_line_number") or it.get("line_number", "")).strip() == clean_c_line),
+            (
+                it for it in c_po_items
+                if str(it.get("order_line_number") or it.get("line_number", "")).split("-")[0].zfill(5) == clean_c_line
+            ),
             None
         )
-        mat_desc = c.description or (po_item_info.get("description") if po_item_info else None) or f"Item {c.product_code}"
-        partner_code = c.partner_product_code or (po_item_info.get("partner_code") if po_item_info else None) or ""
+        mat_desc = c.description or ((po_item_info.get("description") or po_item_info.get("item_description") or "") if po_item_info else "") or ""
+        partner_code = (
+            c.partner_product_code
+            or (
+                (po_item_info.get("partner_item_code") or po_item_info.get("partner_code") or po_item_info.get("partner_product_code"))
+                if po_item_info else ""
+            )
+            or ""
+        )
 
         carton_meta = {
             "po_number": c.po_number,
