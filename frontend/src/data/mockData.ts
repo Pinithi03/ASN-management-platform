@@ -36,30 +36,30 @@ export const mockCompanies: Company[] = [
 // ── Users ──────────────────────────────────────────────────
 
 export const mockAdminUser: User = {
-  id: "u1",
+  keycloak_id: "kc-admin-001",
   email: "kasun@sirio.lk",
-  full_name: "Kasun Perera",
-  role: "COMPANY_ADMIN",
-  company_id: "c1",
-  company_name: "Sirio S.r.l.",
-  company_code: "SIRIO",
-  is_active: true,
-  last_login_at: "2026-09-07T08:30:00Z",
+  name: "Kasun Perera",
+  role: "ADMIN",
+  permissions: ["*"],
+  supplier_id: null,
+  supplier_code: null,
+  supplier_name: null,
 };
 
 export const mockSupplierUser: User = {
-  id: "u2",
+  keycloak_id: "kc-supplier-001",
   email: "coats.exports@supplier.com",
-  full_name: "COATS THREAD EXPORTS (PRIVATE) LIMITED",
+  name: "COATS THREAD EXPORTS (PRIVATE) LIMITED",
   role: "SUPPLIER",
-  company_id: "c1",
-  company_name: "Sirio Ltd",
-  company_code: "SIRIO",
+  permissions: [
+    "supplier:own_po",
+    "supplier:own_shipment",
+    "supplier:own_asn",
+    "supplier:own_profile",
+  ],
   supplier_id: "074830fc-dc21-42bb-9877-e6b6a45790a5",
   supplier_code: "0000018194",
   supplier_name: "COATS THREAD EXPORTS (PRIVATE) LIMITED",
-  is_active: true,
-  last_login_at: "2026-09-07T09:00:00Z",
 };
 
 // ── Suppliers (Real Calzedonia EDI Partners from XMLs) ─────────────────────────

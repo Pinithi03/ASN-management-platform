@@ -3,10 +3,7 @@ import {
   Bell,
   Menu,
   LogOut,
-  ChevronDown,
   Check,
-  Building2,
-  ShieldCheck,
   FileText,
   Clock,
   Sparkles,
@@ -14,7 +11,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import { useAuthStore } from "@/store/authStore";
 import { supplierApi } from "@/services/supplierApi";
@@ -43,20 +40,15 @@ export interface NotificationItem {
 
 export default function Header({ onMenuToggle }: HeaderProps) {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
-  const switchSupplier = useAuthStore((s) => s.switchSupplier);
-
-  const [switcherOpen, setSwitcherOpen] = useState(false);
-  const [switching, setSwitching] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  // switchSupplier removed — role switching is no longer available.
 
   const [notifOpen, setNotifOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
   const [fieldChangeTick, setFieldChangeTick] = useState(0);
 
-  const isAdmin = user?.role === "COMPANY_ADMIN" || user?.role === "SUPER_ADMIN";
+  const isAdmin = user?.role === "ADMIN";
 
   // Listen for real-time field change broadcast events
   useEffect(() => {
@@ -204,33 +196,9 @@ export default function Header({ onMenuToggle }: HeaderProps) {
 
   const notifications: NotificationItem[] = isAdmin ? adminNotifications : supplierNotifications;
 
-  const dynamicAccounts = [
-    {
-      type: "admin",
-      code: "admin",
-      title: "Sirio Central Admin",
-      sub: "Plant Management",
-      role: "COMPANY_ADMIN",
-      icon: ShieldCheck,
-    },
-    ...(dbSuppliers && dbSuppliers.length > 0
-      ? dbSuppliers.map((s) => ({
-          type: "supplier",
-          code: s.supplier_code,
-          title: s.name,
-          sub: `Partner #${s.supplier_code}${s.total_pos !== undefined && s.total_pos > 0 ? ` • ${s.total_pos} POs` : ""}`,
-          role: "SUPPLIER",
-          icon: Building2,
-        }))
-      : []),
-  ];
-
-  // Close dropdowns on click outside
+  // Close notification dropdown on click outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setSwitcherOpen(false);
-      }
       if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
         setNotifOpen(false);
       }
@@ -274,20 +242,6 @@ export default function Header({ onMenuToggle }: HeaderProps) {
     navigate("/login");
   };
 
-  const handleSwitchAccount = async (code: string) => {
-    try {
-      setSwitching(true);
-      await switchSupplier(code);
-      setSwitcherOpen(false);
-      // Invalidate queries so that POs and Shipments refresh under the new role
-      await queryClient.invalidateQueries();
-    } catch (err) {
-      console.error("Account switch error:", err);
-    } finally {
-      setSwitching(false);
-    }
-  };
-
   return (
     <header className="flex h-16 items-center justify-between border-b border-gray-200 bg-white px-6">
       {/* Left side — mobile menu toggle */}
@@ -302,79 +256,29 @@ export default function Header({ onMenuToggle }: HeaderProps) {
 
       {/* Right side */}
       <div className="flex items-center gap-3">
-        {/* Account Switcher Dropdown */}
-        <div className="relative" ref={dropdownRef}>
-          <button
-            onClick={() => setSwitcherOpen(!switcherOpen)}
-            disabled={switching}
-            className={cn(
-              "flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all shadow-sm",
-              isAdmin
-                ? "border-brand-200 bg-brand-50/60 text-brand-900 hover:bg-brand-100/70"
-                : "border-emerald-200 bg-emerald-50/60 text-emerald-900 hover:bg-emerald-100/70"
-            )}
-          >
-            <span
-              className={cn(
-                "h-2 w-2 rounded-full",
-                isAdmin ? "bg-brand-600 animate-pulse" : "bg-emerald-600 animate-pulse"
-              )}
-            />
-            <div className="text-left">
-              <span className="font-semibold block leading-tight">
-                {isAdmin ? "Admin Portal" : `Partner #${user?.supplier_code || ""}`}
-              </span>
-              <span className="text-[10px] text-gray-500 block leading-tight">Switch Account</span>
-            </div>
-            <ChevronDown className="h-3.5 w-3.5 text-gray-400 ml-1" />
-          </button>
-
-          {switcherOpen && (
-            <div className="absolute right-0 top-full mt-2 w-72 rounded-xl border border-gray-200 bg-white py-2 shadow-xl z-50 animate-in fade-in slide-in-from-top-2">
-              <div className="px-3 py-2 border-b border-gray-100">
-                <p className="text-xs font-semibold text-gray-900">Switch Portal Account</p>
-                <p className="text-[11px] text-gray-500">Test RBAC isolation per supplier</p>
-              </div>
-
-              <div className="py-1 max-h-80 overflow-y-auto">
-                {dynamicAccounts.map((acc) => {
-                  const isCurrent =
-                    (acc.code === "admin" && isAdmin) ||
-                    (user?.supplier_code === acc.code);
-                  const Icon = acc.icon;
-
-                  return (
-                    <button
-                      key={acc.code}
-                      onClick={() => handleSwitchAccount(acc.code)}
-                      className={cn(
-                        "w-full flex items-center justify-between px-3 py-2 text-left text-xs transition-colors hover:bg-gray-50",
-                        isCurrent && "bg-gray-50/80 font-semibold"
-                      )}
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <div
-                          className={cn(
-                            "flex h-7 w-7 items-center justify-center rounded-lg text-xs",
-                            acc.role === "COMPANY_ADMIN"
-                              ? "bg-brand-100 text-brand-700"
-                              : "bg-emerald-100 text-emerald-700"
-                          )}
-                        >
-                          <Icon className="h-4 w-4" />
-                        </div>
-                        <div>
-                          <p className="text-gray-900 leading-tight">{acc.title}</p>
-                          <p className="text-[10px] text-gray-400 leading-tight mt-0.5">{acc.sub}</p>
-                        </div>
-                      </div>
-                      {isCurrent && <Check className="h-4 w-4 text-emerald-600" />}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+        {/* Active Portal Scope / Plant Badge */}
+        <div
+          className={cn(
+            "flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium shadow-xs",
+            isAdmin
+              ? "border-brand-200 bg-brand-50/60 text-brand-900"
+              : "border-emerald-200 bg-emerald-50/60 text-emerald-900"
           )}
+        >
+          <span
+            className={cn(
+              "h-2 w-2 rounded-full",
+              isAdmin ? "bg-brand-600 animate-pulse" : "bg-emerald-600 animate-pulse"
+            )}
+          />
+          <div className="text-left">
+            <span className="font-semibold block leading-tight">
+              {isAdmin ? "Admin Portal" : "Supplier Portal"}
+            </span>
+            <span className="text-[10px] text-gray-500 block leading-tight">
+              {isAdmin ? "Central HQ (All Plants)" : `Partner #${user?.supplier_code || ""}`}
+            </span>
+          </div>
         </div>
 
         {/* Notification Bell + Dropdown Drawer */}
@@ -493,13 +397,13 @@ export default function Header({ onMenuToggle }: HeaderProps) {
               isAdmin ? "bg-brand-600" : "bg-emerald-600"
             )}
           >
-            {user?.full_name?.charAt(0) ?? (isAdmin ? "A" : "S")}
+            {user?.name?.charAt(0) ?? (isAdmin ? "A" : "S")}
           </div>
 
           {/* Name + role */}
           <div className="hidden text-left sm:block max-w-[180px]">
             <p className="text-xs font-bold text-gray-900 truncate">
-              {isAdmin ? user?.full_name || "Admin" : user?.supplier_name || user?.full_name}
+              {isAdmin ? user?.name || "Admin" : user?.supplier_name || user?.name}
             </p>
             <div className="flex items-center gap-1.5">
               <span

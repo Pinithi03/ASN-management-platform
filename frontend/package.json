@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "ASN Management Platform — React Frontend",
+  "description": "ASN Management Platform \u2014 React Frontend",
   "scripts": {
     "dev": "vite --port 3000",
     "build": "tsc -b && vite build",
@@ -20,6 +20,7 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "date-fns": "^3.6.0",
+    "keycloak-js": "26.2.4",
     "lucide-react": "^0.400.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",

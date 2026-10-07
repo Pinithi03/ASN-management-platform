@@ -13,7 +13,7 @@ export default function MainLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const user = useAuthStore((s) => s.user);
-  const switchSupplier = useAuthStore((s) => s.switchSupplier);
+  const logout = useAuthStore((s) => s.logout);
   const isSupplier = user?.role === "SUPPLIER";
 
   // Determine supplier status from localStorage (live sync with Admin modifications)
@@ -100,11 +100,11 @@ export default function MainLayout() {
 
                 <div className="pt-3 border-t border-gray-100 flex items-center justify-center gap-3">
                   <button
-                    onClick={() => switchSupplier("admin")}
+                    onClick={() => logout()}
                     className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-brand-600 hover:bg-brand-700 active:bg-brand-800 rounded-xl shadow-sm transition-all"
                   >
                     <Building2 className="w-4 h-4" />
-                    Switch to Admin Portal
+                    Sign Out
                   </button>
                 </div>
               </div>

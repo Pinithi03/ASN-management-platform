@@ -28,7 +28,7 @@ import { format } from "date-fns";
 export default function EmailInbox() {
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
-  const isAdmin = user?.role === "COMPANY_ADMIN";
+  const isAdmin = user?.role === "ADMIN";
 
   const [search, setSearch] = useState("");
   const [poNumberFilter, setPoNumberFilter] = useState("");

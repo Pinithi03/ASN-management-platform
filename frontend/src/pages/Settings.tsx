@@ -20,12 +20,10 @@ import {
   BellRing,
 } from "lucide-react";
 import { cn } from "@/utils/cn";
-import { useAuthStore } from "@/store/authStore";
 
 type TabType = "company" | "email" | "asn" | "security" | "health";
 
 export default function Settings() {
-  const user = useAuthStore((s) => s.user);
   const [activeTab, setActiveTab] = useState<TabType>("company");
   const [saving, setSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
@@ -33,8 +31,8 @@ export default function Settings() {
   const [imapTestResult, setImapTestResult] = useState<string | null>(null);
 
   // General Company / Plant state
-  const [companyName, setCompanyName] = useState(user?.company_name || "Sirio Ltd");
-  const [companyCode, setCompanyCode] = useState(user?.company_code || "SIRIO");
+  const [companyName, setCompanyName] = useState("Sirio Ltd");
+  const [companyCode, setCompanyCode] = useState("SIRIO");
   const [plantLocation, setPlantLocation] = useState("Badalgama, Sri Lanka");
 
   // Email Engine state

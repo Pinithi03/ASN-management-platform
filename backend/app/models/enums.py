@@ -34,6 +34,7 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         "supplier:own_shipment",
         "supplier:own_asn",
         "supplier:own_profile",
+        "supplier:own_email",
     ],
 }
 

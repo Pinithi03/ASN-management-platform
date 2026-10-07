@@ -5,11 +5,11 @@ import { api } from "./api";
 
 export interface UserItem {
   id: string;
-  company_id: string;
+  company_id?: string | null;
   keycloak_id: string;
   email: string;
   full_name?: string | null;
-  role: "SUPER_ADMIN" | "COMPANY_ADMIN" | "OPERATOR" | "REVIEWER" | string;
+  role: "ADMIN" | "SUPPLIER" | string;
   plant_code: string;
   plant_name: string;
   is_active: boolean;
