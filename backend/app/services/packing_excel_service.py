@@ -48,6 +48,7 @@ class ParsedCartonRow:
     net_weight: float
     quantity: float
     uom: str
+    hu_number: Optional[str] = None
     errors: List[str] = field(default_factory=list)
 
 
@@ -118,6 +119,7 @@ class ExcelValidationResult:
                     "net_weight": r.net_weight,
                     "quantity": r.quantity,
                     "uom": r.uom,
+                    "hu_number": r.hu_number,
                     "errors": r.errors,
                 }
                 for r in self.rows
@@ -229,6 +231,8 @@ async def parse_and_validate_packing_excel(
                     col_map["quantity"] = c_idx
                 elif "uom" in val or "unit" in val:
                     col_map["uom"] = c_idx
+                elif "hu" in val or "sscc" in val or "handling" in val:
+                    col_map["hu_number"] = c_idx
             break
 
     if header_row_idx is None:
@@ -273,6 +277,18 @@ async def parse_and_validate_packing_excel(
         uom_raw = _clean_str(get_val("uom")) or "M"
         uom = "M" if uom_raw.upper() in ("MTR", "METERS", "METER", "METRE", "METRES") else uom_raw.upper()
 
+        hu_raw = _clean_str(get_val("hu_number"))
+        hu_val = None
+        if hu_raw:
+            clean_digits = re.sub(r"\D", "", hu_raw)
+            if len(clean_digits) == 20:
+                hu_val = clean_digits
+            elif len(clean_digits) == 10 and supplier_code:
+                prefix = "1" + supplier_code.lstrip("0").zfill(9)
+                hu_val = f"{prefix}{clean_digits}"
+            elif len(clean_digits) == 10:
+                hu_val = clean_digits
+
         row_errors: List[str] = []
 
         # PO item can be empty and auto-detected later
@@ -301,6 +317,7 @@ async def parse_and_validate_packing_excel(
             net_weight=nw,
             quantity=qty,
             uom=uom,
+            hu_number=hu_val,
             errors=row_errors,
         )
         parsed_rows.append(parsed_row)
@@ -456,7 +473,8 @@ def generate_open_lines_template(open_lines: List[Dict[str, Any]]) -> bytes:
 
     headers = [
         "P/O # *", "PO item *", "Pack No.", "Cart No *", "Supplier_Carton_ref",
-        "ProductCode *", "Lot No.", "Width", "GW *", "NW *", "Quantity *", "UOM *"
+        "ProductCode *", "Lot No.", "Width", "GW *", "NW *", "Quantity *", "UOM *",
+        "HU Number (SSCC)"
     ]
     ws.append(headers)
 
@@ -470,7 +488,7 @@ def generate_open_lines_template(open_lines: List[Dict[str, Any]]) -> bytes:
         bottom=Side(style="thin", color="CBD5E1"),
     )
 
-    for col_idx in range(1, 13):
+    for col_idx in range(1, 14):
         cell = ws.cell(row=1, column=col_idx)
         cell.fill = header_fill
         cell.font = header_font
@@ -494,10 +512,11 @@ def generate_open_lines_template(open_lines: List[Dict[str, Any]]) -> bytes:
             item.get("nw", ""),
             item.get("quantity", ""),
             item.get("uom", "M"),
+            item.get("hu_number", ""),
         ]
         ws.append(row_data)
 
-        for col_idx in range(1, 13):
+        for col_idx in range(1, 14):
             cell = ws.cell(row=row_idx, column=col_idx)
             cell.font = Font(name="Arial", size=10)
             cell.border = thin_border
@@ -508,7 +527,7 @@ def generate_open_lines_template(open_lines: List[Dict[str, Any]]) -> bytes:
                 cell.alignment = Alignment(horizontal="right")
 
     # Column widths
-    col_widths = [15, 12, 16, 10, 24, 24, 14, 10, 10, 10, 12, 8]
+    col_widths = [15, 12, 16, 10, 24, 24, 14, 10, 10, 10, 12, 8, 24]
     for idx, width in enumerate(col_widths, start=1):
         col_letter = openpyxl.utils.get_column_letter(idx)
         ws.column_dimensions[col_letter].width = width

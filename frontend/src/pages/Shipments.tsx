@@ -747,6 +747,31 @@ function WebPackingWizard({
     }));
   };
 
+  const handleStartingSeqChange = (valStr: string) => {
+    const cleanDigits = valStr.replace(/\D/g, "").slice(0, 10);
+    const num = parseInt(cleanDigits, 10) || 1;
+    setStartingSeq(num);
+    setPackedItems((prev) => resequenceAllCartons(prev, num));
+  };
+
+  const handleHuSerialChange = (itemId: string, boxIdx: number, newSerialStr: string) => {
+    const cleanDigits = newSerialStr.replace(/\D/g, "").slice(0, 10);
+    const num = parseInt(cleanDigits, 10) || 1;
+
+    let flatIdx = 0;
+    for (const it of packedItems) {
+      if (it.id === itemId) {
+        flatIdx += boxIdx;
+        break;
+      }
+      flatIdx += it.boxes.length;
+    }
+
+    const newStart = Math.max(1, num - flatIdx);
+    setStartingSeq(newStart);
+    setPackedItems((prev) => resequenceAllCartons(prev, newStart));
+  };
+
   // Synchronize next sequential HU from database sequence
   useEffect(() => {
     let isMounted = true;
@@ -1498,9 +1523,25 @@ function WebPackingWizard({
               </div>
             </div>
 
-            <span className="text-[11px] font-mono text-gray-500">
-              Seq Start: #{String(startingSeq).padStart(10, "0")}
-            </span>
+            {/* Interactive HU Starting Sequence */}
+            <div className="flex items-center gap-1.5 text-xs bg-white border border-gray-300 px-2.5 py-1 rounded-lg shadow-2xs">
+              <span className="text-[11px] font-semibold text-gray-600">HU Start Seq:</span>
+              <span
+                className="font-mono text-gray-500 text-[11px] font-bold bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200 select-none"
+                title="Fixed 10-digit Partner Prefix (1 + Supplier Code)"
+              >
+                {getHuPrefix()}
+              </span>
+              <span className="text-gray-400 font-mono">+</span>
+              <input
+                type="text"
+                maxLength={10}
+                value={String(startingSeq).padStart(10, "0")}
+                onChange={(e) => handleStartingSeqChange(e.target.value)}
+                className="w-24 px-1.5 py-0.5 font-mono text-xs font-bold text-gray-900 border border-gray-300 rounded focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none text-right bg-white"
+                title="Change starting 10-digit sequence number for this shipment"
+              />
+            </div>
           </div>
 
           <div className="space-y-4">
@@ -1591,9 +1632,25 @@ function WebPackingWizard({
                               {idx + 1}
                             </td>
 
-                            {/* 2. HU Number */}
-                            <td className="px-3 py-1.5 font-mono text-[11px] font-semibold text-gray-900 tracking-wider select-all">
-                              {box.hu_number}
+                            {/* 2. HU Number (Fixed 10-digit Partner Prefix + Editable 10-digit Sequential Serial) */}
+                            <td className="px-3 py-1.5">
+                              <div className="inline-flex items-center rounded-md border border-gray-300 overflow-hidden shadow-2xs focus-within:ring-1 focus-within:ring-blue-500 focus-within:border-blue-500 bg-white">
+                                <span
+                                  className="bg-gray-100 text-gray-500 font-mono text-[11px] font-bold px-2 py-1 select-none border-r border-gray-200"
+                                  title="Fixed 10-digit Partner Prefix (cannot change)"
+                                >
+                                  {box.hu_number ? box.hu_number.slice(0, 10) : getHuPrefix()}
+                                </span>
+                                <input
+                                  type="text"
+                                  maxLength={10}
+                                  value={box.hu_number ? box.hu_number.slice(10) : ""}
+                                  onChange={(e) => handleHuSerialChange(item.id, idx, e.target.value)}
+                                  className="w-24 h-7 px-2 font-mono text-xs font-bold text-gray-900 outline-none bg-white tracking-wider"
+                                  placeholder="0000000001"
+                                  title="Editable 10-digit sequence number. Changing this auto-increments subsequent cartons."
+                                />
+                              </div>
                             </td>
 
                             {/* 3. Qty (pre-filled, auto-split) */}
@@ -2510,6 +2567,7 @@ function ExcelPackingWorkflow({
                                 <thead className="sticky top-0 bg-gray-200 text-gray-700 font-bold uppercase tracking-wider">
                                    <tr>
                                       <th className="px-3 py-2 border-b border-gray-300">Unit #</th>
+                                      <th className="px-3 py-2 border-b border-gray-300">20-digit HU Number (SSCC)</th>
                                       <th className="px-3 py-2 border-b border-gray-300">Ref</th>
                                       <th className="px-3 py-2 border-b border-gray-300">Lot No.</th>
                                       <th className="px-3 py-2 border-b border-gray-300">GW</th>
@@ -2521,6 +2579,11 @@ function ExcelPackingWorkflow({
                                    {validationResult.rows.map((r, i) => (
                                       <tr key={i} className="text-gray-600 hover:bg-gray-50">
                                          <td className="px-3 py-1.5 font-mono font-semibold">#{r.carton_number}</td>
+                                         <td className="px-3 py-1.5 font-mono font-bold text-gray-900 tracking-wider">
+                                            {r.hu_number || (
+                                               <span className="text-gray-400 font-normal italic">Auto-generates on dispatch</span>
+                                            )}
+                                         </td>
                                          <td className="px-3 py-1.5">{r.supplier_carton_ref || " "}</td>
                                          <td className="px-3 py-1.5 font-mono">{r.lot_number || " "}</td>
                                          <td className="px-3 py-1.5 font-mono">{r.gross_weight}</td>
