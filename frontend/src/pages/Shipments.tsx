@@ -1169,20 +1169,6 @@ function WebPackingWizard({
                 Excel Drop
               </button>
             )}
-
-            <div className="border-l border-gray-200 pl-3">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-gray-900">
-                  Outbound Delivery Workbench
-                </span>
-                <span className="text-[11px] font-mono text-gray-500">
-                  {poNumbers.length > 0 ? `PO ${poNumbers.join(", ")}` : "All Line Items"}
-                </span>
-              </div>
-              <span className="text-[11px] text-gray-500 block">
-                Partner: <span className="font-mono text-gray-900 font-semibold">{user?.supplier_code || "0000018194"}</span> • {user?.supplier_name || "COATS THREAD EXPORTS"}
-              </span>
-            </div>
           </div>
 
           {/* Center: Stepper */}
@@ -1589,8 +1575,8 @@ function WebPackingWizard({
                           <th className="px-3 py-2 min-w-[180px]">20-digit HU Number (SSCC)</th>
                           <th className="px-3 py-2 text-right w-24">Qty ({item.uom || "M"})</th>
                           {visibleColumns.batch && <th className="px-3 py-2 w-28">Batch / Lot</th>}
-                          <th className="px-3 py-2 text-right w-28">Gross Wt (kg) <span className="text-red-500 font-bold">*</span></th>
-                          <th className="px-3 py-2 text-right w-28">Net Wt (kg) <span className="text-red-500 font-bold">*</span></th>
+                          <th className="px-3 py-2 text-right w-28">Gross Wt (kg)</th>
+                          <th className="px-3 py-2 text-right w-28">Net Wt (kg)</th>
                           {visibleColumns.supplier_ref && <th className="px-3 py-2 w-32">Supplier Carton Ref</th>}
                           {visibleColumns.width && <th className="px-3 py-2 text-right w-24">Width</th>}
                           {visibleColumns.pack_no && <th className="px-3 py-2 w-28">Pack No.</th>}
