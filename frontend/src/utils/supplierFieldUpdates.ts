@@ -220,17 +220,20 @@ export function recordSupplierCreateEvent(supplier: {
   id: string;
   supplier_code: string;
   name: string;
+  email?: string;
+  credentials_sent?: boolean;
 }): void {
   const now = new Date().toISOString();
+  const emailNotice = supplier.email ? ` (credentials emailed to ${supplier.email})` : "";
   const record: SupplierFieldChangeRecord = {
     id: `create-${supplier.supplier_code}-${Date.now()}`,
     supplier_id: supplier.id,
     supplier_code: supplier.supplier_code,
     supplier_name: supplier.name,
     field_key: "create",
-    field_label: "New Supplier Onboarded",
+    field_label: supplier.credentials_sent ? "Supplier Onboarded & Credentials Sent" : "New Supplier Onboarded",
     old_value: "—",
-    new_value: `${supplier.name} (#${supplier.supplier_code})`,
+    new_value: `${supplier.name} (#${supplier.supplier_code})${emailNotice}`,
     updated_at: now,
   };
 
