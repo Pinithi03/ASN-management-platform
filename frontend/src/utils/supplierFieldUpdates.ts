@@ -137,7 +137,7 @@ export function recordSupplierFieldChanges(
         supplier_name: updated.name || original.name,
         field_key,
         field_label,
-        old_value: sOld || "—",
+        old_value: sOld || " ",
         new_value: sNew ? sNew : "Removed / Cleared",
         updated_at: now,
       });
@@ -229,7 +229,7 @@ export function recordSupplierCreateEvent(supplier: {
     supplier_name: supplier.name,
     field_key: "create",
     field_label: "New Supplier Onboarded",
-    old_value: "—",
+    old_value: " ",
     new_value: `${supplier.name} (#${supplier.supplier_code})`,
     updated_at: now,
   };

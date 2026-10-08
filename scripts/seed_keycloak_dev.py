@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import os
+import subprocess
 import sys
 from pathlib import Path
 from urllib.parse import urlparse
@@ -60,28 +61,42 @@ def load_settings() -> dict[str, str]:
     return s
 
 
-async def fetch_suppliers(db_url: str, codes: list[str] | None) -> list[asyncpg.Record]:
+async def fetch_suppliers(db_url: str, codes: list[str] | None) -> list[dict[str, str]]:
     if not db_url:
         fail("DATABASE_URL is not set in .env")
     dsn = db_url.replace("postgresql+asyncpg://", "postgresql://")
-    conn = await asyncpg.connect(dsn)
     try:
+        conn = await asyncpg.connect(dsn)
+        try:
+            if codes:
+                rows = await conn.fetch(
+                    "SELECT id, supplier_code, name FROM suppliers WHERE supplier_code = ANY($1::text[])",
+                    codes,
+                )
+                missing = set(codes) - {r["supplier_code"] for r in rows}
+                if missing:
+                    print(f"WARNING: not found in suppliers table: {', '.join(sorted(missing))}")
+            else:
+                rows = await conn.fetch(
+                    "SELECT id, supplier_code, name FROM suppliers WHERE is_active "
+                    "ORDER BY supplier_code LIMIT 3"
+                )
+            return [dict(r) for r in rows]
+        finally:
+            await conn.close()
+    except Exception as exc:
+        print(f"Direct asyncpg connection failed ({exc}). Querying via 'docker exec ans-postgres'...")
+        sql = "SELECT id, supplier_code, name FROM suppliers WHERE is_active ORDER BY supplier_code;"
+        cmd = ["docker", "exec", "ans-postgres", "psql", "-U", "ans_user", "-d", "ans_platform", "-A", "-F", "\t", "-t", "-c", sql]
+        res = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        results = []
+        for line in res.stdout.strip().splitlines():
+            parts = line.split("\t")
+            if len(parts) >= 3:
+                results.append({"id": parts[0], "supplier_code": parts[1], "name": parts[2]})
         if codes:
-            rows = await conn.fetch(
-                "SELECT id, supplier_code, name FROM suppliers WHERE supplier_code = ANY($1::text[])",
-                codes,
-            )
-            missing = set(codes) - {r["supplier_code"] for r in rows}
-            if missing:
-                print(f"WARNING: not found in suppliers table: {', '.join(sorted(missing))}")
-        else:
-            rows = await conn.fetch(
-                "SELECT id, supplier_code, name FROM suppliers WHERE is_active "
-                "ORDER BY supplier_code LIMIT 3"
-            )
-        return list(rows)
-    finally:
-        await conn.close()
+            results = [r for r in results if r["supplier_code"] in codes]
+        return results
 
 
 class KeycloakAdmin:
