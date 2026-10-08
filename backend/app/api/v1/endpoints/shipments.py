@@ -755,19 +755,22 @@ async def create_direct_shipment(
                 status_code=422,
                 detail=f"Carton {idx + 1}: Quantity must be greater than 0",
             )
-        # If supplier provided weights, validate them
-        if c.net_weight is not None and c.net_weight > 0:
-            if c.gross_weight is not None and c.gross_weight <= c.net_weight:
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"Carton {idx + 1}: Gross weight ({c.gross_weight} kg) must be strictly greater than net weight ({c.net_weight} kg)",
-                )
-            if not c.gross_weight or c.gross_weight <= 0:
-                c.gross_weight = round(c.net_weight + max(0.5, c.net_weight * 0.05), 2)
-        else:
-            # If supplier left weights empty, auto-compute standard default weights for EDI compliance
-            c.net_weight = max(0.1, round(c.quantity * 0.12, 2))
-            c.gross_weight = max(c.net_weight + 0.1, round(c.quantity * 0.15, 2))
+        # Validate mandatory weights: GW > NW > 0
+        if c.net_weight is None or c.net_weight <= 0:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Carton {idx + 1}: Net weight is mandatory and must be greater than 0 kg",
+            )
+        if c.gross_weight is None or c.gross_weight <= 0:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Carton {idx + 1}: Gross weight is mandatory and must be greater than 0 kg",
+            )
+        if c.gross_weight <= c.net_weight:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Carton {idx + 1}: Gross weight ({c.gross_weight} kg) must be strictly greater than net weight ({c.net_weight} kg)",
+            )
 
         if not c.lot_number or not c.lot_number.strip():
             c.lot_number = "DEFAULT"

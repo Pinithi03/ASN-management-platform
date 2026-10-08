@@ -716,12 +716,10 @@ function WebPackingWizard({
   const [startingSeq, setStartingSeq] = useState<number>(1);
   const [packingSlipNumber, setPackingSlipNumber] = useState("");
 
-  // Optional columns configuration for Step 2 Web Workbench
-  type OptionalColumnKey = "batch" | "gross_weight" | "net_weight" | "supplier_ref" | "width" | "pack_no";
+  // Optional columns configuration for Step 2 Web Workbench (Batch, Supplier Ref, Width, Pack No)
+  type OptionalColumnKey = "batch" | "supplier_ref" | "width" | "pack_no";
   const [visibleColumns, setVisibleColumns] = useState<Record<OptionalColumnKey, boolean>>({
     batch: true,
-    gross_weight: true,
-    net_weight: true,
     supplier_ref: false,
     width: false,
     pack_no: false,
@@ -1115,13 +1113,20 @@ function WebPackingWizard({
         }
         const gw = box.gross_weight != null && !isNaN(Number(box.gross_weight)) ? Number(box.gross_weight) : null;
         const nw = box.net_weight != null && !isNaN(Number(box.net_weight)) ? Number(box.net_weight) : null;
-        if (gw !== null && nw !== null && gw > 0 && nw > 0) {
-          if (gw <= nw) {
-            alert(
-              `Carton ${bIdx + 1} for item ${item.item_code}: Gross Weight (${gw}kg) must be strictly greater than Net Weight (${nw}kg).`
-            );
-            return;
-          }
+
+        if (nw === null || nw <= 0) {
+          alert(`Carton ${bIdx + 1} for item ${item.item_code}: Net Weight (kg) is mandatory and must be greater than 0.`);
+          return;
+        }
+        if (gw === null || gw <= 0) {
+          alert(`Carton ${bIdx + 1} for item ${item.item_code}: Gross Weight (kg) is mandatory and must be greater than 0.`);
+          return;
+        }
+        if (gw <= nw) {
+          alert(
+            `Carton ${bIdx + 1} for item ${item.item_code}: Gross Weight (${gw} kg) must be strictly greater than Net Weight (${nw} kg).`
+          );
+          return;
         }
       }
     }
@@ -1454,12 +1459,12 @@ function WebPackingWizard({
                   type="button"
                   onClick={() => setShowColumnMenu((v) => !v)}
                   className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white hover:bg-gray-50 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 shadow-xs transition-colors cursor-pointer"
-                  title="Toggle optional packing columns from Excel (Batch/Lot, Weights, Supplier Ref, Width, Pack No)"
+                  title="Toggle optional packing columns from Excel (Batch/Lot, Supplier Ref, Width, Pack No)"
                 >
                   <SlidersHorizontal className="w-3.5 h-3.5 text-gray-500" />
                   <span>Optional Columns</span>
                   <span className="px-1.5 py-0.2 bg-gray-100 text-gray-700 text-[10px] rounded-full font-mono font-bold">
-                    {Object.values(visibleColumns).filter(Boolean).length}/6
+                    {Object.values(visibleColumns).filter(Boolean).length}/4
                   </span>
                 </button>
 
@@ -1477,8 +1482,6 @@ function WebPackingWizard({
                     </div>
                     {[
                       { key: "batch", label: "Batch / Lot", desc: "Lot or batch code" },
-                      { key: "gross_weight", label: "Gross Wt (kg)", desc: "Carton gross weight" },
-                      { key: "net_weight", label: "Net Wt (kg)", desc: "Carton net weight" },
                       { key: "supplier_ref", label: "Supplier Carton Ref", desc: "Supplier internal ref / barcode" },
                       { key: "width", label: "Width", desc: "Material / roll width" },
                       { key: "pack_no", label: "Pack No.", desc: "Packing group identifier" },
@@ -1582,12 +1585,12 @@ function WebPackingWizard({
                     <table className="w-full text-xs text-left">
                       <thead>
                         <tr className="bg-gray-50/80 text-gray-600 border-b border-gray-200 font-semibold text-[11px] uppercase tracking-wider">
-                          <th className="px-3 py-2 w-24">{isRoll ? "Roll" : "Carton"}</th>
+                          <th className="px-3 py-2 text-center w-14">{isRoll ? "Roll" : "Carton"}</th>
                           <th className="px-3 py-2 min-w-[180px]">20-digit HU Number (SSCC)</th>
                           <th className="px-3 py-2 text-right w-24">Qty ({item.uom || "M"})</th>
                           {visibleColumns.batch && <th className="px-3 py-2 w-28">Batch / Lot</th>}
-                          {visibleColumns.gross_weight && <th className="px-3 py-2 text-right w-28">Gross Wt (kg)</th>}
-                          {visibleColumns.net_weight && <th className="px-3 py-2 text-right w-28">Net Wt (kg)</th>}
+                          <th className="px-3 py-2 text-right w-28">Gross Wt (kg) <span className="text-red-500 font-bold">*</span></th>
+                          <th className="px-3 py-2 text-right w-28">Net Wt (kg) <span className="text-red-500 font-bold">*</span></th>
                           {visibleColumns.supplier_ref && <th className="px-3 py-2 w-32">Supplier Carton Ref</th>}
                           {visibleColumns.width && <th className="px-3 py-2 text-right w-24">Width</th>}
                           {visibleColumns.pack_no && <th className="px-3 py-2 w-28">Pack No.</th>}
@@ -1597,9 +1600,9 @@ function WebPackingWizard({
                       <tbody className="divide-y divide-gray-100">
                         {item.boxes.map((box, idx) => (
                           <tr key={box.id} className="hover:bg-gray-50/80 transition-colors">
-                            {/* 1. Carton # */}
-                            <td className="px-3 py-1.5 font-bold text-gray-700 font-mono text-[11px]">
-                              {isRoll ? "Roll" : "Carton"} {idx + 1}
+                            {/* 1. Carton # (Incremental number like Excel: 1, 2, 3...) */}
+                            <td className="px-3 py-1.5 font-bold text-gray-700 font-mono text-center text-xs">
+                              {idx + 1}
                             </td>
 
                             {/* 2. HU Number */}
@@ -1632,50 +1635,46 @@ function WebPackingWizard({
                               </td>
                             )}
 
-                            {/* 5. Gross Weight (Optional) */}
-                            {visibleColumns.gross_weight && (
-                              <td className="px-3 py-1.5 text-right">
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  min="0"
-                                  value={box.gross_weight !== null && box.gross_weight !== undefined ? box.gross_weight : ""}
-                                  onChange={(e) =>
-                                    updateBox(item.id, idx, {
-                                      gross_weight: e.target.value === "" ? null : parseFloat(e.target.value) || 0,
-                                    })
-                                  }
-                                  placeholder="Optional"
-                                  className={`w-24 h-7 px-2 text-xs text-right border rounded-md font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none ${
-                                    box.gross_weight && box.net_weight && box.gross_weight <= box.net_weight
-                                      ? "border-red-400 bg-red-50 text-red-700"
-                                      : "border-gray-300"
-                                  }`}
-                                />
-                              </td>
-                            )}
+                            {/* 5. Gross Weight (Mandatory) */}
+                            <td className="px-3 py-1.5 text-right">
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0.01"
+                                value={box.gross_weight !== null && box.gross_weight !== undefined ? box.gross_weight : ""}
+                                onChange={(e) =>
+                                  updateBox(item.id, idx, {
+                                    gross_weight: e.target.value === "" ? null : parseFloat(e.target.value) || 0,
+                                  })
+                                }
+                                placeholder="0.00"
+                                className={`w-24 h-7 px-2 text-xs text-right border rounded-md font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none ${
+                                  typeof box.gross_weight === "number" && typeof box.net_weight === "number" && box.gross_weight <= box.net_weight
+                                    ? "border-red-400 bg-red-50 text-red-700"
+                                    : "border-gray-300"
+                                }`}
+                              />
+                            </td>
 
-                            {/* 6. Net Weight (Optional) */}
-                            {visibleColumns.net_weight && (
-                              <td className="px-3 py-1.5 text-right">
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  min="0"
-                                  value={box.net_weight !== null && box.net_weight !== undefined ? box.net_weight : ""}
-                                  onChange={(e) =>
-                                    updateBox(item.id, idx, {
-                                      net_weight: e.target.value === "" ? null : parseFloat(e.target.value) || 0,
-                                    })
-                                  }
-                                  placeholder="Optional"
-                                  className="w-24 h-7 px-2 text-xs text-right border border-gray-300 rounded-md font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
-                                />
-                                {box.gross_weight && box.net_weight && box.gross_weight <= box.net_weight && (
-                                  <span className="text-[10px] text-red-600 font-bold block mt-0.5">GW &le; NW!</span>
-                                )}
-                              </td>
-                            )}
+                            {/* 6. Net Weight (Mandatory) */}
+                            <td className="px-3 py-1.5 text-right">
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0.01"
+                                value={box.net_weight !== null && box.net_weight !== undefined ? box.net_weight : ""}
+                                onChange={(e) =>
+                                  updateBox(item.id, idx, {
+                                    net_weight: e.target.value === "" ? null : parseFloat(e.target.value) || 0,
+                                  })
+                                }
+                                placeholder="0.00"
+                                className="w-24 h-7 px-2 text-xs text-right border border-gray-300 rounded-md font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                              />
+                              {typeof box.gross_weight === "number" && typeof box.net_weight === "number" && box.gross_weight <= box.net_weight && (
+                                <span className="text-[10px] text-red-600 font-bold block mt-0.5">GW &le; NW!</span>
+                              )}
+                            </td>
 
                             {/* 7. Supplier Carton Ref (Optional) */}
                             {visibleColumns.supplier_ref && (
