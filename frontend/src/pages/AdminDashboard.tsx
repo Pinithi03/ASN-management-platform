@@ -324,7 +324,7 @@ export default function AdminDashboard() {
                     </div>
                     <div className="flex items-center gap-3 shrink-0 ml-3">
                       <span className="text-xs text-gray-400">
-                        {email.received_at ? format(new Date(email.received_at), "MMM d, HH:mm") : "—"}
+                        {email.received_at ? format(new Date(email.received_at), "MMM d, HH:mm") : " "}
                       </span>
                       <span className="px-2 py-0.5 text-xs font-semibold rounded bg-blue-100 text-blue-800 border border-blue-200">
                         AUTO-PARSED

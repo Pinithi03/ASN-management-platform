@@ -294,7 +294,7 @@ export default function SupplierDashboard() {
                     </div>
                     <div className="flex items-center gap-3 shrink-0 ml-3">
                       <span className="text-xs text-gray-400">
-                        {email.received_at ? format(new Date(email.received_at), "MMM d, HH:mm") : "—"}
+                        {email.received_at ? format(new Date(email.received_at), "MMM d, HH:mm") : " "}
                       </span>
                       <span className="px-2.5 py-0.5 text-xs font-semibold rounded bg-emerald-100 text-emerald-800 font-mono">
                         #{user?.supplier_code}

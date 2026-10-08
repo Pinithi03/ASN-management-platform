@@ -14,7 +14,6 @@ import {
   Square,
   Calendar,
   X,
-  Eye,
   ArrowRight,
   Copy,
   Check,
@@ -162,9 +161,9 @@ export default function PurchaseOrders() {
   const rawItems = (activePO?.extra_data as any)?.items;
   const lineItems: POLineItemRow[] = Array.isArray(rawItems) && rawItems.length > 0
     ? rawItems.map((it: any, idx: number) => {
-        const itemCode = it.item_code || it.material_code || activePO?.style_number || "—";
+        const itemCode = it.item_code || it.material_code || activePO?.style_number || " ";
         const partnerCode = it.partner_item_code || it.partner_code || "";
-        const desc = it.description || it.item_description || activePO?.description || "—";
+        const desc = it.description || it.item_description || activePO?.description || " ";
         const qty = Number(it.quantity || 0);
 
         let unitPrice: number | undefined = undefined;
@@ -189,7 +188,7 @@ export default function PurchaseOrders() {
     ? [
         {
           line_number: "1",
-          item_code: activePO.style_number || "—",
+          item_code: activePO.style_number || " ",
           partner_item_code: "",
           description: activePO.description || "Primary Line Item",
           color: "",
@@ -304,7 +303,7 @@ export default function PurchaseOrders() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             type="text"
-            placeholder="Search PO#, client, style..."
+            placeholder="Search PO, client, style..."
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
@@ -399,7 +398,6 @@ export default function PurchaseOrders() {
                   <th className="px-4 py-3.5 text-right">Quantity</th>
                   <th className="px-4 py-3.5">Delivery Date</th>
                   <th className="px-4 py-3.5">Status</th>
-                  <th className="px-4 py-3.5 text-center w-28">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -451,13 +449,13 @@ export default function PurchaseOrders() {
                             isSupplier ? "group-hover:text-emerald-600" : "group-hover:text-blue-600"
                           )}
                         >
-                          <span>{po.po_number || "—"}</span>
+                          <span>{po.po_number || " "}</span>
                         </div>
                       </td>
 
                       {/* Client / Destination */}
                       <td className="px-4 py-3 text-gray-700">
-                        <div className="font-medium text-gray-900">{po.destination || po.client_code || "—"}</div>
+                        <div className="font-medium text-gray-900">{po.destination || po.client_code || " "}</div>
                         {po.client_code && po.destination && po.client_code !== po.destination && (
                           <div className="text-xs text-gray-400">{po.client_code}</div>
                         )}
@@ -465,7 +463,7 @@ export default function PurchaseOrders() {
 
                       {/* Style */}
                       <td className="px-4 py-3 text-gray-700">
-                        <div className="font-medium text-gray-900">{po.style_number || "—"}</div>
+                        <div className="font-medium text-gray-900">{po.style_number || " "}</div>
                         {po.description && (
                           <div className="text-xs text-gray-400 truncate max-w-xs">{po.description}</div>
                         )}
@@ -473,14 +471,14 @@ export default function PurchaseOrders() {
 
                       {/* Quantity */}
                       <td className="px-4 py-3 text-right font-mono font-semibold text-gray-900">
-                        {po.quantity?.toLocaleString() ?? "—"}
+                        {po.quantity?.toLocaleString() ?? " "}
                       </td>
 
                       {/* Delivery Date */}
                       <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
                         <div className="flex items-center gap-1.5">
                           <Calendar className="w-3.5 h-3.5 text-gray-400" />
-                          {po.delivery_date ? format(new Date(po.delivery_date), "MMM d, yyyy") : "—"}
+                          {po.delivery_date ? format(new Date(po.delivery_date), "MMM d, yyyy") : " "}
                         </div>
                       </td>
 
@@ -505,40 +503,7 @@ export default function PurchaseOrders() {
                         </div>
                       </td>
 
-                      {/* Actions */}
-                      <td
-                        className="px-4 py-3 text-center"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <div className="flex items-center justify-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedPOForPreview(po)}
-                            title="Preview PO Details"
-                            className={cn(
-                              "p-1.5 text-gray-500 rounded-lg transition-colors cursor-pointer",
-                              isSupplier
-                                ? "hover:text-emerald-600 hover:bg-emerald-50"
-                                : "hover:text-blue-600 hover:bg-blue-50"
-                            )}
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => po.po_number && handleCreateShipment("web", po.po_number)}
-                            title="Create Delivery for this PO"
-                            className={cn(
-                              "p-1.5 text-gray-500 rounded-lg transition-colors cursor-pointer",
-                              isSupplier
-                                ? "hover:text-emerald-600 hover:bg-emerald-50"
-                                : "hover:text-blue-600 hover:bg-blue-50"
-                            )}
-                          >
-                            <PackagePlus className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
+
                     </tr>
                   );
                 })}
@@ -593,7 +558,7 @@ export default function PurchaseOrders() {
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="text-xl font-bold font-mono text-gray-900 tracking-tight">
-                      PO# {activePO.po_number || "—"}
+                      PO {activePO.po_number || " "}
                     </h2>
                     {activePO.version && activePO.version > 1 ? (
                       <span className="px-2 py-0.5 text-xs font-bold bg-amber-100 text-amber-800 rounded-md border border-amber-200">
@@ -815,7 +780,7 @@ export default function PurchaseOrders() {
                             </td>
                             {hasDistinctPartner && (
                               <td className="px-3 py-2.5 font-mono text-gray-700 font-medium">
-                                {item.partner_item_code || "—"}
+                                {item.partner_item_code || " "}
                               </td>
                             )}
                             <td className="px-3 py-2.5 text-gray-700 font-medium break-words max-w-xs">
@@ -827,7 +792,7 @@ export default function PurchaseOrders() {
                                   {item.color}
                                 </span>
                               ) : (
-                                <span className="text-gray-300">—</span>
+                                <span className="text-gray-300"> </span>
                               )}
                             </td>
                             <td className="px-2.5 py-2.5 text-center font-mono text-gray-700 whitespace-nowrap">
@@ -842,14 +807,14 @@ export default function PurchaseOrders() {
                               <td className="px-3 py-2.5 text-right font-mono text-gray-600 whitespace-nowrap">
                                 {item.unit_price !== undefined
                                   ? `${activePO.currency || "USD"} ${item.unit_price.toFixed(2)}`
-                                  : "—"}
+                                  : " "}
                               </td>
                             )}
                             {hasPricing && (
                               <td className="px-3 py-2.5 text-right font-mono font-bold text-gray-900 whitespace-nowrap">
                                 {lineSubtotal !== undefined
                                   ? `${activePO.currency || "USD"} ${lineSubtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                                  : "—"}
+                                  : " "}
                               </td>
                             )}
                           </tr>

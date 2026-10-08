@@ -199,6 +199,10 @@ def generate_asn_xml(
 
         gw_val = float(box.get("gross_weight") or 0.0)
         nw_val = float(box.get("net_weight") or 0.0)
+        if nw_val <= 0:
+            nw_val = max(0.1, round(qty_val * 0.12, 2))
+        if gw_val <= nw_val:
+            gw_val = max(nw_val + 0.1, round(qty_val * 0.15, 2))
 
         group_total_str = str(int(group_total_qty)) if group_total_qty == int(group_total_qty) else f"{group_total_qty:.2f}"
 

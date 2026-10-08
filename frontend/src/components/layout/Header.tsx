@@ -192,7 +192,7 @@ export default function Header({ onMenuToggle }: HeaderProps) {
       notifs.push({
         id: notifId,
         title: "New Purchase Order Assigned",
-        desc: `PO #${po.po_number || "Order"} assigned to your account (${(po.quantity ?? 0).toLocaleString()} units)`,
+        desc: `PO ${po.po_number || "Order"} assigned to your account (${(po.quantity ?? 0).toLocaleString()} units)`,
         time: timeFormatted,
         unread: !readNotifIds.includes(notifId),
         to: "/purchase-orders",

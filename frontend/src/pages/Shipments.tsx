@@ -5,10 +5,9 @@
  * 2. Calzedonia 12-Column Excel Drop (Tailored template generation, drag & drop ingestion, weight rule verification)
  */
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { format } from "date-fns";
 import {
   Search,
   PackagePlus,
@@ -31,8 +30,7 @@ import {
   Box,
   FileText,
   Eye,
-
-
+  SlidersHorizontal,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { cn } from "@/utils/cn";
@@ -116,11 +114,14 @@ type POLineItem = {
 type PackingBox = {
   id: string;
   hu_number: string;
-  batch_code: string;
-  gross_weight: number;
-  net_weight: number;
   qty: number;
+  batch_code: string;
+  gross_weight?: number | null;
+  net_weight?: number | null;
   lot_number?: string;
+  supplier_carton_ref?: string;
+  pack_number?: string;
+  width?: number | null;
 };
 
 type PackedItem = POLineItem & {
@@ -467,7 +468,7 @@ export default function Shipments() {
                 <thead>
                   <tr className="border-b border-gray-200 bg-gray-50/80 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
                     <th className="px-5 py-3.5">Shipment #</th>
-                    <th className="px-5 py-3.5">PO #</th>
+                    <th className="px-5 py-3.5">PO Number</th>
                     <th className="px-5 py-3.5">Destination Plant</th>
                     <th className="px-5 py-3.5">Cartons / Rolls</th>
                     <th className="px-5 py-3.5">Total Quantity</th>
@@ -478,7 +479,7 @@ export default function Shipments() {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {paginatedShipments.map((s) => {
-                    const plantLabel = s.plant_code ? (PLANT_NAMES[s.plant_code] || s.plant_code) : "—";
+                    const plantLabel = s.plant_code ? (PLANT_NAMES[s.plant_code] || s.plant_code) : " ";
                     const uomLabel = s.uom || "M";
                     return (
                       <tr
@@ -514,7 +515,7 @@ export default function Shipments() {
                               )}
                             </div>
                           ) : (
-                            <span className="text-gray-400 text-xs">—</span>
+                            <span className="text-gray-400 text-xs"> </span>
                           )}
                         </td>
                         <td className="px-5 py-3.5">
@@ -544,7 +545,7 @@ export default function Shipments() {
                           </span>
                         </td>
                         <td className="whitespace-nowrap px-5 py-3.5 text-gray-500 text-xs">
-                          {s.ship_date ? new Date(s.ship_date).toLocaleDateString("en-GB") : "—"}
+                          {s.ship_date ? new Date(s.ship_date).toLocaleDateString("en-GB") : " "}
                         </td>
                         <td className="whitespace-nowrap px-5 py-4 text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1.5">
@@ -713,6 +714,17 @@ function WebPackingWizard({
   const [submitSuccessResult, setSubmitSuccessResult] = useState<any>(null);
   const [previewXmlModal, setPreviewXmlModal] = useState<string | null>(null);
   const [startingSeq, setStartingSeq] = useState<number>(1);
+  const [packingSlipNumber, setPackingSlipNumber] = useState("");
+
+  // Optional columns configuration for Step 2 Web Workbench (Batch, Supplier Ref, Width, Pack No)
+  type OptionalColumnKey = "batch" | "supplier_ref" | "width" | "pack_no";
+  const [visibleColumns, setVisibleColumns] = useState<Record<OptionalColumnKey, boolean>>({
+    batch: true,
+    supplier_ref: false,
+    width: false,
+    pack_no: false,
+  });
+  const [showColumnMenu, setShowColumnMenu] = useState(false);
 
   const getHuPrefix = () => {
     const suppCodeClean = (user?.supplier_code || "0000018194").replace(/^0+/, "");
@@ -733,6 +745,31 @@ function WebPackingWizard({
         hu_number: formatHu(currentSeq++),
       })),
     }));
+  };
+
+  const handleStartingSeqChange = (valStr: string) => {
+    const cleanDigits = valStr.replace(/\D/g, "").slice(0, 10);
+    const num = parseInt(cleanDigits, 10) || 1;
+    setStartingSeq(num);
+    setPackedItems((prev) => resequenceAllCartons(prev, num));
+  };
+
+  const handleHuSerialChange = (itemId: string, boxIdx: number, newSerialStr: string) => {
+    const cleanDigits = newSerialStr.replace(/\D/g, "").slice(0, 10);
+    const num = parseInt(cleanDigits, 10) || 1;
+
+    let flatIdx = 0;
+    for (const it of packedItems) {
+      if (it.id === itemId) {
+        flatIdx += boxIdx;
+        break;
+      }
+      flatIdx += it.boxes.length;
+    }
+
+    const newStart = Math.max(1, num - flatIdx);
+    setStartingSeq(newStart);
+    setPackedItems((prev) => resequenceAllCartons(prev, newStart));
   };
 
   // Synchronize next sequential HU from database sequence
@@ -763,6 +800,11 @@ function WebPackingWizard({
   }, [user?.supplier_code, user?.supplier_id]);
 
   const handleDispatchASN = async () => {
+    const trimmedPs = packingSlipNumber.trim();
+    if (!trimmedPs) {
+      alert("Please enter Packing Slip / Delivery Note Number before dispatching.");
+      return;
+    }
     setIsSubmitting(true);
     try {
       const firstItem = packedItems[0];
@@ -777,25 +819,28 @@ function WebPackingWizard({
           product_code: item.item_code,
           partner_product_code: item.partner_product_code || item.item_code,
           description: item.description,
-          lot_number: box.batch_code || box.lot_number || "LOT-01",
+          lot_number: (box.batch_code || box.lot_number || "").trim() || "DEFAULT",
           quantity: Number(box.qty),
           uom: item.uom || "M",
-          net_weight: Number(box.net_weight),
-          gross_weight: Number(box.gross_weight),
-          supplier_carton_ref: `CTN-${bIdx + 1}`,
+          net_weight: box.net_weight != null && !isNaN(Number(box.net_weight)) && Number(box.net_weight) > 0 ? Number(box.net_weight) : undefined,
+          gross_weight: box.gross_weight != null && !isNaN(Number(box.gross_weight)) && Number(box.gross_weight) > 0 ? Number(box.gross_weight) : undefined,
+          supplier_carton_ref: (box.supplier_carton_ref || "").trim() || `CTN-${bIdx + 1}`,
+          pack_number: (box.pack_number || "").trim() || undefined,
+          width: box.width != null && !isNaN(Number(box.width)) ? Number(box.width) : undefined,
           packaging_type: item.packaging_type || "BOX",
           hu_number: box.hu_number,
         }))
       );
 
       const res = await shipmentService.createDirect({
+        packing_slip_number: trimmedPs,
         plant_code: targetPlant,
         supplier_code: activeSupplierCode,
         supplier_name: activeSupplierName,
         supplier_id: user?.supplier_id || undefined,
         carrier: "EXPRESS FREIGHT",
         note: `Online Web Packing Wizard dispatch for PO ${poNumbers.join(", ")}`,
-        cartons: cartonsPayload,
+        cartons: cartonsPayload as any,
       });
 
       setSubmitSuccessResult(res);
@@ -889,18 +934,46 @@ function WebPackingWizard({
     }
   }, [openLinesData]);
 
-  const handleSetGlobalPackagingType = (type: "BOX" | "ROLL") => {
-    setItems((prev) => prev.map((item) => ({ ...item, packaging_type: type })));
+  const distinctPoNumbers = useMemo(() => {
+    return Array.from(new Set(items.map((i) => i.po_number).filter(Boolean)));
+  }, [items]);
+
+  const handleSetPoPackagingType = (poNo: string, type: "BOX" | "ROLL") => {
+    setItems((prev) =>
+      prev.map((item) => ((item.po_number || "Default") === poNo ? { ...item, packaging_type: type } : item))
+    );
   };
 
-  const allBoxes = items.length > 0 && items.every((i) => (i.packaging_type || "BOX") === "BOX");
-  const allRolls = items.length > 0 && items.every((i) => i.packaging_type === "ROLL");
+  const formatSummary = useMemo(() => {
+    if (items.length === 0) return "All Boxes";
+    const hasRolls = items.some((i) => i.packaging_type === "ROLL");
+    const hasBoxes = items.some((i) => (i.packaging_type || "BOX") === "BOX");
+    if (hasRolls && hasBoxes) return "Mixed (Box & Roll)";
+    if (hasRolls) return "All Rolls";
+    return "All Boxes";
+  }, [items]);
 
   const handleShippingNowChange = (id: string, val: number) => {
     setItems((prev) =>
       prev.map((item) =>
         item.id === id ? { ...item, shipping_now: Math.min(Math.max(0, val), item.remaining_qty) } : item
       )
+    );
+  };
+
+  const distributeQuantityEvenly = (totalQty: number, count: number): number[] => {
+    if (count <= 0) return [];
+    if (count === 1) return [totalQty];
+    if (Number.isInteger(totalQty)) {
+      const base = Math.floor(totalQty / count);
+      const remainder = totalQty % count;
+      return Array.from({ length: count }, (_, i) => base + (i < remainder ? 1 : 0));
+    }
+    const rawBase = Math.floor((totalQty / count) * 100) / 100;
+    const diff = Math.round((totalQty - rawBase * count) * 100) / 100;
+    const extraCount = Math.round(diff / 0.01);
+    return Array.from({ length: count }, (_, i) =>
+      Math.round((rawBase + (i < extraCount ? 0.01 : 0)) * 100) / 100
     );
   };
 
@@ -915,21 +988,22 @@ function WebPackingWizard({
     const prefix = getHuPrefix();
     const initialPacked: PackedItem[] = toPack.map((item) => {
       const q = item.shipping_now || 0;
-      const nw = Math.max(0.1, Math.round(q * 0.12 * 100) / 100);
-      const gw = Math.max(nw + 0.1, Math.round(q * 0.15 * 100) / 100);
       const packType = item.packaging_type || "BOX";
       return {
         ...item,
         packaging_type: packType,
-        lot_number: "LOT-01",
+        lot_number: "",
         boxes: [
           {
             id: `box-${Date.now()}-${Math.random()}`,
             hu_number: `${prefix}${String(runningSeq++).padStart(10, "0")}`,
-            batch_code: "LOT-01",
+            batch_code: "",
             qty: q,
-            gross_weight: gw,
-            net_weight: nw,
+            gross_weight: null,
+            net_weight: null,
+            supplier_carton_ref: "",
+            pack_number: "",
+            width: null,
           },
         ],
       };
@@ -952,21 +1026,36 @@ function WebPackingWizard({
         for (let i = 0; i < numBoxes; i++) {
           const qtyThisBox = Math.min(boxQty, remaining);
           remaining -= qtyThisBox;
-          const nw = Math.max(0.1, Math.round(qtyThisBox * 0.12 * 100) / 100);
-          const gw = Math.max(nw + 0.1, Math.round(qtyThisBox * 0.15 * 100) / 100);
           newBoxes.push({
             id: `box-${Date.now()}-${i}-${Math.random()}`,
             hu_number: "", // Allocated sequentially below
-            batch_code: item.boxes[0]?.batch_code || "LOT-01",
+            batch_code: item.boxes[0]?.batch_code || "",
             qty: qtyThisBox,
-            gross_weight: gw,
-            net_weight: nw,
+            gross_weight: null,
+            net_weight: null,
+            supplier_carton_ref: "",
+            pack_number: "",
+            width: null,
           });
         }
         return { ...item, boxes: newBoxes };
       });
       return resequenceAllCartons(updated, startingSeq);
     });
+  };
+
+  const handleEvenSplit = (itemId: string) => {
+    setPackedItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== itemId) return item;
+        const totalQty = item.shipping_now || 0;
+        const splitQtys = distributeQuantityEvenly(totalQty, item.boxes.length);
+        return {
+          ...item,
+          boxes: item.boxes.map((b, i) => ({ ...b, qty: splitQtys[i] })),
+        };
+      })
+    );
   };
 
   const updateBox = (itemId: string, boxIndex: number, patch: Partial<PackingBox>) => {
@@ -983,16 +1072,33 @@ function WebPackingWizard({
     setPackedItems((prev) => {
       const updated = prev.map((item) => {
         if (item.id !== itemId) return item;
-        const lastBox = item.boxes[item.boxes.length - 1];
-        const newBox: PackingBox = {
-          id: `box-${Date.now()}-${Math.random()}`,
-          hu_number: "",
-          batch_code: lastBox?.batch_code || "LOT-01",
-          qty: 0,
-          gross_weight: 1.0,
-          net_weight: 0.8,
-        };
-        return { ...item, boxes: [...item.boxes, newBox] };
+        const totalQty = item.shipping_now || 0;
+        const newCount = item.boxes.length + 1;
+        const splitQtys = distributeQuantityEvenly(totalQty, newCount);
+
+        const newBoxes: PackingBox[] = [];
+        for (let i = 0; i < newCount; i++) {
+          const existing = item.boxes[i];
+          if (existing) {
+            newBoxes.push({
+              ...existing,
+              qty: splitQtys[i],
+            });
+          } else {
+            newBoxes.push({
+              id: `box-${Date.now()}-${Math.random()}`,
+              hu_number: "",
+              batch_code: item.boxes[0]?.batch_code || "",
+              qty: splitQtys[i],
+              gross_weight: null,
+              net_weight: null,
+              supplier_carton_ref: "",
+              pack_number: "",
+              width: null,
+            });
+          }
+        }
+        return { ...item, boxes: newBoxes };
       });
       return resequenceAllCartons(updated, startingSeq);
     });
@@ -1002,7 +1108,14 @@ function WebPackingWizard({
     setPackedItems((prev) => {
       const updated = prev.map((item) => {
         if (item.id !== itemId || item.boxes.length <= 1) return item;
-        return { ...item, boxes: item.boxes.filter((_, idx) => idx !== boxIndex) };
+        const remaining = item.boxes.filter((_, idx) => idx !== boxIndex);
+        const totalQty = item.shipping_now || 0;
+        const splitQtys = distributeQuantityEvenly(totalQty, remaining.length);
+        const rebalanced = remaining.map((b, i) => ({
+          ...b,
+          qty: splitQtys[i],
+        }));
+        return { ...item, boxes: rebalanced };
       });
       return resequenceAllCartons(updated, startingSeq);
     });
@@ -1023,13 +1136,20 @@ function WebPackingWizard({
           alert(`Carton ${bIdx + 1} for item ${item.item_code} has 0 or invalid quantity.`);
           return;
         }
-        if (!box.net_weight || box.net_weight <= 0) {
-          alert(`Carton ${bIdx + 1} for item ${item.item_code} Net Weight must be > 0.`);
+        const gw = box.gross_weight != null && !isNaN(Number(box.gross_weight)) ? Number(box.gross_weight) : null;
+        const nw = box.net_weight != null && !isNaN(Number(box.net_weight)) ? Number(box.net_weight) : null;
+
+        if (nw === null || nw <= 0) {
+          alert(`Carton ${bIdx + 1} for item ${item.item_code}: Net Weight (kg) is mandatory and must be greater than 0.`);
           return;
         }
-        if (!box.gross_weight || box.gross_weight <= box.net_weight) {
+        if (gw === null || gw <= 0) {
+          alert(`Carton ${bIdx + 1} for item ${item.item_code}: Gross Weight (kg) is mandatory and must be greater than 0.`);
+          return;
+        }
+        if (gw <= nw) {
           alert(
-            `Carton ${bIdx + 1} for item ${item.item_code}: Gross Weight (${box.gross_weight}kg) must be strictly greater than Net Weight (${box.net_weight}kg).`
+            `Carton ${bIdx + 1} for item ${item.item_code}: Gross Weight (${gw} kg) must be strictly greater than Net Weight (${nw} kg).`
           );
           return;
         }
@@ -1074,20 +1194,6 @@ function WebPackingWizard({
                 Excel Drop
               </button>
             )}
-
-            <div className="border-l border-gray-200 pl-3">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-gray-900">
-                  Outbound Delivery Workbench
-                </span>
-                <span className="text-[11px] font-mono text-gray-500">
-                  {poNumbers.length > 0 ? `PO #${poNumbers.join(", ")}` : "All Line Items"}
-                </span>
-              </div>
-              <span className="text-[11px] text-gray-500 block">
-                Partner: <span className="font-mono text-gray-900 font-semibold">{user?.supplier_code || "0000018194"}</span> • {user?.supplier_name || "COATS THREAD EXPORTS"}
-              </span>
-            </div>
           </div>
 
           {/* Center: Stepper */}
@@ -1181,8 +1287,9 @@ function WebPackingWizard({
               <button
                 type="button"
                 onClick={handleDispatchASN}
-                disabled={isSubmitting}
+                disabled={isSubmitting || !packingSlipNumber.trim()}
                 className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
+                title={!packingSlipNumber.trim() ? "Please enter Packing Slip Number before dispatching" : "Dispatch to IUNGO EDI"}
               >
                 {isSubmitting ? (
                   <>
@@ -1213,87 +1320,21 @@ function WebPackingWizard({
               <span
                 className={cn(
                   "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold shadow-xs border",
-                  allRolls
-                    ? isSupplier
-                      ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                      : "bg-blue-50 text-blue-800 border-blue-200"
+                  formatSummary.includes("Roll") && !formatSummary.includes("Mixed")
+                    ? "bg-amber-50 text-amber-800 border-amber-200"
+                    : formatSummary.includes("Mixed")
+                    ? "bg-purple-50 text-purple-800 border-purple-200"
                     : isSupplier
-                      ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                      : "bg-blue-50 text-blue-800 border-blue-200"
+                    ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                    : "bg-blue-50 text-blue-800 border-blue-200"
                 )}
               >
-                {allRolls ? "📜 All Line Items are Rolls" : "📦 All Line Items are Boxes"}
+                {formatSummary.includes("Mixed")
+                  ? "📦/📜 Mixed (Box & Roll)"
+                  : formatSummary === "All Rolls"
+                  ? "📜 All Rolls"
+                  : "📦 All Boxes"}
               </span>
-            </div>
-          </div>
-
-          {/* Order & Delivery Details Card (Mirroring XL Drop Step 1 format with Global Pack Type) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-3.5 bg-gray-50/80 border border-gray-200 rounded-xl text-xs">
-            <div>
-              <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider block">
-                {poNumbers.length > 1 ? "Selected Orders (Batch)" : "Purchase Order"}
-              </span>
-              <p className="font-mono font-bold text-gray-900 mt-1 truncate" title={poNumbers.join(", ")}>
-                {poNumbers.length > 0 ? poNumbers.map((p) => `#${p}`).join(", ") : "All Active Lines"}
-              </p>
-            </div>
-            <div>
-              <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider block">
-                Delivering Plant (Auto-Detected)
-              </span>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="font-bold text-gray-800">
-                  {PLANT_NAMES[matchPlant(items[0]?.destination)] || "Omega Line Ltd (PPA1)"}
-                </span>
-                <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded border border-emerald-200">
-                  Auto
-                </span>
-              </div>
-            </div>
-            <div>
-              <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider block">
-                Est. Delivery Schedule
-              </span>
-              <p className="font-semibold text-gray-800 mt-1">
-                {items[0]?.delivery_date ? format(new Date(items[0].delivery_date), "MMM d, yyyy") : "Standard Shipping Schedule"}
-              </p>
-            </div>
-            <div>
-              <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider block">
-                Packaging Format (All Line Items)
-              </span>
-              <div className="flex items-center gap-1.5 mt-1 bg-white p-0.5 rounded-lg border border-gray-200 w-fit">
-                <button
-                  type="button"
-                  onClick={() => handleSetGlobalPackagingType("BOX")}
-                  className={cn(
-                    "flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer",
-                    allBoxes
-                      ? isSupplier
-                        ? "bg-emerald-600 text-white shadow-xs"
-                        : "bg-blue-600 text-white shadow-xs"
-                      : "text-gray-600 hover:text-gray-900 bg-gray-50 hover:bg-gray-100"
-                  )}
-                  title="Apply Box packaging format to all line items"
-                >
-                  📦 All Boxes
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSetGlobalPackagingType("ROLL")}
-                  className={cn(
-                    "flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer",
-                    allRolls
-                      ? isSupplier
-                        ? "bg-emerald-600 text-white shadow-xs"
-                        : "bg-blue-600 text-white shadow-xs"
-                      : "text-gray-600 hover:text-gray-900 bg-gray-50 hover:bg-gray-100"
-                  )}
-                  title="Apply Roll packaging format to all line items"
-                >
-                  📜 All Rolls
-                </button>
-              </div>
             </div>
           </div>
 
@@ -1315,63 +1356,99 @@ function WebPackingWizard({
               </button>
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-xl border border-gray-200">
-              <table className="w-full text-xs text-left">
-                <thead>
-                  <tr className="bg-gray-50/80 text-gray-500 border-b border-gray-200 font-semibold uppercase tracking-wider text-[11px]">
-                    <th className="px-3.5 py-2.5">PO Number</th>
-                    <th className="px-3.5 py-2.5">Item</th>
-                    <th className="px-3.5 py-2.5">Material Code</th>
-                    <th className="px-3.5 py-2.5">Description</th>
-                    <th className="px-3.5 py-2.5 text-right">Ordered</th>
-                    <th className="px-3.5 py-2.5 text-right">Open Balance</th>
-                    <th className="px-3.5 py-2.5 text-right w-44">Shipping Qty</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {items.map((item) => (
-                    <tr key={item.id} className="hover:bg-gray-50/80 transition-colors">
-                      <td className="px-3.5 py-2 font-mono font-semibold text-gray-900">{item.po_number}</td>
-                      <td className="px-3.5 py-2 font-mono text-gray-500">{item.po_item}</td>
-                      <td className="px-3.5 py-2 font-mono font-semibold text-gray-800">{item.item_code}</td>
-                      <td className="px-3.5 py-2 text-gray-600 max-w-xs truncate">{item.description}</td>
-                      <td className="px-3.5 py-2 text-right font-mono text-gray-500">{item.ordered_qty}</td>
-                      <td className="px-3.5 py-2 text-right font-mono font-bold text-gray-900">
-                        {item.remaining_qty}
-                      </td>
-                      <td className="px-3.5 py-2 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <input
-                            type="number"
-                            min="0"
-                            max={item.remaining_qty}
-                            value={item.shipping_now || 0}
-                            onChange={(e) => handleShippingNowChange(item.id, parseInt(e.target.value) || 0)}
-                            className={cn(
-                              "w-24 h-7 px-2 border border-gray-300 rounded-lg text-right font-mono text-xs font-bold outline-none",
-                              isSupplier
-                                ? "focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-                                : "focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                            )}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleShippingNowChange(item.id, item.remaining_qty)}
-                            className={cn(
-                              "text-[11px] font-semibold px-2 py-1 rounded-md border transition-colors cursor-pointer",
-                              isSupplier
-                                ? "text-emerald-700 bg-emerald-50/80 border-emerald-300 hover:bg-emerald-100"
-                                : "text-blue-700 bg-blue-50/80 border-blue-300 hover:bg-blue-100"
-                            )}
-                          >
-                            Max
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="space-y-4">
+              {distinctPoNumbers.map((poNo) => {
+                const poItems = items.filter((l) => (l.po_number || "Default") === poNo);
+                const poPackType = poItems.length > 0 && poItems.every((i) => i.packaging_type === "ROLL") ? "ROLL" : "BOX";
+
+                return (
+                  <div key={poNo} className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
+                    {/* PO Card Header (Matching Excel Drop layout) */}
+                    <div className="flex items-center justify-between bg-gray-50/80 px-4 py-3 border-b border-gray-200">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-sm text-gray-800">PO {poNo}</span>
+                        <span className="text-xs text-gray-400 font-medium font-mono">({poItems.length} {poItems.length === 1 ? "line" : "lines"})</span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Pack Type</label>
+                        <select
+                          value={poPackType}
+                          onChange={(e) => handleSetPoPackagingType(poNo, e.target.value as "BOX" | "ROLL")}
+                          className="text-xs font-bold bg-white border border-gray-300 rounded-md px-2.5 py-1 outline-none focus:border-emerald-500 shadow-sm cursor-pointer"
+                        >
+                          <option value="BOX">📦 Box</option>
+                          <option value="ROLL">📜 Roll</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Lines Table for this PO */}
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs text-left">
+                        <thead>
+                          <tr className="bg-gray-50/40 text-gray-500 border-b border-gray-100 font-semibold uppercase tracking-wider text-[11px]">
+                            <th className="px-4 py-2.5 min-w-[130px] whitespace-nowrap">Item</th>
+                            <th className="px-4 py-2.5">Material Code</th>
+                            <th className="px-4 py-2.5">Description</th>
+                            <th className="px-4 py-2.5 text-right">Ordered</th>
+                            <th className="px-4 py-2.5 text-right">Open Balance</th>
+                            <th className="px-4 py-2.5 text-right w-44">Shipping Qty</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 bg-white">
+                          {poItems.map((item) => (
+                            <tr key={item.id} className="hover:bg-gray-50/80 transition-colors">
+                              <td className="px-4 py-2 font-mono text-gray-600 whitespace-nowrap">
+                                <span className="bg-gray-100 text-gray-700 px-2 py-0.5 rounded text-xs font-mono font-bold border border-gray-200 whitespace-nowrap inline-block">
+                                  {item.po_item}
+                                </span>
+                              </td>
+                              <td className="px-4 py-2 font-mono font-bold text-gray-800">{item.item_code}</td>
+                              <td className="px-4 py-2 text-gray-600 max-w-xs truncate">{item.description}</td>
+                              <td className="px-4 py-2 text-right font-mono text-gray-500">
+                                {item.ordered_qty} {item.uom || "M"}
+                              </td>
+                              <td className="px-4 py-2 text-right font-mono font-bold text-gray-900">
+                                {item.remaining_qty} {item.uom || "M"}
+                              </td>
+                              <td className="px-4 py-2 text-right">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max={item.remaining_qty}
+                                    value={item.shipping_now || 0}
+                                    onChange={(e) => handleShippingNowChange(item.id, parseInt(e.target.value) || 0)}
+                                    className={cn(
+                                      "w-24 h-7 px-2 border border-gray-300 rounded-lg text-right font-mono text-xs font-bold outline-none",
+                                      isSupplier
+                                        ? "focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                                        : "focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                    )}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => handleShippingNowChange(item.id, item.remaining_qty)}
+                                    className={cn(
+                                      "text-[11px] font-semibold px-2 py-1 rounded-md border transition-colors cursor-pointer",
+                                      isSupplier
+                                        ? "text-emerald-700 bg-emerald-50/80 border-emerald-300 hover:bg-emerald-100"
+                                        : "text-blue-700 bg-blue-50/80 border-blue-300 hover:bg-blue-100"
+                                    )}
+                                  >
+                                    Max
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -1381,13 +1458,90 @@ function WebPackingWizard({
       {step === 2 && (
         <div className="space-y-4">
           {/* Header */}
-          <div className="flex items-center justify-between px-1">
-            <h2 className="text-xs font-bold text-gray-800 uppercase tracking-wide">
-              Carton Packaging & Handling Unit (SSCC) Assignment
-            </h2>
-            <span className="text-[11px] font-mono text-gray-500">
-              Seq Start: #{String(startingSeq).padStart(10, "0")}
-            </span>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1">
+            <div className="flex items-center gap-3 flex-wrap">
+              <h2 className="text-xs font-bold text-gray-800 uppercase tracking-wide">
+                Carton Packaging & Handling Unit (SSCC) Assignment
+              </h2>
+
+              {/* Optional Columns Dropdown */}
+              <div className="relative inline-block text-left">
+                <button
+                  type="button"
+                  onClick={() => setShowColumnMenu((v) => !v)}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white hover:bg-gray-50 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 shadow-xs transition-colors cursor-pointer"
+                  title="Toggle optional packing columns from Excel (Batch/Lot, Supplier Ref, Width, Pack No)"
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-gray-500" />
+                  <span>Optional Columns</span>
+                  <span className="px-1.5 py-0.2 bg-gray-100 text-gray-700 text-[10px] rounded-full font-mono font-bold">
+                    {Object.values(visibleColumns).filter(Boolean).length}/4
+                  </span>
+                </button>
+
+                {showColumnMenu && (
+                  <div className="absolute left-0 mt-1.5 w-64 bg-white border border-gray-200 rounded-xl shadow-xl z-50 p-2.5 text-xs space-y-1">
+                    <div className="px-2 py-1 font-bold text-gray-500 text-[10px] uppercase tracking-wider border-b border-gray-100 flex items-center justify-between">
+                      <span>Toggle Excel Columns</span>
+                      <button
+                        type="button"
+                        onClick={() => setShowColumnMenu(false)}
+                        className="text-gray-400 hover:text-gray-600 text-xs cursor-pointer font-bold"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    {[
+                      { key: "batch", label: "Batch / Lot", desc: "Lot or batch code" },
+                      { key: "supplier_ref", label: "Supplier Carton Ref", desc: "Supplier internal ref / barcode" },
+                      { key: "width", label: "Width", desc: "Material / roll width" },
+                      { key: "pack_no", label: "Pack No.", desc: "Packing group identifier" },
+                    ].map((col) => (
+                      <label
+                        key={col.key}
+                        className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                      >
+                        <div>
+                          <div className="font-semibold text-gray-800">{col.label}</div>
+                          <div className="text-[10px] text-gray-400">{col.desc}</div>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={(visibleColumns as any)[col.key]}
+                          onChange={() =>
+                            setVisibleColumns((prev) => ({
+                              ...prev,
+                              [col.key]: !(prev as any)[col.key],
+                            }))
+                          }
+                          className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Interactive HU Starting Sequence */}
+            <div className="flex items-center gap-1.5 text-xs bg-white border border-gray-300 px-2.5 py-1 rounded-lg shadow-2xs">
+              <span className="text-[11px] font-semibold text-gray-600">HU Start Seq:</span>
+              <span
+                className="font-mono text-gray-500 text-[11px] font-bold bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200 select-none"
+                title="Fixed 10-digit Partner Prefix (1 + Supplier Code)"
+              >
+                {getHuPrefix()}
+              </span>
+              <span className="text-gray-400 font-mono">+</span>
+              <input
+                type="text"
+                maxLength={10}
+                value={String(startingSeq).padStart(10, "0")}
+                onChange={(e) => handleStartingSeqChange(e.target.value)}
+                className="w-24 px-1.5 py-0.5 font-mono text-xs font-bold text-gray-900 border border-gray-300 rounded focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none text-right bg-white"
+                title="Change starting 10-digit sequence number for this shipment"
+              />
+            </div>
           </div>
 
           <div className="space-y-4">
@@ -1401,7 +1555,7 @@ function WebPackingWizard({
                   {/* Line item header toolbar */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-gray-100 bg-gray-50/60 -mx-4 -mt-4 p-4 rounded-t-xl">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-bold text-gray-900 text-xs font-mono">PO #{item.po_number}</span>
+                      <span className="font-bold text-gray-900 text-xs font-mono">PO {item.po_number}</span>
                       <span className="text-gray-300">•</span>
                       <span className="font-mono text-xs font-semibold text-gray-800">{item.item_code}</span>
                       <span className="text-gray-300">•</span>
@@ -1416,13 +1570,21 @@ function WebPackingWizard({
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-2.5">
+                    <div className="flex items-center gap-2.5 flex-wrap">
                       <span className="text-xs font-bold text-gray-800 bg-gray-100 px-2.5 py-1 rounded-lg border border-gray-200 font-mono">
                         Shipping: {item.shipping_now} {item.uom || "M"}
                       </span>
 
                       <div className="flex items-center gap-1 text-xs">
-                        <span className="text-[11px] text-gray-500 font-medium">Split/{isRoll ? "roll" : "box"}:</span>
+                        <span className="text-[11px] text-gray-500 font-medium">Split:</span>
+                        <button
+                          type="button"
+                          onClick={() => handleEvenSplit(item.id)}
+                          className="px-2 py-0.5 bg-white hover:bg-gray-100 border border-gray-300 rounded-md text-gray-700 text-xs font-mono transition-colors cursor-pointer"
+                          title="Distribute shipping quantity equally across cartons"
+                        >
+                          Even
+                        </button>
                         {[100, 200, 500].map((size) => (
                           <button
                             key={size}
@@ -1450,67 +1612,159 @@ function WebPackingWizard({
                     <table className="w-full text-xs text-left">
                       <thead>
                         <tr className="bg-gray-50/80 text-gray-600 border-b border-gray-200 font-semibold text-[11px] uppercase tracking-wider">
-                          <th className="px-3 py-2 w-24">{isRoll ? "Roll" : "Carton"}</th>
-                          <th className="px-3 py-2">20-digit HU Number (SSCC)</th>
-                          <th className="px-3 py-2 w-28">Batch / Lot</th>
+                          <th className="px-3 py-2 text-center w-14">{isRoll ? "Roll" : "Carton"}</th>
+                          <th className="px-3 py-2 min-w-[180px]">20-digit HU Number (SSCC)</th>
                           <th className="px-3 py-2 text-right w-24">Qty ({item.uom || "M"})</th>
+                          {visibleColumns.batch && <th className="px-3 py-2 w-28">Batch / Lot</th>}
                           <th className="px-3 py-2 text-right w-28">Gross Wt (kg)</th>
                           <th className="px-3 py-2 text-right w-28">Net Wt (kg)</th>
+                          {visibleColumns.supplier_ref && <th className="px-3 py-2 w-32">Supplier Carton Ref</th>}
+                          {visibleColumns.width && <th className="px-3 py-2 text-right w-24">Width</th>}
+                          {visibleColumns.pack_no && <th className="px-3 py-2 w-28">Pack No.</th>}
                           <th className="px-3 py-2 text-center w-12">Action</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
                         {item.boxes.map((box, idx) => (
                           <tr key={box.id} className="hover:bg-gray-50/80 transition-colors">
-                            <td className="px-3 py-1.5 font-bold text-gray-700 font-mono text-[11px]">
-                              {isRoll ? "Roll" : "Carton"} {idx + 1}
+                            {/* 1. Carton # (Incremental number like Excel: 1, 2, 3...) */}
+                            <td className="px-3 py-1.5 font-bold text-gray-700 font-mono text-center text-xs">
+                              {idx + 1}
                             </td>
-                            <td className="px-3 py-1.5 font-mono text-[11px] font-semibold text-gray-900 tracking-wider select-all">
-                              {box.hu_number}
-                            </td>
+
+                            {/* 2. HU Number (Fixed 10-digit Partner Prefix + Editable 10-digit Sequential Serial) */}
                             <td className="px-3 py-1.5">
-                              <input
-                                type="text"
-                                value={box.batch_code}
-                                onChange={(e) => updateBox(item.id, idx, { batch_code: e.target.value })}
-                                className="w-24 h-7 px-2 text-xs border border-gray-300 rounded-md font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
-                                placeholder="LOT-01"
-                              />
+                              <div className="inline-flex items-center rounded-md border border-gray-300 overflow-hidden shadow-2xs focus-within:ring-1 focus-within:ring-blue-500 focus-within:border-blue-500 bg-white">
+                                <span
+                                  className="bg-gray-100 text-gray-500 font-mono text-[11px] font-bold px-2 py-1 select-none border-r border-gray-200"
+                                  title="Fixed 10-digit Partner Prefix (cannot change)"
+                                >
+                                  {box.hu_number ? box.hu_number.slice(0, 10) : getHuPrefix()}
+                                </span>
+                                <input
+                                  type="text"
+                                  maxLength={10}
+                                  value={box.hu_number ? box.hu_number.slice(10) : ""}
+                                  onChange={(e) => handleHuSerialChange(item.id, idx, e.target.value)}
+                                  className="w-24 h-7 px-2 font-mono text-xs font-bold text-gray-900 outline-none bg-white tracking-wider"
+                                  placeholder="0000000001"
+                                  title="Editable 10-digit sequence number. Changing this auto-increments subsequent cartons."
+                                />
+                              </div>
                             </td>
+
+                            {/* 3. Qty (pre-filled, auto-split) */}
                             <td className="px-3 py-1.5 text-right">
                               <input
                                 type="number"
-                                min="1"
-                                value={box.qty}
+                                min="0"
+                                step="any"
+                                value={box.qty ?? ""}
                                 onChange={(e) => updateBox(item.id, idx, { qty: Number(e.target.value) || 0 })}
                                 className="w-20 h-7 px-2 text-xs text-right border border-gray-300 rounded-md font-mono font-bold focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                               />
                             </td>
+
+                            {/* 4. Batch / Lot (Optional) */}
+                            {visibleColumns.batch && (
+                              <td className="px-3 py-1.5">
+                                <input
+                                  type="text"
+                                  value={box.batch_code || ""}
+                                  onChange={(e) => updateBox(item.id, idx, { batch_code: e.target.value })}
+                                  className="w-24 h-7 px-2 text-xs border border-gray-300 rounded-md font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                                  placeholder="Optional"
+                                />
+                              </td>
+                            )}
+
+                            {/* 5. Gross Weight (Mandatory) */}
                             <td className="px-3 py-1.5 text-right">
                               <input
                                 type="number"
                                 step="0.01"
                                 min="0.01"
-                                value={box.gross_weight}
-                                onChange={(e) => updateBox(item.id, idx, { gross_weight: parseFloat(e.target.value) || 0 })}
+                                value={box.gross_weight !== null && box.gross_weight !== undefined ? box.gross_weight : ""}
+                                onChange={(e) =>
+                                  updateBox(item.id, idx, {
+                                    gross_weight: e.target.value === "" ? null : parseFloat(e.target.value) || 0,
+                                  })
+                                }
+                                placeholder="0.00"
                                 className={`w-24 h-7 px-2 text-xs text-right border rounded-md font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none ${
-                                  box.gross_weight <= box.net_weight ? "border-red-400 bg-red-50 text-red-700" : "border-gray-300"
+                                  typeof box.gross_weight === "number" && typeof box.net_weight === "number" && box.gross_weight <= box.net_weight
+                                    ? "border-red-400 bg-red-50 text-red-700"
+                                    : "border-gray-300"
                                 }`}
                               />
                             </td>
+
+                            {/* 6. Net Weight (Mandatory) */}
                             <td className="px-3 py-1.5 text-right">
                               <input
                                 type="number"
                                 step="0.01"
                                 min="0.01"
-                                value={box.net_weight}
-                                onChange={(e) => updateBox(item.id, idx, { net_weight: parseFloat(e.target.value) || 0 })}
+                                value={box.net_weight !== null && box.net_weight !== undefined ? box.net_weight : ""}
+                                onChange={(e) =>
+                                  updateBox(item.id, idx, {
+                                    net_weight: e.target.value === "" ? null : parseFloat(e.target.value) || 0,
+                                  })
+                                }
+                                placeholder="0.00"
                                 className="w-24 h-7 px-2 text-xs text-right border border-gray-300 rounded-md font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                               />
-                              {box.gross_weight <= box.net_weight && (
+                              {typeof box.gross_weight === "number" && typeof box.net_weight === "number" && box.gross_weight <= box.net_weight && (
                                 <span className="text-[10px] text-red-600 font-bold block mt-0.5">GW &le; NW!</span>
                               )}
                             </td>
+
+                            {/* 7. Supplier Carton Ref (Optional) */}
+                            {visibleColumns.supplier_ref && (
+                              <td className="px-3 py-1.5">
+                                <input
+                                  type="text"
+                                  value={box.supplier_carton_ref || ""}
+                                  onChange={(e) => updateBox(item.id, idx, { supplier_carton_ref: e.target.value })}
+                                  className="w-28 h-7 px-2 text-xs border border-gray-300 rounded-md font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                                  placeholder="Optional"
+                                />
+                              </td>
+                            )}
+
+                            {/* 8. Width (Optional) */}
+                            {visibleColumns.width && (
+                              <td className="px-3 py-1.5 text-right">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={box.width !== null && box.width !== undefined ? box.width : ""}
+                                  onChange={(e) =>
+                                    updateBox(item.id, idx, {
+                                      width: e.target.value === "" ? null : parseFloat(e.target.value) || 0,
+                                    })
+                                  }
+                                  className="w-20 h-7 px-2 text-xs text-right border border-gray-300 rounded-md font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                                  placeholder="Optional"
+                                />
+                              </td>
+                            )}
+
+                            {/* 9. Pack No. (Optional) */}
+                            {visibleColumns.pack_no && (
+                              <td className="px-3 py-1.5">
+                                <input
+                                  type="text"
+                                  value={box.pack_number || ""}
+                                  onChange={(e) => updateBox(item.id, idx, { pack_number: e.target.value })}
+                                  className="w-24 h-7 px-2 text-xs border border-gray-300 rounded-md font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                                  placeholder="Optional"
+                                />
+                              </td>
+                            )}
+
+                            {/* 10. Action */}
                             <td className="px-3 py-1.5 text-center">
                               {item.boxes.length > 1 && (
                                 <button
@@ -1687,8 +1941,38 @@ function WebPackingWizard({
                   Dispatch Verification & Summary
                 </h2>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Review consignment metrics before final EDI transmission. Transmit using the top toolbar.
+                  Review consignment metrics and enter the official Delivery Note / Packing Slip number before EDI transmission.
                 </p>
+              </div>
+
+              {/* Required Packing Slip / Delivery Note No Card */}
+              <div className="p-4 bg-emerald-50/50 border border-emerald-200/80 rounded-xl">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <label htmlFor="wizard-ps-number" className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
+                      Packing Slip / Delivery Note No <span className="text-red-500 font-bold">*</span>
+                    </label>
+                    <p className="text-[11px] text-gray-500 mt-0.5">
+                      Supplier Dispatch Note / Delivery Note number. Embedded into IUNGO XML as &lt;PackingSlipNumber&gt; and used as Shipment No.
+                    </p>
+                  </div>
+                  <div className="w-full sm:w-auto">
+                    <input
+                      id="wizard-ps-number"
+                      type="text"
+                      required
+                      placeholder="e.g. 01007907 / DN-2026-001"
+                      value={packingSlipNumber}
+                      onChange={(e) => setPackingSlipNumber(e.target.value)}
+                      className={cn(
+                        "w-full sm:w-64 h-10 px-3.5 text-xs font-mono font-bold rounded-lg border outline-none shadow-2xs transition-colors",
+                        !packingSlipNumber.trim()
+                          ? "bg-white border-amber-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
+                          : "bg-white border-emerald-400 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200"
+                      )}
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* 4 Neutral KPI Cards */}
@@ -1799,10 +2083,10 @@ function ExcelPackingWorkflow({
   const [validationResult, setValidationResult] = useState<ExcelValidationResult | null>(null);
   const [showCartonDetails, setShowCartonDetails] = useState(false);
 
-  // Metadata
   const activePos = (targetPos && targetPos.length > 0) ? targetPos : targetPo ? [targetPo] : [];
   const [plantCode, setPlantCode] = useState("PPA1");
   const [estimatedArrival, setEstimatedArrival] = useState("");
+  const [packingSlipNumber, setPackingSlipNumber] = useState("");
   
   // PO specific configurations
   const [poLines, setPoLines] = useState<any[]>([]);
@@ -2014,10 +2298,16 @@ function ExcelPackingWorkflow({
 
   const handleCreateShipment = async () => {
     if (!selectedFile) return;
+    const trimmedPs = packingSlipNumber.trim();
+    if (!trimmedPs) {
+      alert("Please enter Packing Slip / Delivery Note Number before creating shipment.");
+      return;
+    }
     setSubmitting(true);
     try {
       const res = await shipmentService.createFromExcel({
         file: selectedFile,
+        packing_slip_number: trimmedPs,
         plant_code: plantCode,
         supplier_code: user?.supplier_code || undefined,
         supplier_name: user?.supplier_name || undefined,
@@ -2132,7 +2422,29 @@ function ExcelPackingWorkflow({
                  
                  <div className="w-px h-8 bg-gray-300 hidden sm:block"></div>
 
-                 {/* 2. Delivery Date */}
+                 {/* 2. Packing Slip / Delivery Note No */}
+                 <div className="flex items-center gap-2">
+                    <label className="text-xs font-bold text-gray-700 flex items-center gap-1">
+                       Packing Slip No <span className="text-red-500 font-bold">*</span>:
+                    </label>
+                    <input
+                       type="text"
+                       required
+                       placeholder="e.g. 01007907 / DN-2026-001"
+                       value={packingSlipNumber}
+                       onChange={(e) => setPackingSlipNumber(e.target.value)}
+                       className={cn(
+                          "h-9 px-3 text-xs border bg-white rounded-md outline-none font-mono font-bold w-48 shadow-2xs transition-colors",
+                          !packingSlipNumber.trim()
+                             ? "border-amber-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                             : "border-gray-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                       )}
+                    />
+                 </div>
+
+                 <div className="w-px h-8 bg-gray-300 hidden sm:block"></div>
+
+                 {/* 3. Delivery Date */}
                  <div className="flex items-center gap-2">
                     <label className="text-xs font-semibold text-gray-700">Delivery Date:</label>
                     <input type="date" value={estimatedArrival} onChange={(e) => setEstimatedArrival(e.target.value)} className="h-9 px-2 text-xs border border-gray-300 bg-white rounded-md focus:border-emerald-500 outline-none font-medium" />
@@ -2145,9 +2457,10 @@ function ExcelPackingWorkflow({
                  </button>
                  {validationResult?.is_valid && !validating && (
                    <button
-                     disabled={submitting}
+                     disabled={submitting || !packingSlipNumber.trim()}
                      onClick={handleCreateShipment}
                      className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 hover:shadow-md transition-all cursor-pointer disabled:opacity-50"
+                     title={!packingSlipNumber.trim() ? "Please enter Packing Slip Number before creating shipment" : "Create Shipment & Generate HUs"}
                    >
                      {submitting ? <><Loader2 className="w-4 h-4 animate-spin"/> Processing...</> : <><PackagePlus className="w-4 h-4"/> Create Shipment & Generate HUs</>}
                    </button>
@@ -2188,12 +2501,21 @@ function ExcelPackingWorkflow({
                        </div>
                     </div>
 
+                    {validationResult.is_valid && !packingSlipNumber.trim() && (
+                      <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span>
+                          <strong>Required:</strong> Please enter the official <strong>Packing Slip No</strong> in the toolbar above to enable shipment creation.
+                        </span>
+                      </div>
+                    )}
+
                     {/* Summary Table */}
                     <div className="overflow-x-auto rounded-lg border border-gray-200 shadow-xs">
                        <table className="w-full text-left text-xs">
                           <thead className="bg-gray-100 text-gray-600 font-bold uppercase tracking-wider">
                              <tr>
-                                <th className="px-4 py-3 border-b border-gray-200">PO #</th>
+                                <th className="px-4 py-3 border-b border-gray-200">PO Number</th>
                                 <th className="px-4 py-3 border-b border-gray-200">Line</th>
                                 <th className="px-4 py-3 border-b border-gray-200">Product</th>
                                 <th className="px-4 py-3 border-b border-gray-200">Cartons/Rolls</th>
@@ -2245,6 +2567,7 @@ function ExcelPackingWorkflow({
                                 <thead className="sticky top-0 bg-gray-200 text-gray-700 font-bold uppercase tracking-wider">
                                    <tr>
                                       <th className="px-3 py-2 border-b border-gray-300">Unit #</th>
+                                      <th className="px-3 py-2 border-b border-gray-300">20-digit HU Number (SSCC)</th>
                                       <th className="px-3 py-2 border-b border-gray-300">Ref</th>
                                       <th className="px-3 py-2 border-b border-gray-300">Lot No.</th>
                                       <th className="px-3 py-2 border-b border-gray-300">GW</th>
@@ -2256,8 +2579,13 @@ function ExcelPackingWorkflow({
                                    {validationResult.rows.map((r, i) => (
                                       <tr key={i} className="text-gray-600 hover:bg-gray-50">
                                          <td className="px-3 py-1.5 font-mono font-semibold">#{r.carton_number}</td>
-                                         <td className="px-3 py-1.5">{r.supplier_carton_ref || "—"}</td>
-                                         <td className="px-3 py-1.5 font-mono">{r.lot_number || "—"}</td>
+                                         <td className="px-3 py-1.5 font-mono font-bold text-gray-900 tracking-wider">
+                                            {r.hu_number || (
+                                               <span className="text-gray-400 font-normal italic">Auto-generates on dispatch</span>
+                                            )}
+                                         </td>
+                                         <td className="px-3 py-1.5">{r.supplier_carton_ref || " "}</td>
+                                         <td className="px-3 py-1.5 font-mono">{r.lot_number || " "}</td>
                                          <td className="px-3 py-1.5 font-mono">{r.gross_weight}</td>
                                          <td className="px-3 py-1.5 font-mono">{r.net_weight}</td>
                                          <td className="px-3 py-1.5 font-mono font-bold text-gray-900 bg-gray-50">{r.quantity}</td>
@@ -2294,7 +2622,7 @@ function ExcelPackingWorkflow({
                                          onChange={() => togglePo(po)}
                                          className="w-4 h-4 text-emerald-600 rounded border-gray-300 cursor-pointer" 
                                       />
-                                      <span className="font-mono font-bold text-sm text-gray-800">PO #{po}</span>
+                                      <span className="font-mono font-bold text-sm text-gray-800">PO {po}</span>
                                    </div>
                                    <div className="flex items-center gap-2">
                                       <label className="text-[10px] font-bold text-gray-500 uppercase">Pack Type</label>
@@ -2320,7 +2648,7 @@ function ExcelPackingWorkflow({
                                          />
                                          <div className="flex-1 min-w-0 flex items-center justify-between">
                                             <div className="flex items-center gap-2">
-                                               <span className="bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border border-gray-200">#{line.po_item}</span>
+                                               <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-xs font-mono font-bold border border-gray-200 whitespace-nowrap inline-block">{line.po_item}</span>
                                                <span className="text-xs font-bold text-gray-800 font-mono">{line.material_code}</span>
                                                <span className="text-xs text-gray-500 truncate max-w-sm">{line.description}</span>
                                             </div>
@@ -2670,13 +2998,13 @@ function ShipmentDetailModal({
                 <div className="p-3.5 bg-gray-50 rounded-xl border border-gray-200">
                   <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">Total Gross Weight</span>
                   <span className="text-lg font-black text-gray-900 font-mono mt-0.5 block">
-                    {data.gross_weight != null ? data.gross_weight : "—"} <span className="text-xs font-semibold text-gray-600">kg</span>
+                    {data.gross_weight != null ? data.gross_weight : " "} <span className="text-xs font-semibold text-gray-600">kg</span>
                   </span>
                 </div>
                 <div className="p-3.5 bg-gray-50 rounded-xl border border-gray-200">
                   <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">Total Net Weight</span>
                   <span className="text-lg font-black text-gray-900 font-mono mt-0.5 block">
-                    {data.net_weight != null ? data.net_weight : "—"} <span className="text-xs font-semibold text-gray-600">kg</span>
+                    {data.net_weight != null ? data.net_weight : " "} <span className="text-xs font-semibold text-gray-600">kg</span>
                   </span>
                 </div>
               </div>
@@ -2729,7 +3057,7 @@ function ShipmentDetailModal({
                       <tr>
                         <th className="px-3.5 py-2.5">Box #</th>
                         <th className="px-3.5 py-2.5">Handling Unit (20-digit SSCC)</th>
-                        <th className="px-3.5 py-2.5">PO # / Line</th>
+                        <th className="px-3.5 py-2.5">PO / Line Item</th>
                         <th className="px-3.5 py-2.5">Product Code</th>
                         <th className="px-3.5 py-2.5">Lot / Batch</th>
                         <th className="px-3.5 py-2.5 text-right">Quantity</th>
@@ -2757,13 +3085,13 @@ function ShipmentDetailModal({
                               </button>
                             </td>
                             <td className="px-3.5 py-2.5 text-gray-700">
-                              {meta.po_number || "—"}{meta.po_line ? ` / ${meta.po_line}` : ""}
+                              {meta.po_number || " "}{meta.po_line ? ` / ${meta.po_line}` : ""}
                             </td>
                             <td className="px-3.5 py-2.5 font-semibold text-gray-800">
-                              {meta.product_code || "—"}
+                              {meta.product_code || " "}
                             </td>
                             <td className="px-3.5 py-2.5 text-gray-500">
-                              {meta.lot_number || "—"}
+                              {meta.lot_number || " "}
                             </td>
                             <td className="px-3.5 py-2.5 text-right font-bold text-blue-700">
                               {meta.quantity?.toLocaleString() || meta.quantity || 0} {meta.uom || data.uom || "M"}

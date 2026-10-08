@@ -318,6 +318,7 @@ async def validate_excel_packing_list(
 @router.post("/create-from-excel")
 async def create_shipment_from_excel(
     file: UploadFile = File(...),
+    packing_slip_number: str = Form(...),
     supplier_code: str = Form("0000058376"),
     supplier_name: str = Form("Sirio Ltd"),
     supplier_id: Optional[str] = Form(None),
@@ -339,6 +340,23 @@ async def create_shipment_from_excel(
     """
     if not file.filename or not (file.filename.endswith(".xlsx") or file.filename.endswith(".xls")):
         raise HTTPException(status_code=400, detail="Only Excel files (.xlsx) are accepted")
+
+    ps_clean = str(packing_slip_number or "").strip()
+    if not ps_clean:
+        raise HTTPException(
+            status_code=422,
+            detail="Packing Slip / Delivery Note Number is required",
+        )
+
+    # Check for duplicate shipment / packing slip number
+    existing_shipment = await db.scalar(
+        select(Shipment.id).where(Shipment.shipment_number == ps_clean)
+    )
+    if existing_shipment:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Packing slip / Shipment number '{ps_clean}' already exists. Please enter a unique number.",
+        )
 
     file_bytes = await file.read()
     if not file_bytes:
@@ -440,23 +458,53 @@ async def create_shipment_from_excel(
         company_name = "Omega Line Ltd"
         group_code = "OMEGALINENEW"
 
-    # ─── 3. Generate 20-digit Handling Units (HUs) ──────────────────
+    # ─── 3. Generate or use provided 20-digit Handling Units (HUs) ──
     total_cartons = len(validation_res.rows)
-    try:
-        hu_numbers = await generate_batch_hu(
-            session=db,
-            supplier_code=actual_supp_code,
-            count=total_cartons,
-            company_id=company_id,
-            supplier_id=supplier_id,
-        )
-    except Exception as e:
-        logger.error("HU generation error: %s", e)
-        await db.rollback()
-        # Safe fallback sequence if DB lock failed
-        prefix = "1" + actual_supp_code.lstrip("0").zfill(9)
-        base_num = int(datetime.utcnow().timestamp()) % 1000000000
-        hu_numbers = [f"{prefix}{str(base_num + i).zfill(10)}" for i in range(total_cartons)]
+    provided_hus = [
+        r.hu_number.strip()
+        for r in validation_res.rows
+        if getattr(r, "hu_number", None) and len(str(r.hu_number).strip()) == 20 and str(r.hu_number).strip().isdigit()
+    ]
+    if len(provided_hus) == total_cartons:
+        hu_numbers = provided_hus
+        # Update sequence table to continue seamlessly from supplier's highest serial
+        try:
+            prefix = "1" + actual_supp_code.lstrip("0").zfill(9)
+            serials = [int(h[10:]) for h in hu_numbers if h.startswith(prefix) and h[10:].isdigit()]
+            if serials:
+                max_serial = max(serials)
+                seq_stmt = select(HUSequence).where(HUSequence.supplier_id == supplier_id).with_for_update()
+                seq_res = await db.execute(seq_stmt)
+                seq_obj = seq_res.scalar_one_or_none()
+                if seq_obj:
+                    if max_serial > seq_obj.last_number:
+                        seq_obj.last_number = max_serial
+                else:
+                    seq_obj = HUSequence(supplier_id=supplier_id, last_number=max_serial)
+                    db.add(seq_obj)
+                await db.flush()
+        except Exception as e:
+            logger.warning("Could not sync HU sequence with provided Excel HUs: %s", e)
+    else:
+        try:
+            hu_numbers = await generate_batch_hu(
+                session=db,
+                supplier_code=actual_supp_code,
+                count=total_cartons,
+                company_id=company_id,
+                supplier_id=supplier_id,
+            )
+        except Exception as e:
+            logger.error("HU generation error: %s", e)
+            await db.rollback()
+            # Safe fallback sequence if DB lock failed
+            prefix = "1" + actual_supp_code.lstrip("0").zfill(9)
+            base_num = int(datetime.utcnow().timestamp()) % 1000000000
+            hu_numbers = [f"{prefix}{str(base_num + i).zfill(10)}" for i in range(total_cartons)]
+
+    # Attach allocated hu_numbers back to validation_res.rows so row.hu_number is available
+    for idx, r in enumerate(validation_res.rows):
+        r.hu_number = hu_numbers[idx]
 
     # ─── 4. Build Shipment & Packing Slip Entities ──────────────────
     shipment_date = date.today()
@@ -467,9 +515,8 @@ async def create_shipment_from_excel(
         except ValueError:
             pass
 
-    # Generate sequential shipment / packing slip number based on PO (e.g. 2001614890-01)
-    first_po_num = validation_res.rows[0].po_number if validation_res.rows else None
-    shipment_number = await generate_po_shipment_number(db, first_po_num)
+    # Use supplier-provided packing slip / delivery note number as shipment number
+    shipment_number = ps_clean
 
     shipment = Shipment(
         id=uuid.uuid4(),
@@ -527,15 +574,27 @@ async def create_shipment_from_excel(
 
         clean_row_item = str(row.po_item).split("-")[0].zfill(5)
         po_item_info = next(
-            (it for it in po_items_list if str(it.get("order_line_number") or it.get("line_number", "")).strip() == clean_row_item),
+            (
+                it for it in po_items_list
+                if str(it.get("order_line_number") or it.get("line_number", "")).split("-")[0].zfill(5) == clean_row_item
+            ),
             None
         )
-        mat_desc = (po_item_info.get("description") if po_item_info else None) or f"Item {row.product_code}"
-        partner_code = (po_item_info.get("partner_code") if po_item_info else None) or ""
+        mat_desc = (po_item_info.get("description") or po_item_info.get("item_description") or "") if po_item_info else ""
+        partner_code = (
+            (po_item_info.get("partner_item_code") or po_item_info.get("partner_code") or po_item_info.get("partner_product_code"))
+            if po_item_info else ""
+        ) or ""
+
+        official_line = (
+            str(po_item_info.get("order_line_number") or po_item_info.get("line_number", "")).strip()
+            if po_item_info
+            else str(row.po_item).strip()
+        ) or str(row.po_item).strip()
 
         boxes_for_xml.append({
             "po_number": row.po_number,
-            "po_line": row.po_item,
+            "po_line": official_line,
             "order_date": po_order_date,
             "order_type": "ZA6A",
             "hu_number": hu_num,
@@ -663,17 +722,20 @@ class DirectCartonItem(BaseModel):
     product_code: str
     description: Optional[str] = ""
     partner_product_code: Optional[str] = ""
-    lot_number: str = "DEFAULT"
+    lot_number: Optional[str] = "DEFAULT"
     quantity: float
     uom: str = "M"
-    net_weight: float
-    gross_weight: float
+    net_weight: Optional[float] = None
+    gross_weight: Optional[float] = None
     supplier_carton_ref: Optional[str] = None
     packaging_type: Optional[str] = "BOX"
     hu_number: Optional[str] = None
+    pack_number: Optional[str] = None
+    width: Optional[float] = None
 
 
 class CreateDirectShipmentRequest(BaseModel):
+    packing_slip_number: str
     plant_code: str = "PPD1"
     supplier_code: Optional[str] = "0000058376"
     supplier_name: Optional[str] = "CALZEDONIA CENTRAL HUB"
@@ -699,23 +761,49 @@ async def create_direct_shipment(
     if not req.cartons:
         raise HTTPException(status_code=400, detail="At least one carton is required.")
 
-    # 1. Validate weights and quantities
+    ps_clean = str(req.packing_slip_number or "").strip()
+    if not ps_clean:
+        raise HTTPException(
+            status_code=422,
+            detail="Packing Slip / Delivery Note Number is required",
+        )
+
+    # Check for duplicate shipment / packing slip number
+    existing_shipment = await db.scalar(
+        select(Shipment.id).where(Shipment.shipment_number == ps_clean)
+    )
+    if existing_shipment:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Packing slip / Shipment number '{ps_clean}' already exists. Please enter a unique number.",
+        )
+
+    # 1. Validate weights and quantities (with auto-fallback for optional fields)
     for idx, c in enumerate(req.cartons):
         if c.quantity <= 0:
             raise HTTPException(
                 status_code=422,
                 detail=f"Carton {idx + 1}: Quantity must be greater than 0",
             )
-        if c.net_weight <= 0:
+        # Validate mandatory weights: GW > NW > 0
+        if c.net_weight is None or c.net_weight <= 0:
             raise HTTPException(
                 status_code=422,
-                detail=f"Carton {idx + 1}: Net weight must be greater than 0 kg",
+                detail=f"Carton {idx + 1}: Net weight is mandatory and must be greater than 0 kg",
+            )
+        if c.gross_weight is None or c.gross_weight <= 0:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Carton {idx + 1}: Gross weight is mandatory and must be greater than 0 kg",
             )
         if c.gross_weight <= c.net_weight:
             raise HTTPException(
                 status_code=422,
                 detail=f"Carton {idx + 1}: Gross weight ({c.gross_weight} kg) must be strictly greater than net weight ({c.net_weight} kg)",
             )
+
+        if not c.lot_number or not c.lot_number.strip():
+            c.lot_number = "DEFAULT"
 
     # 2. Resolve company and plant details
     plant_upper = (req.plant_code or "PPA1").upper()
@@ -838,8 +926,8 @@ async def create_direct_shipment(
         except ValueError:
             pass
 
-    # Generate sequential shipment / packing slip number based on PO (e.g. 2001614890-01)
-    shipment_number = await generate_po_shipment_number(db, first_po_num)
+    # Use supplier-provided packing slip / delivery note number as shipment number
+    shipment_number = ps_clean
 
     total_units = int(sum(c.quantity for c in req.cartons))
 
@@ -879,11 +967,21 @@ async def create_direct_shipment(
 
         clean_c_line = str(c.po_line).split("-")[0].zfill(5)
         po_item_info = next(
-            (it for it in c_po_items if str(it.get("order_line_number") or it.get("line_number", "")).strip() == clean_c_line),
+            (
+                it for it in c_po_items
+                if str(it.get("order_line_number") or it.get("line_number", "")).split("-")[0].zfill(5) == clean_c_line
+            ),
             None
         )
-        mat_desc = c.description or (po_item_info.get("description") if po_item_info else None) or f"Item {c.product_code}"
-        partner_code = c.partner_product_code or (po_item_info.get("partner_code") if po_item_info else None) or ""
+        mat_desc = c.description or ((po_item_info.get("description") or po_item_info.get("item_description") or "") if po_item_info else "") or ""
+        partner_code = (
+            c.partner_product_code
+            or (
+                (po_item_info.get("partner_item_code") or po_item_info.get("partner_code") or po_item_info.get("partner_product_code"))
+                if po_item_info else ""
+            )
+            or ""
+        )
 
         carton_meta = {
             "po_number": c.po_number,
@@ -891,6 +989,8 @@ async def create_direct_shipment(
             "product_code": c.product_code,
             "lot_number": c.lot_number,
             "supplier_carton_ref": c.supplier_carton_ref,
+            "pack_number": c.pack_number,
+            "width": c.width,
             "quantity": c.quantity,
             "uom": c.uom,
             "box_index": idx + 1,
@@ -912,9 +1012,15 @@ async def create_direct_shipment(
         )
         packing_slips.append(ps)
 
+        official_line = (
+            str(po_item_info.get("order_line_number") or po_item_info.get("line_number", "")).strip()
+            if po_item_info
+            else str(c.po_line).strip()
+        ) or str(c.po_line).strip()
+
         boxes_for_xml.append({
             "po_number": c.po_number,
-            "po_line": c.po_line,
+            "po_line": official_line,
             "order_date": c_order_date,
             "order_type": "ZA6A",
             "hu_number": hu_num,
@@ -923,6 +1029,8 @@ async def create_direct_shipment(
             "partner_product_code": partner_code,
             "lot_number": c.lot_number or "DEFAULT",
             "supplier_carton_ref": c.supplier_carton_ref,
+            "pack_number": c.pack_number,
+            "width": c.width,
             "quantity": c.quantity,
             "uom": c.uom or "M",
             "gross_weight": c.gross_weight,
