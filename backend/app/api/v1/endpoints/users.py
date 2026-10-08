@@ -37,7 +37,7 @@ PLANTS = [
 
 class UserResponse(BaseModel):
     id: str
-    company_id: str
+    company_id: Optional[str] = None
     keycloak_id: str
     email: str
     full_name: Optional[str] = None
@@ -95,7 +95,7 @@ def to_user_response(u: User) -> UserResponse:
 
     return UserResponse(
         id=str(u.id),
-        company_id=str(u.company_id),
+        company_id=str(u.company_id) if u.company_id else None,
         keycloak_id=u.keycloak_id,
         email=u.email,
         full_name=u.full_name,
@@ -127,7 +127,10 @@ async def list_users(
 
     stmt = (
         select(User)
-        .where(User.company_id == comp_uuid, User.role != "SUPPLIER")
+        .where(
+            or_(User.company_id == comp_uuid, User.company_id.is_(None)),
+            User.role != "SUPPLIER",
+        )
     )
 
     if is_active is True:

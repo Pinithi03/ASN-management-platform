@@ -25,7 +25,6 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
-from app.core.config import get_settings
 from app.core.security import decode_access_token
 from app.db.session import get_db  # noqa: F401 — re-exported for endpoints
 from app.models.enums import UserRole, ROLE_PERMISSIONS
@@ -65,24 +64,6 @@ async def get_current_user(
     Sets request.state.user so downstream code (middleware, logging)
     can access the identity without re-parsing the token.
     """
-    settings = get_settings()
-
-    # Development fallback if using mock/dev tokens or unauthenticated in development
-    if settings.ENVIRONMENT == "development":
-        if creds is None or creds.credentials.startswith("jwt-") or creds.credentials.startswith("mock-"):
-            role = UserRole.SUPPLIER
-            user = CurrentUser(
-                keycloak_id="dev-supplier-0000018194",
-                email="coats.exports@supplier.com",
-                name="COATS THREAD EXPORTS (PRIVATE) LIMITED",
-                role=role,
-                supplier_id=uuid.UUID("074830fc-dc21-42bb-9877-e6b6a45790a5"),
-                supplier_code="0000018194",
-                permissions=frozenset(ROLE_PERMISSIONS[role.value]),
-            )
-            request.state.user = user
-            return user
-
     if creds is None:
         raise HTTPException(
             status_code=401,
@@ -99,19 +80,6 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
     except jwt.PyJWTError:
-        if settings.ENVIRONMENT == "development":
-            role = UserRole.SUPPLIER
-            user = CurrentUser(
-                keycloak_id="dev-supplier-0000018194",
-                email="coats.exports@supplier.com",
-                name="COATS THREAD EXPORTS (PRIVATE) LIMITED",
-                role=role,
-                supplier_id=uuid.UUID("074830fc-dc21-42bb-9877-e6b6a45790a5"),
-                supplier_code="0000018194",
-                permissions=frozenset(ROLE_PERMISSIONS[role.value]),
-            )
-            request.state.user = user
-            return user
         raise HTTPException(
             status_code=401,
             detail="invalid_token",

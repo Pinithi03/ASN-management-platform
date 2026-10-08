@@ -1,6 +1,6 @@
 /**
  * Sidebar — role-aware navigation.
- * COMPANY_ADMIN and SUPPLIER see different menu items.
+ * ADMIN and SUPPLIER see different menu items.
  */
 
 import { NavLink, useLocation } from "react-router-dom";
@@ -61,7 +61,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const location = useLocation();
   const user = useAuthStore((s) => s.user);
 
-  const isAdmin = user?.role === "COMPANY_ADMIN";
+  const isAdmin = user?.role === "ADMIN";
   const mainNav = isAdmin ? adminMainNav : supplierMainNav;
   const settingsNav = isAdmin ? adminSettingsNav : supplierSettingsNav;
 
@@ -160,9 +160,9 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
             {isAdmin ? "Company / Tenant" : "Supplier Partner"}
           </p>
           <p className="truncate text-sm font-medium text-gray-700">
-            {user.company_name}
+            {user.supplier_name || "ANS Portal"}
           </p>
-          <p className="text-xs text-gray-400 font-mono">{user.company_code}</p>
+          <p className="text-xs text-gray-400 font-mono">{user.supplier_code || user.role}</p>
         </div>
       )}
 

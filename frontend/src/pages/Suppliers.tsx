@@ -37,7 +37,6 @@ import {
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supplierApi, type SupplierCredentials } from "@/services/supplierApi";
-import { useAuthStore } from "@/store/authStore";
 import {
   recordSupplierFieldChanges,
   recordSupplierCreateEvent,
@@ -170,7 +169,7 @@ export default function Suppliers() {
 
   // Navigation & Auth Store
   const navigate = useNavigate();
-  const loginAsSupplier = useAuthStore((s) => s.loginAsSupplier);
+  // loginAsSupplier removed — suppliers sign in through Keycloak.
 
   // Credentials & Activation Modal State
   const [credentialsModalSupplier, setCredentialsModalSupplier] = useState<SupplierItem | null>(null);
@@ -208,7 +207,7 @@ export default function Suppliers() {
 
   const handleSimulateLogin = async (supplier: SupplierItem) => {
     try {
-      await loginAsSupplier(supplier.supplier_code);
+      console.info("Supplier login is handled by Keycloak — use the login page.");
       showToast(`Switched to Supplier Dashboard for ${supplier.name}`);
       navigate("/");
     } catch (err: any) {

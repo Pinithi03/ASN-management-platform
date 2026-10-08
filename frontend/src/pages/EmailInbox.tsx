@@ -19,7 +19,6 @@ import {
   Filter,
   FileText,
   Building2,
-  ShieldCheck,
 } from "lucide-react";
 import { emailApi } from "@/services/emailApi";
 import { useAuthStore } from "@/store/authStore";
@@ -28,7 +27,7 @@ import { format } from "date-fns";
 export default function EmailInbox() {
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
-  const isAdmin = user?.role === "COMPANY_ADMIN";
+  const isAdmin = user?.role === "ADMIN";
 
   const [search, setSearch] = useState("");
   const [poNumberFilter, setPoNumberFilter] = useState("");
@@ -122,11 +121,11 @@ export default function EmailInbox() {
           <h1 className="text-2xl font-semibold text-gray-900">
             {isAdmin ? "Email Processing Queue" : "My Inbound Supplier Emails"}
           </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            {isAdmin
-              ? "Autonomous inbound PO email ingestion from IUNGO & suppliers"
-              : `Ingested order emails matching Partner #${user?.supplier_code} (${user?.supplier_name})`}
-          </p>
+          {isAdmin && (
+            <p className="text-sm text-gray-500 mt-1">
+              Autonomous inbound PO email ingestion from IUNGO & suppliers
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-3">
           <div className="hidden sm:flex items-center gap-2 px-3 py-2 bg-emerald-50 text-emerald-800 text-xs font-semibold rounded-lg border border-emerald-200 shadow-2xs">
@@ -147,18 +146,6 @@ export default function EmailInbox() {
           </button>
         </div>
       </div>
-
-      {!isAdmin && (
-        <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs rounded-xl flex items-center justify-between shadow-sm">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span>
-              <strong>Supplier Privacy Protection Active:</strong> Viewing emails strictly scoped to{" "}
-              <strong className="font-mono">#{user?.supplier_code} ({user?.supplier_name})</strong>. Access to other partner emails is restricted.
-            </span>
-          </div>
-        </div>
-      )}
 
       {syncMessage && (
         <div

@@ -2,16 +2,17 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import AuthProvider from "@/providers/AuthProvider";
 import App from "./App";
 import "./styles/globals.css";
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 2000, // 2s freshness window
-      refetchInterval: 5000, // Autonomous continuous 5s background polling
-      refetchIntervalInBackground: false, // Pause background polling when browser tab is inactive
-      refetchOnWindowFocus: true, // Refresh instantly when user refocuses the app
+      staleTime: 2000,
+      refetchInterval: 5000,
+      refetchIntervalInBackground: false,
+      refetchOnWindowFocus: true,
       retry: 1,
     },
   },
@@ -21,8 +22,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <BrowserRouter>
       <QueryClientProvider client={queryClient}>
-        <App />
+        <AuthProvider>
+          <App />
+        </AuthProvider>
       </QueryClientProvider>
     </BrowserRouter>
-  </React.StrictMode>
+  </React.StrictMode>,
 );

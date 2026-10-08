@@ -2,12 +2,10 @@
  * CompanySettings — admin-only. Shows plant/company config.
  */
 
-import { useAuthStore } from "@/store/authStore";
 import { mockCompanies } from "@/data/mockData";
 
 export default function CompanySettings(){
-  const user=useAuthStore(s=>s.user);
-  const company=mockCompanies.find(c=>c.id===user?.company_id)||mockCompanies[0];
+  const company = mockCompanies[0];
 
   return(
     <div className="space-y-6">

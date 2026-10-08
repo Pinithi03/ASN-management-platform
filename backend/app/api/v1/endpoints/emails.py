@@ -28,13 +28,15 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFile, File
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select, case, desc, cast, String
+from sqlalchemy import func, select, case, desc, cast, String, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.api.v1.deps import CurrentUser, get_current_user
 from app.db.session import get_db
 from app.models.email_attachment import EmailAttachment
 from app.models.email_message import EmailRecord
+from app.models.enums import UserRole
 from app.models.parsed_data import ParsedData
 from app.models.purchase_order import PurchaseOrder
 from app.models.supplier import Supplier
@@ -185,6 +187,7 @@ def _extract_xml_field(
 @router.get("", response_model=PaginatedEmailResponse)
 @router.get("/", response_model=PaginatedEmailResponse, include_in_schema=False)
 async def list_emails(
+    current_user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     status: Optional[str] = Query(None, description="Filter by status"),
     email_type: Optional[str] = Query(None, description="Filter by type"),
@@ -197,6 +200,27 @@ async def list_emails(
 ):
     """List emails with optional filters (including PO number and vendor code search) and pagination."""
     query = select(EmailRecord)
+
+    # Scoping for supplier role: suppliers only see their own emails
+    if current_user.role == UserRole.SUPPLIER:
+        supp_conditions = []
+        if current_user.supplier_id:
+            supp_conditions.append(EmailRecord.supplier_id == current_user.supplier_id)
+            po_subq = select(PurchaseOrder.source_email_id).where(
+                PurchaseOrder.supplier_id == current_user.supplier_id
+            )
+            supp_conditions.append(EmailRecord.id.in_(po_subq))
+        if current_user.supplier_code:
+            v_code = current_user.supplier_code
+            parsed_subq = select(ParsedData.email_record_id).where(
+                (ParsedData.supplier_id_extracted == v_code)
+                | cast(ParsedData.raw_extracted, String).ilike(f"%{v_code}%")
+            )
+            supp_conditions.append(EmailRecord.id.in_(parsed_subq))
+        if supp_conditions:
+            query = query.where(or_(*supp_conditions))
+        else:
+            query = query.where(EmailRecord.id.is_(None))
 
     if company_id:
         query = query.where(EmailRecord.company_id == company_id)
@@ -313,6 +337,7 @@ async def list_emails(
 
 @router.get("/stats", response_model=EmailStatsResponse)
 async def email_stats(
+    current_user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     company_id: Optional[str] = Query(None),
 ):
@@ -327,6 +352,26 @@ async def email_stats(
         func.count().filter(EmailRecord.status == "REJECTED").label("rejected"),
         func.count().filter(EmailRecord.status == "ERROR").label("error"),
     )
+
+    if current_user.role == UserRole.SUPPLIER:
+        supp_conditions = []
+        if current_user.supplier_id:
+            supp_conditions.append(EmailRecord.supplier_id == current_user.supplier_id)
+            po_subq = select(PurchaseOrder.source_email_id).where(
+                PurchaseOrder.supplier_id == current_user.supplier_id
+            )
+            supp_conditions.append(EmailRecord.id.in_(po_subq))
+        if current_user.supplier_code:
+            v_code = current_user.supplier_code
+            parsed_subq = select(ParsedData.email_record_id).where(
+                (ParsedData.supplier_id_extracted == v_code)
+                | cast(ParsedData.raw_extracted, String).ilike(f"%{v_code}%")
+            )
+            supp_conditions.append(EmailRecord.id.in_(parsed_subq))
+        if supp_conditions:
+            query = query.where(or_(*supp_conditions))
+        else:
+            query = query.where(EmailRecord.id.is_(None))
 
     if company_id:
         query = query.where(EmailRecord.company_id == company_id)
@@ -547,6 +592,7 @@ async def test_poll():
 @router.get("/{email_id}", response_model=EmailDetailResponse)
 async def get_email(
     email_id: UUID,
+    current_user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Get full email detail: bodies, stored attachments, and parsed data."""
@@ -562,10 +608,27 @@ async def get_email(
     if not record:
         raise HTTPException(status_code=404, detail="Email not found")
 
+    if current_user.role == UserRole.SUPPLIER:
+        # Verify supplier owns this email
+        if record.supplier_id and current_user.supplier_id and record.supplier_id != current_user.supplier_id:
+            raise HTTPException(status_code=403, detail="Access denied to this email")
+
     pd_result = await db.execute(
-        select(ParsedData).where(ParsedData.email_record_id == str(email_id))
+        select(ParsedData)
+        .where(ParsedData.email_record_id == str(email_id))
+        .order_by(ParsedData.created_at.desc())
     )
-    parsed_items = pd_result.scalars().all()
+    raw_parsed_items = pd_result.scalars().all()
+    # Deduplicate defensively by po_number_extracted so each distinct PO appears at most once
+    seen_pos: set[str] = set()
+    parsed_items: list[ParsedData] = []
+    for pd in raw_parsed_items:
+        po_key = (pd.po_number_extracted or "").strip()
+        if po_key:
+            if po_key in seen_pos:
+                continue
+            seen_pos.add(po_key)
+        parsed_items.append(pd)
 
     att_result = await db.execute(
         select(EmailAttachment)
