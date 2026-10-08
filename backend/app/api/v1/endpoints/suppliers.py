@@ -45,6 +45,8 @@ def get_supplier_discovery_meta(code):
     return None
 
 
+from app.api.v1.deps import CurrentUser, get_current_user
+from app.services.keycloak_admin import verify_admin_password
 from app.db.session import get_db
 from app.models.parsed_data import ParsedData
 from app.models.purchase_order import PurchaseOrder
@@ -55,6 +57,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # ─── Pydantic Schemas ───────────────────────────────────────────
+
+class SupplierDeleteRequest(BaseModel):
+    admin_password: Optional[str] = None
+
 
 class SupplierResponse(BaseModel):
     id: str
@@ -68,6 +74,8 @@ class SupplierResponse(BaseModel):
     tax_id: Optional[str] = None
     category: Optional[str] = None
     is_active: bool = True
+    is_deleted: bool = False
+    deleted_at: Optional[str] = None
     onboarded_at: str
     updated_at: Optional[str] = None
     last_profile_updated_at: Optional[str] = None
@@ -79,6 +87,7 @@ class SupplierResponse(BaseModel):
     temporary_password: Optional[str] = None
     temp_password_expires_at: Optional[str] = None
     requires_password_change: bool = False
+    credentials_emailed: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -92,6 +101,7 @@ class SupplierCredentialsResponse(BaseModel):
     expires_in_hours: int = 6
     expires_at: str
     requires_password_change: bool = True
+    credentials_emailed: bool = False
     message: str = "Temporary credentials generated successfully. Valid for 6 hours."
 
 
@@ -395,6 +405,8 @@ async def list_suppliers(
     db: AsyncSession = Depends(get_db),
     search: Optional[str] = Query(None, description="Search by name, code, email, or contact"),
     active_only: Optional[bool] = Query(None, description="Filter by active status"),
+    archived_only: Optional[bool] = Query(False, description="Filter for archived/deleted suppliers only"),
+    include_deleted: Optional[bool] = Query(False, description="Include soft-deleted suppliers"),
 ) -> list[SupplierResponse]:
     """
     List all onboarded and email-detected suppliers, enriched with live PO statistics.
@@ -402,6 +414,11 @@ async def list_suppliers(
     await _ensure_seed_and_email_sync(db)
 
     query = select(Supplier).order_by(Supplier.name.asc())
+    if archived_only:
+        query = query.where(Supplier.is_deleted.is_(True))
+    elif not include_deleted:
+        query = query.where(Supplier.is_deleted.is_(False))
+
     if isinstance(active_only, bool):
         query = query.where(Supplier.is_active == active_only)
     if isinstance(search, str) and search.strip():
@@ -459,6 +476,8 @@ async def list_suppliers(
                 tax_id=s.tax_id,
                 category=s.category or "Textiles & Garments",
                 is_active=s.is_active,
+                is_deleted=bool(s.is_deleted),
+                deleted_at=s.deleted_at.isoformat() if s.deleted_at else None,
                 onboarded_at=s.created_at.isoformat() if s.created_at else datetime.now(timezone.utc).isoformat(),
                 updated_at=s.updated_at.isoformat() if s.updated_at else None,
                 last_profile_updated_at=s.updated_at.isoformat() if s.updated_at else None,
@@ -511,6 +530,66 @@ async def create_supplier(
     await db.commit()
     await db.refresh(new_supp)
 
+    # 1. Generate & cache temporary credentials
+    from app.core.credentials_store import issue_temporary_credentials
+    cred = issue_temporary_credentials(
+        supplier_code=new_supp.supplier_code,
+        email=new_supp.email,
+        name=new_supp.name,
+        duration_hours=6,
+    )
+    temp_pw = cred["temporary_password"]
+
+    # 2. Provision account in Keycloak SSO
+    kc_uid = None
+    try:
+        from app.services.keycloak_admin import provision_supplier_in_keycloak
+        kc_res = provision_supplier_in_keycloak(
+            supplier_code=new_supp.supplier_code,
+            email=new_supp.email,
+            name=new_supp.name,
+            supplier_id=str(new_supp.id),
+            temporary_password=temp_pw,
+        )
+        kc_uid = kc_res.get("keycloak_id")
+    except Exception as ex:
+        logger.error("Could not provision supplier %s in Keycloak: %s", new_supp.supplier_code, ex)
+
+    # 3. Create or synchronize User entity in users table
+    try:
+        from app.models.user import User
+        from app.models.company import Company
+        co_res = await db.execute(select(Company).limit(1))
+        company = co_res.scalar_one_or_none()
+        company_id = company.id if company else uuid.UUID("00000000-0000-0000-0000-000000000001")
+
+        usr = User(
+            company_id=company_id,
+            keycloak_id=kc_uid or f"kc-supp-{new_supp.supplier_code}",
+            email=new_supp.email,
+            full_name=new_supp.name,
+            role="SUPPLIER",
+            supplier_id=new_supp.id,
+            is_active=True,
+        )
+        db.add(usr)
+        await db.commit()
+    except Exception as ex:
+        logger.error("Could not record User entity for supplier %s: %s", new_supp.supplier_code, ex)
+
+    # 4. Dispatch automated welcome email with credentials
+    email_sent = False
+    try:
+        from app.services.email_sender import send_supplier_welcome_email
+        email_sent = send_supplier_welcome_email(
+            to_email=new_supp.email,
+            supplier_name=new_supp.name,
+            supplier_code=new_supp.supplier_code,
+            temporary_password=temp_pw,
+        )
+    except Exception as ex:
+        logger.error("Failed to send welcome credentials email to %s: %s", new_supp.email, ex)
+
     return SupplierResponse(
         id=str(new_supp.id),
         supplier_code=new_supp.supplier_code,
@@ -523,9 +602,16 @@ async def create_supplier(
         tax_id=new_supp.tax_id,
         category=new_supp.category,
         is_active=new_supp.is_active,
+        is_deleted=False,
+        deleted_at=None,
         onboarded_at=new_supp.created_at.isoformat(),
         total_pos=0,
         latest_po_date=None,
+        has_credentials_issued=True,
+        temporary_password=temp_pw,
+        temp_password_expires_at=cred.get("expires_at"),
+        requires_password_change=True,
+        credentials_emailed=email_sent,
     )
 
 
@@ -605,6 +691,8 @@ async def update_supplier(
         tax_id=supp.tax_id,
         category=supp.category,
         is_active=supp.is_active,
+        is_deleted=bool(supp.is_deleted),
+        deleted_at=supp.deleted_at.isoformat() if supp.deleted_at else None,
         onboarded_at=supp.created_at.isoformat() if supp.created_at else datetime.now(timezone.utc).isoformat(),
         updated_at=supp.updated_at.isoformat() if supp.updated_at else datetime.now(timezone.utc).isoformat(),
         last_profile_updated_at=supp.updated_at.isoformat() if supp.updated_at else datetime.now(timezone.utc).isoformat(),
@@ -614,13 +702,32 @@ async def update_supplier(
 
 
 @router.delete("/{supplier_id}", status_code=status.HTTP_200_OK)
+@router.post("/{supplier_id}/delete", status_code=status.HTTP_200_OK)
 async def delete_supplier(
     supplier_id: str,
+    payload: Optional[SupplierDeleteRequest] = None,
+    admin_password: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
+    current_user: Optional[CurrentUser] = Depends(get_current_user),
 ) -> dict:
     """
-    Delete a supplier profile.
+    Safely soft-delete/archive a supplier partner after verifying the administrator's password against Keycloak.
+    Preserves all historical purchase orders and records for 1-click restore.
     """
+    pwd = (payload.admin_password if payload and payload.admin_password else None) or admin_password
+    if not pwd or not pwd.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Administrator password is required to verify deletion.",
+        )
+
+    admin_identifier = (current_user.username or current_user.email) if current_user else None
+    if not verify_admin_password(admin_identifier, pwd.strip()):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Security Verification Failed: Invalid administrator password. Deletion denied.",
+        )
+
     supp: Optional[Supplier] = None
     try:
         supp_uuid = uuid.UUID(supplier_id)
@@ -645,21 +752,88 @@ async def delete_supplier(
     _DELETED_SUPPLIER_CODES.add(code)
     _DELETED_SUPPLIER_CODES.add(code.lstrip("0"))
 
-    # Detach POs and Users before deleting so foreign keys don't block
-    from app.models.user import User
+    # Soft-delete: mark is_deleted=True, deactivate, set timestamp
+    # CRITICAL: We do NOT detach purchase orders or delete users, preserving all historical data and backup!
+    supp.is_deleted = True
+    supp.is_active = False
+    supp.deleted_at = datetime.now(timezone.utc)
 
-    await db.execute(
-        update(PurchaseOrder).where(PurchaseOrder.supplier_id == supp.id).values(supplier_id=None)
-    )
-    await db.execute(
-        update(User).where(User.supplier_id == supp.id).values(supplier_id=None)
-    )
-
-    await db.execute(
-        delete(Supplier).where(Supplier.id == supp.id)
-    )
     await db.commit()
-    return {"status": "success", "message": f"Supplier {supp.name} deleted successfully"}
+    return {
+        "status": "success",
+        "message": f"Supplier {supp.name} (#{supp.supplier_code}) successfully moved to Archive / Trash. All purchase orders and records are preserved and can be restored.",
+        "id": str(supp.id),
+        "supplier_code": supp.supplier_code,
+    }
+
+
+@router.post("/{supplier_id}/restore", response_model=SupplierResponse)
+async def restore_supplier(
+    supplier_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> SupplierResponse:
+    """
+    Restore an archived / soft-deleted supplier partner back to active status.
+    """
+    supp: Optional[Supplier] = None
+    try:
+        supp_uuid = uuid.UUID(supplier_id)
+        res = await db.execute(select(Supplier).where(Supplier.id == supp_uuid))
+        supp = res.scalar_one_or_none()
+    except ValueError:
+        pass
+
+    if not supp:
+        res = await db.execute(
+            select(Supplier).where(Supplier.supplier_code == supplier_id)
+        )
+        supp = res.scalar_one_or_none()
+
+    if not supp:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Supplier with ID or code '{supplier_id}' not found.",
+        )
+
+    code = supp.supplier_code.strip()
+    _DELETED_SUPPLIER_CODES.discard(code)
+    _DELETED_SUPPLIER_CODES.discard(code.lstrip("0"))
+
+    supp.is_deleted = False
+    supp.deleted_at = None
+    supp.is_active = True
+
+    await db.commit()
+    await db.refresh(supp)
+
+    po_cnt = (
+        await db.execute(
+            select(func.count(PurchaseOrder.id)).where(
+                PurchaseOrder.supplier_id == supp.id
+            )
+        )
+    ).scalar() or 0
+
+    return SupplierResponse(
+        id=str(supp.id),
+        supplier_code=supp.supplier_code,
+        name=supp.name,
+        email=supp.email,
+        contact_name=supp.contact_name,
+        phone=supp.phone,
+        address=supp.address,
+        country=supp.country,
+        tax_id=supp.tax_id,
+        category=supp.category,
+        is_active=supp.is_active,
+        is_deleted=False,
+        deleted_at=None,
+        onboarded_at=supp.created_at.isoformat() if supp.created_at else datetime.now(timezone.utc).isoformat(),
+        updated_at=supp.updated_at.isoformat() if supp.updated_at else None,
+        last_profile_updated_at=supp.updated_at.isoformat() if supp.updated_at else None,
+        total_pos=po_cnt,
+        latest_po_date=None,
+    )
 
 
 def _is_uuid(val: str) -> bool:
@@ -732,6 +906,37 @@ async def activate_supplier_credentials(
 
     await db.commit()
 
+    # 4. Provision in Keycloak SSO
+    kc_uid = None
+    try:
+        from app.services.keycloak_admin import provision_supplier_in_keycloak
+        kc_res = provision_supplier_in_keycloak(
+            supplier_code=supplier.supplier_code,
+            email=supplier.email,
+            name=supplier.name,
+            supplier_id=str(supplier.id),
+            temporary_password=cred["temporary_password"],
+        )
+        kc_uid = kc_res.get("keycloak_id")
+        if usr and kc_uid:
+            usr.keycloak_id = kc_uid
+            await db.commit()
+    except Exception as ex:
+        logger.error("Keycloak activation error for %s: %s", supplier.supplier_code, ex)
+
+    # 5. Send automated credentials email to company address
+    email_sent = False
+    try:
+        from app.services.email_sender import send_supplier_welcome_email
+        email_sent = send_supplier_welcome_email(
+            to_email=supplier.email,
+            supplier_name=supplier.name,
+            supplier_code=supplier.supplier_code,
+            temporary_password=cred["temporary_password"],
+        )
+    except Exception as ex:
+        logger.error("Email sending error for %s: %s", supplier.supplier_code, ex)
+
     return SupplierCredentialsResponse(
         supplier_id=str(supplier.id),
         supplier_code=supplier.supplier_code,
@@ -741,7 +946,8 @@ async def activate_supplier_credentials(
         expires_in_hours=6,
         expires_at=cred["expires_at"],
         requires_password_change=True,
-        message=f"Supplier {supplier.name} successfully activated. 6-hour temporary password generated.",
+        credentials_emailed=email_sent,
+        message=f"Supplier {supplier.name} successfully activated. 6-hour temporary password generated and emailed to {supplier.email}.",
     )
 
 
