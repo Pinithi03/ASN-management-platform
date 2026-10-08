@@ -22,6 +22,7 @@ from pydantic import BaseModel
 from sqlalchemy import cast, String, desc, func, select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.deps import CurrentUser, get_current_user, UserRole
 from app.db.session import get_db
 from app.models.email_message import EmailRecord
 from app.models.parsed_data import ParsedData
@@ -121,6 +122,7 @@ class POStatsResponse(BaseModel):
 @router.get("/", response_model=PaginatedPOResponse, include_in_schema=False)
 async def list_purchase_orders(
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
     status: Optional[str] = Query(None, description="Filter by status"),
     search: Optional[str] = Query(None, description="Search PO#, client, style"),
     supplier_id: Optional[str] = Query(None, description="Filter by supplier UUID"),
@@ -129,6 +131,10 @@ async def list_purchase_orders(
     per_page: int = Query(20, ge=1, le=100),
 ):
     """List purchase orders with optional filters and pagination."""
+    # Enforce supplier scoping if logged in as SUPPLIER
+    if current_user.role == UserRole.SUPPLIER:
+        supplier_id = str(current_user.supplier_id or current_user.supplier_code)
+
     query = select(PurchaseOrder)
 
     # Apply filters
@@ -226,10 +232,14 @@ async def list_purchase_orders(
 @router.get("/stats", response_model=POStatsResponse)
 async def po_stats(
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
     supplier_id: Optional[str] = Query(None),
     company_id: Optional[str] = Query(None),
 ):
     """Get PO count breakdown by status."""
+    if current_user.role == UserRole.SUPPLIER:
+        supplier_id = str(current_user.supplier_id or current_user.supplier_code)
+
     query = select(
         func.count().label("total"),
         func.count().filter(PurchaseOrder.status == "ACTIVE").label("active"),
@@ -255,16 +265,20 @@ async def po_stats(
         try:
             supp_uuid = uuid.UUID(supplier_id)
             query = query.where(
-                PurchaseOrder.supplier_id == supp_uuid
-                | PurchaseOrder.supplier_id.in_(supp_ids_subq)
-                | PurchaseOrder.po_number.in_(parsed_po_subq)
-                | PurchaseOrder.client_code.ilike(v_filter)
+                or_(
+                    PurchaseOrder.supplier_id == supp_uuid,
+                    PurchaseOrder.supplier_id.in_(supp_ids_subq),
+                    PurchaseOrder.po_number.in_(parsed_po_subq),
+                    PurchaseOrder.client_code.ilike(v_filter),
+                )
             )
         except (ValueError, TypeError):
             query = query.where(
-                PurchaseOrder.supplier_id.in_(supp_ids_subq)
-                | PurchaseOrder.po_number.in_(parsed_po_subq)
-                | PurchaseOrder.client_code.ilike(v_filter)
+                or_(
+                    PurchaseOrder.supplier_id.in_(supp_ids_subq),
+                    PurchaseOrder.po_number.in_(parsed_po_subq),
+                    PurchaseOrder.client_code.ilike(v_filter),
+                )
             )
 
     result = await db.execute(query)
@@ -297,8 +311,12 @@ async def list_open_po_lines(
     supplier_id: Optional[str] = Query(None),
     company_id: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> list[dict[str, Any]]:
     """Return open PO lines across active purchase orders for shipping dropdowns or Excel generation."""
+    if current_user.role == UserRole.SUPPLIER:
+        supplier_id = str(current_user.supplier_id or current_user.supplier_code)
+
     try:
         stmt = select(PurchaseOrder).where(
             PurchaseOrder.status.in_(["ACTIVE", "UPDATED", "XML_SENT", "PARTIAL", "SHIPPED"])
