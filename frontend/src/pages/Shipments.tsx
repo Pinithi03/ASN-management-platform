@@ -2487,35 +2487,39 @@ function ExcelPackingWorkflow({
                     </button>
                  </div>
                  
-                 <div className="w-px h-8 bg-gray-300 hidden sm:block"></div>
+                 {validationResult && (
+                    <>
+                       <div className="w-px h-8 bg-gray-300 hidden sm:block"></div>
 
-                 {/* 2. Packing Slip / Delivery Note No */}
-                 <div className="flex items-center gap-2">
-                    <label className="text-xs font-bold text-gray-700 flex items-center gap-1">
-                       Packing Slip No <span className="text-red-500 font-bold">*</span>:
-                    </label>
-                    <input
-                       type="text"
-                       required
-                       placeholder="e.g. 01007907 / DN-2026-001"
-                       value={packingSlipNumber}
-                       onChange={(e) => setPackingSlipNumber(e.target.value)}
-                       className={cn(
-                          "h-9 px-3 text-xs border bg-white rounded-md outline-none font-mono font-bold w-48 shadow-2xs transition-colors",
-                          !packingSlipNumber.trim()
-                             ? "border-amber-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-                             : "border-gray-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-                       )}
-                    />
-                 </div>
+                       {/* 2. Packing Slip / Delivery Note No */}
+                       <div className="flex items-center gap-2">
+                          <label className="text-xs font-bold text-gray-700 flex items-center gap-1">
+                             Packing Slip No <span className="text-red-500 font-bold">*</span>:
+                          </label>
+                          <input
+                             type="text"
+                             required
+                             placeholder="e.g. 01007907 / DN-2026-001"
+                             value={packingSlipNumber}
+                             onChange={(e) => setPackingSlipNumber(e.target.value)}
+                             className={cn(
+                                "h-9 px-3 text-xs border bg-white rounded-md outline-none font-mono font-bold w-48 shadow-2xs transition-colors",
+                                !packingSlipNumber.trim()
+                                   ? "border-amber-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                                   : "border-gray-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                             )}
+                          />
+                       </div>
 
-                 <div className="w-px h-8 bg-gray-300 hidden sm:block"></div>
+                       <div className="w-px h-8 bg-gray-300 hidden sm:block"></div>
 
-                 {/* 3. Delivery Date */}
-                 <div className="flex items-center gap-2">
-                    <label className="text-xs font-semibold text-gray-700">Delivery Date:</label>
-                    <input type="date" value={estimatedArrival} onChange={(e) => setEstimatedArrival(e.target.value)} className="h-9 px-2 text-xs border border-gray-300 bg-white rounded-md focus:border-emerald-500 outline-none font-medium" />
-                 </div>
+                       {/* 3. Delivery Date */}
+                       <div className="flex items-center gap-2">
+                          <label className="text-xs font-semibold text-gray-700">Delivery Date:</label>
+                          <input type="date" value={estimatedArrival} onChange={(e) => setEstimatedArrival(e.target.value)} className="h-9 px-2 text-xs border border-gray-300 bg-white rounded-md focus:border-emerald-500 outline-none font-medium" />
+                       </div>
+                    </>
+                 )}
               </div>
 
               <div className="flex items-center gap-2">
