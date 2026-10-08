@@ -30,8 +30,7 @@ import {
   Box,
   FileText,
   Eye,
-
-
+  SlidersHorizontal,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { cn } from "@/utils/cn";
@@ -115,11 +114,14 @@ type POLineItem = {
 type PackingBox = {
   id: string;
   hu_number: string;
-  batch_code: string;
-  gross_weight: number;
-  net_weight: number;
   qty: number;
+  batch_code: string;
+  gross_weight?: number | null;
+  net_weight?: number | null;
   lot_number?: string;
+  supplier_carton_ref?: string;
+  pack_number?: string;
+  width?: number | null;
 };
 
 type PackedItem = POLineItem & {
@@ -714,6 +716,18 @@ function WebPackingWizard({
   const [startingSeq, setStartingSeq] = useState<number>(1);
   const [packingSlipNumber, setPackingSlipNumber] = useState("");
 
+  // Optional columns configuration for Step 2 Web Workbench
+  type OptionalColumnKey = "batch" | "gross_weight" | "net_weight" | "supplier_ref" | "width" | "pack_no";
+  const [visibleColumns, setVisibleColumns] = useState<Record<OptionalColumnKey, boolean>>({
+    batch: true,
+    gross_weight: true,
+    net_weight: true,
+    supplier_ref: false,
+    width: false,
+    pack_no: false,
+  });
+  const [showColumnMenu, setShowColumnMenu] = useState(false);
+
   const getHuPrefix = () => {
     const suppCodeClean = (user?.supplier_code || "0000018194").replace(/^0+/, "");
     return "1" + suppCodeClean.padStart(9, "0");
@@ -782,12 +796,14 @@ function WebPackingWizard({
           product_code: item.item_code,
           partner_product_code: item.partner_product_code || item.item_code,
           description: item.description,
-          lot_number: box.batch_code || box.lot_number || "LOT-01",
+          lot_number: (box.batch_code || box.lot_number || "").trim() || "DEFAULT",
           quantity: Number(box.qty),
           uom: item.uom || "M",
-          net_weight: Number(box.net_weight),
-          gross_weight: Number(box.gross_weight),
-          supplier_carton_ref: `CTN-${bIdx + 1}`,
+          net_weight: box.net_weight != null && !isNaN(Number(box.net_weight)) && Number(box.net_weight) > 0 ? Number(box.net_weight) : undefined,
+          gross_weight: box.gross_weight != null && !isNaN(Number(box.gross_weight)) && Number(box.gross_weight) > 0 ? Number(box.gross_weight) : undefined,
+          supplier_carton_ref: (box.supplier_carton_ref || "").trim() || `CTN-${bIdx + 1}`,
+          pack_number: (box.pack_number || "").trim() || undefined,
+          width: box.width != null && !isNaN(Number(box.width)) ? Number(box.width) : undefined,
           packaging_type: item.packaging_type || "BOX",
           hu_number: box.hu_number,
         }))
@@ -801,7 +817,7 @@ function WebPackingWizard({
         supplier_id: user?.supplier_id || undefined,
         carrier: "EXPRESS FREIGHT",
         note: `Online Web Packing Wizard dispatch for PO ${poNumbers.join(", ")}`,
-        cartons: cartonsPayload,
+        cartons: cartonsPayload as any,
       });
 
       setSubmitSuccessResult(res);
@@ -922,6 +938,22 @@ function WebPackingWizard({
     );
   };
 
+  const distributeQuantityEvenly = (totalQty: number, count: number): number[] => {
+    if (count <= 0) return [];
+    if (count === 1) return [totalQty];
+    if (Number.isInteger(totalQty)) {
+      const base = Math.floor(totalQty / count);
+      const remainder = totalQty % count;
+      return Array.from({ length: count }, (_, i) => base + (i < remainder ? 1 : 0));
+    }
+    const rawBase = Math.floor((totalQty / count) * 100) / 100;
+    const diff = Math.round((totalQty - rawBase * count) * 100) / 100;
+    const extraCount = Math.round(diff / 0.01);
+    return Array.from({ length: count }, (_, i) =>
+      Math.round((rawBase + (i < extraCount ? 0.01 : 0)) * 100) / 100
+    );
+  };
+
   const handleProceedToPacking = () => {
     const toPack = items.filter((i) => (i.shipping_now || 0) > 0);
     if (toPack.length === 0) {
@@ -933,21 +965,22 @@ function WebPackingWizard({
     const prefix = getHuPrefix();
     const initialPacked: PackedItem[] = toPack.map((item) => {
       const q = item.shipping_now || 0;
-      const nw = Math.max(0.1, Math.round(q * 0.12 * 100) / 100);
-      const gw = Math.max(nw + 0.1, Math.round(q * 0.15 * 100) / 100);
       const packType = item.packaging_type || "BOX";
       return {
         ...item,
         packaging_type: packType,
-        lot_number: "LOT-01",
+        lot_number: "",
         boxes: [
           {
             id: `box-${Date.now()}-${Math.random()}`,
             hu_number: `${prefix}${String(runningSeq++).padStart(10, "0")}`,
-            batch_code: "LOT-01",
+            batch_code: "",
             qty: q,
-            gross_weight: gw,
-            net_weight: nw,
+            gross_weight: null,
+            net_weight: null,
+            supplier_carton_ref: "",
+            pack_number: "",
+            width: null,
           },
         ],
       };
@@ -970,21 +1003,36 @@ function WebPackingWizard({
         for (let i = 0; i < numBoxes; i++) {
           const qtyThisBox = Math.min(boxQty, remaining);
           remaining -= qtyThisBox;
-          const nw = Math.max(0.1, Math.round(qtyThisBox * 0.12 * 100) / 100);
-          const gw = Math.max(nw + 0.1, Math.round(qtyThisBox * 0.15 * 100) / 100);
           newBoxes.push({
             id: `box-${Date.now()}-${i}-${Math.random()}`,
             hu_number: "", // Allocated sequentially below
-            batch_code: item.boxes[0]?.batch_code || "LOT-01",
+            batch_code: item.boxes[0]?.batch_code || "",
             qty: qtyThisBox,
-            gross_weight: gw,
-            net_weight: nw,
+            gross_weight: null,
+            net_weight: null,
+            supplier_carton_ref: "",
+            pack_number: "",
+            width: null,
           });
         }
         return { ...item, boxes: newBoxes };
       });
       return resequenceAllCartons(updated, startingSeq);
     });
+  };
+
+  const handleEvenSplit = (itemId: string) => {
+    setPackedItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== itemId) return item;
+        const totalQty = item.shipping_now || 0;
+        const splitQtys = distributeQuantityEvenly(totalQty, item.boxes.length);
+        return {
+          ...item,
+          boxes: item.boxes.map((b, i) => ({ ...b, qty: splitQtys[i] })),
+        };
+      })
+    );
   };
 
   const updateBox = (itemId: string, boxIndex: number, patch: Partial<PackingBox>) => {
@@ -1001,16 +1049,33 @@ function WebPackingWizard({
     setPackedItems((prev) => {
       const updated = prev.map((item) => {
         if (item.id !== itemId) return item;
-        const lastBox = item.boxes[item.boxes.length - 1];
-        const newBox: PackingBox = {
-          id: `box-${Date.now()}-${Math.random()}`,
-          hu_number: "",
-          batch_code: lastBox?.batch_code || "LOT-01",
-          qty: 0,
-          gross_weight: 1.0,
-          net_weight: 0.8,
-        };
-        return { ...item, boxes: [...item.boxes, newBox] };
+        const totalQty = item.shipping_now || 0;
+        const newCount = item.boxes.length + 1;
+        const splitQtys = distributeQuantityEvenly(totalQty, newCount);
+
+        const newBoxes: PackingBox[] = [];
+        for (let i = 0; i < newCount; i++) {
+          const existing = item.boxes[i];
+          if (existing) {
+            newBoxes.push({
+              ...existing,
+              qty: splitQtys[i],
+            });
+          } else {
+            newBoxes.push({
+              id: `box-${Date.now()}-${Math.random()}`,
+              hu_number: "",
+              batch_code: item.boxes[0]?.batch_code || "",
+              qty: splitQtys[i],
+              gross_weight: null,
+              net_weight: null,
+              supplier_carton_ref: "",
+              pack_number: "",
+              width: null,
+            });
+          }
+        }
+        return { ...item, boxes: newBoxes };
       });
       return resequenceAllCartons(updated, startingSeq);
     });
@@ -1020,7 +1085,14 @@ function WebPackingWizard({
     setPackedItems((prev) => {
       const updated = prev.map((item) => {
         if (item.id !== itemId || item.boxes.length <= 1) return item;
-        return { ...item, boxes: item.boxes.filter((_, idx) => idx !== boxIndex) };
+        const remaining = item.boxes.filter((_, idx) => idx !== boxIndex);
+        const totalQty = item.shipping_now || 0;
+        const splitQtys = distributeQuantityEvenly(totalQty, remaining.length);
+        const rebalanced = remaining.map((b, i) => ({
+          ...b,
+          qty: splitQtys[i],
+        }));
+        return { ...item, boxes: rebalanced };
       });
       return resequenceAllCartons(updated, startingSeq);
     });
@@ -1041,15 +1113,15 @@ function WebPackingWizard({
           alert(`Carton ${bIdx + 1} for item ${item.item_code} has 0 or invalid quantity.`);
           return;
         }
-        if (!box.net_weight || box.net_weight <= 0) {
-          alert(`Carton ${bIdx + 1} for item ${item.item_code} Net Weight must be > 0.`);
-          return;
-        }
-        if (!box.gross_weight || box.gross_weight <= box.net_weight) {
-          alert(
-            `Carton ${bIdx + 1} for item ${item.item_code}: Gross Weight (${box.gross_weight}kg) must be strictly greater than Net Weight (${box.net_weight}kg).`
-          );
-          return;
+        const gw = box.gross_weight != null && !isNaN(Number(box.gross_weight)) ? Number(box.gross_weight) : null;
+        const nw = box.net_weight != null && !isNaN(Number(box.net_weight)) ? Number(box.net_weight) : null;
+        if (gw !== null && nw !== null && gw > 0 && nw > 0) {
+          if (gw <= nw) {
+            alert(
+              `Carton ${bIdx + 1} for item ${item.item_code}: Gross Weight (${gw}kg) must be strictly greater than Net Weight (${nw}kg).`
+            );
+            return;
+          }
         }
       }
     }
@@ -1370,10 +1442,73 @@ function WebPackingWizard({
       {step === 2 && (
         <div className="space-y-4">
           {/* Header */}
-          <div className="flex items-center justify-between px-1">
-            <h2 className="text-xs font-bold text-gray-800 uppercase tracking-wide">
-              Carton Packaging & Handling Unit (SSCC) Assignment
-            </h2>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1">
+            <div className="flex items-center gap-3 flex-wrap">
+              <h2 className="text-xs font-bold text-gray-800 uppercase tracking-wide">
+                Carton Packaging & Handling Unit (SSCC) Assignment
+              </h2>
+
+              {/* Optional Columns Dropdown */}
+              <div className="relative inline-block text-left">
+                <button
+                  type="button"
+                  onClick={() => setShowColumnMenu((v) => !v)}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white hover:bg-gray-50 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 shadow-xs transition-colors cursor-pointer"
+                  title="Toggle optional packing columns from Excel (Batch/Lot, Weights, Supplier Ref, Width, Pack No)"
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-gray-500" />
+                  <span>Optional Columns</span>
+                  <span className="px-1.5 py-0.2 bg-gray-100 text-gray-700 text-[10px] rounded-full font-mono font-bold">
+                    {Object.values(visibleColumns).filter(Boolean).length}/6
+                  </span>
+                </button>
+
+                {showColumnMenu && (
+                  <div className="absolute left-0 mt-1.5 w-64 bg-white border border-gray-200 rounded-xl shadow-xl z-50 p-2.5 text-xs space-y-1">
+                    <div className="px-2 py-1 font-bold text-gray-500 text-[10px] uppercase tracking-wider border-b border-gray-100 flex items-center justify-between">
+                      <span>Toggle Excel Columns</span>
+                      <button
+                        type="button"
+                        onClick={() => setShowColumnMenu(false)}
+                        className="text-gray-400 hover:text-gray-600 text-xs cursor-pointer font-bold"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    {[
+                      { key: "batch", label: "Batch / Lot", desc: "Lot or batch code" },
+                      { key: "gross_weight", label: "Gross Wt (kg)", desc: "Carton gross weight" },
+                      { key: "net_weight", label: "Net Wt (kg)", desc: "Carton net weight" },
+                      { key: "supplier_ref", label: "Supplier Carton Ref", desc: "Supplier internal ref / barcode" },
+                      { key: "width", label: "Width", desc: "Material / roll width" },
+                      { key: "pack_no", label: "Pack No.", desc: "Packing group identifier" },
+                    ].map((col) => (
+                      <label
+                        key={col.key}
+                        className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                      >
+                        <div>
+                          <div className="font-semibold text-gray-800">{col.label}</div>
+                          <div className="text-[10px] text-gray-400">{col.desc}</div>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={(visibleColumns as any)[col.key]}
+                          onChange={() =>
+                            setVisibleColumns((prev) => ({
+                              ...prev,
+                              [col.key]: !(prev as any)[col.key],
+                            }))
+                          }
+                          className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
             <span className="text-[11px] font-mono text-gray-500">
               Seq Start: #{String(startingSeq).padStart(10, "0")}
             </span>
@@ -1405,13 +1540,21 @@ function WebPackingWizard({
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-2.5">
+                    <div className="flex items-center gap-2.5 flex-wrap">
                       <span className="text-xs font-bold text-gray-800 bg-gray-100 px-2.5 py-1 rounded-lg border border-gray-200 font-mono">
                         Shipping: {item.shipping_now} {item.uom || "M"}
                       </span>
 
                       <div className="flex items-center gap-1 text-xs">
-                        <span className="text-[11px] text-gray-500 font-medium">Split/{isRoll ? "roll" : "box"}:</span>
+                        <span className="text-[11px] text-gray-500 font-medium">Split:</span>
+                        <button
+                          type="button"
+                          onClick={() => handleEvenSplit(item.id)}
+                          className="px-2 py-0.5 bg-white hover:bg-gray-100 border border-gray-300 rounded-md text-gray-700 text-xs font-mono transition-colors cursor-pointer"
+                          title="Distribute shipping quantity equally across cartons"
+                        >
+                          Even
+                        </button>
                         {[100, 200, 500].map((size) => (
                           <button
                             key={size}
@@ -1440,66 +1583,146 @@ function WebPackingWizard({
                       <thead>
                         <tr className="bg-gray-50/80 text-gray-600 border-b border-gray-200 font-semibold text-[11px] uppercase tracking-wider">
                           <th className="px-3 py-2 w-24">{isRoll ? "Roll" : "Carton"}</th>
-                          <th className="px-3 py-2">20-digit HU Number (SSCC)</th>
-                          <th className="px-3 py-2 w-28">Batch / Lot</th>
+                          <th className="px-3 py-2 min-w-[180px]">20-digit HU Number (SSCC)</th>
                           <th className="px-3 py-2 text-right w-24">Qty ({item.uom || "M"})</th>
-                          <th className="px-3 py-2 text-right w-28">Gross Wt (kg)</th>
-                          <th className="px-3 py-2 text-right w-28">Net Wt (kg)</th>
+                          {visibleColumns.batch && <th className="px-3 py-2 w-28">Batch / Lot</th>}
+                          {visibleColumns.gross_weight && <th className="px-3 py-2 text-right w-28">Gross Wt (kg)</th>}
+                          {visibleColumns.net_weight && <th className="px-3 py-2 text-right w-28">Net Wt (kg)</th>}
+                          {visibleColumns.supplier_ref && <th className="px-3 py-2 w-32">Supplier Carton Ref</th>}
+                          {visibleColumns.width && <th className="px-3 py-2 text-right w-24">Width</th>}
+                          {visibleColumns.pack_no && <th className="px-3 py-2 w-28">Pack No.</th>}
                           <th className="px-3 py-2 text-center w-12">Action</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
                         {item.boxes.map((box, idx) => (
                           <tr key={box.id} className="hover:bg-gray-50/80 transition-colors">
+                            {/* 1. Carton # */}
                             <td className="px-3 py-1.5 font-bold text-gray-700 font-mono text-[11px]">
                               {isRoll ? "Roll" : "Carton"} {idx + 1}
                             </td>
+
+                            {/* 2. HU Number */}
                             <td className="px-3 py-1.5 font-mono text-[11px] font-semibold text-gray-900 tracking-wider select-all">
                               {box.hu_number}
                             </td>
-                            <td className="px-3 py-1.5">
-                              <input
-                                type="text"
-                                value={box.batch_code}
-                                onChange={(e) => updateBox(item.id, idx, { batch_code: e.target.value })}
-                                className="w-24 h-7 px-2 text-xs border border-gray-300 rounded-md font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
-                                placeholder="LOT-01"
-                              />
-                            </td>
+
+                            {/* 3. Qty (pre-filled, auto-split) */}
                             <td className="px-3 py-1.5 text-right">
                               <input
                                 type="number"
-                                min="1"
-                                value={box.qty}
+                                min="0"
+                                step="any"
+                                value={box.qty ?? ""}
                                 onChange={(e) => updateBox(item.id, idx, { qty: Number(e.target.value) || 0 })}
                                 className="w-20 h-7 px-2 text-xs text-right border border-gray-300 rounded-md font-mono font-bold focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                               />
                             </td>
-                            <td className="px-3 py-1.5 text-right">
-                              <input
-                                type="number"
-                                step="0.01"
-                                min="0.01"
-                                value={box.gross_weight}
-                                onChange={(e) => updateBox(item.id, idx, { gross_weight: parseFloat(e.target.value) || 0 })}
-                                className={`w-24 h-7 px-2 text-xs text-right border rounded-md font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none ${
-                                  box.gross_weight <= box.net_weight ? "border-red-400 bg-red-50 text-red-700" : "border-gray-300"
-                                }`}
-                              />
-                            </td>
-                            <td className="px-3 py-1.5 text-right">
-                              <input
-                                type="number"
-                                step="0.01"
-                                min="0.01"
-                                value={box.net_weight}
-                                onChange={(e) => updateBox(item.id, idx, { net_weight: parseFloat(e.target.value) || 0 })}
-                                className="w-24 h-7 px-2 text-xs text-right border border-gray-300 rounded-md font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
-                              />
-                              {box.gross_weight <= box.net_weight && (
-                                <span className="text-[10px] text-red-600 font-bold block mt-0.5">GW &le; NW!</span>
-                              )}
-                            </td>
+
+                            {/* 4. Batch / Lot (Optional) */}
+                            {visibleColumns.batch && (
+                              <td className="px-3 py-1.5">
+                                <input
+                                  type="text"
+                                  value={box.batch_code || ""}
+                                  onChange={(e) => updateBox(item.id, idx, { batch_code: e.target.value })}
+                                  className="w-24 h-7 px-2 text-xs border border-gray-300 rounded-md font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                                  placeholder="Optional"
+                                />
+                              </td>
+                            )}
+
+                            {/* 5. Gross Weight (Optional) */}
+                            {visibleColumns.gross_weight && (
+                              <td className="px-3 py-1.5 text-right">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={box.gross_weight !== null && box.gross_weight !== undefined ? box.gross_weight : ""}
+                                  onChange={(e) =>
+                                    updateBox(item.id, idx, {
+                                      gross_weight: e.target.value === "" ? null : parseFloat(e.target.value) || 0,
+                                    })
+                                  }
+                                  placeholder="Optional"
+                                  className={`w-24 h-7 px-2 text-xs text-right border rounded-md font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none ${
+                                    box.gross_weight && box.net_weight && box.gross_weight <= box.net_weight
+                                      ? "border-red-400 bg-red-50 text-red-700"
+                                      : "border-gray-300"
+                                  }`}
+                                />
+                              </td>
+                            )}
+
+                            {/* 6. Net Weight (Optional) */}
+                            {visibleColumns.net_weight && (
+                              <td className="px-3 py-1.5 text-right">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={box.net_weight !== null && box.net_weight !== undefined ? box.net_weight : ""}
+                                  onChange={(e) =>
+                                    updateBox(item.id, idx, {
+                                      net_weight: e.target.value === "" ? null : parseFloat(e.target.value) || 0,
+                                    })
+                                  }
+                                  placeholder="Optional"
+                                  className="w-24 h-7 px-2 text-xs text-right border border-gray-300 rounded-md font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                                />
+                                {box.gross_weight && box.net_weight && box.gross_weight <= box.net_weight && (
+                                  <span className="text-[10px] text-red-600 font-bold block mt-0.5">GW &le; NW!</span>
+                                )}
+                              </td>
+                            )}
+
+                            {/* 7. Supplier Carton Ref (Optional) */}
+                            {visibleColumns.supplier_ref && (
+                              <td className="px-3 py-1.5">
+                                <input
+                                  type="text"
+                                  value={box.supplier_carton_ref || ""}
+                                  onChange={(e) => updateBox(item.id, idx, { supplier_carton_ref: e.target.value })}
+                                  className="w-28 h-7 px-2 text-xs border border-gray-300 rounded-md font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                                  placeholder="Optional"
+                                />
+                              </td>
+                            )}
+
+                            {/* 8. Width (Optional) */}
+                            {visibleColumns.width && (
+                              <td className="px-3 py-1.5 text-right">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={box.width !== null && box.width !== undefined ? box.width : ""}
+                                  onChange={(e) =>
+                                    updateBox(item.id, idx, {
+                                      width: e.target.value === "" ? null : parseFloat(e.target.value) || 0,
+                                    })
+                                  }
+                                  className="w-20 h-7 px-2 text-xs text-right border border-gray-300 rounded-md font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                                  placeholder="Optional"
+                                />
+                              </td>
+                            )}
+
+                            {/* 9. Pack No. (Optional) */}
+                            {visibleColumns.pack_no && (
+                              <td className="px-3 py-1.5">
+                                <input
+                                  type="text"
+                                  value={box.pack_number || ""}
+                                  onChange={(e) => updateBox(item.id, idx, { pack_number: e.target.value })}
+                                  className="w-24 h-7 px-2 text-xs border border-gray-300 rounded-md font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                                  placeholder="Optional"
+                                />
+                              </td>
+                            )}
+
+                            {/* 10. Action */}
                             <td className="px-3 py-1.5 text-center">
                               {item.boxes.length > 1 && (
                                 <button
