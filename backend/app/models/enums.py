@@ -9,16 +9,16 @@ import enum
 
 
 class UserRole(str, enum.Enum):
-    """Two portal roles — matches the Keycloak realm roles exactly."""
+    """Portal roles — matches Keycloak realm roles."""
+    SUPER_ADMIN = "SUPER_ADMIN"
     ADMIN = "ADMIN"
     SUPPLIER = "SUPPLIER"
 
     # Legacy aliases for migration (old DB rows may still have these)
     @classmethod
     def _missing_(cls, value: str):
-        """Map old six-role names to the new two-role scheme."""
+        """Map legacy role names to the portal roles."""
         _LEGACY = {
-            "SUPER_ADMIN": cls.ADMIN,
             "COMPANY_ADMIN": cls.ADMIN,
             "OPERATOR": cls.ADMIN,
             "REVIEWER": cls.ADMIN,
@@ -28,6 +28,7 @@ class UserRole(str, enum.Enum):
 
 
 ROLE_PERMISSIONS: dict[str, list[str]] = {
+    "SUPER_ADMIN": ["*"],
     "ADMIN": ["*"],
     "SUPPLIER": [
         "supplier:own_po",

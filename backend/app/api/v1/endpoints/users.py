@@ -53,14 +53,6 @@ class UserResponse(BaseModel):
         from_attributes = True
 
 
-class UserCreateRequest(BaseModel):
-    email: str
-    full_name: str
-    role: str = "COMPANY_ADMIN"  # SUPER_ADMIN, COMPANY_ADMIN, OPERATOR, REVIEWER
-    plant_code: str = "SIRIO"  # HQ, SIRIO, BENJI, OMEGA, ALPHA, VAVUNIYA
-    is_active: bool = True
-
-
 class UserUpdateRequest(BaseModel):
     full_name: Optional[str] = None
     role: Optional[str] = None
@@ -72,26 +64,14 @@ def get_plant_name(code: str) -> str:
     for p in PLANTS:
         if p["code"] == code.upper():
             return p["name"]
-    return "Sirio Ltd — Badalgama"
+    return "Central HQ (All Plants)"
 
 
 def to_user_response(u: User) -> UserResponse:
-    # Derive plant_code from explicit field, email domain, or role
+    # All administrative users operate centrally from HQ
     p_code = getattr(u, "plant_code", None)
-    if not p_code:
-        email = u.email.lower()
-        if u.role == "SUPER_ADMIN" or "hq" in email:
-            p_code = "HQ"
-        elif "benji" in email:
-            p_code = "BENJI"
-        elif "omega" in email:
-            p_code = "OMEGA"
-        elif "alpha" in email:
-            p_code = "ALPHA"
-        elif "vavuniya" in email:
-            p_code = "VAVUNIYA"
-        else:
-            p_code = "SIRIO"
+    if not p_code or u.role in ("SUPER_ADMIN", "ADMIN", "COMPANY_ADMIN", "OPERATOR", "REVIEWER"):
+        p_code = "HQ"
 
     return UserResponse(
         id=str(u.id),
@@ -157,52 +137,6 @@ async def list_users(
     return [to_user_response(u) for u in users]
 
 
-@router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-@router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED, include_in_schema=False)
-async def create_user(
-    body: UserCreateRequest,
-    db: AsyncSession = Depends(get_db),
-    company_id: Optional[str] = Query(None),
-):
-    """
-    Create a new Plant Administrator or Super Admin user.
-    """
-    comp_uuid = uuid.UUID(company_id) if company_id else PRIMARY_COMPANY_ID
-
-    existing = await db.execute(
-        select(User).where(
-            User.company_id == comp_uuid,
-            func.lower(User.email) == body.email.strip().lower(),
-            User.is_active.is_(True),
-        )
-    )
-    if existing.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Admin user with email '{body.email}' already exists.",
-        )
-
-    new_user = User(
-        id=uuid.uuid4(),
-        company_id=comp_uuid,
-        keycloak_id=f"kc-admin-{uuid.uuid4().hex[:8]}",
-        email=body.email.strip().lower(),
-        full_name=body.full_name.strip(),
-        role=body.role.upper(),
-        supplier_id=None,
-        is_active=body.is_active,
-    )
-
-    db.add(new_user)
-    await db.commit()
-    await db.refresh(new_user)
-
-    res = to_user_response(new_user)
-    res.plant_code = body.plant_code
-    res.plant_name = get_plant_name(body.plant_code)
-    return res
-
-
 @router.get("/{user_id}", response_model=UserResponse)
 async def get_user(
     user_id: uuid.UUID,
@@ -247,19 +181,16 @@ async def update_user(
         usr.full_name = body.full_name.strip()
 
     if body.role is not None:
-        usr.role = body.role.upper()
+        new_role = body.role.upper()
+        if new_role in ("SUPER_ADMIN", "ADMIN"):
+            usr.role = new_role
 
     if body.is_active is not None:
         usr.is_active = body.is_active
 
     await db.commit()
     await db.refresh(usr)
-
-    res = to_user_response(usr)
-    if body.plant_code:
-        res.plant_code = body.plant_code
-        res.plant_name = get_plant_name(body.plant_code)
-    return res
+    return to_user_response(usr)
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_200_OK)

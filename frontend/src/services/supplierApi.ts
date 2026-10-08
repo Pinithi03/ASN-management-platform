@@ -44,10 +44,11 @@ export interface SupplierCredentials {
 
 export const supplierApi = {
   /** Fetch all onboarded and email-detected suppliers from database */
-  list: async (search?: string, activeOnly?: boolean): Promise<SupplierItem[]> => {
+  list: async (search?: string, activeOnly?: boolean, includeDeleted: boolean = true): Promise<SupplierItem[]> => {
     const params: Record<string, string | boolean> = {};
     if (search) params.search = search;
     if (activeOnly !== undefined) params.active_only = activeOnly;
+    if (includeDeleted !== undefined) params.include_deleted = includeDeleted;
     const { data } = await api.get("/suppliers", { params });
     return data;
   },
@@ -64,9 +65,17 @@ export const supplierApi = {
     return data;
   },
 
-  /** Delete a supplier */
-  delete: async (supplierIdOrCode: string): Promise<{ status: string }> => {
-    const { data } = await api.delete(`/suppliers/${supplierIdOrCode}`);
+  /** Safely soft-delete / archive a supplier with admin password verification */
+  delete: async (supplierIdOrCode: string, adminPassword?: string): Promise<{ status: string; message: string }> => {
+    const { data } = await api.post(`/suppliers/${supplierIdOrCode}/delete`, {
+      admin_password: adminPassword,
+    });
+    return data;
+  },
+
+  /** Restore an archived / soft-deleted supplier partner */
+  restore: async (supplierIdOrCode: string): Promise<SupplierItem> => {
+    const { data } = await api.post(`/suppliers/${supplierIdOrCode}/restore`);
     return data;
   },
 

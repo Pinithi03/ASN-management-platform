@@ -5,7 +5,6 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Users,
-  UserPlus,
   Search,
   RefreshCw,
   CheckCircle2,
@@ -16,40 +15,29 @@ import {
   X,
   Mail,
   AlertCircle,
-  Factory,
   UserCheck,
+  ShieldCheck,
 } from "lucide-react";
-import { userApi, UserItem, CreateUserPayload, UpdateUserPayload } from "@/services/userApi";
+import { userApi, UserItem, UpdateUserPayload } from "@/services/userApi";
 import { format } from "date-fns";
-
-const PLANTS = [
-  { code: "HQ", name: "Central HQ (All Plants)" },
-  { code: "SIRIO", name: "Sirio Ltd — Badalgama" },
-  { code: "BENJI", name: "Benji Ltd — Bingiriya" },
-  { code: "OMEGA", name: "Omega Line Ltd — Sandalankawa" },
-  { code: "ALPHA", name: "Alpha Apparels Ltd — Polgahawela" },
-  { code: "VAVUNIYA", name: "Vavuniya Apparels — Vavuniya" },
-];
 
 export default function UserManagement() {
   const queryClient = useQueryClient();
 
   // State
   const [search, setSearch] = useState("");
-  const [plantFilter, setPlantFilter] = useState<string>("ALL");
+  const [roleFilter, setRoleFilter] = useState<string>("ALL");
 
   // Modals state
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserItem | null>(null);
   const [resetPassResult, setResetPassResult] = useState<{ email: string; pass: string } | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  // Form state
-  const [formData, setFormData] = useState<CreateUserPayload>({
-    email: "",
+  // Form state for editing
+  const [formData, setFormData] = useState<UpdateUserPayload>({
     full_name: "",
-    role: "COMPANY_ADMIN",
-    plant_code: "SIRIO",
+    role: "ADMIN",
+    plant_code: "HQ",
     is_active: true,
   });
 
@@ -62,21 +50,9 @@ export default function UserManagement() {
   const users = apiUsers;
 
   // ─── Mutations ──────────────────────────────────────────────
-  const createUserMutation = useMutation({
-    mutationFn: (payload: CreateUserPayload) => userApi.create(payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["users"] });
-      setIsAddModalOpen(false);
-      resetForm();
-    },
-    onError: (err: Error) => {
-      setActionError(err.message || "Failed to create administrator.");
-    },
-  });
-
   const updateUserMutation = useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: UpdateUserPayload }) =>
-      userApi.update(id, payload),
+      userApi.update(id, { ...payload, plant_code: "HQ" }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
       setEditingUser(null);
@@ -114,10 +90,9 @@ export default function UserManagement() {
 
   const resetForm = () => {
     setFormData({
-      email: "",
       full_name: "",
-      role: "COMPANY_ADMIN",
-      plant_code: "SIRIO",
+      role: "ADMIN",
+      plant_code: "HQ",
       is_active: true,
     });
     setActionError(null);
@@ -126,10 +101,9 @@ export default function UserManagement() {
   const handleOpenEdit = (user: UserItem) => {
     setEditingUser(user);
     setFormData({
-      email: user.email,
       full_name: user.full_name || "",
-      role: user.role || "COMPANY_ADMIN",
-      plant_code: user.plant_code || "SIRIO",
+      role: user.role === "SUPER_ADMIN" ? "SUPER_ADMIN" : "ADMIN",
+      plant_code: "HQ",
       is_active: user.is_active,
     });
     setActionError(null);
@@ -142,20 +116,20 @@ export default function UserManagement() {
       const matchSearch =
         !q ||
         (u.full_name || "").toLowerCase().includes(q) ||
-        u.email.toLowerCase().includes(q) ||
-        (u.plant_name || "").toLowerCase().includes(q);
+        u.email.toLowerCase().includes(q);
 
-      const matchPlant = plantFilter === "ALL" || u.plant_code === plantFilter;
+      const matchRole = roleFilter === "ALL" || u.role === roleFilter;
 
-      return matchSearch && matchPlant;
+      return matchSearch && matchRole;
     });
-  }, [users, search, plantFilter]);
+  }, [users, search, roleFilter]);
 
   // Statistics
   const stats = useMemo(() => {
     const total = users.length;
     const active = users.filter((u) => u.is_active).length;
-    return { total, active };
+    const superAdmins = users.filter((u) => u.role === "SUPER_ADMIN").length;
+    return { total, active, superAdmins };
   }, [users]);
 
   return (
@@ -165,10 +139,10 @@ export default function UserManagement() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2.5">
             <Users className="w-7 h-7 text-brand-600" />
-            Plant Administrators & System Users
+            System Administrators & Roles
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            Manage administrative accounts, plant-level access, and credentials across Oniverse manufacturing plants.
+            Directory of platform administrators provisioned via Keycloak Identity Provider.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -179,16 +153,6 @@ export default function UserManagement() {
             title="Refresh Administrators"
           >
             <RefreshCw className={`w-4 h-4 ${isRefetching ? "animate-spin text-brand-600" : ""}`} />
-          </button>
-          <button
-            onClick={() => {
-              resetForm();
-              setIsAddModalOpen(true);
-            }}
-            className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-brand-600 rounded-lg hover:bg-brand-700 active:bg-brand-800 transition-all shadow-sm"
-          >
-            <UserPlus className="w-4 h-4" />
-            Add Administrator
           </button>
         </div>
       </div>
@@ -206,7 +170,7 @@ export default function UserManagement() {
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4">
-          <div className="p-3 bg-emerald-50 rounded-xl text-emerald-600">
+          <div className="p-3 bg-gray-100 rounded-xl text-gray-700">
             <UserCheck className="w-6 h-6" />
           </div>
           <div>
@@ -216,12 +180,12 @@ export default function UserManagement() {
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4">
-          <div className="p-3 bg-blue-50 rounded-xl text-blue-600">
-            <Factory className="w-6 h-6" />
+          <div className="p-3 bg-gray-100 rounded-xl text-gray-700">
+            <ShieldCheck className="w-6 h-6" />
           </div>
           <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Manufacturing Plants</p>
-            <p className="text-2xl font-bold text-gray-900 mt-0.5">5 Plants</p>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Super Administrators</p>
+            <p className="text-2xl font-bold text-gray-900 mt-0.5">{stats.superAdmins}</p>
           </div>
         </div>
       </div>
@@ -236,29 +200,22 @@ export default function UserManagement() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search admin name, email, or plant..."
+              placeholder="Search admin name or email..."
               className="w-full pl-9 pr-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none transition-all"
             />
           </div>
 
-          {/* Role & Plant Filter Dropdowns */}
+          {/* Role Filter Dropdown */}
           <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-            {/* Plant selector */}
-            <div className="flex items-center gap-2">
-              <Factory className="w-4 h-4 text-gray-400" />
-              <select
-                value={plantFilter}
-                onChange={(e) => setPlantFilter(e.target.value)}
-                className="px-3 py-2 text-xs font-semibold bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none"
-              >
-                <option value="ALL">All Manufacturing Plants</option>
-                {PLANTS.map((p) => (
-                  <option key={p.code} value={p.code}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <select
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value)}
+              className="px-3 py-2 text-xs font-semibold bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none text-gray-900"
+            >
+              <option value="ALL">All Administrative Roles</option>
+              <option value="SUPER_ADMIN">Super Administrators</option>
+              <option value="ADMIN">System Administrators</option>
+            </select>
           </div>
         </div>
       </div>
@@ -282,7 +239,7 @@ export default function UserManagement() {
               <thead>
                 <tr className="bg-gray-50/80 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-500">
                   <th className="px-6 py-3.5">Administrator Name & Email</th>
-                  <th className="px-6 py-3.5">Assigned Oniverse Plant</th>
+                  <th className="px-6 py-3.5">System Role</th>
                   <th className="px-6 py-3.5">Account Status</th>
                   <th className="px-6 py-3.5">Last Login</th>
                   <th className="px-6 py-3.5 text-right">Actions</th>
@@ -312,15 +269,17 @@ export default function UserManagement() {
                         </div>
                       </td>
 
-                      {/* Assigned Plant */}
+                      {/* System Role */}
                       <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <Factory className="w-4 h-4 text-brand-600 shrink-0" />
-                          <div>
-                            <p className="text-xs font-bold text-gray-900 truncate">{usr.plant_name}</p>
-                            <span className="text-[10px] font-mono text-gray-500">[{usr.plant_code}]</span>
-                          </div>
-                        </div>
+                        {usr.role === "SUPER_ADMIN" ? (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-black border border-gray-200">
+                            Super Administrator
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-black border border-gray-200">
+                            System Administrator
+                          </span>
+                        )}
                       </td>
 
                       {/* Status Toggle */}
@@ -334,14 +293,14 @@ export default function UserManagement() {
                           }
                           className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border transition-all ${
                             usr.is_active
-                              ? "bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100"
+                              ? "bg-gray-100 text-black border-gray-300 hover:bg-gray-200"
                               : "bg-red-50 text-red-700 border-red-300 hover:bg-red-100"
                           }`}
                           title="Click to toggle user status"
                         >
                           {usr.is_active ? (
                             <>
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                              <CheckCircle2 className="w-3.5 h-3.5 text-black" />
                               ACTIVE
                             </>
                           ) : (
@@ -399,121 +358,6 @@ export default function UserManagement() {
         )}
       </div>
 
-      {/* ─── ADD ADMIN MODAL ────────────────────────────────────── */}
-      {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in">
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95">
-            <div className="p-5 bg-brand-900 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <UserPlus className="w-5 h-5 text-brand-400" />
-                <h3 className="text-base font-bold">Add Plant Administrator</h3>
-              </div>
-              <button
-                onClick={() => setIsAddModalOpen(false)}
-                className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-brand-800 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                createUserMutation.mutate(formData);
-              }}
-              className="p-6 space-y-4"
-            >
-              {actionError && (
-                <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
-                  <span>{actionError}</span>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                  Full Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Kasun Perera"
-                  value={formData.full_name}
-                  onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                  className="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                  Corporate Email Address <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="email"
-                  required
-                  placeholder="e.g. admin@sirio.lk"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none font-mono"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                    System Role <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={formData.role}
-                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                    className="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none"
-                  >
-                    <option value="COMPANY_ADMIN">Plant Administrator</option>
-                    <option value="SUPER_ADMIN">Super Administrator (HQ)</option>
-                    <option value="OPERATOR">Plant Operator</option>
-                    <option value="REVIEWER">System Reviewer</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                    Assigned Oniverse Plant <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={formData.plant_code}
-                    onChange={(e) => setFormData({ ...formData, plant_code: e.target.value })}
-                    className="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none"
-                  >
-                    {PLANTS.map((p) => (
-                      <option key={p.code} value={p.code}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="pt-3 flex items-center justify-end gap-3 border-t border-gray-100 mt-4">
-                <button
-                  type="button"
-                  onClick={() => setIsAddModalOpen(false)}
-                  className="px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-800 rounded-lg"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={createUserMutation.isPending}
-                  className="px-5 py-2 text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 rounded-lg transition-all shadow-sm"
-                >
-                  {createUserMutation.isPending ? "Creating Administrator..." : "Create Administrator"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
       {/* ─── EDIT ADMIN MODAL ────────────────────────────────────── */}
       {editingUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in">
@@ -539,7 +383,7 @@ export default function UserManagement() {
                   payload: {
                     full_name: formData.full_name,
                     role: formData.role,
-                    plant_code: formData.plant_code,
+                    plant_code: "HQ",
                     is_active: formData.is_active,
                   },
                 });
@@ -566,39 +410,21 @@ export default function UserManagement() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                    System Role
-                  </label>
-                  <select
-                    value={formData.role}
-                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                    className="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none"
-                  >
-                    <option value="COMPANY_ADMIN">Plant Administrator</option>
-                    <option value="SUPER_ADMIN">Super Administrator (HQ)</option>
-                    <option value="OPERATOR">Plant Operator</option>
-                    <option value="REVIEWER">System Reviewer</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                    Assigned Oniverse Plant
-                  </label>
-                  <select
-                    value={formData.plant_code}
-                    onChange={(e) => setFormData({ ...formData, plant_code: e.target.value })}
-                    className="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none"
-                  >
-                    {PLANTS.map((p) => (
-                      <option key={p.code} value={p.code}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
+                  System Role
+                </label>
+                <select
+                  value={formData.role}
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                  className="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none"
+                >
+                  <option value="SUPER_ADMIN">Super Administrator (Full System & Organization Control)</option>
+                  <option value="ADMIN">System Administrator (Operations & ASN Management)</option>
+                </select>
+                <p className="text-[11px] text-gray-500 mt-1.5">
+                  Administrators operate centrally across all Oniverse manufacturing facilities and headquarters.
+                </p>
               </div>
 
               <div className="pt-3 flex items-center justify-end gap-3 border-t border-gray-100 mt-4">

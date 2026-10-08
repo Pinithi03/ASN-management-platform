@@ -25,14 +25,6 @@ export interface UserListParams {
   company_id?: string;
 }
 
-export interface CreateUserPayload {
-  email: string;
-  full_name: string;
-  role: string;
-  plant_code: string;
-  is_active?: boolean;
-}
-
 export interface UpdateUserPayload {
   full_name?: string;
   role?: string;
@@ -50,12 +42,6 @@ export const userApi = {
   /** Get admin user detail by ID */
   getById: async (userId: string): Promise<UserItem> => {
     const { data } = await api.get<UserItem>(`/users/${userId}`);
-    return data;
-  },
-
-  /** Create a new plant administrator */
-  create: async (body: CreateUserPayload): Promise<UserItem> => {
-    const { data } = await api.post<UserItem>("/users", body);
     return data;
   },
 

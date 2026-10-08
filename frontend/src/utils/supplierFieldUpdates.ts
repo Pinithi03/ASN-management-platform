@@ -220,8 +220,11 @@ export function recordSupplierCreateEvent(supplier: {
   id: string;
   supplier_code: string;
   name: string;
+  email?: string;
+  credentials_sent?: boolean;
 }): void {
   const now = new Date().toISOString();
+  const emailNotice = supplier.email ? ` (credentials emailed to ${supplier.email})` : "";
   const record: SupplierFieldChangeRecord = {
     id: `create-${supplier.supplier_code}-${Date.now()}`,
     supplier_id: supplier.id,

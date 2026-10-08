@@ -24,7 +24,7 @@ export default function EmailInbox() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
-  const isAdmin = user?.role === "ADMIN";
+  const isAdmin = user?.role === "ADMIN" || user?.role === "SUPER_ADMIN";
 
   const [search, setSearch] = useState("");
   const [poNumberFilter, setPoNumberFilter] = useState("");

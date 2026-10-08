@@ -23,7 +23,7 @@ function shipmentNum(id:string){const s=mockShipments.find(x=>x.id===id);return 
 
 export default function ASNManagement(){
   const user=useAuthStore(s=>s.user);
-  const isAdmin=user?.role==="ADMIN";
+  const isAdmin = user?.role === "ADMIN" || user?.role === "SUPER_ADMIN";
   const [search,setSearch]=useState("");
   const [sf,setSf]=useState<string>("ALL");
   const [sel,setSel]=useState<ASNRecord|null>(null);

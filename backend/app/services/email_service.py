@@ -450,11 +450,34 @@ async def save_purchase_order(
 
     if existing:
         old_version = existing.version or 1
-        new_version = max(old_version + 1, progressive_version) if progressive_version else (old_version + 1)
         old_quantity = existing.quantity
         old_total_value = existing.total_value
+        new_delivery_date = _parse_date(parsed_po.delivery_date)
 
-        # Update existing PO - ensure canonical normalized number & increment version
+        # Detect if any data actually changed
+        is_same_email = (
+            existing.source_email_id is not None
+            and email_record_id is not None
+            and str(existing.source_email_id) == str(email_record_id)
+        )
+        has_data_changed = (
+            not is_same_email
+            and (
+                existing.quantity != parsed_po.total_quantity
+                or float(existing.total_value or 0) != float(parsed_po.total_value or 0)
+                or (new_delivery_date and str(existing.delivery_date) != str(new_delivery_date))
+                or (primary_style and existing.style_number != primary_style)
+            )
+        )
+
+        if progressive_version:
+            new_version = max(old_version, progressive_version)
+        elif has_data_changed:
+            new_version = old_version + 1
+        else:
+            new_version = old_version
+
+        # Update existing PO - ensure canonical normalized number & accurate version
         existing.po_number = clean_po
         existing.version = new_version
         if (parsed_po.total_quantity or 0) <= 0:
@@ -464,7 +487,8 @@ async def save_purchase_order(
         existing.quantity = parsed_po.total_quantity
         existing.total_value = parsed_po.total_value
         existing.destination = parsed_po.destination or existing.destination
-        existing.delivery_date = _parse_date(parsed_po.delivery_date) or existing.delivery_date
+        if new_delivery_date:
+            existing.delivery_date = new_delivery_date
         existing.currency = parsed_po.currency or existing.currency
         existing.source_email_id = email_record_id
         if resolved_supplier_id:
@@ -477,33 +501,33 @@ async def save_purchase_order(
             existing.description = primary_desc
         existing.extra_data = extra_info
 
-        # Audit trail of changes
-        old_items = existing.extra_data.get("items", []) if existing.extra_data else []
-        changed_fields = {
-            "version": {"old": old_version, "new": new_version},
-            "status": {"old": existing.status, "new": existing.status},
-            "quantity": {"old": old_quantity, "new": existing.quantity},
-            "total_value": {"old": float(old_total_value or 0), "new": float(existing.total_value or 0)},
-            "delivery_date": {"old": str(existing.delivery_date), "new": str(_parse_date(parsed_po.delivery_date))},
-            "items_count": {"old": len(old_items), "new": len(items_data)},
-        }
+        # Record in po_history only if there's a genuine version bump or data update
+        if new_version > old_version or has_data_changed:
+            old_items = existing.extra_data.get("items", []) if existing.extra_data else []
+            changed_fields = {
+                "version": {"old": old_version, "new": new_version},
+                "status": {"old": existing.status, "new": existing.status},
+                "quantity": {"old": old_quantity, "new": existing.quantity},
+                "total_value": {"old": float(old_total_value or 0), "new": float(existing.total_value or 0)},
+                "delivery_date": {"old": str(existing.delivery_date), "new": str(new_delivery_date)},
+                "items_count": {"old": len(old_items), "new": len(items_data)},
+            }
+            try:
+                hist = POHistory(
+                    po_id=existing.id,
+                    company_id=existing.company_id,
+                    source_email_id=uuid.UUID(str(email_record_id)) if email_record_id else None,
+                    version=new_version,
+                    changed_fields=changed_fields,
+                    change_source="EMAIL_UPDATE",
+                )
+                db.add(hist)
+            except Exception:
+                logger.exception("Failed to insert POHistory for %s", existing.po_number)
 
-        # Record in po_history
-        try:
-            hist = POHistory(
-                po_id=existing.id,
-                company_id=existing.company_id,
-                source_email_id=uuid.UUID(str(email_record_id)) if email_record_id else None,
-                version=new_version,
-                changed_fields=changed_fields,
-                change_source="EMAIL_UPDATE",
-            )
-            db.add(hist)
-        except Exception:
-            logger.exception("Failed to insert POHistory for %s", existing.po_number)
         po = existing
         logger.info(
-            "Updated PO: %s (v%d, was v%d), qty=%s->%s, val=%s->%s",
+            "Processed PO: %s (v%d, was v%d), qty=%s->%s, val=%s->%s",
             po.po_number, po.version, old_version, old_quantity, po.quantity, old_total_value, po.total_value,
         )
     else:

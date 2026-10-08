@@ -79,6 +79,19 @@ class Settings(BaseSettings):
         """JWKS endpoint — fetched over the internal network in Docker."""
         return f"{self.KEYCLOAK_INTERNAL_URL}/realms/{self.KEYCLOAK_REALM}/protocol/openid-connect/certs"
 
+    # Keycloak Admin Credentials
+    KC_BOOTSTRAP_ADMIN_USERNAME: str = "admin"
+    KC_BOOTSTRAP_ADMIN_PASSWORD: str = "DevKcAdmin#2026"
+    PORTAL_URL: str = "http://localhost:3000"
+
+    # Outbound SMTP Email Settings
+    SMTP_HOST: str = "mailpit"
+    SMTP_PORT: int = 1025
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM_EMAIL: str = "Oniverse ASN Portal <no-reply@oniverse.lk>"
+    SMTP_USE_TLS: bool = False
+
     # CORS
     CORS_ORIGINS: list[str] | str = [
         "http://localhost:3000",

@@ -74,7 +74,7 @@ export default function PurchaseOrders() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const isSupplier = user?.role === "SUPPLIER";
-  const supplierId = isSupplier ? (user?.supplier_id || undefined) : undefined;
+  const supplierId = isSupplier ? (user?.supplier_id || user?.supplier_code || undefined) : undefined;
 
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");

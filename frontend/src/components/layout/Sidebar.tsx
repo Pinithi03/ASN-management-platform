@@ -61,7 +61,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const location = useLocation();
   const user = useAuthStore((s) => s.user);
 
-  const isAdmin = user?.role === "ADMIN";
+  const isAdmin = user?.role === "ADMIN" || user?.role === "SUPER_ADMIN";
   const mainNav = isAdmin ? adminMainNav : supplierMainNav;
   const settingsNav = isAdmin ? adminSettingsNav : supplierSettingsNav;
 

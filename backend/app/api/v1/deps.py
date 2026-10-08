@@ -40,6 +40,7 @@ _bearer = HTTPBearer(auto_error=False)
 # ---------------------------------------------------------------------------
 class CurrentUser(BaseModel):
     keycloak_id: str
+    username: Optional[str] = None
     email: Optional[str] = None
     name: Optional[str] = None
     role: UserRole                      # ADMIN or SUPPLIER
@@ -89,7 +90,9 @@ async def get_current_user(
     # --- Determine role ---
     held_roles = set(claims.get("realm_access", {}).get("roles", []))
 
-    if UserRole.ADMIN.value in held_roles:
+    if UserRole.SUPER_ADMIN.value in held_roles:
+        role = UserRole.SUPER_ADMIN
+    elif UserRole.ADMIN.value in held_roles:
         role = UserRole.ADMIN
     elif UserRole.SUPPLIER.value in held_roles:
         role = UserRole.SUPPLIER
@@ -108,6 +111,7 @@ async def get_current_user(
     supplier_id_raw = claims.get("supplier_id") if role is UserRole.SUPPLIER else None
     user = CurrentUser(
         keycloak_id=claims["sub"],
+        username=claims.get("preferred_username"),
         email=claims.get("email"),
         name=claims.get("name"),
         role=role,

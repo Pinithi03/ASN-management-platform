@@ -4,7 +4,6 @@
  */
 
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   Search,
   Plus,
@@ -24,19 +23,17 @@ import {
   BellRing,
   FileText,
   Building,
-  Key,
-  ExternalLink,
-  Copy,
-  Check,
-  Eye,
-  EyeOff,
-  Zap,
-  Shield,
   ChevronLeft,
   ChevronRight,
+  Archive,
+  RotateCcw,
+  Lock,
+  ShieldCheck,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { supplierApi, type SupplierCredentials } from "@/services/supplierApi";
+import { supplierApi } from "@/services/supplierApi";
 import {
   recordSupplierFieldChanges,
   recordSupplierCreateEvent,
@@ -55,6 +52,8 @@ export interface SupplierItem {
   tax_id?: string;
   address?: string;
   is_active: boolean;
+  is_deleted?: boolean;
+  deleted_at?: string | null;
   onboarded_at: string;
   updated_at?: string;
   recently_updated_by_supplier?: boolean;
@@ -159,7 +158,7 @@ export default function Suppliers() {
   }, [serverSuppliers]);
 
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "INACTIVE">("ALL");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "INACTIVE" | "ARCHIVED">("ALL");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Modals
@@ -167,111 +166,100 @@ export default function Suppliers() {
   const [editingSupplier, setEditingSupplier] = useState<SupplierItem | null>(null);
   const [deletingSupplier, setDeletingSupplier] = useState<SupplierItem | null>(null);
 
-  // Navigation & Auth Store
-  const navigate = useNavigate();
-  // loginAsSupplier removed — suppliers sign in through Keycloak.
-
-  // Credentials & Activation Modal State
-  const [credentialsModalSupplier, setCredentialsModalSupplier] = useState<SupplierItem | null>(null);
-  const [activeCredentials, setActiveCredentials] = useState<SupplierCredentials | null>(null);
-  const [isActivating, setIsActivating] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [copiedKey, setCopiedKey] = useState<string | null>(null);
-
-  const handleActivateAndIssueCredentials = async (supplier: SupplierItem) => {
-    setIsActivating(true);
-    try {
-      const creds = await supplierApi.activateAndGenerateCredentials(supplier.id);
-      setActiveCredentials(creds);
-      setCredentialsModalSupplier(supplier);
-      setShowPassword(true);
-      refetch();
-      showToast(`⚡ Approved & Issued 6-hour credentials for ${supplier.name} (#${supplier.supplier_code})`);
-    } catch (err: any) {
-      showToast(`Error activating supplier credentials: ${err?.message || "Server error"}`);
-    } finally {
-      setIsActivating(false);
-    }
-  };
-
-  const handleViewCredentials = async (supplier: SupplierItem) => {
-    try {
-      const creds = await supplierApi.getCredentials(supplier.id);
-      setActiveCredentials(creds);
-      setCredentialsModalSupplier(supplier);
-      setShowPassword(false);
-    } catch (err: any) {
-      showToast(`Error retrieving credentials: ${err?.message || "Server error"}`);
-    }
-  };
-
-  const handleSimulateLogin = async (supplier: SupplierItem) => {
-    try {
-      console.info("Supplier login is handled by Keycloak — use the login page.");
-      showToast(`Switched to Supplier Dashboard for ${supplier.name}`);
-      navigate("/");
-    } catch (err: any) {
-      showToast(`Error opening dashboard: ${err?.message}`);
-    }
-  };
-
-  const handleCopyText = (text: string, key: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedKey(key);
-    setTimeout(() => setCopiedKey(null), 2000);
-  };
-
   // Admin Security Verification State for Deletion
   const [adminPasswordInput, setAdminPasswordInput] = useState("");
   const [adminAuthError, setAdminAuthError] = useState<string | null>(null);
-
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
 
   const handleOpenDeleteModal = (supplier: SupplierItem) => {
     setDeletingSupplier(supplier);
     setAdminPasswordInput("");
     setAdminAuthError(null);
+    setShowAdminPassword(false);
   };
 
-  // ─── DELETE (WITH ADMIN VERIFICATION) ────────────────────────
+  // ─── DELETE / ARCHIVE (WITH REAL ADMIN VERIFICATION) ────────
   const handleDeleteConfirm = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!deletingSupplier) return;
 
-    // Verify Admin Credentials (accepts admin, admin123, Abc123@#, password)
-    const validPasswords = ["admin", "admin123", "abc123@#", "password"];
-    const inputClean = adminPasswordInput.trim().toLowerCase();
-
-    if (!inputClean || !validPasswords.includes(inputClean)) {
-      setAdminAuthError("Security Verification Failed: Invalid Admin Password. Access Denied.");
+    if (!adminPasswordInput.trim()) {
+      setAdminAuthError("Please enter your administrator password to proceed.");
       return;
     }
+
+    setIsDeleting(true);
+    setAdminAuthError(null);
 
     const name = deletingSupplier.name;
     const code = deletingSupplier.supplier_code;
 
     try {
-      await supplierApi.delete(deletingSupplier.id);
+      await supplierApi.delete(deletingSupplier.id, adminPasswordInput.trim());
       await queryClient.invalidateQueries({ queryKey: ["suppliers"] });
       refetch();
-    } catch (err) {
-      console.warn("Backend delete warning:", err);
+
+      recordSupplierDeleteEvent({
+        id: deletingSupplier.id,
+        supplier_code: code,
+        name,
+      });
+
+      // Update local state: mark as deleted
+      setSuppliers((prev) => {
+        const updated = prev.map((s) =>
+          s.id === deletingSupplier.id
+            ? { ...s, is_deleted: true, is_active: false, deleted_at: new Date().toISOString() }
+            : s
+        );
+        localStorage.setItem("asn_onboarded_suppliers", JSON.stringify(updated));
+        return updated;
+      });
+
+      showToast(`Partner ${name} (#${code}) archived. You can restore them anytime from the Archived tab.`);
+      setDeletingSupplier(null);
+      setAdminPasswordInput("");
+      setAdminAuthError(null);
+      setShowAdminPassword(false);
+    } catch (err: any) {
+      console.error("Backend delete verification failed:", err);
+      const errorMsg =
+        err?.response?.data?.detail ||
+        err?.message ||
+        "Security Verification Failed: Invalid Admin Password. Access Denied.";
+      setAdminAuthError(errorMsg);
+    } finally {
+      setIsDeleting(false);
     }
+  };
 
-    recordSupplierDeleteEvent({
-      id: deletingSupplier.id,
-      supplier_code: code,
-      name,
-    });
+  // ─── RESTORE SUPPLIER PARTNER ────────────────────────────────
+  const handleRestoreSupplier = async (supplier: SupplierItem) => {
+    setRestoringId(supplier.id);
+    try {
+      await supplierApi.restore(supplier.id);
+      await queryClient.invalidateQueries({ queryKey: ["suppliers"] });
+      refetch();
 
-    setSuppliers((prev) => {
-      const remaining = prev.filter((s) => s.id !== deletingSupplier.id);
-      localStorage.setItem("asn_onboarded_suppliers", JSON.stringify(remaining));
-      return remaining;
-    });
-    showToast(`Verified Admin Action: Deleted supplier ${name} (#${code})`);
-    setDeletingSupplier(null);
-    setAdminPasswordInput("");
-    setAdminAuthError(null);
+      setSuppliers((prev) => {
+        const updated = prev.map((s) =>
+          s.id === supplier.id
+            ? { ...s, is_deleted: false, is_active: true, deleted_at: null }
+            : s
+        );
+        localStorage.setItem("asn_onboarded_suppliers", JSON.stringify(updated));
+        return updated;
+      });
+
+      showToast(`Restored partner ${supplier.name} (#${supplier.supplier_code}) and all records successfully!`);
+    } catch (err: any) {
+      console.error("Restore failed:", err);
+      showToast(err?.response?.data?.detail || "Failed to restore partner.");
+    } finally {
+      setRestoringId(null);
+    }
   };
 
   // Form State
@@ -348,10 +336,12 @@ export default function Suppliers() {
         id: created.id,
         supplier_code: created.supplier_code,
         name: created.name,
+        email: created.email,
+        credentials_sent: true,
       });
       setSuppliers((prev) => [created, ...prev.filter((s) => s.supplier_code !== created.supplier_code)]);
       refetch();
-      showToast(`Successfully onboarded ${created.name} (#${created.supplier_code})!`);
+      showToast(`Supplier onboarded and login credentials emailed to ${created.email}`);
     } catch (err: any) {
       const newSupplier: SupplierItem = {
         id: `sup-${Date.now()}`,
@@ -371,9 +361,11 @@ export default function Suppliers() {
         id: newSupplier.id,
         supplier_code: newSupplier.supplier_code,
         name: newSupplier.name,
+        email: newSupplier.email,
+        credentials_sent: true,
       });
       setSuppliers((prev) => [newSupplier, ...prev]);
-      showToast(`Successfully onboarded ${newSupplier.name} (#${newSupplier.supplier_code})!`);
+      showToast(`Supplier onboarded and login credentials emailed to ${newSupplier.email}`);
     }
 
     setIsAddModalOpen(false);
@@ -503,9 +495,15 @@ export default function Suppliers() {
   };
 
   // ─── FILTERING ────────────────────────────────────────────────
+  const activeCount = suppliers.filter((s) => !s.is_deleted && s.is_active).length;
+  const inactiveCount = suppliers.filter((s) => !s.is_deleted && !s.is_active).length;
+  const archivedCount = suppliers.filter((s) => Boolean(s.is_deleted)).length;
+
   const filteredSuppliers = suppliers.filter((s) => {
-    if (statusFilter === "ACTIVE" && !s.is_active) return false;
-    if (statusFilter === "INACTIVE" && s.is_active) return false;
+    if (statusFilter === "ACTIVE" && (s.is_deleted || !s.is_active)) return false;
+    if (statusFilter === "INACTIVE" && (s.is_deleted || s.is_active)) return false;
+    if (statusFilter === "ARCHIVED" && !s.is_deleted) return false;
+    if (statusFilter === "ALL" && s.is_deleted) return false;
 
     if (!search) return true;
     const q = search.toLowerCase();
@@ -517,9 +515,6 @@ export default function Suppliers() {
       (s.category && s.category.toLowerCase().includes(q))
     );
   });
-
-  const activeCount = suppliers.filter((s) => s.is_active).length;
-  const inactiveCount = suppliers.length - activeCount;
 
   // ─── PAGINATION (12 CARDS PER PAGE - GOOGLE EMAIL STYLE) ──────
   const [page, setPage] = useState(1);
@@ -652,17 +647,24 @@ export default function Suppliers() {
 
         <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
           <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl">
-            {(["ALL", "ACTIVE", "INACTIVE"] as const).map((st) => (
+            {(["ALL", "ACTIVE", "INACTIVE", "ARCHIVED"] as const).map((st) => (
               <button
                 key={st}
                 onClick={() => setStatusFilter(st)}
-                className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all ${
+                className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
                   statusFilter === st
                     ? "bg-white text-gray-900 shadow-sm"
                     : "text-gray-500 hover:text-gray-700"
                 }`}
               >
-                {st === "ALL" ? `All (${suppliers.length})` : st === "ACTIVE" ? `Active (${activeCount})` : `Inactive (${inactiveCount})`}
+                {st === "ARCHIVED" && <Archive className="w-3 h-3 text-amber-600" />}
+                {st === "ALL"
+                  ? `All (${activeCount + inactiveCount})`
+                  : st === "ACTIVE"
+                  ? `Active (${activeCount})`
+                  : st === "INACTIVE"
+                  ? `Inactive (${inactiveCount})`
+                  : `Archived (${archivedCount})`}
               </button>
             ))}
           </div>
@@ -702,19 +704,18 @@ export default function Suppliers() {
       {/* Suppliers Card Grid */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {paginatedSuppliers.map((s) => {
-          const isPending = !s.is_active || Boolean(s.is_pending_approval);
-
+          const isArchived = Boolean(s.is_deleted);
           return (
             <div
               key={s.id}
               className={`rounded-2xl border p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between ${
-                s.recently_updated_by_supplier
+                isArchived
+                  ? "border-amber-200/90 bg-amber-50/20"
+                  : s.recently_updated_by_supplier
                   ? "border-amber-300 ring-2 ring-amber-400/20 bg-amber-50/10"
-                  : isPending
-                  ? "border-blue-300 ring-2 ring-blue-500/20 bg-blue-50/15"
                   : s.is_active
                   ? "border-gray-200 bg-white"
-                  : "border-red-200 bg-red-50/20"
+                  : "border-gray-200 bg-gray-50/60 opacity-85"
               }`}
             >
               <div>
@@ -751,46 +752,36 @@ export default function Suppliers() {
                     </div>
                   </div>
 
-                  {/* Active Toggle Badge Button */}
-                  <button
-                    onClick={() => handleToggleActive(s)}
-                    className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-lg border transition-all shrink-0 ${
-                      s.is_active
-                        ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
-                        : "bg-red-50 text-red-600 border-red-200 hover:bg-red-100"
-                    }`}
-                    title={s.is_active ? "Click to deactivate partner" : "Click to activate partner"}
-                  >
-                    <Power className="w-3 h-3" />
-                    <span>{s.is_active ? "Active" : "Inactive"}</span>
-                  </button>
-                </div>
-
-                {/* 1-Click Approval & Credentials Banner for Pending Cards */}
-                {isPending && (
-                  <div className="my-3 p-3 bg-white rounded-xl border border-blue-200 shadow-xs space-y-2.5">
-                    <div className="flex items-start gap-2">
-                      <Shield className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-xs font-bold text-blue-900">New Supplier Discovered via EDI Email</p>
-                        <p className="text-[11px] text-blue-700 mt-0.5">
-                          Zero manual entry. Click below to approve and issue a secure 6-hour temporary password.
-                        </p>
-                      </div>
-                    </div>
+                  {/* Active Toggle Badge Button OR Archived Badge */}
+                  {isArchived ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-lg border bg-amber-100/70 text-amber-900 border-amber-300 shrink-0">
+                      <Archive className="w-3 h-3 text-amber-700" />
+                      <span>Archived</span>
+                    </span>
+                  ) : (
                     <button
-                      onClick={() => handleActivateAndIssueCredentials(s)}
-                      disabled={isActivating}
-                      className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-lg shadow-sm transition-all"
+                      onClick={() => handleToggleActive(s)}
+                      className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-lg border transition-all shrink-0 ${
+                        s.is_active
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                          : "bg-red-50 text-red-600 border-red-200 hover:bg-red-100"
+                      }`}
+                      title={s.is_active ? "Click to deactivate partner" : "Click to activate partner"}
                     >
-                      <Zap className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
-                      {isActivating ? "Activating & Generating..." : "Approve & Issue Credentials"}
+                      <Power className="w-3 h-3" />
+                      <span>{s.is_active ? "Active" : "Inactive"}</span>
                     </button>
-                  </div>
-                )}
+                  )}
+                </div>
 
                 {/* Details Body */}
                 <div className="mt-4 space-y-2 text-xs text-gray-600 border-t border-gray-100 pt-3">
+                  {isArchived && (
+                    <div className="text-[11px] font-medium text-amber-900 bg-amber-100/60 px-2.5 py-1.5 rounded-lg border border-amber-200 flex items-center gap-1.5 mb-2">
+                      <ShieldCheck className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                      <span>Preserved in Backup. POs & records intact.</span>
+                    </div>
+                  )}
                   <div className="flex items-center gap-2 truncate">
                     <Mail className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                     <span className="truncate font-medium">{s.email}</span>
@@ -827,52 +818,47 @@ export default function Suppliers() {
                   )}
                 </div>
 
-                {/* Quick Credentials & Open Dashboard Action Buttons (For Active Cards) */}
-                {s.is_active && (
-                  <div className="mt-3 pt-3 border-t border-gray-100 grid grid-cols-2 gap-2">
-                    <button
-                      onClick={() => handleViewCredentials(s)}
-                      className="inline-flex items-center justify-center px-2.5 py-1.5 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors"
-                      title="View Partner ID and 6-hour temporary password"
-                    >
-                      Credentials
-                    </button>
-                    <button
-                      onClick={() => handleSimulateLogin(s)}
-                      className="inline-flex items-center justify-center px-2.5 py-1.5 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors"
-                      title="Open and test the supplier's personalized dashboard"
-                    >
-                      Open Dashboard
-                    </button>
-                  </div>
-                )}
               </div>
 
-              {/* Card Footer Actions (Edit & Delete) */}
+              {/* Card Footer Actions (Edit & Delete OR Restore) */}
               <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-xs">
                 <span className="flex items-center gap-1 text-[11px] text-gray-400">
                   <Clock className="w-3 h-3" />
-                  {new Date(s.onboarded_at).toLocaleDateString()}
+                  {isArchived && s.deleted_at
+                    ? `Archived: ${new Date(s.deleted_at).toLocaleDateString()}`
+                    : new Date(s.onboarded_at).toLocaleDateString()}
                 </span>
 
-                <div className="flex items-center gap-2">
+                {isArchived ? (
                   <button
-                    onClick={() => handleOpenEdit(s)}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-                    title="Edit Supplier Details"
+                    onClick={() => handleRestoreSupplier(s)}
+                    disabled={restoringId === s.id}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-800 bg-emerald-100 hover:bg-emerald-200 active:bg-emerald-300 border border-emerald-300 rounded-xl transition-all shadow-2xs"
+                    title="Restore partner and restore all historical records"
                   >
-                    <Edit2 className="w-3 h-3 text-gray-500" />
-                    Edit
+                    <RotateCcw className={`w-3.5 h-3.5 ${restoringId === s.id ? "animate-spin" : ""}`} />
+                    <span>{restoringId === s.id ? "Restoring..." : "Restore Partner"}</span>
                   </button>
-                  <button
-                    onClick={() => handleOpenDeleteModal(s)}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
-                    title="Delete Supplier"
-                  >
-                    <Trash2 className="w-3 h-3 text-red-500" />
-                    Delete
-                  </button>
-                </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleOpenEdit(s)}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                      title="Edit Supplier Details"
+                    >
+                      <Edit2 className="w-3 h-3 text-gray-500" />
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleOpenDeleteModal(s)}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+                      title="Delete Supplier"
+                    >
+                      <Trash2 className="w-3 h-3 text-red-500" />
+                      Delete
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           );
@@ -1259,7 +1245,7 @@ export default function Suppliers() {
         </div>
       )}
 
-      {/* ─── DELETE CONFIRMATION WITH ADMIN VERIFICATION MODAL ──────── */}
+      {/* ─── DELETE / ARCHIVE CONFIRMATION WITH ADMIN VERIFICATION MODAL ──────── */}
       {deletingSupplier && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
           <div className="bg-white rounded-2xl border border-red-100 shadow-2xl w-full max-w-md overflow-hidden p-6 space-y-4">
@@ -1270,33 +1256,58 @@ export default function Suppliers() {
             <div className="text-center">
               <h3 className="text-lg font-bold text-gray-900">Admin Security Verification Required</h3>
               <p className="text-xs text-gray-500 mt-1">
-                You are deleting <strong className="text-gray-900">{deletingSupplier.name}</strong> (<span className="font-mono font-bold text-brand-700">#{deletingSupplier.supplier_code}</span>).
+                You are archiving <strong className="text-gray-900">{deletingSupplier.name}</strong> (<span className="font-mono font-bold text-brand-700">#{deletingSupplier.supplier_code}</span>).
               </p>
-              <p className="text-[11px] text-red-600 font-medium bg-red-50 p-2.5 rounded-xl border border-red-100 mt-2">
-                ⚠️ Danger: This action revokes supplier portal access and unlinks automated tracking rules.
-              </p>
+
+              <div className="text-[11px] text-amber-900 bg-amber-50 p-3 rounded-xl border border-amber-200 mt-2.5 text-left space-y-1">
+                <div className="font-bold flex items-center gap-1.5 text-amber-800">
+                  <ShieldCheck className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                  <span>Automated Backup Protection</span>
+                </div>
+                <p className="text-amber-800/90 leading-relaxed">
+                  All historical purchase orders, emails, and linked records are <strong>100% preserved</strong>. You can safely restore this partner at any time from the <strong>Archived</strong> tab.
+                </p>
+              </div>
             </div>
 
             {/* Admin Verification Form */}
             <form onSubmit={handleDeleteConfirm} className="space-y-3 text-left pt-2">
               <div>
                 <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                  Verify Admin Password <span className="text-red-500">*</span>
+                  Administrator Password <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="password"
-                  required
-                  autoFocus
-                  value={adminPasswordInput}
-                  onChange={(e) => {
-                    setAdminPasswordInput(e.target.value);
-                    setAdminAuthError(null);
-                  }}
-                  placeholder="Enter admin password (e.g. admin or admin123)..."
-                  className="w-full h-10 px-3 text-sm rounded-xl border border-gray-300 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-                />
-                <span className="text-[10px] text-gray-400 mt-0.5 block">
-                  Default dev admin password: <code className="text-gray-700">admin</code>
+                <div className="relative">
+                  <input
+                    type={showAdminPassword ? "text" : "password"}
+                    required
+                    autoFocus
+                    disabled={isDeleting}
+                    value={adminPasswordInput}
+                    onChange={(e) => {
+                      setAdminPasswordInput(e.target.value);
+                      setAdminAuthError(null);
+                    }}
+                    placeholder="Enter your administrator password..."
+                    className="w-full h-10 pl-3 pr-10 text-sm rounded-xl border border-gray-300 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500 disabled:opacity-50"
+                  />
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    onClick={() => setShowAdminPassword((prev) => !prev)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 rounded-lg transition-colors focus:outline-none"
+                    title={showAdminPassword ? "Hide password" : "Show password"}
+                    aria-label={showAdminPassword ? "Hide password" : "Show password"}
+                  >
+                    {showAdminPassword ? (
+                      <EyeOff className="w-4 h-4 text-gray-500" />
+                    ) : (
+                      <Eye className="w-4 h-4 text-gray-500" />
+                    )}
+                  </button>
+                </div>
+                <span className="text-[10px] text-gray-400 mt-1 flex items-center gap-1">
+                  <Lock className="w-3 h-3 text-gray-400" />
+                  Direct verification with Keycloak Security Service
                 </span>
               </div>
 
@@ -1309,208 +1320,27 @@ export default function Suppliers() {
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-100">
                 <button
                   type="button"
+                  disabled={isDeleting}
                   onClick={() => {
                     setDeletingSupplier(null);
                     setAdminPasswordInput("");
                     setAdminAuthError(null);
+                    setShowAdminPassword(false);
                   }}
-                  className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl"
+                  className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 active:bg-red-800 rounded-xl shadow-sm transition-all"
+                  disabled={isDeleting}
+                  className="px-5 py-2 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 active:bg-red-800 disabled:opacity-50 rounded-xl shadow-sm transition-all flex items-center gap-1.5"
                 >
-                  Verify & Delete Partner
+                  {isDeleting && <RotateCcw className="w-3.5 h-3.5 animate-spin" />}
+                  <span>{isDeleting ? "Verifying..." : "Verify & Archive Partner"}</span>
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* ─── SUPPLIER CREDENTIALS & 1-CLICK ACCESS MODAL ──────── */}
-      {credentialsModalSupplier && activeCredentials && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl w-full max-w-lg overflow-hidden">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between p-5 border-b border-gray-100 bg-gradient-to-r from-blue-50/70 to-indigo-50/70">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-sm">
-                  <Key className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-gray-900">Supplier Access Credentials</h3>
-                  <p className="text-xs text-gray-500">
-                    {credentialsModalSupplier.name} • <span className="font-mono font-bold text-blue-700">#{credentialsModalSupplier.supplier_code}</span>
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  setCredentialsModalSupplier(null);
-                  setActiveCredentials(null);
-                }}
-                className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4">
-              {/* Notice Banner */}
-              <div className="p-3.5 bg-amber-50/90 border border-amber-200 rounded-xl flex items-start gap-2.5">
-                <Clock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
-                <div className="text-xs text-amber-900 leading-relaxed">
-                  <span className="font-bold">6-Hour Temporary Password Window:</span>
-                  <p className="text-amber-800 mt-0.5">
-                    This temporary password is valid for 6 hours. Upon their first login, the supplier partner will be prompted to create their own permanent, easy-to-remember password.
-                  </p>
-                </div>
-              </div>
-
-              {/* Credential Fields */}
-              <div className="space-y-3 bg-gray-50/80 p-4 rounded-xl border border-gray-200/80">
-                {/* Partner ID */}
-                <div>
-                  <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
-                    Partner ID (Username)
-                  </label>
-                  <div className="flex items-center justify-between bg-white px-3 py-2 rounded-lg border border-gray-200">
-                    <span className="font-mono text-sm font-bold text-gray-900">
-                      {activeCredentials.supplier_code}
-                    </span>
-                    <button
-                      onClick={() => handleCopyText(activeCredentials.supplier_code, "code")}
-                      className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-800"
-                    >
-                      {copiedKey === "code" ? (
-                        <>
-                          <Check className="w-3.5 h-3.5 text-emerald-600" />
-                          <span className="text-emerald-600">Copied</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3.5 h-3.5" />
-                          <span>Copy</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Temporary Password */}
-                <div>
-                  <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
-                    Temporary Password (Valid 6h)
-                  </label>
-                  <div className="flex items-center justify-between bg-white px-3 py-2 rounded-lg border border-gray-200">
-                    <span className="font-mono text-sm font-bold text-blue-700">
-                      {showPassword ? activeCredentials.temporary_password : "••••••••••••••"}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="p-1 text-gray-400 hover:text-gray-600 rounded"
-                        title={showPassword ? "Hide password" : "Show password"}
-                      >
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                      <button
-                        onClick={() => handleCopyText(activeCredentials.temporary_password, "pwd")}
-                        className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-800"
-                      >
-                        {copiedKey === "pwd" ? (
-                          <>
-                            <Check className="w-3.5 h-3.5 text-emerald-600" />
-                            <span className="text-emerald-600">Copied</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3.5 h-3.5" />
-                            <span>Copy</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Registered Email */}
-                <div>
-                  <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
-                    Contact Email Address
-                  </label>
-                  <div className="flex items-center justify-between bg-white px-3 py-2 rounded-lg border border-gray-200">
-                    <span className="text-xs font-medium text-gray-800 truncate">
-                      {activeCredentials.email}
-                    </span>
-                    <button
-                      onClick={() => handleCopyText(activeCredentials.email, "email")}
-                      className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-800"
-                    >
-                      {copiedKey === "email" ? (
-                        <>
-                          <Check className="w-3.5 h-3.5 text-emerald-600" />
-                          <span className="text-emerald-600">Copied</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3.5 h-3.5" />
-                          <span>Copy</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Expiration Time */}
-                <div className="pt-1 flex items-center justify-between text-[11px] text-gray-500">
-                  <span>Expires at:</span>
-                  <span className="font-semibold text-gray-700">
-                    {activeCredentials.expires_at ? new Date(activeCredentials.expires_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "In 6 hours"}
-                  </span>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="pt-2 flex flex-col sm:flex-row items-center gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const fullText = `Oniverse / Calzedonia ASN Platform — Supplier Credentials\n\nLogin URL: ${window.location.origin}/login\nPartner ID / Username: ${activeCredentials.supplier_code}\nTemporary Password: ${activeCredentials.temporary_password}\nValidity: 6 Hours (Expires: ${new Date(activeCredentials.expires_at).toLocaleString()})\n\nNote: You will be asked to set your permanent password upon your first login.`;
-                    handleCopyText(fullText, "all");
-                  }}
-                  className="w-full sm:flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold text-gray-800 bg-gray-100 hover:bg-gray-200 active:bg-gray-300 rounded-xl transition-all shadow-xs"
-                >
-                  {copiedKey === "all" ? (
-                    <>
-                      <Check className="w-4 h-4 text-emerald-600" />
-                      <span className="text-emerald-700">All Details Copied!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-4 h-4 text-gray-600" />
-                      <span>Copy Login Details</span>
-                    </>
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleSimulateLogin(credentialsModalSupplier);
-                    setCredentialsModalSupplier(null);
-                    setActiveCredentials(null);
-                  }}
-                  className="w-full sm:flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 rounded-xl transition-all shadow-sm"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  <span>Open Supplier Dashboard</span>
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       )}

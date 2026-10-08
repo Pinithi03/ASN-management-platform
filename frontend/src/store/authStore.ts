@@ -12,7 +12,7 @@ export interface AuthUser {
   keycloak_id: string;
   email: string | null;
   name: string | null;
-  role: "ADMIN" | "SUPPLIER";
+  role: "SUPER_ADMIN" | "ADMIN" | "SUPPLIER";
   permissions: string[];
   supplier_id: string | null;
   supplier_code: string | null;
@@ -51,7 +51,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     keycloak.logout({ redirectUri: window.location.origin });
   },
 
-  isAdmin: () => get().user?.role === "ADMIN",
+  isAdmin: () => get().user?.role === "ADMIN" || get().user?.role === "SUPER_ADMIN",
 
   hasPermission: (perm) => {
     const perms = get().user?.permissions ?? [];
