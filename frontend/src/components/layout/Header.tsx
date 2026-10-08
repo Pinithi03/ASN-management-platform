@@ -9,6 +9,7 @@ import {
   Sparkles,
   CheckCheck,
   ArrowRight,
+  X,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -45,10 +46,11 @@ export default function Header({ onMenuToggle }: HeaderProps) {
   // switchSupplier removed — role switching is no longer available.
 
   const [notifOpen, setNotifOpen] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
   const [fieldChangeTick, setFieldChangeTick] = useState(0);
 
-  const isAdmin = user?.role === "ADMIN";
+  const isAdmin = user?.role === "ADMIN" || user?.role === "SUPER_ADMIN";
 
   // Listen for real-time field change broadcast events
   useEffect(() => {
@@ -67,11 +69,15 @@ export default function Header({ onMenuToggle }: HeaderProps) {
     refetchInterval: 10000,
   });
 
-  // Dynamic assigned POs for logged-in supplier
+  // Dynamic assigned POs strictly for logged-in supplier account
   const { data: poData } = useQuery({
-    queryKey: ["supplierNotificationsPOs", user?.supplier_code],
-    queryFn: () => poApi.list({ per_page: 5 }),
-    enabled: !isAdmin && Boolean(user?.supplier_code),
+    queryKey: ["supplierNotificationsPOs", user?.supplier_code, user?.supplier_id],
+    queryFn: () =>
+      poApi.list({
+        supplier_id: user?.supplier_id || user?.supplier_code || undefined,
+        per_page: 5,
+      }),
+    enabled: !isAdmin && Boolean(user?.supplier_code || user?.supplier_id),
     staleTime: 10000,
   });
 
@@ -112,8 +118,12 @@ export default function Header({ onMenuToggle }: HeaderProps) {
         notifTitle = "Supplier Profile Deleted";
         notifDesc = `${chg.supplier_name} (#${chg.supplier_code}) was deleted from the platform`;
       } else if (chg.field_key === "create") {
-        notifTitle = "New Supplier Onboarded";
-        notifDesc = `${chg.supplier_name} (#${chg.supplier_code}) added to active partner directory`;
+        notifTitle = chg.field_label || "Supplier Onboarded & Credentials Sent";
+        notifDesc = `${chg.supplier_name} (#${chg.supplier_code}) onboarded. ${
+          chg.new_value.includes("credentials emailed to")
+            ? "Login credentials sent to " + chg.new_value.split("credentials emailed to ")[1]?.replace(")", "")
+            : "Added to active partner directory"
+        }`;
       } else if (chg.field_key === "is_active") {
         notifTitle = "Account Status Changed";
         notifDesc = `${chg.supplier_name} (#${chg.supplier_code}) is now ${chg.new_value}`;
@@ -238,6 +248,11 @@ export default function Header({ onMenuToggle }: HeaderProps) {
   };
 
   const handleLogout = () => {
+    setShowLogoutConfirm(true);
+  };
+
+  const handleConfirmLogout = () => {
+    setShowLogoutConfirm(false);
     logout();
     navigate("/login");
   };
@@ -256,30 +271,20 @@ export default function Header({ onMenuToggle }: HeaderProps) {
 
       {/* Right side */}
       <div className="flex items-center gap-3">
-        {/* Active Portal Scope / Plant Badge */}
-        <div
-          className={cn(
-            "flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium shadow-xs",
-            isAdmin
-              ? "border-brand-200 bg-brand-50/60 text-brand-900"
-              : "border-emerald-200 bg-emerald-50/60 text-emerald-900"
-          )}
-        >
-          <span
-            className={cn(
-              "h-2 w-2 rounded-full",
-              isAdmin ? "bg-brand-600 animate-pulse" : "bg-emerald-600 animate-pulse"
-            )}
-          />
-          <div className="text-left">
-            <span className="font-semibold block leading-tight">
-              {isAdmin ? "Admin Portal" : "Supplier Portal"}
-            </span>
-            <span className="text-[10px] text-gray-500 block leading-tight">
-              {isAdmin ? "Central HQ (All Plants)" : `Partner #${user?.supplier_code || ""}`}
-            </span>
+        {/* Active Portal Scope / Plant Badge (Only for Admin) */}
+        {isAdmin && (
+          <div className="flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium shadow-xs border-brand-200 bg-brand-50/60 text-brand-900">
+            <span className="h-2 w-2 rounded-full bg-brand-600 animate-pulse" />
+            <div className="text-left">
+              <span className="font-semibold block leading-tight">
+                {user?.role === "SUPER_ADMIN" ? "Super Admin" : "Admin Portal"}
+              </span>
+              <span className="text-[10px] text-gray-500 block leading-tight">
+                Central HQ (All Plants)
+              </span>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Notification Bell + Dropdown Drawer */}
         <div className="relative" ref={notifRef}>
@@ -388,50 +393,81 @@ export default function Header({ onMenuToggle }: HeaderProps) {
           )}
         </div>
 
-        {/* User info + role badge */}
-        <div className="flex items-center gap-2.5 rounded-lg px-2 py-1">
-          {/* Avatar */}
-          <div
-            className={cn(
-              "flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold text-white shadow-sm",
-              isAdmin ? "bg-brand-600" : "bg-emerald-600"
-            )}
-          >
-            {user?.name?.charAt(0) ?? (isAdmin ? "A" : "S")}
-          </div>
+        {/* User info + role badge (Only for Admin) */}
+        {isAdmin && (
+          <div className="flex items-center gap-2.5 rounded-lg px-2 py-1">
+            {/* Avatar */}
+            <div className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold text-white shadow-sm bg-brand-600">
+              {user?.name?.charAt(0) ?? "A"}
+            </div>
 
-          {/* Name + role */}
-          <div className="hidden text-left sm:block max-w-[180px]">
-            <p className="text-xs font-bold text-gray-900 truncate">
-              {isAdmin ? user?.name || "Admin" : user?.supplier_name || user?.name}
-            </p>
-            <div className="flex items-center gap-1.5">
-              <span
-                className={cn(
-                  "inline-block rounded px-1.5 py-0.5 text-[9px] font-bold uppercase leading-none",
-                  isAdmin
-                    ? "bg-brand-100 text-brand-700"
-                    : "bg-emerald-100 text-emerald-700"
-                )}
-              >
-                {isAdmin ? "Admin" : "Supplier"}
-              </span>
-              <span className="text-[10px] font-mono text-gray-400 truncate">
-                {isAdmin ? "HQ" : `#${user?.supplier_code}`}
-              </span>
+            {/* Name + role */}
+            <div className="hidden text-left sm:block max-w-[180px]">
+              <p className="text-xs font-bold text-gray-900 truncate">
+                {user?.name || "Admin"}
+              </p>
+              <div className="flex items-center gap-1.5">
+                <span className="inline-block rounded px-1.5 py-0.5 text-[9px] font-bold uppercase leading-none bg-brand-100 text-brand-700">
+                  {user?.role === "SUPER_ADMIN" ? "Super Admin" : "Admin"}
+                </span>
+                <span className="text-[10px] font-mono text-gray-400 truncate">
+                  HQ
+                </span>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Logout */}
         <button
           onClick={handleLogout}
-          title="Logout"
+          title="Sign Out"
           className="rounded-lg p-2 text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors"
         >
           <LogOut className="h-5 w-5" />
         </button>
       </div>
+
+      {/* Sign Out Confirmation Modal */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in">
+          <div className="relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl border border-gray-100">
+            {/* Close button */}
+            <button
+              onClick={() => setShowLogoutConfirm(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 rounded-lg p-1 transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">
+                Sign Out
+              </h3>
+              <p className="mt-2 text-sm text-gray-500 leading-relaxed">
+                Are you sure you want to end your current session?
+              </p>
+
+              <div className="mt-6 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowLogoutConfirm(false)}
+                  className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmLogout}
+                  className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-700 active:bg-red-800 transition-colors"
+                >
+                  Sign Out
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 }
