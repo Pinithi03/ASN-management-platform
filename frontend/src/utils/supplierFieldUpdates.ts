@@ -233,7 +233,7 @@ export function recordSupplierCreateEvent(supplier: {
     field_key: "create",
     field_label: "New Supplier Onboarded",
     old_value: " ",
-    new_value: `${supplier.name} (#${supplier.supplier_code})`,
+    new_value: `${supplier.name} (#${supplier.supplier_code})${emailNotice}`,
     updated_at: now,
   };
 
