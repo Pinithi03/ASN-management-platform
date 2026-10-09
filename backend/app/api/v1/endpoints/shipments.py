@@ -1327,11 +1327,12 @@ async def get_shipment_detail(
 @router.get("/{id}/labels")
 async def download_shipment_labels(
     id: uuid.UUID,
+    size: str = Query("6x4", description="Label size: '6x4', '4x6', '4x3', 'a4'"),
     db: AsyncSession = Depends(get_db),
 ) -> StreamingResponse:
     """
-    Generate and stream 6"x4" industrial PDF labels with Code 39 barcodes
-    for all cartons/boxes in this shipment.
+    Generate and stream industrial PDF labels with Code 39 barcodes
+    for all cartons/boxes in this shipment with customizable size.
     """
     try:
         stmt = select(Shipment).where(Shipment.id == id)
@@ -1383,13 +1384,13 @@ async def download_shipment_labels(
                 "label_date": shipment.ship_date.strftime("%d-%m-%Y") if shipment.ship_date else datetime.now().strftime("%d-%m-%Y"),
             })
 
-        pdf_bytes = generate_batch_labels(labels_data)
+        pdf_bytes = generate_batch_labels(labels_data, size=size)
 
         return StreamingResponse(
             io.BytesIO(pdf_bytes),
             media_type="application/pdf",
             headers={
-                "Content-Disposition": f"attachment; filename=Labels_{shipment.shipment_number}.pdf",
+                "Content-Disposition": f"attachment; filename=Labels_{shipment.shipment_number}_{size}.pdf",
                 "Access-Control-Expose-Headers": "Content-Disposition",
             },
         )

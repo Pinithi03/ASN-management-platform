@@ -223,19 +223,38 @@ export default function Shipments() {
   }, [user]);
 
 
-  // Download Labels PDF
-  const handleDownloadLabels = async (shipmentId: string, shipmentNumber: string) => {
+  const [labelModalData, setLabelModalData] = useState<{
+    open: boolean;
+    shipmentId: string;
+    shipmentNumber: string;
+    totalBoxes?: number;
+  } | null>(null);
+
+  // Download / Print Labels PDF with customizable size
+  const handleDownloadLabels = async (
+    shipmentId: string,
+    shipmentNumber: string,
+    size: string = "6x4",
+    autoPrint = false
+  ) => {
     setActionLoadingId(`labels-${shipmentId}`);
     try {
-      const blob = await shipmentService.downloadLabelsPdf(shipmentId);
+      const blob = await shipmentService.downloadLabelsPdf(shipmentId, size);
       const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `Labels_${shipmentNumber}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
+      if (autoPrint) {
+        const printWindow = window.open(url, "_blank");
+        if (printWindow) {
+          printWindow.focus();
+        }
+      } else {
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `Labels_${shipmentNumber}_${size}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+      setTimeout(() => window.URL.revokeObjectURL(url), 60000);
     } catch (e: any) {
       alert(`Failed to download labels: ${e?.response?.data?.detail || e.message || e}`);
     } finally {
@@ -502,9 +521,16 @@ export default function Shipments() {
                           <div className="flex items-center justify-end gap-1.5">
 
                             <button
-                              onClick={() => handleDownloadLabels(s.id, s.shipment_number)}
+                              onClick={() =>
+                                setLabelModalData({
+                                  open: true,
+                                  shipmentId: s.id,
+                                  shipmentNumber: s.shipment_number,
+                                  totalBoxes: s.total_boxes,
+                                })
+                              }
                               disabled={actionLoadingId === `labels-${s.id}`}
-                              title="Download 6x4 Code 39 Barcode PDF Labels"
+                              title="Print or Download Barcode Labels (Customizable Sizes)"
                               className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 shadow-2xs transition-colors disabled:opacity-50 cursor-pointer"
                             >
                               {actionLoadingId === `labels-${s.id}` ? (
@@ -598,6 +624,9 @@ export default function Shipments() {
             loadShipments();
           }}
           onSwitchToExcel={() => setCreationMethod("excel")}
+          onOpenLabelModal={(id, num, count) =>
+            setLabelModalData({ open: true, shipmentId: id, shipmentNumber: num, totalBoxes: count })
+          }
         />
       ) : (
         /* OPTION 2: CALZEDONIA 12-COLUMN EXCEL WORKFLOW */
@@ -609,6 +638,9 @@ export default function Shipments() {
             setSearchParams({});
             loadShipments();
           }}
+          onOpenLabelModal={(id, num, count) =>
+            setLabelModalData({ open: true, shipmentId: id, shipmentNumber: num, totalBoxes: count })
+          }
         />
       )}
 
@@ -617,7 +649,9 @@ export default function Shipments() {
         <ShipmentDetailModal
           shipmentId={inspectShipmentId}
           onClose={() => setInspectShipmentId(null)}
-          onDownloadLabels={handleDownloadLabels}
+          onDownloadLabels={(id, num, count) =>
+            setLabelModalData({ open: true, shipmentId: id, shipmentNumber: num, totalBoxes: count })
+          }
           onPreviewXml={handlePreviewXml}
         />
       )}
@@ -627,6 +661,18 @@ export default function Shipments() {
         <XmlPreviewModal
           data={xmlModalData}
           onClose={() => setXmlModalData((prev) => ({ ...prev, open: false }))}
+        />
+      )}
+
+      {/* LABEL PRINT & SIZE SELECTION MODAL */}
+      {labelModalData?.open && (
+        <LabelPrintModal
+          data={labelModalData}
+          onClose={() => setLabelModalData(null)}
+          onDownload={(size, autoPrint) => {
+            handleDownloadLabels(labelModalData.shipmentId, labelModalData.shipmentNumber, size, autoPrint);
+          }}
+          isLoading={actionLoadingId === `labels-${labelModalData.shipmentId}`}
         />
       )}
     </div>
@@ -640,10 +686,12 @@ function WebPackingWizard({
   poQuery,
   onSuccess,
   onSwitchToExcel,
+  onOpenLabelModal,
 }: {
   poQuery: string;
   onSuccess: () => void;
   onSwitchToExcel?: () => void;
+  onOpenLabelModal?: (id: string, num: string, count?: number) => void;
 }) {
   const user = useAuthStore((s) => s.user);
   const isSupplier = user?.role === "SUPPLIER";
@@ -2069,26 +2117,28 @@ function WebPackingWizard({
               <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-gray-200">
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={async () => {
-                      if (submitSuccessResult.shipment?.id) {
-                        try {
-                          const blob = await shipmentService.downloadLabelsPdf(submitSuccessResult.shipment.id);
+                    onClick={() => {
+                      const sId = submitSuccessResult?.shipment?.id;
+                      const sNum = submitSuccessResult?.shipment?.shipment_number || packingSlipNumber;
+                      const bCount = packedItems.reduce((acc, curr) => acc + curr.boxes.length, 0);
+                      if (onOpenLabelModal && sId) {
+                        onOpenLabelModal(sId, sNum, bCount);
+                      } else if (sId) {
+                        shipmentService.downloadLabelsPdf(sId, "6x4").then((blob) => {
                           const url = window.URL.createObjectURL(blob);
                           const a = document.createElement("a");
                           a.href = url;
-                          a.download = `Labels_${submitSuccessResult.shipment.shipment_number}.pdf`;
+                          a.download = `Labels_${sNum}.pdf`;
                           document.body.appendChild(a);
                           a.click();
-                          document.body.removeChild(a);
+                          a.remove();
                           window.URL.revokeObjectURL(url);
-                        } catch (e: any) {
-                          alert("Failed to download labels: " + (e?.message || "Unknown error"));
-                        }
+                        });
                       }
                     }}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-xs flex items-center gap-1.5 cursor-pointer"
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs flex items-center gap-1.5 cursor-pointer"
                   >
-                    <FileText className="w-3.5 h-3.5" /> Download 6x4 PDF Labels
+                    <Printer className="w-3.5 h-3.5" /> Print / Download Labels
                   </button>
 
                   <button
@@ -2282,10 +2332,12 @@ function ExcelPackingWorkflow({
   targetPo,
   targetPos,
   onSuccess,
+  onOpenLabelModal,
 }: {
   targetPo?: string;
   targetPos?: string[];
   onSuccess: () => void;
+  onOpenLabelModal?: (id: string, num: string, count?: number) => void;
 }) {
   const user = useAuthStore((s) => s.user);
   const [dragActive, setDragActive] = useState(false);
@@ -2933,11 +2985,20 @@ function ExcelPackingWorkflow({
             <button
               type="button"
               disabled={downloadingLabels}
-              onClick={handleDownloadLabelsPdf}
-              className="flex-1 min-w-[200px] flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3.5 text-sm font-bold text-white shadow-lg hover:bg-emerald-700 hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0 transition-all cursor-pointer"
+              onClick={() => {
+                const sId = createdResponse?.shipment?.id;
+                const sNum = createdResponse?.shipment?.shipment_number || packingSlipNumber;
+                const bCount = createdResponse?.shipment?.total_boxes;
+                if (onOpenLabelModal && sId) {
+                  onOpenLabelModal(sId, sNum, bCount);
+                } else {
+                  handleDownloadLabelsPdf();
+                }
+              }}
+              className="flex-1 min-w-[200px] flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3.5 text-sm font-bold text-white shadow-lg hover:bg-emerald-700 hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 transition-all cursor-pointer"
             >
               {downloadingLabels ? <Loader2 className="h-5 w-5 animate-spin" /> : <Printer className="h-5 w-5" />}
-              6x4 Labels PDF
+              Print / Download Labels
             </button>
 
             <button
@@ -3108,7 +3169,7 @@ function ShipmentDetailModal({
 }: {
   shipmentId: string;
   onClose: () => void;
-  onDownloadLabels: (id: string, num: string) => void;
+  onDownloadLabels: (id: string, num: string, count?: number) => void;
   onPreviewXml: (shipment: any) => void;
 }) {
   const [data, setData] = useState<any>(null);
@@ -3340,11 +3401,11 @@ function ShipmentDetailModal({
           {data && (
             <div className="flex items-center gap-2">
               <button
-                onClick={() => onDownloadLabels(data.id, data.shipment_number)}
+                onClick={() => onDownloadLabels(data.id, data.shipment_number, data.total_boxes)}
                 className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer"
               >
                 <Printer className="w-3.5 h-3.5" />
-                Download 6x4 Labels PDF
+                Print / Download Labels
               </button>
 
               <button
@@ -3358,6 +3419,183 @@ function ShipmentDetailModal({
               </button>
             </div>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ───────────────────────────────────────────────────────────────────
+// SUBCOMPONENT E: Label Print & Size Customization Modal
+// ───────────────────────────────────────────────────────────────────
+function LabelPrintModal({
+  data,
+  onClose,
+  onDownload,
+  isLoading,
+}: {
+  data: {
+    open: boolean;
+    shipmentId: string;
+    shipmentNumber: string;
+    totalBoxes?: number;
+  };
+  onClose: () => void;
+  onDownload: (size: string, autoPrint: boolean) => void;
+  isLoading?: boolean;
+}) {
+  const [selectedSize, setSelectedSize] = useState<string>(() => {
+    return localStorage.getItem("calzedonia_preferred_label_size") || "6x4";
+  });
+
+  const handleSelectSize = (size: string) => {
+    setSelectedSize(size);
+    localStorage.setItem("calzedonia_preferred_label_size", size);
+  };
+
+  const SIZES = [
+    {
+      id: "6x4",
+      title: '6" × 4" Landscape',
+      subtitle: "Calzedonia Standard (152 × 102 mm)",
+      desc: "Standard wide industrial shipping label. Best for thermal sticker rolls.",
+      badge: "Standard",
+      badgeColor: "bg-blue-100 text-blue-700 border-blue-200",
+    },
+    {
+      id: "4x6",
+      title: '4" × 6" Portrait',
+      subtitle: "Logistics Standard Thermal (102 × 152 mm)",
+      desc: "Standard vertical shipping label for Zebra & TSC thermal printers.",
+      badge: "Thermal Roll",
+      badgeColor: "bg-emerald-100 text-emerald-700 border-emerald-200",
+    },
+    {
+      id: "4x3",
+      title: '4" × 3" Compact',
+      subtitle: "Compact Box / Carton (102 × 76 mm)",
+      desc: "Optimized for small packages, yarn boxes, and thread cartons.",
+      badge: "Compact",
+      badgeColor: "bg-amber-100 text-amber-700 border-amber-200",
+    },
+    {
+      id: "a4",
+      title: "A4 Sheet (4 Labels / Page)",
+      subtitle: "Office Laser / Inkjet (210 × 297 mm)",
+      desc: "2×2 grid layout with cut guides. Perfect for standard A4 paper or 4-up sticker sheets.",
+      badge: "Office Printer",
+      badgeColor: "bg-purple-100 text-purple-700 border-purple-200",
+    },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4 backdrop-blur-sm animate-in fade-in duration-150">
+      <div className="relative w-full max-w-lg rounded-2xl bg-white shadow-2xl border border-gray-200 overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 bg-gray-50/80">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-700">
+              <Printer className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-gray-900">Print & Download Barcode Labels</h2>
+              <p className="text-xs text-gray-500 font-mono">
+                {data.shipmentNumber} • {data.totalBoxes ?? 1} {data.totalBoxes === 1 ? "Carton" : "Cartons"}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors cursor-pointer"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="text-xs font-bold text-gray-700 uppercase tracking-wider block mb-2">
+              Select Label Print Size:
+            </label>
+            <div className="space-y-2.5">
+              {SIZES.map((s) => {
+                const isSelected = selectedSize === s.id;
+                return (
+                  <div
+                    key={s.id}
+                    onClick={() => handleSelectSize(s.id)}
+                    className={cn(
+                      "p-3 rounded-xl border-2 transition-all cursor-pointer flex items-start justify-between gap-3",
+                      isSelected
+                        ? "border-blue-600 bg-blue-50/40 shadow-xs"
+                        : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50/50"
+                    )}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="mt-0.5">
+                        <input
+                          type="radio"
+                          name="labelSize"
+                          checked={isSelected}
+                          onChange={() => handleSelectSize(s.id)}
+                          className="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer"
+                        />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-gray-900">{s.title}</span>
+                          <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded border", s.badgeColor)}>
+                            {s.badge}
+                          </span>
+                        </div>
+                        <p className="text-xs font-medium text-gray-600 mt-0.5">{s.subtitle}</p>
+                        <p className="text-[11px] text-gray-500 mt-0.5">{s.desc}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <p className="text-[11px] text-gray-500 italic bg-gray-50 p-2.5 rounded-lg border border-gray-200">
+            💡 Your preferred size is saved automatically for future label downloads.
+          </p>
+        </div>
+
+        {/* Footer Actions */}
+        <div className="flex items-center justify-between border-t border-gray-200 px-6 py-4 bg-gray-50/70">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer shadow-xs"
+          >
+            Cancel
+          </button>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={isLoading}
+              onClick={() => onDownload(selectedSize, true)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 border border-gray-300 bg-white hover:bg-gray-50 text-gray-800 rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+              title="Open print preview directly in browser"
+            >
+              {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Printer className="w-3.5 h-3.5 text-gray-600" />}
+              Print Directly
+            </button>
+
+            <button
+              type="button"
+              disabled={isLoading}
+              onClick={() => onDownload(selectedSize, false)}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+            >
+              {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+              Download PDF
+            </button>
+          </div>
         </div>
       </div>
     </div>

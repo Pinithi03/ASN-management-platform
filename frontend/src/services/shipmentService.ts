@@ -231,10 +231,13 @@ export const shipmentService = {
   },
 
   /**
-   * Download 6"x4" barcode label PDF.
+   * Download barcode label PDF with customizable size ('6x4', '4x6', '4x3', 'a4').
    */
-  async downloadLabelsPdf(shipmentId: string): Promise<Blob> {
-    const res = await api.get(`/shipments/${shipmentId}/labels`, { responseType: "blob" });
+  async downloadLabelsPdf(shipmentId: string, size: string = "6x4"): Promise<Blob> {
+    const res = await api.get(`/shipments/${shipmentId}/labels`, {
+      params: { size },
+      responseType: "blob",
+    });
     return res.data;
   },
 
