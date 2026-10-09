@@ -1669,11 +1669,7 @@ function WebPackingWizard({
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-2.5 flex-wrap">
-                      <span className="text-xs font-bold text-gray-800 bg-gray-100 px-2.5 py-1 rounded-lg border border-gray-200 font-mono">
-                        Shipping: {item.shipping_now} {item.uom || "M"}
-                      </span>
-
+                    <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
                       {/* Manual Split Control with Mode Toggle */}
                       {(() => {
                         const cfg = splitConfigs[item.id] || { mode: "qty", value: "" };
@@ -1799,7 +1795,7 @@ function WebPackingWizard({
                       <button
                         type="button"
                         onClick={() => addBox(item.id)}
-                        className="inline-flex items-center gap-1 px-3 py-1 bg-white hover:bg-gray-50 border border-gray-300 rounded-lg text-gray-700 text-xs font-medium shadow-xs transition-colors cursor-pointer"
+                        className="inline-flex items-center gap-1 px-3 py-1 bg-white hover:bg-gray-50 border border-gray-300 rounded-lg text-gray-700 text-xs font-medium shadow-xs transition-colors cursor-pointer shrink-0"
                       >
                         + Add {isRoll ? "Roll" : "Carton"}
                       </button>
