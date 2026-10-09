@@ -418,7 +418,7 @@ export default function Shipments() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-200 bg-gray-50/80 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                    <th className="px-5 py-3.5">Shipment #</th>
+                    <th className="px-5 py-3.5">Packing Slip No</th>
                     <th className="px-5 py-3.5">PO Number</th>
                     <th className="px-5 py-3.5">Destination Plant</th>
                     <th className="px-5 py-3.5">Cartons / Rolls</th>
@@ -500,14 +500,6 @@ export default function Shipments() {
                         </td>
                         <td className="whitespace-nowrap px-5 py-4 text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              onClick={() => setInspectShipmentId(s.id)}
-                              title="Inspect Cartons & Shipment Details"
-                              className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200 shadow-2xs transition-colors cursor-pointer"
-                            >
-                              <Eye className="h-3.5 w-3.5 text-blue-600" />
-                              Inspect
-                            </button>
 
                             <button
                               onClick={() => handleDownloadLabels(s.id, s.shipment_number)}
