@@ -222,22 +222,6 @@ export default function Shipments() {
     loadShipments();
   }, [user]);
 
-  // Download blank template
-  const handleDownloadBlankTemplate = async () => {
-    try {
-      const blob = await shipmentService.downloadTemplate();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "Standard_Packing_List_Template.xlsx";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (err) {
-      alert("Failed to download template. Please try again.");
-    }
-  };
 
   // Download Labels PDF
   const handleDownloadLabels = async (shipmentId: string, shipmentNumber: string) => {
@@ -331,39 +315,6 @@ export default function Shipments() {
             <p className="text-sm text-gray-500 mt-1">
               Manage past deliveries or prepare new Calzedonia ASNs via Outbound Delivery Workbench or Excel upload.
             </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-
-            <button
-              onClick={handleDownloadBlankTemplate}
-              className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-xs transition-colors cursor-pointer"
-            >
-              <Download className="h-4 w-4 text-gray-500" />
-              Template (.xlsx)
-            </button>
-            <button
-              onClick={() => {
-                setCreationMethod("excel");
-                setIsCreating(true);
-              }}
-              className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-xs transition-colors cursor-pointer"
-            >
-              <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
-              Excel Drop
-            </button>
-            <button
-              onClick={() => {
-                setCreationMethod("web");
-                setIsCreating(true);
-              }}
-              className={cn(
-                "flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white rounded-lg shadow-xs transition-colors cursor-pointer",
-                isSupplier ? "bg-emerald-600 hover:bg-emerald-700" : "bg-blue-600 hover:bg-blue-700"
-              )}
-            >
-              <PackagePlus className="h-4 w-4" />
-              + Create Delivery
-            </button>
           </div>
         </div>
       ) : creationMethod === "excel" ? (
@@ -714,6 +665,7 @@ function WebPackingWizard({
   const [submitSuccessResult, setSubmitSuccessResult] = useState<any>(null);
   const [previewXmlModal, setPreviewXmlModal] = useState<string | null>(null);
   const [startingSeq, setStartingSeq] = useState<number>(1);
+  const [startingSeqStr, setStartingSeqStr] = useState<string>("0000000001");
   const [packingSlipNumber, setPackingSlipNumber] = useState("");
 
   // Optional columns configuration for Step 2 Web Workbench (Batch, Supplier Ref, Width, Pack No)
@@ -748,15 +700,31 @@ function WebPackingWizard({
   };
 
   const handleStartingSeqChange = (valStr: string) => {
-    const cleanDigits = valStr.replace(/\D/g, "").slice(0, 10);
-    const num = parseInt(cleanDigits, 10) || 1;
+    let cleanDigits = valStr.replace(/\D/g, "");
+    if (cleanDigits.length === 20) cleanDigits = cleanDigits.slice(10);
+    cleanDigits = cleanDigits.slice(0, 10);
+    setStartingSeqStr(cleanDigits);
+    const num = parseInt(cleanDigits, 10);
+    if (!isNaN(num) && num > 0) {
+      setStartingSeq(num);
+      if (cleanDigits.length === 10) {
+        setPackedItems((prev) => resequenceAllCartons(prev, num));
+      }
+    }
+  };
+
+  const handleStartingSeqBlur = () => {
+    const num = parseInt(startingSeqStr, 10) || 1;
+    const padded = String(num).padStart(10, "0");
     setStartingSeq(num);
+    setStartingSeqStr(padded);
     setPackedItems((prev) => resequenceAllCartons(prev, num));
   };
 
   const handleHuSerialChange = (itemId: string, boxIdx: number, newSerialStr: string) => {
-    const cleanDigits = newSerialStr.replace(/\D/g, "").slice(0, 10);
-    const num = parseInt(cleanDigits, 10) || 1;
+    let cleanDigits = newSerialStr.replace(/\D/g, "");
+    if (cleanDigits.length === 20) cleanDigits = cleanDigits.slice(10);
+    cleanDigits = cleanDigits.slice(0, 10);
 
     let flatIdx = 0;
     for (const it of packedItems) {
@@ -767,9 +735,52 @@ function WebPackingWizard({
       flatIdx += it.boxes.length;
     }
 
+    const prefix = getHuPrefix();
+
+    if (cleanDigits.length < 10) {
+      // Allow user to type/edit freely while preserving what they type in this box
+      setPackedItems((prev) =>
+        prev.map((it) =>
+          it.id === itemId
+            ? {
+                ...it,
+                boxes: it.boxes.map((b, bI) =>
+                  bI === boxIdx ? { ...b, hu_number: `${prefix}${cleanDigits}` } : b
+                ),
+              }
+            : it
+        )
+      );
+      return;
+    }
+
+    // When 10 digits are filled, automatically re-sequence starting from this number
+    const num = parseInt(cleanDigits, 10) || 1;
     const newStart = Math.max(1, num - flatIdx);
     setStartingSeq(newStart);
+    setStartingSeqStr(String(newStart).padStart(10, "0"));
     setPackedItems((prev) => resequenceAllCartons(prev, newStart));
+  };
+
+  const handleHuSerialBlur = (itemId: string, boxIdx: number) => {
+    let flatIdx = 0;
+    for (const it of packedItems) {
+      if (it.id === itemId) {
+        flatIdx += boxIdx;
+        break;
+      }
+      flatIdx += it.boxes.length;
+    }
+
+    setPackedItems((prev) => {
+      const box = prev.find((it) => it.id === itemId)?.boxes[boxIdx];
+      const digits = (box?.hu_number || "").slice(10);
+      const num = parseInt(digits, 10) || 1;
+      const newStart = Math.max(1, num - flatIdx);
+      setStartingSeq(newStart);
+      setStartingSeqStr(String(newStart).padStart(10, "0"));
+      return resequenceAllCartons(prev, newStart);
+    });
   };
 
   // Synchronize next sequential HU from database sequence
@@ -782,6 +793,7 @@ function WebPackingWizard({
         const res = await shipmentService.getNextHuSequence(suppCode, suppId);
         if (isMounted && res && typeof res.next_number === "number") {
           setStartingSeq(res.next_number);
+          setStartingSeqStr(String(res.next_number).padStart(10, "0"));
           setPackedItems((prev) => {
             if (prev.length > 0) {
               return resequenceAllCartons(prev, res.next_number);
@@ -1461,7 +1473,7 @@ function WebPackingWizard({
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1">
             <div className="flex items-center gap-3 flex-wrap">
               <h2 className="text-xs font-bold text-gray-800 uppercase tracking-wide">
-                Carton Packaging & Handling Unit (SSCC) Assignment
+                Carton Packaging & Handling Unit Assignment
               </h2>
 
               {/* Optional Columns Dropdown */}
@@ -1524,24 +1536,55 @@ function WebPackingWizard({
             </div>
 
             {/* Interactive HU Starting Sequence */}
-            <div className="flex items-center gap-1.5 text-xs bg-white border border-gray-300 px-2.5 py-1 rounded-lg shadow-2xs">
-              <span className="text-[11px] font-semibold text-gray-600">HU Start Seq:</span>
-              <span
-                className="font-mono text-gray-500 text-[11px] font-bold bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200 select-none"
-                title="Fixed 10-digit Partner Prefix (1 + Supplier Code)"
-              >
-                {getHuPrefix()}
-              </span>
-              <span className="text-gray-400 font-mono">+</span>
-              <input
-                type="text"
-                maxLength={10}
-                value={String(startingSeq).padStart(10, "0")}
-                onChange={(e) => handleStartingSeqChange(e.target.value)}
-                className="w-24 px-1.5 py-0.5 font-mono text-xs font-bold text-gray-900 border border-gray-300 rounded focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none text-right bg-white"
-                title="Change starting 10-digit sequence number for this shipment"
-              />
-            </div>
+            {(() => {
+              const isToolbarShort = startingSeqStr.length < 10;
+              return (
+                <div
+                  className={cn(
+                    "flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg shadow-2xs border transition-colors",
+                    isToolbarShort
+                      ? "border-red-300 ring-1 ring-red-200 bg-red-50/20"
+                      : "border-gray-300 bg-white"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "text-[11px] font-semibold",
+                      isToolbarShort ? "text-red-700" : "text-gray-600"
+                    )}
+                  >
+                    HU Start Seq:
+                  </span>
+                  <span
+                    className={cn(
+                      "font-mono text-[11px] font-bold px-1.5 py-0.5 rounded border select-none",
+                      isToolbarShort
+                        ? "bg-red-100/60 text-red-700 border-red-200"
+                        : "bg-gray-100 text-gray-500 border-gray-200"
+                    )}
+                    title="Fixed 10-digit Partner Prefix (1 + Supplier Code)"
+                  >
+                    {getHuPrefix()}
+                  </span>
+                  <span className={cn("font-mono", isToolbarShort ? "text-red-400" : "text-gray-400")}>+</span>
+                  <input
+                    type="text"
+                    maxLength={10}
+                    value={startingSeqStr}
+                    onChange={(e) => handleStartingSeqChange(e.target.value)}
+                    onBlur={handleStartingSeqBlur}
+                    className={cn(
+                      "w-28 px-1.5 py-0.5 font-mono text-xs font-bold border rounded outline-none text-right transition-colors",
+                      isToolbarShort
+                        ? "text-red-900 border-red-300 focus:border-red-500 focus:ring-1 focus:ring-red-400 bg-white"
+                        : "text-gray-900 border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+                    )}
+                    placeholder="0000000001"
+                    title={isToolbarShort ? `Needs 10 digits (${startingSeqStr.length}/10 entered). Auto-pads with zeros on blur.` : "10-digit starting sequence number"}
+                  />
+                </div>
+              );
+            })()}
           </div>
 
           <div className="space-y-4">
@@ -1613,7 +1656,7 @@ function WebPackingWizard({
                       <thead>
                         <tr className="bg-gray-50/80 text-gray-600 border-b border-gray-200 font-semibold text-[11px] uppercase tracking-wider">
                           <th className="px-3 py-2 text-center w-14">{isRoll ? "Roll" : "Carton"}</th>
-                          <th className="px-3 py-2 min-w-[180px]">20-digit HU Number (SSCC)</th>
+                          <th className="px-3 py-2 min-w-[180px]">20-digit HU Number</th>
                           <th className="px-3 py-2 text-right w-24">Qty ({item.uom || "M"})</th>
                           {visibleColumns.batch && <th className="px-3 py-2 w-28">Batch / Lot</th>}
                           <th className="px-3 py-2 text-right w-28">Gross Wt (kg)</th>
@@ -1632,25 +1675,49 @@ function WebPackingWizard({
                               {idx + 1}
                             </td>
 
-                            {/* 2. HU Number (Fixed 10-digit Partner Prefix + Editable 10-digit Sequential Serial) */}
+                            {/* 2. HU Number (Fixed 10-digit Partner Prefix + Editable Sequence) */}
                             <td className="px-3 py-1.5">
-                              <div className="inline-flex items-center rounded-md border border-gray-300 overflow-hidden shadow-2xs focus-within:ring-1 focus-within:ring-blue-500 focus-within:border-blue-500 bg-white">
-                                <span
-                                  className="bg-gray-100 text-gray-500 font-mono text-[11px] font-bold px-2 py-1 select-none border-r border-gray-200"
-                                  title="Fixed 10-digit Partner Prefix (cannot change)"
-                                >
-                                  {box.hu_number ? box.hu_number.slice(0, 10) : getHuPrefix()}
-                                </span>
-                                <input
-                                  type="text"
-                                  maxLength={10}
-                                  value={box.hu_number ? box.hu_number.slice(10) : ""}
-                                  onChange={(e) => handleHuSerialChange(item.id, idx, e.target.value)}
-                                  className="w-24 h-7 px-2 font-mono text-xs font-bold text-gray-900 outline-none bg-white tracking-wider"
-                                  placeholder="0000000001"
-                                  title="Editable 10-digit sequence number. Changing this auto-increments subsequent cartons."
-                                />
-                              </div>
+                              {(() => {
+                                const val = box.hu_number ? box.hu_number.slice(10) : "";
+                                const isShort = val.length < 10;
+                                return (
+                                  <div
+                                    className={cn(
+                                      "inline-flex items-center rounded-md overflow-hidden shadow-2xs border transition-colors",
+                                      isShort
+                                        ? "border-red-300 ring-1 ring-red-200 focus-within:border-red-500 focus-within:ring-red-400 bg-red-50/20"
+                                        : "border-gray-300 focus-within:ring-1 focus-within:ring-blue-500 focus-within:border-blue-500 bg-white"
+                                    )}
+                                  >
+                                    <span
+                                      className={cn(
+                                        "font-mono text-[11px] font-bold px-2 py-1 select-none border-r transition-colors",
+                                        isShort
+                                          ? "bg-red-100/60 text-red-700 border-red-200"
+                                          : "bg-gray-100 text-gray-500 border-gray-200"
+                                      )}
+                                      title="Fixed 10-digit Partner Prefix (1 + Supplier Code)"
+                                    >
+                                      {box.hu_number ? box.hu_number.slice(0, 10) : getHuPrefix()}
+                                    </span>
+                                    <input
+                                      type="text"
+                                      maxLength={10}
+                                      value={val}
+                                      onChange={(e) => handleHuSerialChange(item.id, idx, e.target.value)}
+                                      onBlur={() => handleHuSerialBlur(item.id, idx)}
+                                      className={cn(
+                                        "w-28 h-7 px-2 font-mono text-xs font-bold outline-none tracking-wider transition-colors",
+                                        isShort
+                                          ? "text-red-900 bg-red-50/10 placeholder-red-300"
+                                          : "text-gray-900 bg-white placeholder-gray-400"
+                                      )}
+                                      placeholder="0000000001"
+                                      title={isShort ? `Needs 10 digits (${val.length}/10 entered). Auto-pads with zeros on blur.` : "10-digit sequential number. Changing this auto-increments subsequent cartons."}
+                                    />
+                                  </div>
+                                );
+                              })()}
                             </td>
 
                             {/* 3. Qty (pre-filled, auto-split) */}
@@ -1838,7 +1905,7 @@ function WebPackingWizard({
               <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-bold text-gray-800 uppercase tracking-wider">
-                    Allocated 20-digit Handling Units (SSCC)
+                    Allocated 20-digit Handling Units
                   </span>
                   <span className="text-[11px] text-gray-500 font-mono">
                     Prefix: {submitSuccessResult.handling_units?.[0]?.substring(0, 10) || "1000018194"}
@@ -2420,35 +2487,39 @@ function ExcelPackingWorkflow({
                     </button>
                  </div>
                  
-                 <div className="w-px h-8 bg-gray-300 hidden sm:block"></div>
+                 {validationResult && (
+                    <>
+                       <div className="w-px h-8 bg-gray-300 hidden sm:block"></div>
 
-                 {/* 2. Packing Slip / Delivery Note No */}
-                 <div className="flex items-center gap-2">
-                    <label className="text-xs font-bold text-gray-700 flex items-center gap-1">
-                       Packing Slip No <span className="text-red-500 font-bold">*</span>:
-                    </label>
-                    <input
-                       type="text"
-                       required
-                       placeholder="e.g. 01007907 / DN-2026-001"
-                       value={packingSlipNumber}
-                       onChange={(e) => setPackingSlipNumber(e.target.value)}
-                       className={cn(
-                          "h-9 px-3 text-xs border bg-white rounded-md outline-none font-mono font-bold w-48 shadow-2xs transition-colors",
-                          !packingSlipNumber.trim()
-                             ? "border-amber-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-                             : "border-gray-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-                       )}
-                    />
-                 </div>
+                       {/* 2. Packing Slip / Delivery Note No */}
+                       <div className="flex items-center gap-2">
+                          <label className="text-xs font-bold text-gray-700 flex items-center gap-1">
+                             Packing Slip No <span className="text-red-500 font-bold">*</span>:
+                          </label>
+                          <input
+                             type="text"
+                             required
+                             placeholder="e.g. 01007907 / DN-2026-001"
+                             value={packingSlipNumber}
+                             onChange={(e) => setPackingSlipNumber(e.target.value)}
+                             className={cn(
+                                "h-9 px-3 text-xs border bg-white rounded-md outline-none font-mono font-bold w-48 shadow-2xs transition-colors",
+                                !packingSlipNumber.trim()
+                                   ? "border-amber-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                                   : "border-gray-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                             )}
+                          />
+                       </div>
 
-                 <div className="w-px h-8 bg-gray-300 hidden sm:block"></div>
+                       <div className="w-px h-8 bg-gray-300 hidden sm:block"></div>
 
-                 {/* 3. Delivery Date */}
-                 <div className="flex items-center gap-2">
-                    <label className="text-xs font-semibold text-gray-700">Delivery Date:</label>
-                    <input type="date" value={estimatedArrival} onChange={(e) => setEstimatedArrival(e.target.value)} className="h-9 px-2 text-xs border border-gray-300 bg-white rounded-md focus:border-emerald-500 outline-none font-medium" />
-                 </div>
+                       {/* 3. Delivery Date */}
+                       <div className="flex items-center gap-2">
+                          <label className="text-xs font-semibold text-gray-700">Delivery Date:</label>
+                          <input type="date" value={estimatedArrival} onChange={(e) => setEstimatedArrival(e.target.value)} className="h-9 px-2 text-xs border border-gray-300 bg-white rounded-md focus:border-emerald-500 outline-none font-medium" />
+                       </div>
+                    </>
+                 )}
               </div>
 
               <div className="flex items-center gap-2">
@@ -2567,7 +2638,7 @@ function ExcelPackingWorkflow({
                                 <thead className="sticky top-0 bg-gray-200 text-gray-700 font-bold uppercase tracking-wider">
                                    <tr>
                                       <th className="px-3 py-2 border-b border-gray-300">Unit #</th>
-                                      <th className="px-3 py-2 border-b border-gray-300">20-digit HU Number (SSCC)</th>
+                                      <th className="px-3 py-2 border-b border-gray-300">20-digit HU Number</th>
                                       <th className="px-3 py-2 border-b border-gray-300">Ref</th>
                                       <th className="px-3 py-2 border-b border-gray-300">Lot No.</th>
                                       <th className="px-3 py-2 border-b border-gray-300">GW</th>
@@ -3045,7 +3116,7 @@ function ShipmentDetailModal({
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">
-                    Carton & Handling Unit (SSCC) Breakdown ({data.cartons?.length || 0})
+                    Carton & Handling Unit Breakdown ({data.cartons?.length || 0})
                   </h3>
                   <span className="text-xs text-gray-400">
                     Click HU to copy
@@ -3056,7 +3127,7 @@ function ShipmentDetailModal({
                     <thead className="bg-gray-100 text-gray-600 font-bold uppercase tracking-wider border-b border-gray-200">
                       <tr>
                         <th className="px-3.5 py-2.5">Box #</th>
-                        <th className="px-3.5 py-2.5">Handling Unit (20-digit SSCC)</th>
+                        <th className="px-3.5 py-2.5">Handling Unit (20-digit HU)</th>
                         <th className="px-3.5 py-2.5">PO / Line Item</th>
                         <th className="px-3.5 py-2.5">Product Code</th>
                         <th className="px-3.5 py-2.5">Lot / Batch</th>

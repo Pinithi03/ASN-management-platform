@@ -242,6 +242,7 @@ async def parse_and_validate_packing_excel(
             "po_number": 0, "po_item": 1, "pack_number": 2, "carton_number": 3,
             "supplier_carton_ref": 4, "product_code": 5, "lot_number": 6,
             "width": 7, "gross_weight": 8, "net_weight": 9, "quantity": 10, "uom": 11,
+            "hu_number": 12,
         }
 
     parsed_rows: List[ParsedCartonRow] = []
@@ -283,11 +284,13 @@ async def parse_and_validate_packing_excel(
             clean_digits = re.sub(r"\D", "", hu_raw)
             if len(clean_digits) == 20:
                 hu_val = clean_digits
-            elif len(clean_digits) == 10 and supplier_code:
-                prefix = "1" + supplier_code.lstrip("0").zfill(9)
-                hu_val = f"{prefix}{clean_digits}"
-            elif len(clean_digits) == 10:
-                hu_val = clean_digits
+            elif 0 < len(clean_digits) <= 10:
+                padded_serial = clean_digits.zfill(10)
+                if supplier_code:
+                    prefix = "1" + supplier_code.lstrip("0").zfill(9)
+                    hu_val = f"{prefix}{padded_serial}"
+                else:
+                    hu_val = padded_serial
 
         row_errors: List[str] = []
 
@@ -474,7 +477,7 @@ def generate_open_lines_template(open_lines: List[Dict[str, Any]]) -> bytes:
     headers = [
         "P/O # *", "PO item *", "Pack No.", "Cart No *", "Supplier_Carton_ref",
         "ProductCode *", "Lot No.", "Width", "GW *", "NW *", "Quantity *", "UOM *",
-        "HU Number (SSCC)"
+        "HU Number"
     ]
     ws.append(headers)
 
