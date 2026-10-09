@@ -668,6 +668,9 @@ function WebPackingWizard({
   const [startingSeqStr, setStartingSeqStr] = useState<string>("0000000001");
   const [packingSlipNumber, setPackingSlipNumber] = useState("");
 
+  // Split configuration state per item: mode ('qty' or 'count') and input value
+  const [splitConfigs, setSplitConfigs] = useState<Record<string, { mode: "qty" | "count"; value: string }>>({});
+
   // Optional columns configuration for Step 2 Web Workbench (Batch, Supplier Ref, Width, Pack No)
   type OptionalColumnKey = "batch" | "supplier_ref" | "width" | "pack_no";
   const [visibleColumns, setVisibleColumns] = useState<Record<OptionalColumnKey, boolean>>({
@@ -1026,6 +1029,7 @@ function WebPackingWizard({
   };
 
   const handleSplitBox = (itemId: string, boxQty: number) => {
+    if (boxQty <= 0) return;
     setPackedItems((prev) => {
       const updated = prev.map((item) => {
         if (item.id !== itemId) return item;
@@ -1038,16 +1042,17 @@ function WebPackingWizard({
         for (let i = 0; i < numBoxes; i++) {
           const qtyThisBox = Math.min(boxQty, remaining);
           remaining -= qtyThisBox;
+          const existing = item.boxes[i];
           newBoxes.push({
-            id: `box-${Date.now()}-${i}-${Math.random()}`,
+            id: existing ? existing.id : `box-${Date.now()}-${i}-${Math.random()}`,
             hu_number: "", // Allocated sequentially below
-            batch_code: item.boxes[0]?.batch_code || "",
+            batch_code: existing?.batch_code || item.boxes[0]?.batch_code || "",
             qty: qtyThisBox,
-            gross_weight: null,
-            net_weight: null,
-            supplier_carton_ref: "",
-            pack_number: "",
-            width: null,
+            gross_weight: existing?.gross_weight ?? null,
+            net_weight: existing?.net_weight ?? null,
+            supplier_carton_ref: existing?.supplier_carton_ref ?? "",
+            pack_number: existing?.pack_number ?? "",
+            width: existing?.width ?? null,
           });
         }
         return { ...item, boxes: newBoxes };
@@ -1056,19 +1061,70 @@ function WebPackingWizard({
     });
   };
 
-  const handleEvenSplit = (itemId: string) => {
-    setPackedItems((prev) =>
-      prev.map((item) => {
+  const handleSplitByCount = (itemId: string, count: number) => {
+    if (count <= 0) return;
+    setPackedItems((prev) => {
+      const updated = prev.map((item) => {
         if (item.id !== itemId) return item;
+
         const totalQty = item.shipping_now || 0;
-        const splitQtys = distributeQuantityEvenly(totalQty, item.boxes.length);
-        return {
-          ...item,
-          boxes: item.boxes.map((b, i) => ({ ...b, qty: splitQtys[i] })),
-        };
-      })
-    );
+        const splitQtys = distributeQuantityEvenly(totalQty, count);
+        const newBoxes: PackingBox[] = [];
+
+        for (let i = 0; i < count; i++) {
+          const existing = item.boxes[i];
+          if (existing) {
+            newBoxes.push({
+              ...existing,
+              qty: splitQtys[i],
+            });
+          } else {
+            newBoxes.push({
+              id: `box-${Date.now()}-${i}-${Math.random()}`,
+              hu_number: "",
+              batch_code: item.boxes[0]?.batch_code || "",
+              qty: splitQtys[i],
+              gross_weight: null,
+              net_weight: null,
+              supplier_carton_ref: "",
+              pack_number: "",
+              width: null,
+            });
+          }
+        }
+        return { ...item, boxes: newBoxes };
+      });
+      return resequenceAllCartons(updated, startingSeq);
+    });
   };
+
+  const handleApplySplit = (item: PackedItem) => {
+    const config = splitConfigs[item.id] || { mode: "qty", value: "" };
+    const rawVal = parseFloat(config.value);
+
+    if (isNaN(rawVal) || rawVal <= 0) {
+      alert("Please enter a valid positive number greater than 0 to split.");
+      return;
+    }
+
+    const totalQty = item.shipping_now || 0;
+    if (totalQty <= 0) {
+      alert("Shipping quantity is 0. Please set shipping quantity first.");
+      return;
+    }
+
+    if (config.mode === "qty") {
+      handleSplitBox(item.id, rawVal);
+    } else {
+      const count = Math.round(rawVal);
+      if (count < 1) {
+        alert("Please enter at least 1 carton.");
+        return;
+      }
+      handleSplitByCount(item.id, count);
+    }
+  };
+
 
   const updateBox = (itemId: string, boxIndex: number, patch: Partial<PackingBox>) => {
     setPackedItems((prev) =>
@@ -1618,27 +1674,127 @@ function WebPackingWizard({
                         Shipping: {item.shipping_now} {item.uom || "M"}
                       </span>
 
-                      <div className="flex items-center gap-1 text-xs">
-                        <span className="text-[11px] text-gray-500 font-medium">Split:</span>
-                        <button
-                          type="button"
-                          onClick={() => handleEvenSplit(item.id)}
-                          className="px-2 py-0.5 bg-white hover:bg-gray-100 border border-gray-300 rounded-md text-gray-700 text-xs font-mono transition-colors cursor-pointer"
-                          title="Distribute shipping quantity equally across cartons"
-                        >
-                          Even
-                        </button>
-                        {[100, 200, 500].map((size) => (
-                          <button
-                            key={size}
-                            onClick={() => handleSplitBox(item.id, size)}
-                            className="px-2 py-0.5 bg-white hover:bg-gray-100 border border-gray-300 rounded-md text-gray-700 text-xs font-mono transition-colors cursor-pointer"
-                            title={`Split into ${size} units per ${isRoll ? "roll" : "carton"}`}
-                          >
-                            {size}
-                          </button>
-                        ))}
-                      </div>
+                      {/* Manual Split Control with Mode Toggle */}
+                      {(() => {
+                        const cfg = splitConfigs[item.id] || { mode: "qty", value: "" };
+                        const valNum = parseFloat(cfg.value || "0");
+                        let previewInfo = "";
+                        if (valNum > 0 && item.shipping_now) {
+                          if (cfg.mode === "qty") {
+                            const c = Math.ceil(item.shipping_now / valNum);
+                            previewInfo = `→ ${c} ${c === 1 ? (isRoll ? "roll" : "box") : (isRoll ? "rolls" : "boxes")}`;
+                          } else {
+                            const c = Math.round(valNum);
+                            previewInfo = `→ ${c} ${c === 1 ? (isRoll ? "roll" : "box") : (isRoll ? "rolls" : "boxes")}`;
+                          }
+                        }
+
+                        return (
+                          <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-lg p-1 shadow-2xs">
+                            <span className="text-[11px] text-gray-500 font-semibold uppercase tracking-wider pl-1">
+                              Split:
+                            </span>
+
+                            {/* Mode Segmented Switch */}
+                            <div className="flex items-center bg-gray-200/70 p-0.5 rounded-md text-xs font-medium">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setSplitConfigs((prev) => ({
+                                    ...prev,
+                                    [item.id]: {
+                                      mode: "qty",
+                                      value: prev[item.id]?.value || "",
+                                    },
+                                  }))
+                                }
+                                className={cn(
+                                  "px-2 py-0.5 rounded text-[11px] transition-all cursor-pointer font-medium",
+                                  cfg.mode === "qty"
+                                    ? "bg-white text-blue-700 font-bold shadow-2xs"
+                                    : "text-gray-600 hover:text-gray-900"
+                                )}
+                                title={`Split by quantity per ${isRoll ? "roll" : "carton"}`}
+                              >
+                                Qty / {isRoll ? "Roll" : "Box"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setSplitConfigs((prev) => ({
+                                    ...prev,
+                                    [item.id]: {
+                                      mode: "count",
+                                      value: prev[item.id]?.value || "",
+                                    },
+                                  }))
+                                }
+                                className={cn(
+                                  "px-2 py-0.5 rounded text-[11px] transition-all cursor-pointer font-medium",
+                                  cfg.mode === "count"
+                                    ? "bg-white text-blue-700 font-bold shadow-2xs"
+                                    : "text-gray-600 hover:text-gray-900"
+                                )}
+                                title={`Split into total number of ${isRoll ? "rolls" : "cartons"}`}
+                              >
+                                # of {isRoll ? "Rolls" : "Boxes"}
+                              </button>
+                            </div>
+
+                            {/* Manual Value Input */}
+                            <input
+                              type="number"
+                              min="1"
+                              step={cfg.mode === "count" ? "1" : "any"}
+                              value={cfg.value}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setSplitConfigs((prev) => ({
+                                  ...prev,
+                                  [item.id]: {
+                                    mode: prev[item.id]?.mode || "qty",
+                                    value: val,
+                                  },
+                                }));
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  handleApplySplit(item);
+                                }
+                              }}
+                              placeholder={
+                                cfg.mode === "count"
+                                  ? "Count"
+                                  : `Per ${isRoll ? "roll" : "box"}`
+                              }
+                              className="w-20 px-2 py-0.5 text-xs font-mono bg-white border border-gray-300 rounded-md text-gray-900 placeholder:text-gray-400 focus:outline-hidden focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                              title={
+                                cfg.mode === "count"
+                                  ? `Enter number of ${isRoll ? "rolls" : "cartons"} to divide into`
+                                  : `Enter quantity packed per ${isRoll ? "roll" : "carton"}`
+                              }
+                            />
+
+                            {/* Live calculation preview indicator */}
+                            {previewInfo && (
+                              <span className="text-[11px] font-mono font-medium text-blue-600 px-1 hidden sm:inline">
+                                {previewInfo}
+                              </span>
+                            )}
+
+                            {/* Action Split Button */}
+                            <button
+                              type="button"
+                              onClick={() => handleApplySplit(item)}
+                              className="px-2.5 py-0.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-md text-xs font-medium transition-colors cursor-pointer shadow-2xs"
+                              title="Click or press Enter to split cartons"
+                            >
+                              Split
+                            </button>
+                          </div>
+                        );
+                      })()}
 
                       <button
                         type="button"
