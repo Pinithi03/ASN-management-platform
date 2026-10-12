@@ -14,6 +14,7 @@ export interface SupplierCreateParams {
   country?: string;
   tax_id?: string;
   category?: string;
+  profile_picture_url?: string;
   current_hu_number?: string;
   is_active?: boolean;
 }
@@ -28,6 +29,7 @@ export interface SupplierUpdateParams {
   country?: string;
   tax_id?: string;
   category?: string;
+  profile_picture_url?: string;
   current_hu_number?: string;
   hu_locked?: boolean;
   is_active?: boolean;
@@ -94,6 +96,14 @@ export const supplierApi = {
   /** Update an existing supplier profile */
   update: async (supplierIdOrCode: string, payload: SupplierUpdateParams): Promise<SupplierItem> => {
     const { data } = await api.put(`/suppliers/${supplierIdOrCode}`, payload);
+    return data;
+  },
+
+  /** Upload or change supplier profile picture / avatar */
+  uploadAvatar: async (supplierIdOrCode: string, profilePictureUrl: string | null): Promise<SupplierItem> => {
+    const { data } = await api.post(`/suppliers/${supplierIdOrCode}/avatar`, {
+      profile_picture_url: profilePictureUrl,
+    });
     return data;
   },
 
