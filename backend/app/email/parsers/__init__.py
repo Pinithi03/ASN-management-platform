@@ -99,6 +99,9 @@ class ParsedPO:
     phone: str = ""                # <Telephone> / <Phone> from SdPartner
     tax_id: str = ""               # <FiscalCode> / <TaxId> / <VatRegistration> from SdPartner
     category: str = ""             # <Category> / Product Category
+    supplier_email: str = ""       # <Email> from SdPartner
+    partner_contact: str = ""      # <ContactPerson> from SdPartner
+    all_supplier_emails: list[str] = field(default_factory=list) # All emails from SdPartner
     currency: str = DEFAULT_CURRENCY
     total_quantity: int = 0
     total_value: float = 0.0

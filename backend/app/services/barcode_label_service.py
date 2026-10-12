@@ -140,7 +140,7 @@ def _draw_label(
 
     # ─── 1. Header Banner ───────────────────────────────────────────
     c.setFont("Helvetica-Bold", 14)
-    c.drawString(x, y, "CALZEDONIA GROUP")
+    c.drawString(x, y, "ASN DISPATCH & SHIPPING LABEL")
     y -= 4
     c.setStrokeColorRGB(0.2, 0.2, 0.2)
     c.setLineWidth(1.5)

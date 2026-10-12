@@ -158,6 +158,86 @@ def provision_supplier_in_keycloak(
         }
 
 
+def set_supplier_enabled_in_keycloak(supplier_code: str, enabled: bool) -> bool:
+    """
+    Enable or disable a supplier user account in Keycloak by their supplier code/username.
+    Used when a supplier is soft-deleted/archived (enabled=False) or restored (enabled=True).
+    """
+    settings = get_settings()
+    try:
+        admin_token = _get_admin_token()
+    except Exception as e:
+        logger.warning("Could not get admin token to toggle Keycloak user: %s", e)
+        return False
+
+    base_api = f"{settings.KEYCLOAK_INTERNAL_URL.rstrip('/')}/admin/realms/{settings.KEYCLOAK_REALM}"
+    headers = {
+        "Authorization": f"Bearer {admin_token}",
+        "Content-Type": "application/json",
+    }
+    clean_code = str(supplier_code).strip()
+
+    with httpx.Client(timeout=10.0) as client:
+        # Check both lowercase and uppercase / direct username
+        for candidate in (clean_code, clean_code.lower(), clean_code.upper()):
+            resp = client.get(
+                f"{base_api}/users",
+                params={"username": candidate, "exact": "true"},
+                headers=headers,
+            )
+            if resp.status_code == 200 and resp.json():
+                user_id = resp.json()[0]["id"]
+                upd_resp = client.put(
+                    f"{base_api}/users/{user_id}",
+                    json={"enabled": enabled},
+                    headers=headers,
+                )
+                if upd_resp.status_code in (200, 204):
+                    logger.info("Updated Keycloak user %s enabled=%s", candidate, enabled)
+                    return True
+                else:
+                    logger.warning("Failed to update Keycloak user %s enabled state: %s", candidate, upd_resp.text)
+    return False
+
+
+def delete_supplier_from_keycloak(supplier_code: str) -> bool:
+    """
+    Permanently delete a supplier user account from Keycloak.
+    """
+    settings = get_settings()
+    try:
+        admin_token = _get_admin_token()
+    except Exception as e:
+        logger.warning("Could not get admin token to delete Keycloak user: %s", e)
+        return False
+
+    base_api = f"{settings.KEYCLOAK_INTERNAL_URL.rstrip('/')}/admin/realms/{settings.KEYCLOAK_REALM}"
+    headers = {
+        "Authorization": f"Bearer {admin_token}",
+    }
+    clean_code = str(supplier_code).strip()
+
+    with httpx.Client(timeout=10.0) as client:
+        for candidate in (clean_code, clean_code.lower(), clean_code.upper()):
+            resp = client.get(
+                f"{base_api}/users",
+                params={"username": candidate, "exact": "true"},
+                headers=headers,
+            )
+            if resp.status_code == 200 and resp.json():
+                user_id = resp.json()[0]["id"]
+                del_resp = client.delete(
+                    f"{base_api}/users/{user_id}",
+                    headers=headers,
+                )
+                if del_resp.status_code in (200, 204):
+                    logger.info("Deleted Keycloak user %s (uid=%s)", candidate, user_id)
+                    return True
+                else:
+                    logger.warning("Failed to delete Keycloak user %s: %s", candidate, del_resp.text)
+    return False
+
+
 def verify_admin_password(username_or_email: Optional[str], password: str) -> bool:
     """
     Verify an administrator's password against Keycloak.

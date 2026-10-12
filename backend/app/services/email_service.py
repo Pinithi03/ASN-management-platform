@@ -368,20 +368,76 @@ async def save_purchase_order(
         )
         supp_res = await db.execute(supp_stmt)
         supp = supp_res.scalar_one_or_none()
+        # Assemble accurate physical supplier address
+        addr_parts = []
+        if parsed_po.address:
+            clean_addr = parsed_po.address.strip().rstrip(",")
+            if not any(bp in clean_addr.lower() for bp in ["omega line", "sirio", "alpha apparel", "benji", "vavuniya"]):
+                addr_parts.append(clean_addr)
+        if parsed_po.city and parsed_po.city.strip().upper() not in ["", "ZZZ"]:
+            addr_parts.append(parsed_po.city.strip())
+        if parsed_po.zipcode and parsed_po.zipcode.strip() not in ["", "0", "0000", "ZZZ"]:
+            addr_parts.append(parsed_po.zipcode.strip())
+        full_supp_address = ", ".join(addr_parts) if addr_parts else None
+
+        supplier_email_val = (
+            parsed_po.supplier_email.strip().lower()
+            if getattr(parsed_po, "supplier_email", None)
+            else f"supplier_{supp_clean or 'unknown'}@oniverse.local"
+        )
+        supplier_contact = (
+            getattr(parsed_po, "partner_contact", None)
+            or None
+        )
+
         if supp:
             resolved_supplier_id = supp.id
             if (not supp.name or supp.name.startswith("Supplier ")) and parsed_po.supplier_name:
                 supp.name = parsed_po.supplier_name.strip()
-            if not supp.address and parsed_po.destination:
-                supp.address = parsed_po.destination.strip()
+            if full_supp_address and (
+                not supp.address
+                or any(bp in supp.address.lower() for bp in ["omega line", "sirio", "alpha", "benji"])
+                or "kaduwela road" in supp.address.lower()
+                or "western province" in supp.address.lower()
+            ):
+                supp.address = full_supp_address
+            if getattr(parsed_po, "supplier_email", None) and (
+                not supp.email
+                or "oniverse.local" in supp.email
+                or "supplier.com" in supp.email
+                or "gmail.com" in supp.email
+                or "yahoo.com" in supp.email
+            ):
+                supp.email = parsed_po.supplier_email.strip().lower()
+            if parsed_po.country and (not supp.country or (supp.country == "Sri Lanka" and parsed_po.country != "Sri Lanka")):
+                supp.country = parsed_po.country.strip()
+            if parsed_po.phone:
+                supp.phone = parsed_po.phone.strip()
+            if parsed_po.tax_id:
+                supp.tax_id = parsed_po.tax_id.strip()
+            if supplier_contact and (
+                not supp.contact_name
+                or supp.contact_name in [
+                    "Duminda Silva",
+                    "Rohan Fernando",
+                    "Pradeep Kumara",
+                    "Operations Team",
+                    "KUSHANI TISSERA",
+                    "Chamika Sewwandi",
+                ]
+            ):
+                supp.contact_name = supplier_contact.strip()
         else:
             new_supp = Supplier(
                 supplier_code=parsed_po.supplier_code,
                 name=parsed_po.supplier_name.strip() if parsed_po.supplier_name else f"Supplier {parsed_po.supplier_code}",
-                email=f"supplier_{supp_clean or 'unknown'}@oniverse.local",
-                address=parsed_po.destination.strip() if parsed_po.destination else None,
-                country="Sri Lanka",
-                category="Textiles & Garments",
+                email=supplier_email_val,
+                address=full_supp_address,
+                country=parsed_po.country.strip() if parsed_po.country else "Sri Lanka",
+                phone=parsed_po.phone.strip() if parsed_po.phone else None,
+                tax_id=parsed_po.tax_id.strip() if parsed_po.tax_id else None,
+                contact_name=supplier_contact.strip() if supplier_contact else None,
+                category=parsed_po.category.strip() if parsed_po.category else "Textiles & Garments",
             )
             db.add(new_supp)
             await db.flush()
@@ -396,16 +452,18 @@ async def save_purchase_order(
 
     items_data = [
         {
-            "line_number": li.line_number,
-            "order_line_number": getattr(li, "order_line_number", None) or str(li.line_number),
-            "item_code": getattr(li, "item_code", None) or li.style,
-            "partner_item_code": getattr(li, "partner_item_code", None) or li.style,
-            "item_description": getattr(li, "item_description", None) or li.description,
-            "qty_unit": getattr(li, "qty_unit", None) or li.size,
-            "material_code": li.style,
-            "description": li.description,
-            "color": li.color,
-            "size": li.size,
+            "line_number": getattr(li, "order_line_number", "") or str(li.line_number),
+            "order_line_number": getattr(li, "order_line_number", "") or str(li.line_number),
+            "item_code": getattr(li, "item_code", None) or getattr(li, "style", "") or "",
+            "partner_item_code": getattr(li, "partner_item_code", None) or getattr(li, "partner_code", "") or "",
+            "partner_code": getattr(li, "partner_code", "") or getattr(li, "partner_item_code", "") or "",
+            "item_description": getattr(li, "item_description", None) or getattr(li, "description", "") or "",
+            "qty_unit": getattr(li, "qty_unit", None) or getattr(li, "uom", "") or getattr(li, "size", "") or "M",
+            "material_code": getattr(li, "partner_item_code", "") or getattr(li, "item_code", "") or getattr(li, "style", ""),
+            "description": getattr(li, "item_description", None) or getattr(li, "description", "") or "",
+            "color": getattr(li, "color", "") or "",
+            "size": getattr(li, "size", "") or getattr(li, "qty_unit", "") or "M",
+            "uom": getattr(li, "uom", "") or getattr(li, "qty_unit", None) or getattr(li, "size", "") or "M",
             "quantity": li.quantity,
             "unit_price": li.unit_price,
         }
@@ -426,27 +484,6 @@ async def save_purchase_order(
     )
     result = await db.execute(stmt)
     existing = result.scalar_one_or_none()
-
-    items_data = [
-        {
-            "line_number": getattr(li, "order_line_number", "") or str(li.line_number),
-            "order_line_number": getattr(li, "order_line_number", "") or str(li.line_number),
-            "item_code": getattr(li, "item_code", None) or li.style,
-            "partner_item_code": getattr(li, "partner_item_code", None) or getattr(li, "partner_code", "") or li.style,
-            "partner_code": getattr(li, "partner_code", "") or getattr(li, "partner_item_code", "") or "",
-            "item_description": getattr(li, "item_description", None) or li.description,
-            "qty_unit": getattr(li, "qty_unit", None) or getattr(li, "uom", "") or li.size or "M",
-            "material_code": li.style,
-            "description": li.description,
-            "color": li.color,
-            "size": li.size,
-            "uom": getattr(li, "uom", "") or getattr(li, "qty_unit", None) or li.size or "M",
-            "quantity": li.quantity,
-            "unit_price": li.unit_price,
-        }
-        for li in parsed_po.line_items
-        if getattr(li, "quantity", 0) > 0
-    ]
 
     if existing:
         old_version = existing.version or 1

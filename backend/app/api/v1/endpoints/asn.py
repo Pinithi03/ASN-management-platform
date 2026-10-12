@@ -110,8 +110,8 @@ async def get_asn_detail(
                 boxes_count = shp.total_boxes
 
         # Get supplier
-        supp_code = "0000058376"
-        supp_name = "Sirio Ltd"
+        supp_code = "0000018194"
+        supp_name = "COATS THREAD EXPORTS (PVT) LTD"
         if r.supplier_id:
             supp_stmt = select(Supplier).where(Supplier.id == r.supplier_id)
             supp_res = await db.execute(supp_stmt)
@@ -181,7 +181,7 @@ async def download_asn_xml(
     if not r:
         raise HTTPException(status_code=404, detail="ASN record not found")
 
-    supp_code = "0000058376"
+    supp_code = "0000018194"
     if r.supplier_id:
         supp_stmt = select(Supplier).where(Supplier.id == r.supplier_id)
         supp_res = await db.execute(supp_stmt)
@@ -222,7 +222,7 @@ async def revalidate_asn_xml(
     if not r:
         raise HTTPException(status_code=404, detail="ASN record not found")
 
-    supp_code = "0000058376"
+    supp_code = "0000018194"
     if r.supplier_id:
         supp_stmt = select(Supplier).where(Supplier.id == r.supplier_id)
         supp_res = await db.execute(supp_stmt)
@@ -261,7 +261,7 @@ async def send_asn_xml(
     if not r:
         raise HTTPException(status_code=404, detail="ASN record not found")
 
-    supp_code = "0000058376"
+    supp_code = "0000018194"
     if r.supplier_id:
         supp_stmt = select(Supplier).where(Supplier.id == r.supplier_id)
         supp_res = await db.execute(supp_stmt)

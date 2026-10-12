@@ -423,7 +423,7 @@ export default function UserManagement() {
                   <option value="ADMIN">System Administrator (Operations & ASN Management)</option>
                 </select>
                 <p className="text-[11px] text-gray-500 mt-1.5">
-                  Administrators operate centrally across all Oniverse manufacturing facilities and headquarters.
+                  Administrators operate centrally across all manufacturing facilities and headquarters.
                 </p>
               </div>
 

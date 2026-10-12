@@ -14,6 +14,8 @@ export interface SupplierCreateParams {
   country?: string;
   tax_id?: string;
   category?: string;
+  profile_picture_url?: string;
+  current_hu_number?: string;
   is_active?: boolean;
 }
 
@@ -27,6 +29,9 @@ export interface SupplierUpdateParams {
   country?: string;
   tax_id?: string;
   category?: string;
+  profile_picture_url?: string;
+  current_hu_number?: string;
+  hu_locked?: boolean;
   is_active?: boolean;
 }
 
@@ -44,11 +49,22 @@ export interface SupplierCredentials {
 
 export const supplierApi = {
   /** Fetch all onboarded and email-detected suppliers from database */
-  list: async (search?: string, activeOnly?: boolean, includeDeleted: boolean = true): Promise<SupplierItem[]> => {
+  list: async (
+    searchOrOptions?: string | { search?: string; active_only?: boolean; include_deleted?: boolean; archived_only?: boolean },
+    activeOnly?: boolean,
+    includeDeleted: boolean = true
+  ): Promise<SupplierItem[]> => {
     const params: Record<string, string | boolean> = {};
-    if (search) params.search = search;
-    if (activeOnly !== undefined) params.active_only = activeOnly;
-    if (includeDeleted !== undefined) params.include_deleted = includeDeleted;
+    if (typeof searchOrOptions === "object" && searchOrOptions !== null) {
+      if (searchOrOptions.search) params.search = searchOrOptions.search;
+      if (searchOrOptions.active_only !== undefined) params.active_only = searchOrOptions.active_only;
+      if (searchOrOptions.include_deleted !== undefined) params.include_deleted = searchOrOptions.include_deleted;
+      if (searchOrOptions.archived_only !== undefined) params.archived_only = searchOrOptions.archived_only;
+    } else {
+      if (searchOrOptions) params.search = searchOrOptions;
+      if (activeOnly !== undefined) params.active_only = activeOnly;
+      if (includeDeleted !== undefined) params.include_deleted = includeDeleted;
+    }
     const { data } = await api.get("/suppliers", { params });
     return data;
   },
@@ -59,9 +75,35 @@ export const supplierApi = {
     return data;
   },
 
+  /** Look up parsed XML data in inbound email mailbox for a supplier code */
+  lookupXml: async (supplierCode: string): Promise<{
+    found: boolean;
+    supplier_code: string;
+    name?: string;
+    email?: string;
+    contact_name?: string;
+    phone?: string;
+    address?: string;
+    country?: string;
+    tax_id?: string;
+    category?: string;
+    source_filename?: string;
+  }> => {
+    const { data } = await api.get(`/suppliers/lookup-xml/${encodeURIComponent(supplierCode.trim())}`);
+    return data;
+  },
+
   /** Update an existing supplier profile */
   update: async (supplierIdOrCode: string, payload: SupplierUpdateParams): Promise<SupplierItem> => {
     const { data } = await api.put(`/suppliers/${supplierIdOrCode}`, payload);
+    return data;
+  },
+
+  /** Upload or change supplier profile picture / avatar */
+  uploadAvatar: async (supplierIdOrCode: string, profilePictureUrl: string | null): Promise<SupplierItem> => {
+    const { data } = await api.post(`/suppliers/${supplierIdOrCode}/avatar`, {
+      profile_picture_url: profilePictureUrl,
+    });
     return data;
   },
 
@@ -97,6 +139,14 @@ export const supplierApi = {
       supplier_code_or_email: supplierCodeOrEmail,
       current_password: currentPassword,
       new_password: newPassword,
+    });
+    return data;
+  },
+
+  /** Configure or update starting handling unit (HU) number */
+  setHuNumber: async (supplierIdOrCode: string, currentHuNumber: string): Promise<SupplierItem> => {
+    const { data } = await api.post(`/suppliers/${supplierIdOrCode}/hu-number`, {
+      current_hu_number: currentHuNumber,
     });
     return data;
   },
