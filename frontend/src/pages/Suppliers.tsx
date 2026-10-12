@@ -51,6 +51,8 @@ export interface SupplierItem {
   category?: string;
   tax_id?: string;
   address?: string;
+  current_hu_number?: string;
+  hu_locked?: boolean;
   is_active: boolean;
   is_deleted?: boolean;
   deleted_at?: string | null;
@@ -68,79 +70,9 @@ export interface SupplierItem {
   requires_password_change?: boolean;
 }
 
-export const INITIAL_SUPPLIERS: SupplierItem[] = [
-  {
-    id: "sup-1",
-    name: "Coats Thread Exports Ltd",
-    supplier_code: "0000018194",
-    email: "orders@coatsthread.lk",
-    contact_name: "Kamal Wickramasinghe",
-    phone: "+94 11 4712000",
-    country: "Sri Lanka",
-    category: "Thread & Trims",
-    tax_id: "PV-10293847",
-    address: "No. 40, Station Road, Colombo 03",
-    is_active: true,
-    onboarded_at: "2026-01-15T08:30:00Z",
-  },
-  {
-    id: "sup-2",
-    name: "Hayleys Fabric PLC",
-    supplier_code: "0000001122",
-    email: "apparel.orders@hayleysfabric.com",
-    contact_name: "Nimali Perera",
-    phone: "+94 34 2280000",
-    country: "Sri Lanka",
-    category: "Knit & Cotton Fabric",
-    tax_id: "PQ-49201934",
-    address: "Narthupana Estate, Neboda",
-    is_active: true,
-    onboarded_at: "2026-02-01T10:00:00Z",
-  },
-  {
-    id: "sup-3",
-    name: "South Asia Textiles Ltd",
-    supplier_code: "0000080589",
-    email: "supply@southasiatextiles.com",
-    contact_name: "Wasitha Maheshitha",
-    phone: "+94 11 2855123",
-    country: "Sri Lanka",
-    category: "Dyed & Printed Fabric",
-    tax_id: "PV-88371920",
-    address: "Pugoda Road, Kirindiwela",
-    is_active: true,
-    onboarded_at: "2026-03-10T14:20:00Z",
-  },
-  {
-    id: "sup-4",
-    name: "Prym Intimates Lanka Ltd",
-    supplier_code: "0000058376",
-    email: "onboarding@prym-intimates.lk",
-    contact_name: "Saman Kumara",
-    phone: "+94 11 4567890",
-    country: "Sri Lanka",
-    category: "Elastics & Fasteners",
-    tax_id: "PV-55291048",
-    address: "Export Processing Zone, Biyagama",
-    is_active: true,
-    onboarded_at: "2026-04-05T09:15:00Z",
-  },
-];
-
 export default function Suppliers() {
   const queryClient = useQueryClient();
-  const [suppliers, setSuppliers] = useState<SupplierItem[]>(() => {
-    const saved = localStorage.getItem("asn_onboarded_suppliers");
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
-        }
-      } catch {}
-    }
-    return INITIAL_SUPPLIERS;
-  });
+  const [suppliers, setSuppliers] = useState<SupplierItem[]>([]);
 
   // Live query from PostgreSQL backend API (/api/v1/suppliers)
   // Automatically refetches every 5s to pick up newly parsed suppliers from incoming emails
@@ -153,7 +85,6 @@ export default function Suppliers() {
   useEffect(() => {
     if (serverSuppliers) {
       setSuppliers(serverSuppliers);
-      localStorage.setItem("asn_onboarded_suppliers", JSON.stringify(serverSuppliers));
     }
   }, [serverSuppliers]);
 
@@ -207,17 +138,6 @@ export default function Suppliers() {
         name,
       });
 
-      // Update local state: mark as deleted
-      setSuppliers((prev) => {
-        const updated = prev.map((s) =>
-          s.id === deletingSupplier.id
-            ? { ...s, is_deleted: true, is_active: false, deleted_at: new Date().toISOString() }
-            : s
-        );
-        localStorage.setItem("asn_onboarded_suppliers", JSON.stringify(updated));
-        return updated;
-      });
-
       showToast(`Partner ${name} (#${code}) archived. You can restore them anytime from the Archived tab.`);
       setDeletingSupplier(null);
       setAdminPasswordInput("");
@@ -243,16 +163,6 @@ export default function Suppliers() {
       await queryClient.invalidateQueries({ queryKey: ["suppliers"] });
       refetch();
 
-      setSuppliers((prev) => {
-        const updated = prev.map((s) =>
-          s.id === supplier.id
-            ? { ...s, is_deleted: false, is_active: true, deleted_at: null }
-            : s
-        );
-        localStorage.setItem("asn_onboarded_suppliers", JSON.stringify(updated));
-        return updated;
-      });
-
       showToast(`Restored partner ${supplier.name} (#${supplier.supplier_code}) and all records successfully!`);
     } catch (err: any) {
       console.error("Restore failed:", err);
@@ -273,31 +183,10 @@ export default function Suppliers() {
     category: "Textiles & Garments",
     tax_id: "",
     address: "",
+    current_hu_number: "",
+    hu_locked: false,
     is_active: true,
   });
-
-  // Save suppliers to localStorage on change
-  useEffect(() => {
-    localStorage.setItem("asn_onboarded_suppliers", JSON.stringify(suppliers));
-  }, [suppliers]);
-
-  // Sync with localStorage on window focus / storage events (when supplier updates in another tab)
-  useEffect(() => {
-    const handleSync = () => {
-      const saved = localStorage.getItem("asn_onboarded_suppliers");
-      if (saved) {
-        try {
-          setSuppliers(JSON.parse(saved));
-        } catch {}
-      }
-    };
-    window.addEventListener("focus", handleSync);
-    window.addEventListener("storage", handleSync);
-    return () => {
-      window.removeEventListener("focus", handleSync);
-      window.removeEventListener("storage", handleSync);
-    };
-  }, []);
 
   const handleAcknowledgeSupplierUpdate = (supplier: SupplierItem) => {
     setSuppliers((prev) =>
@@ -330,6 +219,7 @@ export default function Suppliers() {
         category: formData.category,
         tax_id: formData.tax_id.trim() || undefined,
         address: formData.address.trim() || undefined,
+        current_hu_number: formData.current_hu_number.trim() || undefined,
         is_active: formData.is_active,
       });
       recordSupplierCreateEvent({
@@ -339,47 +229,71 @@ export default function Suppliers() {
         email: created.email,
         credentials_sent: true,
       });
-      setSuppliers((prev) => [created, ...prev.filter((s) => s.supplier_code !== created.supplier_code)]);
+      await queryClient.invalidateQueries({ queryKey: ["suppliers"] });
       refetch();
       showToast(`Supplier onboarded and login credentials emailed to ${created.email}`);
+      setIsAddModalOpen(false);
+      resetForm();
     } catch (err: any) {
-      const newSupplier: SupplierItem = {
-        id: `sup-${Date.now()}`,
-        name: formData.name.trim(),
-        supplier_code: formData.supplier_code.trim().toUpperCase(),
-        email: formData.email.trim().toLowerCase(),
-        contact_name: formData.contact_name.trim(),
-        phone: formData.phone.trim(),
-        country: formData.country.trim(),
-        category: formData.category,
-        tax_id: formData.tax_id.trim() || "PV-10293847",
-        address: formData.address.trim() || "Sri Lanka Manufacturing Plant",
-        is_active: formData.is_active,
-        onboarded_at: new Date().toISOString(),
-      };
-      recordSupplierCreateEvent({
-        id: newSupplier.id,
-        supplier_code: newSupplier.supplier_code,
-        name: newSupplier.name,
-        email: newSupplier.email,
-        credentials_sent: true,
-      });
-      setSuppliers((prev) => [newSupplier, ...prev]);
-      showToast(`Supplier onboarded and login credentials emailed to ${newSupplier.email}`);
+      console.error("Create supplier failed:", err);
+      const errorMsg =
+        err?.response?.data?.detail ||
+        err?.message ||
+        "Failed to onboard supplier. Please check details and try again.";
+      showToast(typeof errorMsg === "string" ? errorMsg : JSON.stringify(errorMsg));
     }
+  };
 
-    setIsAddModalOpen(false);
-    resetForm();
+  // ─── XML DATA LOOKUP / AUTOFILL ──────────────────────────────
+  const [isLookingUpXml, setIsLookingUpXml] = useState(false);
+  const [xmlFoundBadge, setXmlFoundBadge] = useState<string | null>(null);
+
+  const handleLookupXml = async (codeToLookup?: string) => {
+    const code = (codeToLookup || formData.supplier_code).trim();
+    if (!code) {
+      showToast("Please enter a supplier code first to fetch details.");
+      return;
+    }
+    setIsLookingUpXml(true);
+    setXmlFoundBadge(null);
+    try {
+      const res = await supplierApi.lookupXml(code);
+      if (res && res.found) {
+        setFormData((prev) => ({
+          ...prev,
+          supplier_code: res.supplier_code || prev.supplier_code,
+          name: res.name || prev.name,
+          email: res.email || prev.email,
+          contact_name: res.contact_name || prev.contact_name,
+          phone: res.phone || prev.phone,
+          address: res.address || prev.address,
+          country: res.country || prev.country,
+          tax_id: res.tax_id || prev.tax_id,
+          category: res.category || prev.category,
+        }));
+        setXmlFoundBadge(`Auto-filled from ${res.source_filename || "Inbound XML"}`);
+        showToast(`Loaded details from XML: ${res.name} (#${res.supplier_code})`);
+      } else {
+        setXmlFoundBadge(null);
+        showToast(`No inbound XML found for code ${code} yet.`);
+      }
+    } catch (err) {
+      console.warn("XML lookup error:", err);
+      showToast("Could not lookup XML for this code.");
+    } finally {
+      setIsLookingUpXml(false);
+    }
   };
 
   // ─── UPDATE ───────────────────────────────────────────────────
-  const handleOpenEdit = (supplier: SupplierItem) => {
+  const handleOpenEdit = async (supplier: SupplierItem) => {
     if (supplier.recently_updated_by_supplier) {
       setSuppliers((prev) =>
         prev.map((s) => (s.id === supplier.id ? { ...s, recently_updated_by_supplier: false } : s))
       );
     }
     setEditingSupplier(supplier);
+    setXmlFoundBadge(null);
     setFormData({
       name: supplier.name,
       supplier_code: supplier.supplier_code,
@@ -390,8 +304,30 @@ export default function Suppliers() {
       category: supplier.category || "Textiles & Garments",
       tax_id: supplier.tax_id || "",
       address: supplier.address || "",
+      current_hu_number: supplier.current_hu_number || "",
+      hu_locked: Boolean(supplier.hu_locked),
       is_active: supplier.is_active,
     });
+
+    // Auto-enrich missing fields from parsed XML if available
+    if (!supplier.contact_name || !supplier.phone || !supplier.tax_id) {
+      try {
+        const res = await supplierApi.lookupXml(supplier.supplier_code);
+        if (res && res.found) {
+          setFormData((prev) => ({
+            ...prev,
+            contact_name: prev.contact_name || res.contact_name || "",
+            phone: prev.phone || res.phone || "",
+            tax_id: prev.tax_id || res.tax_id || "",
+            address: prev.address || res.address || "",
+            country: prev.country === "Sri Lanka" && res.country && res.country !== "Sri Lanka" ? res.country : prev.country,
+          }));
+          setXmlFoundBadge(`Enriched from Inbound XML (${res.source_filename || "EDI"})`);
+        }
+      } catch (e) {
+        // silently ignore
+      }
+    }
   };
 
   const handleUpdateSupplier = async (e: React.FormEvent) => {
@@ -423,60 +359,43 @@ export default function Suppliers() {
         category: formData.category,
         tax_id: formData.tax_id.trim(),
         address: formData.address.trim(),
+        current_hu_number: formData.current_hu_number.trim() || undefined,
+        hu_locked: formData.hu_locked,
         is_active: formData.is_active,
       });
-      setSuppliers((prev) =>
-        prev.map((s) => (s.id === editingSupplier.id ? { ...s, ...updated } : s))
-      );
+      await queryClient.invalidateQueries({ queryKey: ["suppliers"] });
       refetch();
       const changeMsg =
         changedFields.length > 0
           ? ` (${changedFields.map((c) => c.field_label).join(", ")})`
           : "";
       showToast(`Updated details for ${updated.name} (#${updated.supplier_code})${changeMsg}`);
-    } catch (err) {
-      setSuppliers((prev) =>
-        prev.map((s) =>
-          s.id === editingSupplier.id
-            ? {
-                ...s,
-                name: formData.name.trim(),
-                supplier_code: formData.supplier_code.trim().toUpperCase(),
-                email: formData.email.trim().toLowerCase(),
-                contact_name: formData.contact_name.trim(),
-                phone: formData.phone.trim(),
-                country: formData.country.trim(),
-                category: formData.category,
-                tax_id: formData.tax_id.trim(),
-                address: formData.address.trim(),
-                is_active: formData.is_active,
-              }
-            : s
-        )
-      );
-      showToast(`Updated details for ${formData.name} (#${formData.supplier_code})`);
+      setEditingSupplier(null);
+      resetForm();
+    } catch (err: any) {
+      console.error("Update supplier failed:", err);
+      const errorMsg =
+        err?.response?.data?.detail ||
+        err?.message ||
+        "Failed to update supplier details.";
+      showToast(typeof errorMsg === "string" ? errorMsg : JSON.stringify(errorMsg));
     }
-
-    setEditingSupplier(null);
-    resetForm();
   };
 
-  // ─── TOGGLE ACTIVE / INACTIVE ─────────────────────────────────
   const handleToggleActive = async (supplier: SupplierItem) => {
     const nextStatus = !supplier.is_active;
     recordSupplierFieldChanges(supplier, { is_active: nextStatus });
-    setSuppliers((prev) =>
-      prev.map((s) => (s.id === supplier.id ? { ...s, is_active: nextStatus } : s))
-    );
     try {
       await supplierApi.update(supplier.id, { is_active: nextStatus });
+      await queryClient.invalidateQueries({ queryKey: ["suppliers"] });
       refetch();
+      showToast(
+        `${supplier.name} is now marked as ${nextStatus ? "ACTIVE PARTNER" : "INACTIVE / SUSPENDED"}`
+      );
     } catch (err) {
-      console.warn("Backend status update:", err);
+      console.warn("Backend status update failed:", err);
+      showToast("Failed to update status on server.");
     }
-    showToast(
-      `${supplier.name} is now marked as ${nextStatus ? "ACTIVE PARTNER" : "INACTIVE / SUSPENDED"}`
-    );
   };
 
   const resetForm = () => {
@@ -490,6 +409,8 @@ export default function Suppliers() {
       category: "Textiles & Garments",
       tax_id: "",
       address: "",
+      current_hu_number: "",
+      hu_locked: false,
       is_active: true,
     });
   };
@@ -546,7 +467,7 @@ export default function Suppliers() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Supplier Onboarding & Management</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Onboard, update, and manage Calzedonia partner suppliers with unique identification codes for automated email tracking.
+            Onboard, update, and manage partner suppliers with unique identification codes for automated email tracking.
           </p>
         </div>
         <button
@@ -816,6 +737,34 @@ export default function Suppliers() {
                       <span className="truncate">{s.address}</span>
                     </div>
                   )}
+
+                  {/* Current HU Number Sequence Badge */}
+                  <div className="flex items-center justify-between text-xs py-1 px-2.5 bg-gray-50/90 rounded-xl border border-gray-200/70 mt-2">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">HU:</span>
+                      <span className="font-mono text-xs font-bold text-gray-800 truncate" title={s.current_hu_number || "Not set"}>
+                        {s.current_hu_number ? `#${s.current_hu_number}` : "Not Set"}
+                      </span>
+                    </div>
+                    <span
+                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md border shrink-0 ${
+                        s.current_hu_number
+                          ? s.hu_locked
+                            ? "bg-amber-50 text-amber-800 border-amber-200"
+                            : "bg-emerald-50 text-emerald-800 border-emerald-200"
+                          : "bg-gray-100 text-gray-500 border-gray-200"
+                      }`}
+                      title={
+                        s.current_hu_number
+                          ? s.hu_locked
+                            ? "Locked for supplier (Admin can edit)"
+                            : "Unlocked for supplier"
+                          : "Not initialized"
+                      }
+                    >
+                      {s.current_hu_number ? (s.hu_locked ? "Locked" : "Editable") : "Not Set"}
+                    </span>
+                  </div>
                 </div>
 
               </div>
@@ -914,6 +863,13 @@ export default function Suppliers() {
             </div>
 
             <form onSubmit={handleCreateSupplier} className="p-6 space-y-4">
+              {xmlFoundBadge && (
+                <div className="text-[11px] font-medium text-emerald-800 bg-emerald-50 px-3 py-2 rounded-xl border border-emerald-200 flex items-center gap-2">
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>{xmlFoundBadge}</span>
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
                   Supplier Company Name <span className="text-red-500">*</span>
@@ -930,18 +886,35 @@ export default function Suppliers() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                    Unique Supplier Code <span className="text-red-500">*</span>
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                      Supplier Code <span className="text-red-500">*</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => handleLookupXml()}
+                      disabled={isLookingUpXml || !formData.supplier_code.trim()}
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-700 bg-brand-50 hover:bg-brand-100 px-2 py-0.5 rounded-lg border border-brand-200 transition-colors disabled:opacity-40"
+                      title="Fetch details from incoming XML attachments in mailbox"
+                    >
+                      <Sparkles className={`w-3 h-3 text-brand-600 ${isLookingUpXml ? "animate-spin" : ""}`} />
+                      <span>{isLookingUpXml ? "Fetching..." : "Auto-fetch XML"}</span>
+                    </button>
+                  </div>
                   <input
                     type="text"
                     required
                     value={formData.supplier_code}
                     onChange={(e) => setFormData({ ...formData, supplier_code: e.target.value })}
-                    placeholder="e.g. 0000080589 or SUP-001"
+                    onBlur={() => {
+                      if (formData.supplier_code.trim() && !formData.name) {
+                        handleLookupXml(formData.supplier_code);
+                      }
+                    }}
+                    placeholder="e.g. 0000111924"
                     className="w-full h-10 px-3 text-sm font-mono font-semibold rounded-xl border border-gray-200 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                   />
-                  <span className="text-[10px] text-gray-400 mt-0.5 block">Used for automated email tracking</span>
+                  <span className="text-[10px] text-gray-400 mt-0.5 block">Unique EDI code from &lt;SdPartner&gt;</span>
                 </div>
 
                 <div>
@@ -1048,6 +1021,22 @@ export default function Suppliers() {
                 </div>
               </div>
 
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
+                  Current Handling Unit (HU) Number
+                </label>
+                <input
+                  type="text"
+                  value={formData.current_hu_number}
+                  onChange={(e) => setFormData({ ...formData, current_hu_number: e.target.value })}
+                  placeholder="e.g. 10000011220000000001 or 1"
+                  className="w-full h-10 px-3 text-sm font-mono rounded-xl border border-gray-200 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                />
+                <span className="text-[10px] text-gray-400 mt-0.5 block">
+                  Initial starting sequence number currently generated by the supplier for packing units
+                </span>
+              </div>
+
               <div className="pt-4 border-t border-gray-100 flex items-center justify-end gap-3">
                 <button
                   type="button"
@@ -1086,6 +1075,13 @@ export default function Suppliers() {
             </div>
 
             <form onSubmit={handleUpdateSupplier} className="p-6 space-y-4">
+              {xmlFoundBadge && (
+                <div className="text-[11px] font-medium text-emerald-800 bg-emerald-50 px-3 py-2 rounded-xl border border-emerald-200 flex items-center gap-2">
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>{xmlFoundBadge}</span>
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
                   Supplier Company Name <span className="text-red-500">*</span>
@@ -1101,9 +1097,21 @@ export default function Suppliers() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                    Unique Supplier Code <span className="text-red-500">*</span>
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                      Supplier Code <span className="text-red-500">*</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => handleLookupXml(formData.supplier_code)}
+                      disabled={isLookingUpXml}
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-700 bg-brand-50 hover:bg-brand-100 px-2 py-0.5 rounded-lg border border-brand-200 transition-colors"
+                      title="Sync latest details from incoming XML attachments in mailbox"
+                    >
+                      <Sparkles className={`w-3 h-3 text-brand-600 ${isLookingUpXml ? "animate-spin" : ""}`} />
+                      <span>{isLookingUpXml ? "Syncing..." : "Sync XML"}</span>
+                    </button>
+                  </div>
                   <input
                     type="text"
                     required
@@ -1210,6 +1218,42 @@ export default function Suppliers() {
                     placeholder="Facility Address, Sri Lanka"
                     className="w-full h-10 px-3 text-sm rounded-xl border border-gray-200 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                   />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 p-3 bg-gray-50/80 rounded-xl border border-gray-200">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
+                    Current Generating HU Number
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.current_hu_number}
+                    onChange={(e) => setFormData({ ...formData, current_hu_number: e.target.value })}
+                    placeholder="e.g. 10000011220000000001"
+                    className="w-full h-10 px-3 text-sm font-mono rounded-xl border border-gray-200 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white"
+                  />
+                  <span className="text-[10px] text-gray-400 mt-0.5 block">
+                    Admin editable: syncs and sets the running HU sequence
+                  </span>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
+                    Supplier Edit Lock
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer mt-2 text-xs font-semibold text-gray-800">
+                    <input
+                      type="checkbox"
+                      checked={formData.hu_locked}
+                      onChange={(e) => setFormData({ ...formData, hu_locked: e.target.checked })}
+                      className="w-4 h-4 text-brand-600 rounded border-gray-300 focus:ring-brand-500"
+                    />
+                    <span>{formData.hu_locked ? "Locked for Supplier" : "Unlocked (Editable once)"}</span>
+                  </label>
+                  <span className="text-[10px] text-gray-400 mt-1 block">
+                    {formData.hu_locked ? "Supplier cannot change from portal" : "Supplier can configure once from portal"}
+                  </span>
                 </div>
               </div>
 
