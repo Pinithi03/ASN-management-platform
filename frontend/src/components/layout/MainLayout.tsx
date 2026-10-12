@@ -7,6 +7,8 @@ import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
 import { useAuthStore } from "@/store/authStore";
+import { useQuery } from "@tanstack/react-query";
+import { supplierApi } from "@/services/supplierApi";
 import { ShieldAlert, Lock, Building2 } from "lucide-react";
 
 export default function MainLayout() {
@@ -16,28 +18,30 @@ export default function MainLayout() {
   const logout = useAuthStore((s) => s.logout);
   const isSupplier = user?.role === "SUPPLIER";
 
-  // Determine supplier status from localStorage (live sync with Admin modifications)
-  let supplierAccountState: "ACTIVE" | "INACTIVE" | "DELETED" = "ACTIVE";
-
-  if (isSupplier && user?.supplier_code) {
-    const savedStr = localStorage.getItem("asn_onboarded_suppliers");
-    if (savedStr) {
-      try {
-        const suppliersList = JSON.parse(savedStr);
-        const match = suppliersList.find(
-          (s: any) =>
+  // Determine supplier status from live backend API (live sync across all sessions)
+  const { data: supplierProfile } = useQuery({
+    queryKey: ["currentSupplierStatus", user?.supplier_code],
+    queryFn: async () => {
+      if (!isSupplier || !user?.supplier_code) return null;
+      const list = await supplierApi.list({ include_deleted: true });
+      return (
+        list.find(
+          (s) =>
             s.supplier_code === user.supplier_code ||
             (s.email && s.email.toLowerCase() === user.email?.toLowerCase())
-        );
+        ) || null
+      );
+    },
+    enabled: isSupplier && !!user?.supplier_code,
+    refetchInterval: 10000,
+  });
 
-        if (!match) {
-          supplierAccountState = "DELETED";
-        } else if (!match.is_active) {
-          supplierAccountState = "INACTIVE";
-        }
-      } catch {
-        supplierAccountState = "ACTIVE";
-      }
+  let supplierAccountState: "ACTIVE" | "INACTIVE" | "DELETED" = "ACTIVE";
+  if (isSupplier && supplierProfile) {
+    if (supplierProfile.is_deleted) {
+      supplierAccountState = "DELETED";
+    } else if (!supplierProfile.is_active) {
+      supplierAccountState = "INACTIVE";
     }
   }
 
