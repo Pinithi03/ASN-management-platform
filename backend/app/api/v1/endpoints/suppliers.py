@@ -118,6 +118,7 @@ class SupplierResponse(BaseModel):
     country: Optional[str] = None
     tax_id: Optional[str] = None
     category: Optional[str] = None
+    profile_picture_url: Optional[str] = None
     current_hu_number: Optional[str] = None
     hu_locked: bool = False
     is_active: bool = True
@@ -168,6 +169,7 @@ class SupplierCreateRequest(BaseModel):
     country: Optional[str] = "Sri Lanka"
     tax_id: Optional[str] = None
     category: Optional[str] = "Textiles & Garments"
+    profile_picture_url: Optional[str] = None
     current_hu_number: Optional[str] = None
     is_active: bool = True
 
@@ -182,6 +184,7 @@ class SupplierUpdateRequest(BaseModel):
     country: Optional[str] = None
     tax_id: Optional[str] = None
     category: Optional[str] = None
+    profile_picture_url: Optional[str] = None
     current_hu_number: Optional[str] = None
     hu_locked: Optional[bool] = None
     is_active: Optional[bool] = None
@@ -526,6 +529,7 @@ async def list_suppliers(
                 country=s.country or "Sri Lanka",
                 tax_id=s.tax_id,
                 category=s.category or "Textiles & Garments",
+                profile_picture_url=s.profile_picture_url,
                 current_hu_number=s.current_hu_number,
                 hu_locked=bool(s.hu_locked),
                 is_active=s.is_active,
@@ -770,6 +774,7 @@ async def create_supplier(
         country=supp_country,
         tax_id=supp_tax_id,
         category=payload.category.strip() if payload.category else "Textiles & Garments",
+        profile_picture_url=payload.profile_picture_url.strip() if payload.profile_picture_url else None,
         current_hu_number=hu_str,
         hu_locked=has_hu,
         is_active=payload.is_active,
@@ -853,6 +858,7 @@ async def create_supplier(
         country=new_supp.country,
         tax_id=new_supp.tax_id,
         category=new_supp.category,
+        profile_picture_url=new_supp.profile_picture_url,
         current_hu_number=new_supp.current_hu_number,
         hu_locked=bool(new_supp.hu_locked),
         is_active=new_supp.is_active,
@@ -918,6 +924,8 @@ async def update_supplier(
         supp.tax_id = payload.tax_id.strip() or None
     if payload.category is not None:
         supp.category = payload.category.strip() or None
+    if payload.profile_picture_url is not None:
+        supp.profile_picture_url = payload.profile_picture_url.strip() or None
     if payload.current_hu_number is not None:
         hu_val = payload.current_hu_number.strip() if payload.current_hu_number else None
         supp.current_hu_number = hu_val
@@ -954,6 +962,81 @@ async def update_supplier(
         country=supp.country,
         tax_id=supp.tax_id,
         category=supp.category,
+        profile_picture_url=supp.profile_picture_url,
+        current_hu_number=supp.current_hu_number,
+        hu_locked=bool(supp.hu_locked),
+        is_active=supp.is_active,
+        is_deleted=bool(supp.is_deleted),
+        deleted_at=supp.deleted_at.isoformat() if supp.deleted_at else None,
+        onboarded_at=supp.created_at.isoformat() if supp.created_at else datetime.now(timezone.utc).isoformat(),
+        updated_at=supp.updated_at.isoformat() if supp.updated_at else datetime.now(timezone.utc).isoformat(),
+        last_profile_updated_at=supp.updated_at.isoformat() if supp.updated_at else datetime.now(timezone.utc).isoformat(),
+        total_pos=po_cnt,
+        latest_po_date=None,
+    )
+
+
+class SupplierAvatarRequest(BaseModel):
+    profile_picture_url: Optional[str] = None
+
+
+@router.post("/{supplier_id_or_code}/avatar", response_model=SupplierResponse)
+@router.put("/{supplier_id_or_code}/avatar", response_model=SupplierResponse)
+async def update_supplier_avatar(
+    supplier_id_or_code: str,
+    payload: SupplierAvatarRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Update or remove a supplier partner's profile picture / avatar."""
+    supp = None
+    try:
+        val_uuid = uuid.UUID(supplier_id_or_code)
+        supp = (await db.execute(select(Supplier).where(Supplier.id == val_uuid))).scalar_one_or_none()
+    except (ValueError, AttributeError):
+        pass
+
+    if not supp:
+        supp = (
+            await db.execute(select(Supplier).where(Supplier.supplier_code == supplier_id_or_code.strip()))
+        ).scalar_one_or_none()
+
+    if not supp:
+        clean = supplier_id_or_code.strip().lstrip("0")
+        if clean:
+            supp = (
+                await db.execute(
+                    select(Supplier).where(func.ltrim(Supplier.supplier_code, "0") == clean)
+                )
+            ).scalar_one_or_none()
+
+    if not supp:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Supplier '{supplier_id_or_code}' not found.",
+        )
+
+    supp.profile_picture_url = payload.profile_picture_url.strip() if payload.profile_picture_url else None
+    await db.commit()
+    await db.refresh(supp)
+
+    po_cnt = (
+        await db.execute(
+            select(func.count(PurchaseOrder.id)).where(PurchaseOrder.supplier_id == supp.id)
+        )
+    ).scalar() or 0
+
+    return SupplierResponse(
+        id=str(supp.id),
+        supplier_code=supp.supplier_code,
+        name=supp.name,
+        email=supp.email,
+        contact_name=supp.contact_name,
+        phone=supp.phone,
+        address=supp.address,
+        country=supp.country,
+        tax_id=supp.tax_id,
+        category=supp.category,
+        profile_picture_url=supp.profile_picture_url,
         current_hu_number=supp.current_hu_number,
         hu_locked=bool(supp.hu_locked),
         is_active=supp.is_active,
@@ -1104,6 +1187,7 @@ async def restore_supplier(
         country=supp.country,
         tax_id=supp.tax_id,
         category=supp.category,
+        profile_picture_url=supp.profile_picture_url,
         current_hu_number=supp.current_hu_number,
         hu_locked=bool(supp.hu_locked),
         is_active=supp.is_active,
@@ -1369,6 +1453,7 @@ async def set_supplier_hu_number(
         country=supp.country,
         tax_id=supp.tax_id,
         category=supp.category,
+        profile_picture_url=supp.profile_picture_url,
         current_hu_number=supp.current_hu_number,
         hu_locked=bool(supp.hu_locked),
         is_active=supp.is_active,

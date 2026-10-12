@@ -45,6 +45,7 @@ class Supplier(Base, TimestampMixin, SoftDeleteMixin):
     country: Mapped[Optional[str]] = mapped_column(String(100))
     tax_id: Mapped[Optional[str]] = mapped_column(String(50))
     category: Mapped[Optional[str]] = mapped_column(String(100))
+    profile_picture_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     current_hu_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     hu_locked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
