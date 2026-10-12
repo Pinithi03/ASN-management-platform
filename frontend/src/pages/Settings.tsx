@@ -38,7 +38,7 @@ export default function Settings() {
   // Email Engine state
   const [imapHost, setImapHost] = useState("imap.outlook.com");
   const [imapPort, setImapPort] = useState("993");
-  const [imapUser, setImapUser] = useState("purchasing.sirio@calzedonia.com");
+  const [imapUser, setImapUser] = useState("purchasing.sirio@plant.local");
   const [pollingInterval, setPollingInterval] = useState("5");
   const [defaultParser, setDefaultParser] = useState("iungo_html");
 
@@ -79,7 +79,7 @@ export default function Settings() {
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Platform Settings</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Configure corporate identity, automated email ingestion, Calzedonia ASN engine, and security rules.
+            Configure corporate identity, automated email ingestion, ASN dispatch engine, and security rules.
           </p>
         </div>
 
@@ -271,12 +271,12 @@ export default function Settings() {
               {[
                 {
                   id: "iungo_html",
-                  name: "IUNGO HTML Parser",
+                  name: "Standard HTML Parser",
                   desc: "Parses HTML order tables, line items, delivery dates, & supplier metadata.",
                 },
                 {
                   id: "calzedonia_xml",
-                  name: "Calzedonia XML Parser",
+                  name: "Standard XML Parser",
                   desc: "Parses structured XML attachments and purchase order revisions.",
                 },
                 {
@@ -311,7 +311,7 @@ export default function Settings() {
         </div>
       )}
 
-      {/* Tab Content 3: Calzedonia ASN & Storage */}
+      {/* Tab Content 3: ASN Engine & Storage */}
       {activeTab === "asn" && (
         <div className="space-y-6 animate-in fade-in duration-200">
           <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm space-y-4">
@@ -342,13 +342,13 @@ export default function Settings() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Calzedonia XML Schema Version</label>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">ASN XML Schema Version</label>
                 <select
                   value={xmlSchemaVersion}
                   onChange={(e) => setXmlSchemaVersion(e.target.value)}
                   className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3.5 py-2 text-sm text-gray-900 focus:bg-white focus:border-amber-500 focus:outline-none"
                 >
-                  <option value="2.1">Version 2.1 (Calzedonia Standard 2026)</option>
+                  <option value="2.1">Version 2.1 (Standard 2026)</option>
                   <option value="2.0">Version 2.0 (Legacy)</option>
                 </select>
               </div>

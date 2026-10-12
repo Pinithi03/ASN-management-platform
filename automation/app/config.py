@@ -8,7 +8,7 @@ import os
 # Broker (RabbitMQ)
 broker_url = os.getenv(
     "CELERY_BROKER_URL",
-    "amqp://ans_rabbit:ans_rabbit_pass@localhost:5672/",
+    "amqp://ans_rabbit:DevRabbit2026@localhost:5672/",
 )
 
 # Result backend (Redis)

@@ -161,31 +161,31 @@ export default function PurchaseOrders() {
   const rawItems = (activePO?.extra_data as any)?.items;
   const lineItems: POLineItemRow[] = Array.isArray(rawItems) && rawItems.length > 0
     ? rawItems.map((it: any, idx: number) => {
-        const itemCode = it.item_code || it.material_code || activePO?.style_number || " ";
-        const partnerCode = it.partner_item_code || it.partner_code || "";
-        const desc = it.description || it.item_description || activePO?.description || " ";
-        const qty = Number(it.quantity || 0);
+      const itemCode = it.item_code || it.material_code || activePO?.style_number || " ";
+      const partnerCode = it.partner_item_code || it.partner_code || "";
+      const desc = it.item_description || it.description || activePO?.description || " ";
+      const qty = Number(it.quantity || 0);
 
-        let unitPrice: number | undefined = undefined;
-        if (it.unit_price !== undefined && it.unit_price !== null && Number(it.unit_price) > 0) {
-          unitPrice = Number(it.unit_price);
-        } else if (activePO?.unit_price && Number(activePO.unit_price) > 0) {
-          unitPrice = Number(activePO.unit_price);
-        }
+      let unitPrice: number | undefined = undefined;
+      if (it.unit_price !== undefined && it.unit_price !== null && Number(it.unit_price) > 0) {
+        unitPrice = Number(it.unit_price);
+      } else if (activePO?.unit_price && Number(activePO.unit_price) > 0) {
+        unitPrice = Number(activePO.unit_price);
+      }
 
-        return {
-          line_number: String(it.order_line_number || it.line_number || idx + 1),
-          item_code: itemCode,
-          partner_item_code: partnerCode,
-          description: desc,
-          color: it.color || "",
-          size: it.size || it.qty_unit || it.uom || "M",
-          quantity: qty,
-          unit_price: unitPrice,
-        };
-      })
+      return {
+        line_number: String(it.order_line_number || it.line_number || idx + 1),
+        item_code: itemCode,
+        partner_item_code: partnerCode,
+        description: desc,
+        color: it.color || "",
+        size: it.size || it.qty_unit || it.uom || "M",
+        quantity: qty,
+        unit_price: unitPrice,
+      };
+    })
     : activePO
-    ? [
+      ? [
         {
           line_number: "1",
           item_code: activePO.style_number || " ",
@@ -197,7 +197,7 @@ export default function PurchaseOrders() {
           unit_price: activePO.unit_price ? Number(activePO.unit_price) : undefined,
         },
       ]
-    : [];
+      : [];
 
   const totalLineQuantity = lineItems.reduce((acc, item) => acc + (item.quantity || 0), 0);
   const totalLineValue = lineItems.reduce((acc, item) => {
@@ -414,8 +414,8 @@ export default function PurchaseOrders() {
                             ? "bg-emerald-50/70 border-l-4 border-emerald-600"
                             : "bg-blue-50/70 border-l-4 border-blue-600"
                           : isSupplier
-                          ? "hover:bg-emerald-50/30"
-                          : "hover:bg-blue-50/30"
+                            ? "hover:bg-emerald-50/30"
+                            : "hover:bg-blue-50/30"
                       )}
                     >
                       {/* Selection Checkbox */}
@@ -486,9 +486,8 @@ export default function PurchaseOrders() {
                       <td className="px-4 py-3 whitespace-nowrap">
                         <div className="flex items-center gap-1.5">
                           <span
-                            className={`px-2.5 py-1 text-xs font-semibold rounded-full inline-flex items-center ${
-                              STATUS_BADGES[po.status] || "bg-gray-100 text-gray-700 border border-gray-200"
-                            }`}
+                            className={`px-2.5 py-1 text-xs font-semibold rounded-full inline-flex items-center ${STATUS_BADGES[po.status] || "bg-gray-100 text-gray-700 border border-gray-200"
+                              }`}
                           >
                             {po.status}
                           </span>
@@ -570,9 +569,8 @@ export default function PurchaseOrders() {
                       </span>
                     )}
                     <span
-                      className={`px-2.5 py-0.5 text-xs font-semibold rounded-full inline-flex items-center ${
-                        STATUS_BADGES[activePO.status] || "bg-gray-100 text-gray-700"
-                      }`}
+                      className={`px-2.5 py-0.5 text-xs font-semibold rounded-full inline-flex items-center ${STATUS_BADGES[activePO.status] || "bg-gray-100 text-gray-700"
+                        }`}
                     >
                       {activePO.status}
                     </span>

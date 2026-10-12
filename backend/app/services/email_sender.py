@@ -35,13 +35,13 @@ def send_supplier_welcome_email(
         logger.warning("Skipping welcome email: no recipient email provided for supplier %s", supplier_code)
         return False
 
-    sender = settings.SMTP_FROM_EMAIL or "Oniverse ASN Portal <no-reply@oniverse.lk>"
-    subject = f"Welcome to Oniverse ASN Portal — Login Credentials for #{supplier_code}"
+    sender = settings.SMTP_FROM_EMAIL or "ASN Portal <no-reply@asn-platform.local>"
+    subject = f"Welcome to ASN Portal — Login Credentials for #{supplier_code}"
 
     # Plain text version
     text_content = f"""Dear {supplier_name},
 
-Your partner account on the Oniverse (Calzedonia Group) ASN Management Platform has been successfully activated.
+Your partner account on the ASN Management Platform has been successfully activated.
 
 Here are your portal access credentials:
 --------------------------------------------------
@@ -61,7 +61,7 @@ You can use the ASN portal to:
 If you have any questions, please contact Sirio Central Procurement HQ at sirio.asn.dev@gmail.com.
 
 Best regards,
-Oniverse Supply Chain & Procurement Team
+Supply Chain & Procurement Team
 """
 
     # Rich HTML version
@@ -93,8 +93,8 @@ Oniverse Supply Chain & Procurement Team
 <body>
   <div class="container">
     <div class="header">
-      <h1>Oniverse ASN Management Platform</h1>
-      <p>Calzedonia Group Partner Supply Chain Portal</p>
+      <h1>ASN Management Platform</h1>
+      <p>Partner Supply Chain Portal</p>
     </div>
     <div class="content">
       <div class="salutation">Dear {supplier_name},</div>
@@ -126,7 +126,7 @@ Oniverse Supply Chain & Procurement Team
       </div>
     </div>
     <div class="footer">
-      Oniverse (Sirio, Benji, Omega Line, Alpha Apparels, Vavuniya Apparels)<br>
+      Sirio, Benji, Omega Line, Alpha Apparels, Vavuniya Apparels<br>
       For technical support, contact Sirio Admin HQ: <a href="mailto:sirio.asn.dev@gmail.com" style="color: #2563eb;">sirio.asn.dev@gmail.com</a>
     </div>
   </div>

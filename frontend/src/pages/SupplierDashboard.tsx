@@ -48,7 +48,7 @@ export default function SupplierDashboard() {
           </span>
         </div>
         <p className="text-sm text-gray-500 mt-1">
-          Welcome back, <span className="font-semibold text-gray-700">{user?.supplier_name || user?.name}</span>. Scoped partner overview for Oniverse Group Sri Lanka.
+          Welcome back, <span className="font-semibold text-gray-700">{user?.supplier_name || user?.name}</span>. Scoped partner overview for Sri Lanka Manufacturing Plants.
         </p>
       </div>
 
@@ -248,7 +248,7 @@ export default function SupplierDashboard() {
               </div>
 
               <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
-                <span>Authorized Calzedonia Partner</span>
+                <span>Authorized Supplier Partner</span>
                 <button
                   onClick={() => navigate("/shipments")}
                   className="text-emerald-700 hover:text-emerald-800 font-semibold flex items-center gap-1"

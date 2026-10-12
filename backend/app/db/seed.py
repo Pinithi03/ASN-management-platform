@@ -39,12 +39,11 @@ PRIMARY_COMPANY_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 COATS_SUPPLIER_ID = uuid.UUID("074830fc-dc21-42bb-9877-e6b6a45790a5")
 HAYLEYS_SUPPLIER_ID = uuid.UUID("00000000-0000-0000-0000-000000001122")
 SOUTH_ASIA_SUPPLIER_ID = uuid.UUID("00000000-0000-0000-0000-000000080589")
-CALZEDONIA_HUB_SUPPLIER_ID = uuid.UUID("00000000-0000-0000-0000-000000058376")
-CALZEDONIA_HUB_ID = CALZEDONIA_HUB_SUPPLIER_ID
+ORIENT_SUPPLIER_ID = uuid.UUID("00000000-0000-0000-0000-000011192400")
 
 
 async def seed_database() -> None:
-    global COATS_SUPPLIER_ID, HAYLEYS_SUPPLIER_ID, SOUTH_ASIA_SUPPLIER_ID, CALZEDONIA_HUB_SUPPLIER_ID
+    global COATS_SUPPLIER_ID, HAYLEYS_SUPPLIER_ID, SOUTH_ASIA_SUPPLIER_ID, ORIENT_SUPPLIER_ID
     logger.info("Starting database seed...")
 
     async with async_session_factory() as db:
@@ -119,50 +118,54 @@ async def seed_database() -> None:
         await db.commit()
         logger.info("Companies seeded.")
 
-        # 2. Suppliers
+        # 2. Suppliers (Real verified values extracted from inbound IUNGO XML EDI files)
         suppliers_data = [
             {
                 "id": COATS_SUPPLIER_ID,
                 "supplier_code": "0000018194",
                 "name": "COATS THREAD EXPORTS (PRIVATE) LIMITED",
-                "email": "coats.exports@supplier.com",
-                "contact_name": "Duminda Silva",
+                "email": "suhani.athukorala@coats.com",
+                "contact_name": "Suhani Athukorala",
                 "phone": "+94 11 249 1100",
-                "address": "144/2, Kaduwela Road, Malabe",
+                "address": "NO. 123, BAUDDHALOKA MAWATHA, P.O. BOX 250, COLOMBO",
                 "country": "Sri Lanka",
+                "tax_id": "PV-88776655",
                 "is_active": True,
             },
             {
                 "id": HAYLEYS_SUPPLIER_ID,
                 "supplier_code": "0000001122",
                 "name": "HAYLEYS FABRIC PLC",
-                "email": "hayleys.fabric@supplier.com",
-                "contact_name": "Rohan Fernando",
+                "email": "asn.calzedonia@hayleysfabric.com",
+                "contact_name": "Wiraja Wijesundara",
                 "phone": "+94 34 229 7100",
-                "address": "Narthupana Estate, Neboda",
+                "address": "NARTHUPANA ESTATE, NEBODA-SRI LANKA",
                 "country": "Sri Lanka",
+                "tax_id": "PV-10293847",
                 "is_active": True,
             },
             {
                 "id": SOUTH_ASIA_SUPPLIER_ID,
                 "supplier_code": "0000080589",
                 "name": "SOUTH ASIA TEXTILES (PRIVATE) LIMITED",
-                "email": "southasia.textiles@supplier.com",
-                "contact_name": "Pradeep Kumara",
+                "email": "chathurika.nuwarapaksha@satextile.com",
+                "contact_name": "Chathurika Nuwarapaksha",
                 "phone": "+94 11 482 1000",
-                "address": "Pugoda, Western Province",
+                "address": "70,Felix R Dias Bandaranayake Mawatha, Pugoda",
                 "country": "Sri Lanka",
+                "tax_id": "PV-44332211",
                 "is_active": True,
             },
             {
-                "id": CALZEDONIA_HUB_SUPPLIER_ID,
-                "supplier_code": "0000058376",
-                "name": "CALZEDONIA CENTRAL HUB",
-                "email": "edi@calzedonia.com",
-                "contact_name": "EDI Operations",
-                "phone": "+39 045 860 4111",
-                "address": "Via Monte Baldo 20, Dossobuono di Villafranca, Verona",
-                "country": "Italy",
+                "id": ORIENT_SUPPLIER_ID,
+                "supplier_code": "0000111924",
+                "name": "ORIENT INTERNATIONAL HOLDING SHANGH FOREIGN TRADE CO.,LTD.",
+                "email": "detai_xu@vip.163.com",
+                "contact_name": "Detai Xu",
+                "phone": "+86 21 62798888",
+                "address": "LOU SHAN GUAN ROAD, SHANGHAI, 200336",
+                "country": "China",
+                "tax_id": "91310000132204567A",
                 "is_active": True,
             },
         ]
@@ -413,7 +416,7 @@ async def seed_database() -> None:
             {
                 "id": uuid.UUID("00000000-0000-0000-0000-000000000302"),
                 "company_id": PRIMARY_COMPANY_ID,
-                "supplier_id": CALZEDONIA_HUB_ID,
+                "supplier_id": ORIENT_SUPPLIER_ID,
                 "client_id": uuid.UUID("00000000-0000-0000-0000-000000000101"),
                 "client_code": "Sirio Ltd",
                 "source_email_id": None,
@@ -448,7 +451,7 @@ async def seed_database() -> None:
             {
                 "id": uuid.UUID("00000000-0000-0000-0000-000000000303"),
                 "company_id": PRIMARY_COMPANY_ID,
-                "supplier_id": CALZEDONIA_HUB_ID,
+                "supplier_id": ORIENT_SUPPLIER_ID,
                 "client_id": uuid.UUID("00000000-0000-0000-0000-000000000101"),
                 "client_code": "CALZEDONIA",
                 "source_email_id": None,
@@ -483,7 +486,7 @@ async def seed_database() -> None:
             {
                 "id": uuid.UUID("00000000-0000-0000-0000-000000000304"),
                 "company_id": PRIMARY_COMPANY_ID,
-                "supplier_id": CALZEDONIA_HUB_ID,
+                "supplier_id": ORIENT_SUPPLIER_ID,
                 "client_id": uuid.UUID("00000000-0000-0000-0000-000000000101"),
                 "client_code": "CALZEDONIA",
                 "source_email_id": None,

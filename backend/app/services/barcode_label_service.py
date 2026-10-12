@@ -96,7 +96,7 @@ def _draw_label_6x4(
 
     # 1. Header Banner
     c.setFont("Helvetica-Bold", 13)
-    c.drawString(x, y, "CALZEDONIA GROUP")
+    c.drawString(x, y, "ASN DISPATCH & SHIPPING LABEL")
     y -= 4
     c.setStrokeColorRGB(0.2, 0.2, 0.2)
     c.setLineWidth(1.4)
@@ -275,7 +275,7 @@ def _draw_label_4x6(
 
     # 1. Header
     c.setFont("Helvetica-Bold", 13)
-    c.drawString(x, y, "CALZEDONIA GROUP")
+    c.drawString(x, y, "ASN DISPATCH & SHIPPING LABEL")
     y -= 5
     c.setStrokeColorRGB(0.2, 0.2, 0.2)
     c.setLineWidth(1.4)
@@ -439,8 +439,8 @@ def _draw_label_4x3(
     y = height - margin
 
     # 1. Header
-    c.setFont("Helvetica-Bold", 11)
-    c.drawString(x, y, "CALZEDONIA GROUP")
+    c.setFont("Helvetica-Bold", 10.5)
+    c.drawString(x, y, "ASN DISPATCH & SHIPPING LABEL")
     date_str = f"{label_date}"
     c.setFont("Helvetica", 7.5)
     c.drawString(right_x - c.stringWidth(date_str, "Helvetica", 7.5), y, date_str)
@@ -662,3 +662,7 @@ def generate_batch_labels(labels_data: list[dict[str, Any]], size: str = "6x4") 
     c.save()
     buffer.seek(0)
     return buffer.read()
+
+# Backward compatibility alias
+_draw_label = _draw_label_6x4
+

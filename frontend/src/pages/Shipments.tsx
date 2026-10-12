@@ -2,7 +2,7 @@
  * Shipments & Advanced Shipping Notices (ASN) Page.
  * Offers two seamless workflows for suppliers:
  * 1. Smart Web Packing Wizard (Interactive Online Packing, Auto-split cartons & 20-digit HU generation)
- * 2. Calzedonia 12-Column Excel Drop (Tailored template generation, drag & drop ingestion, weight rule verification)
+ * 2. 12-Column Excel Drop (Tailored template generation, drag & drop ingestion, weight rule verification)
  */
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
@@ -287,7 +287,7 @@ export default function Shipments() {
           validated: data.xml_validated,
         });
       } else {
-        alert("This shipment does not have a generated ASN XML yet. Finalize packing to generate the Calzedonia ASN.");
+        alert("This shipment does not have a generated ASN XML yet. Finalize packing to generate the ASN.");
       }
     } catch (err: any) {
       alert(`Failed to load ASN XML: ${err?.response?.data?.detail || err?.message || "Unknown error"}`);
@@ -332,7 +332,7 @@ export default function Shipments() {
           <div>
             <h1 className="text-2xl font-semibold text-gray-900">Shipments & Outbound Deliveries</h1>
             <p className="text-sm text-gray-500 mt-1">
-              Manage past deliveries or prepare new Calzedonia ASNs via Outbound Delivery Workbench or Excel upload.
+              Manage past deliveries or prepare new ASNs via Outbound Delivery Workbench or Excel upload.
             </p>
           </div>
         </div>
@@ -629,7 +629,7 @@ export default function Shipments() {
           }
         />
       ) : (
-        /* OPTION 2: CALZEDONIA 12-COLUMN EXCEL WORKFLOW */
+        /* OPTION 2: 12-COLUMN EXCEL WORKFLOW */
         <ExcelPackingWorkflow
           targetPo={poQuery.split(",")[0] || undefined}
           targetPos={poQuery.split(",").filter(Boolean)}
@@ -1397,7 +1397,7 @@ function WebPackingWizard({
                 onClick={handleDispatchASN}
                 disabled={isSubmitting || !packingSlipNumber.trim()}
                 className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
-                title={!packingSlipNumber.trim() ? "Please enter Packing Slip Number before dispatching" : "Dispatch to IUNGO EDI"}
+                title={!packingSlipNumber.trim() ? "Please enter Packing Slip Number before dispatching" : "Dispatch to EDI"}
               >
                 {isSubmitting ? (
                   <>
@@ -1405,7 +1405,7 @@ function WebPackingWizard({
                   </>
                 ) : (
                   <>
-                    <Send className="w-3.5 h-3.5" /> Dispatch to IUNGO EDI
+                    <Send className="w-3.5 h-3.5" /> Dispatch to EDI
                   </>
                 )}
               </button>
@@ -2083,7 +2083,7 @@ function WebPackingWizard({
                       Shipment #{submitSuccessResult.shipment?.shipment_number} Created Successfully
                     </h2>
                     <p className="text-xs text-gray-600 mt-0.5 font-mono">
-                      Calzedonia ASN #{submitSuccessResult.asn?.asn_number} registered and validated.
+                      ASN #{submitSuccessResult.asn?.asn_number} registered and validated.
                     </p>
                   </div>
                 </div>
@@ -2152,7 +2152,7 @@ function WebPackingWizard({
                       const url = window.URL.createObjectURL(blob);
                       const a = document.createElement("a");
                       a.href = url;
-                      a.download = submitSuccessResult.asn?.xml_filename || "Calzedonia_ASN.xml";
+                      a.download = submitSuccessResult.asn?.xml_filename || "Dispatch_ASN.xml";
                       document.body.appendChild(a);
                       a.click();
                       document.body.removeChild(a);
@@ -2160,7 +2160,7 @@ function WebPackingWizard({
                     }}
                     className="px-4 py-2 border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 rounded-lg text-xs font-semibold shadow-xs flex items-center gap-1.5 cursor-pointer"
                   >
-                    <Download className="w-3.5 h-3.5" /> Download Calzedonia XML
+                    <Download className="w-3.5 h-3.5" /> Download ASN XML
                   </button>
 
                   {submitSuccessResult.asn?.xml_content && (
@@ -2214,7 +2214,7 @@ function WebPackingWizard({
                       Packing Slip / Delivery Note No <span className="text-red-500 font-bold">*</span>
                     </label>
                     <p className="text-[11px] text-gray-500 mt-0.5">
-                      Supplier Dispatch Note / Delivery Note number. Embedded into IUNGO XML as &lt;PackingSlipNumber&gt; and used as Shipment No.
+                      Supplier Dispatch Note / Delivery Note number. Embedded into EDI XML as &lt;PackingSlipNumber&gt; and used as Shipment No.
                     </p>
                   </div>
                   <div className="w-full sm:w-auto">
@@ -2274,7 +2274,7 @@ function WebPackingWizard({
               <div className="p-3 bg-emerald-50/60 border border-emerald-200 rounded-xl text-xs flex items-center gap-2 text-emerald-900">
                 <Check className="w-4 h-4 text-emerald-600 shrink-0" />
                 <span>
-                  <strong>EDI Compliance:</strong> Calzedonia DTD rules verified (GW &gt; NW &gt; 0, contiguous 20-digit SSCC sequence). Ready for transmission.
+                  <strong>EDI Compliance:</strong> DTD rules verified (GW &gt; NW &gt; 0, contiguous 20-digit SSCC sequence). Ready for transmission.
                 </span>
               </div>
             </>
@@ -2287,7 +2287,7 @@ function WebPackingWizard({
                 <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gray-50/80">
                   <div className="flex items-center gap-2">
                     <FileText className="w-4 h-4 text-blue-600" />
-                    <span className="font-bold text-gray-900 text-sm">Official Calzedonia SdDataSlice XML</span>
+                    <span className="font-bold text-gray-900 text-sm">Official SdDataSlice XML</span>
                   </div>
                   <button
                     onClick={() => setPreviewXmlModal(null)}
@@ -2326,7 +2326,7 @@ function WebPackingWizard({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SUBCOMPONENT B: Complete Calzedonia 12-Column Excel Drop Workflow
+// SUBCOMPONENT B: Complete 12-Column Excel Drop Workflow
 // ─────────────────────────────────────────────────────────────────────────────
 function ExcelPackingWorkflow({
   targetPo,
@@ -3139,7 +3139,7 @@ function XmlPreviewModal({
           <div className="flex items-center gap-3">
             {sentSuccess ? (
               <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200">
-                <Check className="h-4 w-4" /> Dispatched to iungo@calzedonia.com
+                <Check className="h-4 w-4" /> Dispatched to Central EDI
               </span>
             ) : (
               <button
@@ -3148,7 +3148,7 @@ function XmlPreviewModal({
                 className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 cursor-pointer transition-colors"
               >
                 {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                Dispatch to IUNGO EDI
+                Dispatch to EDI
               </button>
             )}
           </div>
@@ -3304,7 +3304,7 @@ function ShipmentDetailModal({
 
                 {data.asn && (
                   <div className="flex items-center gap-2">
-                    <span className="font-bold text-blue-900">Calzedonia ASN:</span>
+                    <span className="font-bold text-blue-900">ASN:</span>
                     <span className="px-2 py-0.5 bg-purple-100 text-purple-800 font-mono font-bold rounded border border-purple-200">
                       {data.asn.asn_number}
                     </span>

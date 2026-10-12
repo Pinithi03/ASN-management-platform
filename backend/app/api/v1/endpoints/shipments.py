@@ -319,8 +319,8 @@ async def validate_excel_packing_list(
 async def create_shipment_from_excel(
     file: UploadFile = File(...),
     packing_slip_number: str = Form(...),
-    supplier_code: str = Form("0000058376"),
-    supplier_name: str = Form("Sirio Ltd"),
+    supplier_code: str = Form("0000018194"),
+    supplier_name: str = Form("COATS THREAD EXPORTS (PVT) LTD"),
     supplier_id: Optional[str] = Form(None),
     plant_code: str = Form("PPC1"),
     storage_location: Optional[str] = Form("0101"),
@@ -746,8 +746,8 @@ class DirectCartonItem(BaseModel):
 class CreateDirectShipmentRequest(BaseModel):
     packing_slip_number: str
     plant_code: str = "PPD1"
-    supplier_code: Optional[str] = "0000058376"
-    supplier_name: Optional[str] = "CALZEDONIA CENTRAL HUB"
+    supplier_code: Optional[str] = "0000018194"
+    supplier_name: Optional[str] = "COATS THREAD EXPORTS (PVT) LTD"
     supplier_id: Optional[str] = None
     storage_location: Optional[str] = "SL01"
     estimated_arrival: Optional[str] = None
@@ -1350,8 +1350,8 @@ async def download_shipment_labels(
             raise HTTPException(status_code=400, detail="No carton records found for this shipment")
 
         # Supplier info
-        supp_name = "Sirio Ltd"
-        supp_code = "0000058376"
+        supp_name = "COATS THREAD EXPORTS (PVT) LTD"
+        supp_code = "0000018194"
         if shipment.supplier_id:
             supp_stmt = select(Supplier).where(Supplier.id == shipment.supplier_id)
             supp_res = await db.execute(supp_stmt)

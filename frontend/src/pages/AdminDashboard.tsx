@@ -39,7 +39,7 @@ export default function AdminDashboard() {
       <div>
         <h1 className="text-2xl font-semibold text-gray-900">Admin Dashboard</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Multi-company Email Automation & ASN Management Platform — Oniverse Group Sri Lanka
+          Multi-company Email Automation & ASN Management Platform — Sri Lanka Manufacturing Plants
         </p>
       </div>
 
@@ -132,7 +132,7 @@ export default function AdminDashboard() {
                 </div>
               </div>
               <div className="mt-3 text-xs text-gray-500">
-                Calzedonia XML generated & sent
+                ASN XML generated & sent
               </div>
             </div>
           </div>
@@ -230,7 +230,7 @@ export default function AdminDashboard() {
                     <p className="text-2xl font-bold text-blue-900 mt-1">
                       {emailStats?.parsed ?? 0}
                     </p>
-                    <p className="text-[11px] text-blue-600 mt-0.5">IUNGO HTML & XML</p>
+                    <p className="text-[11px] text-blue-600 mt-0.5">Automated HTML & XML</p>
                   </div>
 
                   <div

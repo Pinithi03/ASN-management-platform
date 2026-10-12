@@ -5,7 +5,9 @@
 import { useState } from "react";
 import { Search, CheckCircle2, XCircle, FileCode } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
-import { mockASNs, mockSuppliers, mockShipments } from "@/data/mockData";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { api } from "@/services/api";
+import { supplierApi } from "@/services/supplierApi";
 import { cn } from "@/utils/cn";
 import type { ASNRecord } from "@/types";
 
@@ -18,20 +20,49 @@ const statusColor: Record<string,string> = {
   CANCELLED:"bg-gray-100 text-gray-500",
 };
 
-function supplierName(id:string){const s=mockSuppliers.find(x=>x.id===id);return s?s.name:id;}
-function shipmentNum(id:string){const s=mockShipments.find(x=>x.id===id);return s?s.shipment_number:id;}
-
 export default function ASNManagement(){
-  const user=useAuthStore(s=>s.user);
+  const qc = useQueryClient();
+  const user = useAuthStore(s => s.user);
   const isAdmin = user?.role === "ADMIN" || user?.role === "SUPER_ADMIN";
-  const [search,setSearch]=useState("");
-  const [sf,setSf]=useState<string>("ALL");
-  const [sel,setSel]=useState<ASNRecord|null>(null);
+  const [search, setSearch] = useState("");
+  const [sf, setSf] = useState<string>("ALL");
+  const [sel, setSel] = useState<ASNRecord | null>(null);
 
-  const base=isAdmin?mockASNs:mockASNs.filter(a=>a.supplier_id===user?.supplier_id);
-  const filtered=base.filter(a=>{
-    if(sf!=="ALL"&&a.status!==sf)return false;
-    if(search){const q=search.toLowerCase();return a.asn_number.toLowerCase().includes(q)||supplierName(a.supplier_id).toLowerCase().includes(q);}
+  // Live queries from backend
+  const { data: serverAsns = [] } = useQuery<ASNRecord[]>({
+    queryKey: ["asns", sf, search],
+    queryFn: async () => {
+      const params: Record<string, string> = {};
+      if (sf !== "ALL") params.status = sf;
+      if (search) params.search = search;
+      if (!isAdmin && user?.supplier_id) params.supplier_id = user.supplier_id;
+      const { data } = await api.get("/asn", { params });
+      return data;
+    },
+    refetchInterval: 5000,
+  });
+
+  const { data: serverSuppliers = [] } = useQuery({
+    queryKey: ["suppliers"],
+    queryFn: () => supplierApi.list(),
+  });
+
+  function supplierName(id: string) {
+    const s = serverSuppliers.find(x => x.id === id || x.supplier_code === id);
+    return s ? s.name : id;
+  }
+
+  function shipmentNum(id: string) {
+    return id ? id.slice(0, 8).toUpperCase() : "N/A";
+  }
+
+  const base = serverAsns;
+  const filtered = base.filter(a => {
+    if (sf !== "ALL" && a.status !== sf) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      return a.asn_number.toLowerCase().includes(q) || supplierName(a.supplier_id).toLowerCase().includes(q);
+    }
     return true;
   });
 
@@ -136,7 +167,7 @@ export default function ASNManagement(){
               <D label="Supplier" value={supplierName(sel.supplier_id)} />
               <D label="DTD Validation" value={sel.xml_validated ? "✓ m2Data_Partner.dtd Compliant" : "Pending"} />
               <D label="Status" value={sel.status.replace(/_/g, " ")} />
-              <D label="Dispatch Recipient" value="iungo@calzedonia.com" />
+              <D label="Dispatch Recipient" value="central.edi@dispatch.local" />
               {sel.sent_at && <D label="Sent At" value={new Date(sel.sent_at).toLocaleString("en-GB")} />}
               {sel.accepted_at && <D label="Accepted At" value={new Date(sel.accepted_at).toLocaleString("en-GB")} />}
               {sel.rejection_reason && (
@@ -149,64 +180,21 @@ export default function ASNManagement(){
               {/* Action Buttons */}
               <div className="space-y-2 pt-3 border-t border-gray-100">
                 <button
-                  onClick={() => {
-                    const sampleXml = `<?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE SdDataSlice SYSTEM "m2Data_Partner.dtd">
-<SdDataSlice>
-  <SdCompanyHeader>
-    <LegalName>Sirio Ltd</LegalName>
-    <Group>SIRIONEW</Group>
-    <TransmissionDate>${new Date().toLocaleDateString("en-GB")} 14:30</TransmissionDate>
-  </SdCompanyHeader>
-  <SdPackingSlip>
-    <PartnerId>0000058376</PartnerId>
-    <PackingSlipNumber>${shipmentNum(sel.shipment_id)}</PackingSlipNumber>
-    <FgOutbound>false</FgOutbound>
-    <PackingSlipDate>${new Date().toLocaleDateString("en-GB")}</PackingSlipDate>
-    <DeliveryDate>${new Date(Date.now() + 86400000 * 3).toLocaleDateString("en-GB")}</DeliveryDate>
-    <Note/>
-    <SdPackingSlipLine>
-      <PackingSlipLineNumber>1-1</PackingSlipLineNumber>
-      <OrderTypeName>ZA6A</OrderTypeName>
-      <OrderNumber>2001297727</OrderNumber>
-      <OrderDate>10-02-2025</OrderDate>
-      <OrderLineNumber>00100-0001</OrderLineNumber>
-      <Qty>245</Qty>
-      <BackOrder/>
-      <AcceptanceDate/>
-      <AcceptanceQty/>
-      <AcceptanceBackOrder>false</AcceptanceBackOrder>
-      <ProductCode>ELST1K 000615</ProductCode>
-      <ProductCodePartner>SK104546-015.0-61851</ProductCodePartner>
-      <ProductDescription>Elastic tape 15mm</ProductDescription>
-      <PartnerItemDescription/>
-      <ProductUnitOfMeasure>M</ProductUnitOfMeasure>
-      <ProductBatchCode>LOT-2025-01</ProductBatchCode>
-      <ProductBatchCodePartner/>
-      <Price/>
-      <PriceUnit/>
-      <Note/>
-      <AuxRow1>1</AuxRow1>
-      <AuxRow2>10000583760000000001</AuxRow2>
-      <AuxRow3>BOX</AuxRow3>
-      <AuxRow4>SK104546-015.0-61851</AuxRow4>
-      <AuxRow5>M</AuxRow5>
-      <AuxRowNum1>1</AuxRowNum1>
-      <AuxRowNum2>25.50</AuxRowNum2>
-      <AuxRowNum3>24.00</AuxRowNum3>
-      <AuxRowNum4>245</AuxRowNum4>
-    </SdPackingSlipLine>
-  </SdPackingSlip>
-</SdDataSlice>`;
-                    const blob = new Blob([sampleXml], { type: "application/xml" });
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement("a");
-                    a.href = url;
-                    a.download = `PL_${shipmentNum(sel.shipment_id)}_0000058376.xml`;
-                    document.body.appendChild(a);
-                    a.click();
-                    a.remove();
-                    window.URL.revokeObjectURL(url);
+                  onClick={async () => {
+                    try {
+                      const res = await api.get(`/asn/${sel.id}/xml`, { responseType: "blob" });
+                      const blob = new Blob([res.data], { type: "application/xml" });
+                      const url = window.URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `ASN_${sel.asn_number}.xml`;
+                      document.body.appendChild(a);
+                      a.click();
+                      a.remove();
+                      window.URL.revokeObjectURL(url);
+                    } catch (err) {
+                      alert("Could not download ASN XML from server.");
+                    }
                   }}
                   className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 shadow-sm"
                 >
@@ -216,15 +204,19 @@ export default function ASNManagement(){
 
                 {!isAdmin && sel.status !== "XML_SENT" && (
                   <button
-                    onClick={() => {
-                      alert(`ASN ${sel.asn_number} dispatched to iungo@calzedonia.com!`);
-                      sel.status = "XML_SENT";
-                      sel.sent_at = new Date().toISOString();
+                    onClick={async () => {
+                      try {
+                        await api.post(`/asn/${sel.id}/send`);
+                        await qc.invalidateQueries({ queryKey: ["asns"] });
+                        alert(`ASN ${sel.asn_number} dispatched successfully to Central EDI!`);
+                      } catch (err: any) {
+                        alert(err?.response?.data?.detail || "Failed to dispatch ASN to EDI.");
+                      }
                     }}
                     className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 py-2 text-xs font-semibold text-white hover:bg-emerald-700 shadow-sm"
                   >
                     <CheckCircle2 className="h-4 w-4" />
-                    Dispatch to IUNGO EDI
+                    Dispatch to EDI
                   </button>
                 )}
               </div>
