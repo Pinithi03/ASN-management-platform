@@ -46,7 +46,7 @@ const PO_FIELDS: { key: string; label: string; fallbackKey?: string }[] = [
 const LINE_ITEM_COLUMNS: { key: string; label: string; numeric?: boolean; fallbackKey?: string }[] = [
   { key: "order_line_number", label: "OrderLineNumber", fallbackKey: "line_number" },
   { key: "item_code", label: "ItemCode" },
-  { key: "partner_item_code", label: "PartnerItemCode", fallbackKey: "style" },
+  { key: "partner_item_code", label: "PartnerItemCode", fallbackKey: "partner_code" },
   { key: "item_description", label: "ItemDescription", fallbackKey: "description" },
   { key: "color", label: "Color" },
   { key: "qty_unit", label: "QtyUnit", fallbackKey: "size" },
@@ -443,7 +443,7 @@ export default function EmailDetailPage() {
     { label: "Received", value: formatDate(email.received_at) },
     { label: "Fetched", value: formatDate(email.fetched_at) },
     { label: "LegalName", value: email.xml_legal_name },
-    { label: "IungoEmailAddress", value: email.xml_iungo_email_address },
+    { label: "EDIEmailAddress", value: email.xml_iungo_email_address },
     { label: "TransmissionDate", value: email.xml_transmission_date },
   ];
 

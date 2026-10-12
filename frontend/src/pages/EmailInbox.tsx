@@ -109,7 +109,7 @@ export default function EmailInbox() {
           </h1>
           {isAdmin && (
             <p className="text-sm text-gray-500 mt-1">
-              Autonomous inbound PO email ingestion from IUNGO & suppliers
+              Autonomous inbound PO email ingestion from EDI & suppliers
             </p>
           )}
         </div>

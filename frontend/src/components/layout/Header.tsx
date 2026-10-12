@@ -160,7 +160,7 @@ export default function Header({ onMenuToggle }: HeaderProps) {
         notifs.push({
           id: notifId,
           title: "New Supplier Auto-Detected",
-          desc: `${s.name} (#${s.supplier_code}) auto-discovered from inbound Iungo PO email`,
+          desc: `${s.name} (#${s.supplier_code}) auto-discovered from inbound PO email`,
           time: timeFormatted,
           unread: !readNotifIds.includes(notifId),
           to: "/suppliers",
