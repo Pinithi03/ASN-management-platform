@@ -163,7 +163,7 @@ export default function PurchaseOrders() {
     ? rawItems.map((it: any, idx: number) => {
         const itemCode = it.item_code || it.material_code || activePO?.style_number || " ";
         const partnerCode = it.partner_item_code || it.partner_code || "";
-        const desc = it.description || it.item_description || activePO?.description || " ";
+        const desc = it.item_description || it.description || activePO?.description || " ";
         const qty = Number(it.quantity || 0);
 
         let unitPrice: number | undefined = undefined;
