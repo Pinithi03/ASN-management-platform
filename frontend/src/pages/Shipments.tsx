@@ -236,23 +236,6 @@ export default function Shipments() {
     loadShipments();
   }, [user]);
 
-  // Download blank template
-  const handleDownloadBlankTemplate = async () => {
-    try {
-      const blob = await shipmentService.downloadTemplate();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "Standard_Packing_List_Template.xlsx";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (err) {
-      alert("Failed to download template. Please try again.");
-    }
-  };
-
   // Download Labels PDF
   const handleDownloadLabels = async (shipmentId: string, shipmentNumber: string) => {
     setActionLoadingId(`labels-${shipmentId}`);
@@ -339,46 +322,11 @@ export default function Shipments() {
       {/* 1. TOP HEADER / TITLE                                         */}
       {/* ───────────────────────────────────────────────────────────── */}
       {!isCreating ? (
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold text-gray-900">Shipments & Outbound Deliveries</h1>
-            <p className="text-sm text-gray-500 mt-1">
-              Manage past deliveries or prepare new ASNs via Outbound Delivery Workbench or Excel upload.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-
-            <button
-              onClick={handleDownloadBlankTemplate}
-              className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-xs transition-colors cursor-pointer"
-            >
-              <Download className="h-4 w-4 text-gray-500" />
-              Template (.xlsx)
-            </button>
-            <button
-              onClick={() => {
-                setCreationMethod("excel");
-                setIsCreating(true);
-              }}
-              className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-xs transition-colors cursor-pointer"
-            >
-              <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
-              Excel Drop
-            </button>
-            <button
-              onClick={() => {
-                setCreationMethod("web");
-                setIsCreating(true);
-              }}
-              className={cn(
-                "flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white rounded-lg shadow-xs transition-colors cursor-pointer",
-                isSupplier ? "bg-emerald-600 hover:bg-emerald-700" : "bg-blue-600 hover:bg-blue-700"
-              )}
-            >
-              <PackagePlus className="h-4 w-4" />
-              + Create Delivery
-            </button>
-          </div>
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900">Shipments & Outbound Deliveries</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Manage past deliveries and inspect dispatched ASNs, EDI transmissions, and barcode labels.
+          </p>
         </div>
       ) : creationMethod === "excel" ? (
         <div className="flex items-center justify-between pb-3 border-b border-gray-200">
