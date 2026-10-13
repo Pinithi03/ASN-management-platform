@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   FileText,
   Package,
@@ -23,6 +23,7 @@ import {
   History,
   FileSpreadsheet,
   Truck,
+  Layers,
 } from "lucide-react";
 import { poApi } from "../services/poApi";
 import { useAuthStore } from "../store/authStore";
@@ -70,11 +71,21 @@ export const getPlantInfo = (clientOrDest?: string | null) => {
   return { code: "PPA1", name: clientOrDest, fullName: clientOrDest };
 };
 
-export default function PurchaseOrders() {
+export interface PurchaseOrdersProps {
+  mode?: "all" | "manual" | "excel";
+}
+
+export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
   const navigate = useNavigate();
+  const location = useLocation();
   const user = useAuthStore((s) => s.user);
   const isSupplier = user?.role === "SUPPLIER";
   const supplierId = isSupplier ? (user?.supplier_id || user?.supplier_code || undefined) : undefined;
+
+  const activeMode: "manual" | "excel" =
+    mode === "excel" || location.pathname.includes("/excel")
+      ? "excel"
+      : "manual";
 
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
@@ -232,65 +243,122 @@ export default function PurchaseOrders() {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Purchase Orders</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-semibold text-gray-900">Purchase Orders</h1>
+            {activeMode === "manual" ? (
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold shadow-2xs border",
+                  isSupplier
+                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                    : "bg-blue-50 text-blue-700 border-blue-200"
+                )}
+              >
+                <Layers className={cn("w-3.5 h-3.5", isSupplier ? "text-emerald-600" : "text-blue-600")} />
+                Manual Process
+              </span>
+            ) : (
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold shadow-2xs border",
+                  isSupplier
+                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                    : "bg-blue-50 text-blue-700 border-blue-200"
+                )}
+              >
+                <FileSpreadsheet className={cn("w-3.5 h-3.5", isSupplier ? "text-emerald-600" : "text-blue-600")} />
+                Excel Drop
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-gray-500 mt-1">
+            {activeMode === "manual"
+              ? "Select purchase order lines below to prepare deliveries and assign packings manually using the step-by-step wizard."
+              : "Select purchase orders below to download standard templates or upload completed Excel packing manifests."}
+          </p>
         </div>
-
       </div>
 
       {/* Selected Action Banner */}
       {selectedPOs.size > 0 && (
         <div
           className={cn(
-            "flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 rounded-xl shadow-xs transition-all animate-in fade-in",
+            "w-full flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border shadow-xs transition-all animate-in fade-in slide-in-from-top-1 duration-200",
             isSupplier
-              ? "bg-emerald-50/90 border border-emerald-200"
-              : "bg-blue-50/90 border border-blue-200"
+              ? "bg-emerald-50/80 border-emerald-200"
+              : "bg-blue-50/80 border-blue-200"
           )}
         >
-          <div className="flex items-center gap-2.5">
-            <span
+          <div className="flex items-center gap-3.5">
+            <div
               className={cn(
-                "w-2.5 h-2.5 rounded-full inline-block animate-pulse",
+                "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg font-bold text-xs text-white shadow-xs",
                 isSupplier ? "bg-emerald-600" : "bg-blue-600"
               )}
-            />
-            <span
-              className={cn(
-                "text-sm font-semibold",
-                isSupplier ? "text-emerald-950" : "text-blue-950"
-              )}
             >
-              {selectedPOs.size} order{selectedPOs.size > 1 ? "s" : ""} selected for delivery
-            </span>
+              {selectedPOs.size}
+            </div>
+            <div>
+              <p
+                className={cn(
+                  "text-sm font-semibold leading-tight",
+                  isSupplier ? "text-emerald-950" : "text-blue-950"
+                )}
+              >
+                {selectedPOs.size} Purchase Order{selectedPOs.size > 1 ? "s" : ""} Selected
+              </p>
+              <p
+                className={cn(
+                  "text-xs mt-0.5",
+                  isSupplier ? "text-emerald-700" : "text-blue-700"
+                )}
+              >
+                {activeMode === "manual"
+                  ? "Ready to dispatch via Manual Packing Wizard"
+                  : "Ready to dispatch via 12-Column Excel Drop Manifest"}
+              </p>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => handleCreateShipment("web")}
-              className={cn(
-                "px-3.5 py-1.5 text-xs font-semibold text-white rounded-lg shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer",
-                isSupplier
-                  ? "bg-emerald-600 hover:bg-emerald-700"
-                  : "bg-blue-600 hover:bg-blue-700"
-              )}
-            >
-              <PackagePlus className="w-3.5 h-3.5" />
-              + Create Delivery
-            </button>
-            <button
-              type="button"
-              onClick={() => handleCreateShipment("excel")}
-              className="px-3.5 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg shadow-xs transition-colors cursor-pointer"
-            >
-              Excel Drop
-            </button>
+
+          <div className="flex items-center gap-2.5 self-end sm:self-auto">
             <button
               type="button"
               onClick={() => setSelectedPOs(new Set())}
-              className="text-xs text-gray-500 hover:text-gray-800 px-2 py-1 cursor-pointer font-medium"
+              className="h-10 px-4 text-xs font-semibold text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
             >
-              Clear selection
+              <X className="w-3.5 h-3.5 text-gray-400" />
+              Clear Selection
             </button>
+
+            {activeMode === "manual" ? (
+              <button
+                type="button"
+                onClick={() => handleCreateShipment("web")}
+                className={cn(
+                  "h-10 px-5 text-xs font-semibold text-white rounded-lg shadow-xs flex items-center gap-2 transition-all active:scale-[0.99] cursor-pointer",
+                  isSupplier
+                    ? "bg-emerald-600 hover:bg-emerald-700"
+                    : "bg-blue-600 hover:bg-blue-700"
+                )}
+              >
+                <PackagePlus className="w-4 h-4" />
+                <span>+ Create Delivery</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => handleCreateShipment("excel")}
+                className={cn(
+                  "h-10 px-5 text-xs font-semibold text-white rounded-lg shadow-xs flex items-center gap-2 transition-all active:scale-[0.99] cursor-pointer",
+                  isSupplier
+                    ? "bg-emerald-600 hover:bg-emerald-700"
+                    : "bg-blue-600 hover:bg-blue-700"
+                )}
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>Excel Drop Delivery</span>
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -907,37 +975,45 @@ export default function PurchaseOrders() {
                   Close
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    const poNum = activePO.po_number || "";
-                    setSelectedPOForPreview(null);
-                    handleCreateShipment("excel", poNum);
-                  }}
-                  className="px-3.5 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5"
-                  title="Prepare Outbound Delivery using Excel drop"
-                >
-                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                  Excel Drop
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    const poNum = activePO.po_number || "";
-                    setSelectedPOForPreview(null);
-                    handleCreateShipment("web", poNum);
-                  }}
-                  className={cn(
-                    "px-5 py-2 text-xs font-semibold text-white rounded-lg shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer",
-                    isSupplier
-                      ? "bg-emerald-600 hover:bg-emerald-700"
-                      : "bg-blue-600 hover:bg-blue-700"
-                  )}
-                >
-                  Proceed with Shipments
-                  <ArrowRight className="w-4 h-4" />
-                </button>
+                {activeMode === "excel" ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const poNum = activePO.po_number || "";
+                      setSelectedPOForPreview(null);
+                      handleCreateShipment("excel", poNum);
+                    }}
+                    className={cn(
+                      "px-5 py-2 text-xs font-semibold text-white rounded-lg shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer",
+                      isSupplier
+                        ? "bg-emerald-600 hover:bg-emerald-700"
+                        : "bg-blue-600 hover:bg-blue-700"
+                    )}
+                    title="Prepare Outbound Delivery using Excel drop"
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5" />
+                    Proceed with Excel Drop
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const poNum = activePO.po_number || "";
+                      setSelectedPOForPreview(null);
+                      handleCreateShipment("web", poNum);
+                    }}
+                    className={cn(
+                      "px-5 py-2 text-xs font-semibold text-white rounded-lg shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer",
+                      isSupplier
+                        ? "bg-emerald-600 hover:bg-emerald-700"
+                        : "bg-blue-600 hover:bg-blue-700"
+                    )}
+                  >
+                    Proceed with Manual Delivery
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
           </div>

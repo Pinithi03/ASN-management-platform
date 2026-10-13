@@ -147,9 +147,8 @@ export default function Shipments() {
   useEffect(() => {
     if (poQuery) {
       setIsCreating(true);
-      if (searchParams.get("mode") === "excel") {
-        setCreationMethod("excel");
-      }
+      const modeParam = searchParams.get("mode");
+      setCreationMethod(modeParam === "excel" ? "excel" : "web");
     }
   }, [poQuery, searchParams]);
 
@@ -371,7 +370,7 @@ export default function Shipments() {
           <button
             onClick={() => {
               if (poQuery) {
-                navigate("/purchase-orders");
+                navigate("/purchase-orders/excel");
               } else {
                 setIsCreating(false);
                 setSearchParams({});
@@ -386,7 +385,10 @@ export default function Shipments() {
               Excel Packing List Dispatch
             </span>
             <button
-              onClick={() => setCreationMethod("web")}
+              onClick={() => {
+                setCreationMethod("web");
+                if (poQuery) setSearchParams({ pos: poQuery, mode: "web" });
+              }}
               className={cn(
                 "text-xs hover:underline font-semibold cursor-pointer",
                 isSupplier ? "text-emerald-600 hover:text-emerald-700" : "text-blue-600 hover:text-blue-700"
@@ -654,7 +656,10 @@ export default function Shipments() {
             setSearchParams({});
             loadShipments();
           }}
-          onSwitchToExcel={() => setCreationMethod("excel")}
+          onSwitchToExcel={() => {
+            setCreationMethod("excel");
+            if (poQuery) setSearchParams({ pos: poQuery, mode: "excel" });
+          }}
         />
       ) : (
         /* OPTION 2: 12-COLUMN EXCEL WORKFLOW */
@@ -1171,7 +1176,7 @@ function WebPackingWizard({
                 if (step === 3) setStep(2);
                 else if (step === 2) setStep(1);
                 else if (poNumbers.length > 0 || poQuery) {
-                  navigate("/purchase-orders");
+                  navigate("/purchase-orders/manual");
                 } else {
                   onSuccess();
                 }
@@ -1915,7 +1920,7 @@ function WebPackingWizard({
                 <div className="flex items-center gap-2">
                   {poNumbers.length > 0 && (
                     <button
-                      onClick={() => navigate("/purchase-orders")}
+                      onClick={() => navigate("/purchase-orders/manual")}
                       className={cn(
                         "px-4 py-2 rounded-lg text-xs font-semibold text-white shadow-xs transition-all cursor-pointer",
                         isSupplier ? "bg-emerald-600 hover:bg-emerald-700" : "bg-blue-600 hover:bg-blue-700"
@@ -1926,9 +1931,9 @@ function WebPackingWizard({
                   )}
                   <button
                     onClick={onSuccess}
-                    className="bg-gray-100 hover:bg-gray-200 border border-gray-300 text-gray-800 px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer"
+                    className="bg-gray-900 hover:bg-gray-800 text-white px-4 py-2 rounded-lg text-xs font-semibold shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
                   >
-                    View All Shipments →
+                    Go to Shipments Dashboard →
                   </button>
                 </div>
               </div>
