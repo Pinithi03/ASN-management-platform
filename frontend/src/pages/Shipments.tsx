@@ -31,6 +31,9 @@ import {
   FileText,
   Eye,
   SlidersHorizontal,
+  Wifi,
+  WifiOff,
+  History,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { cn } from "@/utils/cn";
@@ -40,6 +43,21 @@ import {
   CreateShipmentResponse,
 } from "@/services/shipmentService";
 import { poApi } from "@/services/poApi";
+import { ensureFreshToken } from "@/lib/keycloak";
+import {
+  useNetworkStatus,
+  saveManualDraft,
+  getManualDraft,
+  clearManualDraft,
+  saveExcelDraft,
+  getExcelDraft,
+  clearExcelDraft,
+  saveExcelFileBlob,
+  getExcelFileBlob,
+  formatDraftTime,
+  ManualPackingDraft,
+  ExcelPackingDraft,
+} from "@/utils/draftStorage";
 
 const statusColor: Record<string, string> = {
   DRAFT: "bg-gray-50 text-gray-700 border-gray-200",
@@ -721,6 +739,84 @@ function WebPackingWizard({
   const [startingSeq, setStartingSeq] = useState<number>(1);
   const [packingSlipNumber, setPackingSlipNumber] = useState("");
 
+  const isOnline = useNetworkStatus();
+  const [activeDraft, setActiveDraft] = useState<ManualPackingDraft | null>(null);
+  const [hasDismissedDraft, setHasDismissedDraft] = useState(false);
+
+  // Check for existing saved draft on load
+  useEffect(() => {
+    const suppCode = user?.supplier_code || "0000018194";
+    const draft = getManualDraft(suppCode, poNumbers);
+    if (
+      draft &&
+      (draft.packedItems.length > 0 ||
+        draft.items.some((i: any) => (i.shipping_now || 0) > 0) ||
+        draft.packingSlipNumber)
+    ) {
+      setActiveDraft(draft);
+    }
+  }, [user?.supplier_code, poNumbers.join(",")]);
+
+  const handleRestoreDraft = () => {
+    if (!activeDraft) return;
+    if (activeDraft.items && activeDraft.items.length > 0) {
+      setItems(activeDraft.items);
+    }
+    if (activeDraft.packedItems && activeDraft.packedItems.length > 0) {
+      setPackedItems(activeDraft.packedItems);
+    }
+    if (activeDraft.step) {
+      setStep(activeDraft.step);
+    }
+    if (activeDraft.startingSeq) {
+      setStartingSeq(activeDraft.startingSeq);
+    }
+    if (activeDraft.packingSlipNumber) {
+      setPackingSlipNumber(activeDraft.packingSlipNumber);
+    }
+    setActiveDraft(null);
+  };
+
+  const handleDiscardDraft = () => {
+    const suppCode = user?.supplier_code || "0000018194";
+    clearManualDraft(suppCode, poNumbers);
+    setActiveDraft(null);
+    setHasDismissedDraft(true);
+  };
+
+  // Debounced auto-save to localStorage
+  useEffect(() => {
+    if (submitSuccessResult) return;
+    const suppCode = user?.supplier_code || "0000018194";
+    const hasData =
+      packedItems.length > 0 ||
+      items.some((i) => (i.shipping_now || 0) > 0) ||
+      Boolean(packingSlipNumber.trim());
+
+    if (!hasData) return;
+
+    const timer = setTimeout(() => {
+      saveManualDraft(suppCode, poNumbers, {
+        step,
+        items,
+        packedItems,
+        startingSeq,
+        packingSlipNumber,
+      });
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, [
+    items,
+    packedItems,
+    step,
+    startingSeq,
+    packingSlipNumber,
+    submitSuccessResult,
+    user?.supplier_code,
+    poNumbers.join(","),
+  ]);
+
   // Optional columns configuration for Step 2 Web Workbench (Batch, Supplier Ref, Width, Pack No)
   type OptionalColumnKey = "batch" | "supplier_ref" | "width" | "pack_no";
   const [visibleColumns, setVisibleColumns] = useState<Record<OptionalColumnKey, boolean>>({
@@ -805,6 +901,10 @@ function WebPackingWizard({
   }, [user?.supplier_code, user?.supplier_id]);
 
   const handleDispatchASN = async () => {
+    if (!isOnline) {
+      alert("You are currently offline. Please reconnect to the internet before dispatching the ASN to EDI.");
+      return;
+    }
     const trimmedPs = packingSlipNumber.trim();
     if (!trimmedPs) {
       alert("Please enter Packing Slip / Delivery Note Number before dispatching.");
@@ -812,6 +912,9 @@ function WebPackingWizard({
     }
     setIsSubmitting(true);
     try {
+      // Proactively refresh JWT before making network call to avoid mid-dispatch 401
+      await ensureFreshToken(60);
+
       const firstItem = packedItems[0];
       const targetPlant = matchPlant(firstItem?.destination);
       const activeSupplierCode = user?.supplier_code || "0000018194";
@@ -849,6 +952,7 @@ function WebPackingWizard({
       });
 
       setSubmitSuccessResult(res);
+      clearManualDraft(activeSupplierCode, poNumbers);
     } catch (err: any) {
       alert("Submission error: " + (err?.response?.data?.detail || err?.message || "Failed to create shipment"));
     } finally {
@@ -929,13 +1033,17 @@ function WebPackingWizard({
 
   useEffect(() => {
     if (openLinesData) {
-      setItems(
-        openLinesData.map((line) => ({
+      setItems((prev) => {
+        // Preserve user's restored draft shipping_now or ongoing edits
+        if (prev.length > 0 && prev.some((p) => (p.shipping_now || 0) > 0)) {
+          return prev;
+        }
+        return openLinesData.map((line) => ({
           ...line,
           packaging_type: line.packaging_type || "BOX",
           shipping_now: 0, // Always default to 0 — user enters qty or clicks Max
-        }))
-      );
+        }));
+      });
     }
   }, [openLinesData]);
 
@@ -1199,6 +1307,18 @@ function WebPackingWizard({
                 Excel Drop
               </button>
             )}
+
+            {isOnline ? (
+              <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <Wifi className="w-3.5 h-3.5 text-emerald-600" />
+                Online
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200 shadow-xs">
+                <WifiOff className="w-3.5 h-3.5 text-amber-600" />
+                Offline (Draft Saved Locally)
+              </span>
+            )}
           </div>
 
           {/* Center: Stepper */}
@@ -1310,6 +1430,42 @@ function WebPackingWizard({
           </div>
         </div>
       </div>
+
+      {/* ─── DRAFT RESTORATION BANNER ─────────────────────────────────── */}
+      {activeDraft && !hasDismissedDraft && (
+        <div className="bg-amber-50/95 border border-amber-200/90 rounded-xl p-3 px-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
+              <History className="w-4 h-4 text-amber-700" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-amber-900">
+                Unsaved packing draft found ({formatDraftTime(activeDraft.updatedAt)})
+              </p>
+              <p className="text-[11px] text-amber-700">
+                Saved at Step {activeDraft.step}: {activeDraft.packedItems?.reduce((a: number, c: any) => a + c.boxes.length, 0) || 0} cartons configured
+                {activeDraft.packingSlipNumber ? ` · Delivery Note: ${activeDraft.packingSlipNumber}` : ""}.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
+            <button
+              type="button"
+              onClick={handleRestoreDraft}
+              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+            >
+              Restore Draft
+            </button>
+            <button
+              type="button"
+              onClick={handleDiscardDraft}
+              className="px-3 py-1.5 bg-white hover:bg-amber-100/60 text-amber-800 border border-amber-300 rounded-lg text-xs font-medium transition-colors cursor-pointer"
+            >
+              Discard
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ─── STEP 1: QUANTITIES TO SHIP ─────────────────────────────────── */}
       {step === 1 && (
@@ -2109,6 +2265,79 @@ function ExcelPackingWorkflow({
   const [dispatchingAsn, setDispatchingAsn] = useState(false);
   const [dispatchedSuccess, setDispatchedSuccess] = useState(false);
 
+  const isOnline = useNetworkStatus();
+  const [activeDraft, setActiveDraft] = useState<ExcelPackingDraft | null>(null);
+  const [hasDismissedDraft, setHasDismissedDraft] = useState(false);
+
+  // Check for saved Excel draft on load
+  useEffect(() => {
+    if (activePos.length === 0) return;
+    const suppCode = user?.supplier_code || "0000018194";
+    const draft = getExcelDraft(suppCode, activePos);
+    if (draft && (draft.validationResult || draft.packingSlipNumber)) {
+      setActiveDraft(draft);
+    }
+  }, [user?.supplier_code, activePos.join(",")]);
+
+  const handleRestoreDraft = async () => {
+    if (!activeDraft) return;
+    if (activeDraft.validationResult) {
+      setValidationResult(activeDraft.validationResult);
+    }
+    if (activeDraft.plantCode) {
+      setPlantCode(activeDraft.plantCode);
+    }
+    if (activeDraft.estimatedArrival) {
+      setEstimatedArrival(activeDraft.estimatedArrival);
+    }
+    if (activeDraft.packingSlipNumber) {
+      setPackingSlipNumber(activeDraft.packingSlipNumber);
+    }
+    // Attempt to restore file blob from IndexedDB
+    try {
+      const suppCode = user?.supplier_code || "0000018194";
+      const storedFile = await getExcelFileBlob(suppCode, activePos);
+      if (storedFile) {
+        setSelectedFile(storedFile);
+      }
+    } catch (e) {
+      console.warn("Could not restore draft file from IndexedDB:", e);
+    }
+    setActiveDraft(null);
+  };
+
+  const handleDiscardDraft = () => {
+    const suppCode = user?.supplier_code || "0000018194";
+    clearExcelDraft(suppCode, activePos);
+    setActiveDraft(null);
+    setHasDismissedDraft(true);
+  };
+
+  // Reactive auto-save when packing slip, dates, or validation status updates
+  useEffect(() => {
+    if (createdResponse || dispatchedSuccess) return;
+    const suppCode = user?.supplier_code || "0000018194";
+    if (validationResult || packingSlipNumber.trim()) {
+      saveExcelDraft(suppCode, activePos, {
+        plantCode,
+        estimatedArrival,
+        packingSlipNumber,
+        validationResult,
+        fileName: selectedFile?.name,
+      });
+    }
+  }, [
+    plantCode,
+    estimatedArrival,
+    packingSlipNumber,
+    validationResult,
+    selectedFile?.name,
+    createdResponse,
+    dispatchedSuccess,
+    user?.supplier_code,
+    activePos.join(","),
+  ]);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -2248,6 +2477,15 @@ function ExcelPackingWorkflow({
       const supplierId = user?.role === "SUPPLIER" ? (user.supplier_id || undefined) : undefined;
       const res = await shipmentService.validateExcel(file, supplierId);
       setValidationResult(res);
+      const suppCode = user?.supplier_code || "0000018194";
+      saveExcelFileBlob(suppCode, activePos, file).catch(() => {});
+      saveExcelDraft(suppCode, activePos, {
+        plantCode,
+        estimatedArrival,
+        packingSlipNumber,
+        validationResult: res,
+        fileName: file.name,
+      });
     } catch (e: any) {
       console.error("Excel validation error:", e);
       const detail = e?.response?.data?.detail;
@@ -2302,7 +2540,14 @@ function ExcelPackingWorkflow({
   };
 
   const handleCreateShipment = async () => {
-    if (!selectedFile) return;
+    if (!isOnline) {
+      alert("You are currently offline. Please reconnect to the network before creating the shipment.");
+      return;
+    }
+    if (!selectedFile) {
+      alert("Please upload or select the validated Excel file before creating the shipment.");
+      return;
+    }
     const trimmedPs = packingSlipNumber.trim();
     if (!trimmedPs) {
       alert("Please enter Packing Slip / Delivery Note Number before creating shipment.");
@@ -2310,6 +2555,9 @@ function ExcelPackingWorkflow({
     }
     setSubmitting(true);
     try {
+      // Proactively refresh JWT before making network call to avoid mid-submission 401
+      await ensureFreshToken(60);
+
       const res = await shipmentService.createFromExcel({
         file: selectedFile,
         packing_slip_number: trimmedPs,
@@ -2391,11 +2639,18 @@ function ExcelPackingWorkflow({
   };
 
   const handleDispatchAsn = async () => {
+    if (!isOnline) {
+      alert("You are currently offline. Please reconnect to the network before dispatching the ASN to EDI.");
+      return;
+    }
     if (!createdResponse) return;
     setDispatchingAsn(true);
     try {
+      await ensureFreshToken(60);
       await shipmentService.sendASN(createdResponse.asn.id);
       setDispatchedSuccess(true);
+      const suppCode = user?.supplier_code || "0000018194";
+      clearExcelDraft(suppCode, activePos);
     } catch (err: any) {
       alert(`Failed to dispatch ASN: ${err?.response?.data?.detail || err.message || err}`);
     } finally {
@@ -2457,6 +2712,17 @@ function ExcelPackingWorkflow({
               </div>
 
               <div className="flex items-center gap-2">
+                 {isOnline ? (
+                   <span className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                     <Wifi className="w-3.5 h-3.5 text-emerald-600" />
+                     Online
+                   </span>
+                 ) : (
+                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200 shadow-xs">
+                     <WifiOff className="w-3.5 h-3.5 text-amber-600" />
+                     Offline (Draft Active)
+                   </span>
+                 )}
                  <button onClick={handleDownloadTailoredTemplate} disabled={downloadingTailored || activePos.length === 0} className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-3.5 py-2 rounded-lg transition-colors border border-emerald-200 flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50">
                     {downloadingTailored ? <Loader2 className="w-4 h-4 animate-spin"/> : <Download className="w-4 h-4"/>} Tailored Sheet
                  </button>
@@ -2472,6 +2738,43 @@ function ExcelPackingWorkflow({
                  )}
               </div>
            </div>
+
+           {/* DRAFT RESTORATION BANNER */}
+           {activeDraft && !hasDismissedDraft && (
+             <div className="bg-amber-50/95 border-b border-amber-200/90 p-3 px-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+               <div className="flex items-center gap-3">
+                 <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
+                   <History className="w-4 h-4 text-amber-700" />
+                 </div>
+                 <div>
+                   <p className="text-xs font-semibold text-amber-900">
+                     Unsaved validated Excel drop found ({formatDraftTime(activeDraft.updatedAt)})
+                   </p>
+                   <p className="text-[11px] text-amber-700">
+                     File: <span className="font-mono font-medium">{activeDraft.fileName || "Packing_List.xlsx"}</span>
+                     {activeDraft.validationResult?.total_cartons ? ` · ${activeDraft.validationResult.total_cartons} cartons/rolls` : ""}
+                     {activeDraft.packingSlipNumber ? ` · Delivery Note: ${activeDraft.packingSlipNumber}` : ""}.
+                   </p>
+                 </div>
+               </div>
+               <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
+                 <button
+                   type="button"
+                   onClick={handleRestoreDraft}
+                   className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                 >
+                   Restore Draft
+                 </button>
+                 <button
+                   type="button"
+                   onClick={handleDiscardDraft}
+                   className="px-3 py-1.5 bg-white hover:bg-amber-100/60 text-amber-800 border border-amber-300 rounded-lg text-xs font-medium transition-colors cursor-pointer"
+                 >
+                   Discard
+                 </button>
+               </div>
+             </div>
+           )}
 
            {/* Content Area */}
            <div className="flex-1 flex flex-col p-4 bg-gray-50/30 overflow-hidden">
