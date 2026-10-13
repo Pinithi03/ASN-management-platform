@@ -33,7 +33,7 @@ import {
   SlidersHorizontal,
   Wifi,
   WifiOff,
-  History,
+  FileEdit,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { cn } from "@/utils/cn";
@@ -54,9 +54,6 @@ import {
   clearExcelDraft,
   saveExcelFileBlob,
   getExcelFileBlob,
-  formatDraftTime,
-  ManualPackingDraft,
-  ExcelPackingDraft,
 } from "@/utils/draftStorage";
 
 const statusColor: Record<string, string> = {
@@ -739,49 +736,34 @@ function WebPackingWizard({
   const [startingSeq, setStartingSeq] = useState<number>(1);
   const [packingSlipNumber, setPackingSlipNumber] = useState("");
 
+  const [searchParams] = useSearchParams();
+  const shouldResume = searchParams.get("resume") === "true";
+  const [draftSavedToast, setDraftSavedToast] = useState(false);
   const isOnline = useNetworkStatus();
-  const [activeDraft, setActiveDraft] = useState<ManualPackingDraft | null>(null);
-  const [hasDismissedDraft, setHasDismissedDraft] = useState(false);
-
-  // Check for existing saved draft on load
+  // Check for existing saved draft on load (auto-resume if navigated from Drafts page)
   useEffect(() => {
     const suppCode = user?.supplier_code || "0000018194";
     const draft = getManualDraft(suppCode, poNumbers);
-    if (
-      draft &&
-      (draft.packedItems.length > 0 ||
-        draft.items.some((i: any) => (i.shipping_now || 0) > 0) ||
-        draft.packingSlipNumber)
-    ) {
-      setActiveDraft(draft);
+    if (draft && shouldResume) {
+      if (draft.items && draft.items.length > 0) setItems(draft.items);
+      if (draft.packedItems && draft.packedItems.length > 0) setPackedItems(draft.packedItems);
+      if (draft.step) setStep(draft.step);
+      if (draft.startingSeq) setStartingSeq(draft.startingSeq);
+      if (draft.packingSlipNumber) setPackingSlipNumber(draft.packingSlipNumber);
     }
-  }, [user?.supplier_code, poNumbers.join(",")]);
+  }, [user?.supplier_code, poNumbers.join(","), shouldResume]);
 
-  const handleRestoreDraft = () => {
-    if (!activeDraft) return;
-    if (activeDraft.items && activeDraft.items.length > 0) {
-      setItems(activeDraft.items);
-    }
-    if (activeDraft.packedItems && activeDraft.packedItems.length > 0) {
-      setPackedItems(activeDraft.packedItems);
-    }
-    if (activeDraft.step) {
-      setStep(activeDraft.step);
-    }
-    if (activeDraft.startingSeq) {
-      setStartingSeq(activeDraft.startingSeq);
-    }
-    if (activeDraft.packingSlipNumber) {
-      setPackingSlipNumber(activeDraft.packingSlipNumber);
-    }
-    setActiveDraft(null);
-  };
-
-  const handleDiscardDraft = () => {
+  const handleManualSaveDraft = () => {
     const suppCode = user?.supplier_code || "0000018194";
-    clearManualDraft(suppCode, poNumbers);
-    setActiveDraft(null);
-    setHasDismissedDraft(true);
+    saveManualDraft(suppCode, poNumbers, {
+      step,
+      items,
+      packedItems,
+      startingSeq,
+      packingSlipNumber,
+    });
+    setDraftSavedToast(true);
+    setTimeout(() => setDraftSavedToast(false), 2500);
   };
 
   // Debounced auto-save to localStorage
@@ -1308,6 +1290,25 @@ function WebPackingWizard({
               </button>
             )}
 
+            <button
+              type="button"
+              onClick={handleManualSaveDraft}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 rounded-lg border border-gray-300 shadow-2xs transition-colors cursor-pointer"
+              title="Save current progress to Drafts in the sidebar"
+            >
+              <FileEdit className="w-3.5 h-3.5 text-blue-600" />
+              {draftSavedToast ? "Saved to Drafts!" : "Save Draft"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigate("/drafts")}
+              className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
+              title="View all saved drafts in sidebar"
+            >
+              Drafts
+            </button>
+
             {isOnline ? (
               <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
                 <Wifi className="w-3.5 h-3.5 text-emerald-600" />
@@ -1316,7 +1317,7 @@ function WebPackingWizard({
             ) : (
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200 shadow-xs">
                 <WifiOff className="w-3.5 h-3.5 text-amber-600" />
-                Offline (Draft Saved Locally)
+                Offline
               </span>
             )}
           </div>
@@ -1430,42 +1431,6 @@ function WebPackingWizard({
           </div>
         </div>
       </div>
-
-      {/* ─── DRAFT RESTORATION BANNER ─────────────────────────────────── */}
-      {activeDraft && !hasDismissedDraft && (
-        <div className="bg-amber-50/95 border border-amber-200/90 rounded-xl p-3 px-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
-              <History className="w-4 h-4 text-amber-700" />
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-amber-900">
-                Unsaved packing draft found ({formatDraftTime(activeDraft.updatedAt)})
-              </p>
-              <p className="text-[11px] text-amber-700">
-                Saved at Step {activeDraft.step}: {activeDraft.packedItems?.reduce((a: number, c: any) => a + c.boxes.length, 0) || 0} cartons configured
-                {activeDraft.packingSlipNumber ? ` · Delivery Note: ${activeDraft.packingSlipNumber}` : ""}.
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
-            <button
-              type="button"
-              onClick={handleRestoreDraft}
-              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer"
-            >
-              Restore Draft
-            </button>
-            <button
-              type="button"
-              onClick={handleDiscardDraft}
-              className="px-3 py-1.5 bg-white hover:bg-amber-100/60 text-amber-800 border border-amber-300 rounded-lg text-xs font-medium transition-colors cursor-pointer"
-            >
-              Discard
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* ─── STEP 1: QUANTITIES TO SHIP ─────────────────────────────────── */}
       {step === 1 && (
@@ -2265,52 +2230,43 @@ function ExcelPackingWorkflow({
   const [dispatchingAsn, setDispatchingAsn] = useState(false);
   const [dispatchedSuccess, setDispatchedSuccess] = useState(false);
 
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const shouldResume = searchParams.get("resume") === "true";
+  const [draftSavedToast, setDraftSavedToast] = useState(false);
   const isOnline = useNetworkStatus();
-  const [activeDraft, setActiveDraft] = useState<ExcelPackingDraft | null>(null);
-  const [hasDismissedDraft, setHasDismissedDraft] = useState(false);
-
-  // Check for saved Excel draft on load
+  // Check for saved Excel draft on load (auto-resume if navigated with ?resume=true)
   useEffect(() => {
     if (activePos.length === 0) return;
     const suppCode = user?.supplier_code || "0000018194";
     const draft = getExcelDraft(suppCode, activePos);
-    if (draft && (draft.validationResult || draft.packingSlipNumber)) {
-      setActiveDraft(draft);
+    if (draft && shouldResume) {
+      if (draft.validationResult) setValidationResult(draft.validationResult);
+      if (draft.plantCode) setPlantCode(draft.plantCode);
+      if (draft.estimatedArrival) setEstimatedArrival(draft.estimatedArrival);
+      if (draft.packingSlipNumber) setPackingSlipNumber(draft.packingSlipNumber);
+      getExcelFileBlob(suppCode, activePos)
+        .then((storedFile) => {
+          if (storedFile) setSelectedFile(storedFile);
+        })
+        .catch(() => {});
     }
-  }, [user?.supplier_code, activePos.join(",")]);
+  }, [user?.supplier_code, activePos.join(","), shouldResume]);
 
-  const handleRestoreDraft = async () => {
-    if (!activeDraft) return;
-    if (activeDraft.validationResult) {
-      setValidationResult(activeDraft.validationResult);
-    }
-    if (activeDraft.plantCode) {
-      setPlantCode(activeDraft.plantCode);
-    }
-    if (activeDraft.estimatedArrival) {
-      setEstimatedArrival(activeDraft.estimatedArrival);
-    }
-    if (activeDraft.packingSlipNumber) {
-      setPackingSlipNumber(activeDraft.packingSlipNumber);
-    }
-    // Attempt to restore file blob from IndexedDB
-    try {
-      const suppCode = user?.supplier_code || "0000018194";
-      const storedFile = await getExcelFileBlob(suppCode, activePos);
-      if (storedFile) {
-        setSelectedFile(storedFile);
-      }
-    } catch (e) {
-      console.warn("Could not restore draft file from IndexedDB:", e);
-    }
-    setActiveDraft(null);
-  };
-
-  const handleDiscardDraft = () => {
+  const handleManualSaveDraft = () => {
     const suppCode = user?.supplier_code || "0000018194";
-    clearExcelDraft(suppCode, activePos);
-    setActiveDraft(null);
-    setHasDismissedDraft(true);
+    saveExcelDraft(suppCode, activePos, {
+      plantCode,
+      estimatedArrival,
+      packingSlipNumber,
+      validationResult,
+      fileName: selectedFile?.name,
+    });
+    if (selectedFile) {
+      saveExcelFileBlob(suppCode, activePos, selectedFile).catch(() => {});
+    }
+    setDraftSavedToast(true);
+    setTimeout(() => setDraftSavedToast(false), 2500);
   };
 
   // Reactive auto-save when packing slip, dates, or validation status updates
@@ -2712,6 +2668,25 @@ function ExcelPackingWorkflow({
               </div>
 
               <div className="flex items-center gap-2">
+                 <button
+                   type="button"
+                   onClick={handleManualSaveDraft}
+                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 rounded-lg border border-gray-300 shadow-2xs transition-colors cursor-pointer"
+                   title="Save current validated state to Drafts"
+                 >
+                   <FileEdit className="w-3.5 h-3.5 text-emerald-600" />
+                   {draftSavedToast ? "Saved to Drafts!" : "Save Draft"}
+                 </button>
+
+                 <button
+                   type="button"
+                   onClick={() => navigate("/drafts")}
+                   className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
+                   title="View all saved drafts in sidebar"
+                 >
+                   Drafts
+                 </button>
+
                  {isOnline ? (
                    <span className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
                      <Wifi className="w-3.5 h-3.5 text-emerald-600" />
@@ -2720,7 +2695,7 @@ function ExcelPackingWorkflow({
                  ) : (
                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200 shadow-xs">
                      <WifiOff className="w-3.5 h-3.5 text-amber-600" />
-                     Offline (Draft Active)
+                     Offline
                    </span>
                  )}
                  <button onClick={handleDownloadTailoredTemplate} disabled={downloadingTailored || activePos.length === 0} className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-3.5 py-2 rounded-lg transition-colors border border-emerald-200 flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50">
@@ -2738,43 +2713,6 @@ function ExcelPackingWorkflow({
                  )}
               </div>
            </div>
-
-           {/* DRAFT RESTORATION BANNER */}
-           {activeDraft && !hasDismissedDraft && (
-             <div className="bg-amber-50/95 border-b border-amber-200/90 p-3 px-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
-               <div className="flex items-center gap-3">
-                 <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
-                   <History className="w-4 h-4 text-amber-700" />
-                 </div>
-                 <div>
-                   <p className="text-xs font-semibold text-amber-900">
-                     Unsaved validated Excel drop found ({formatDraftTime(activeDraft.updatedAt)})
-                   </p>
-                   <p className="text-[11px] text-amber-700">
-                     File: <span className="font-mono font-medium">{activeDraft.fileName || "Packing_List.xlsx"}</span>
-                     {activeDraft.validationResult?.total_cartons ? ` · ${activeDraft.validationResult.total_cartons} cartons/rolls` : ""}
-                     {activeDraft.packingSlipNumber ? ` · Delivery Note: ${activeDraft.packingSlipNumber}` : ""}.
-                   </p>
-                 </div>
-               </div>
-               <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
-                 <button
-                   type="button"
-                   onClick={handleRestoreDraft}
-                   className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer"
-                 >
-                   Restore Draft
-                 </button>
-                 <button
-                   type="button"
-                   onClick={handleDiscardDraft}
-                   className="px-3 py-1.5 bg-white hover:bg-amber-100/60 text-amber-800 border border-amber-300 rounded-lg text-xs font-medium transition-colors cursor-pointer"
-                 >
-                   Discard
-                 </button>
-               </div>
-             </div>
-           )}
 
            {/* Content Area */}
            <div className="flex-1 flex flex-col p-4 bg-gray-50/30 overflow-hidden">

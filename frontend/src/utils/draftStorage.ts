@@ -104,6 +104,12 @@ function cleanupExpiredDrafts() {
 // Manual Wizard Draft Methods
 // ─────────────────────────────────────────────────────────────────────────────
 
+function notifyDraftsUpdated() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("asn_drafts_updated"));
+  }
+}
+
 export function saveManualDraft(
   supplierCode: string,
   poNumbers: string[],
@@ -120,6 +126,7 @@ export function saveManualDraft(
       updatedAt: Date.now(),
     };
     localStorage.setItem(key, JSON.stringify(draft));
+    notifyDraftsUpdated();
     return true;
   } catch (err) {
     console.warn("Failed to save manual packing draft to localStorage:", err);
@@ -141,6 +148,7 @@ export function getManualDraft(
     // Expire if older than 48 hours
     if (Date.now() - parsed.updatedAt > MAX_DRAFT_AGE_MS) {
       localStorage.removeItem(key);
+      notifyDraftsUpdated();
       return null;
     }
     return parsed;
@@ -155,6 +163,7 @@ export function clearManualDraft(supplierCode: string, poNumbers: string[]): voi
   try {
     const key = buildKey(DRAFT_PREFIX_MANUAL, supplierCode, poNumbers);
     localStorage.removeItem(key);
+    notifyDraftsUpdated();
   } catch (err) {
     console.warn("Failed to clear manual packing draft:", err);
   }
@@ -180,6 +189,7 @@ export function saveExcelDraft(
       updatedAt: Date.now(),
     };
     localStorage.setItem(key, JSON.stringify(draft));
+    notifyDraftsUpdated();
     return true;
   } catch (err) {
     console.warn("Failed to save excel draft to localStorage:", err);
@@ -200,6 +210,7 @@ export function getExcelDraft(
 
     if (Date.now() - parsed.updatedAt > MAX_DRAFT_AGE_MS) {
       localStorage.removeItem(key);
+      notifyDraftsUpdated();
       return null;
     }
     return parsed;
@@ -215,9 +226,95 @@ export function clearExcelDraft(supplierCode: string, poNumbers: string[]): void
     const key = buildKey(DRAFT_PREFIX_EXCEL, supplierCode, poNumbers);
     localStorage.removeItem(key);
     clearExcelFileBlob(supplierCode, poNumbers).catch(() => {});
+    notifyDraftsUpdated();
   } catch (err) {
     console.warn("Failed to clear excel draft:", err);
   }
+}
+
+/**
+ * Retrieve all active drafts. Optionally filtered by supplierCode.
+ */
+export function getAllDrafts(filterSupplierCode?: string): {
+  manualDrafts: ManualPackingDraft[];
+  excelDrafts: ExcelPackingDraft[];
+} {
+  const manualDrafts: ManualPackingDraft[] = [];
+  const excelDrafts: ExcelPackingDraft[] = [];
+  const targetCode = filterSupplierCode ? filterSupplierCode.trim().toLowerCase() : null;
+
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key) continue;
+
+      if (key.startsWith(DRAFT_PREFIX_MANUAL)) {
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          try {
+            const parsed: ManualPackingDraft = JSON.parse(raw);
+            if (Date.now() - parsed.updatedAt <= MAX_DRAFT_AGE_MS) {
+              if (
+                !targetCode ||
+                (parsed.supplierCode && parsed.supplierCode.trim().toLowerCase() === targetCode)
+              ) {
+                manualDrafts.push(parsed);
+              }
+            }
+          } catch {}
+        }
+      } else if (key.startsWith(DRAFT_PREFIX_EXCEL) && !key.includes("blob_")) {
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          try {
+            const parsed: ExcelPackingDraft = JSON.parse(raw);
+            if (Date.now() - parsed.updatedAt <= MAX_DRAFT_AGE_MS) {
+              if (
+                !targetCode ||
+                (parsed.supplierCode && parsed.supplierCode.trim().toLowerCase() === targetCode)
+              ) {
+                excelDrafts.push(parsed);
+              }
+            }
+          } catch {}
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("Could not list drafts from localStorage:", err);
+  }
+
+  manualDrafts.sort((a, b) => b.updatedAt - a.updatedAt);
+  excelDrafts.sort((a, b) => b.updatedAt - a.updatedAt);
+
+  return { manualDrafts, excelDrafts };
+}
+
+/**
+ * Get total count of saved drafts.
+ */
+export function getDraftCount(filterSupplierCode?: string): number {
+  const { manualDrafts, excelDrafts } = getAllDrafts(filterSupplierCode);
+  return manualDrafts.length + excelDrafts.length;
+}
+
+/**
+ * React hook to listen for real-time draft count changes.
+ */
+export function useDraftCount(supplierCode?: string): number {
+  const [count, setCount] = useState(() => getDraftCount(supplierCode));
+
+  useEffect(() => {
+    const update = () => setCount(getDraftCount(supplierCode));
+    window.addEventListener("asn_drafts_updated", update);
+    window.addEventListener("storage", update);
+    return () => {
+      window.removeEventListener("asn_drafts_updated", update);
+      window.removeEventListener("storage", update);
+    };
+  }, [supplierCode]);
+
+  return count;
 }
 
 export async function saveExcelFileBlob(
