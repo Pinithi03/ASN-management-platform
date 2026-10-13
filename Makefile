@@ -1,5 +1,5 @@
 # ============================================================
-# ANS Management Platform — Makefile
+# ASN Management Platform — Makefile
 # ============================================================
 # Usage: make <target>
 # Run `make help` to see all available targets.
@@ -23,7 +23,7 @@ RESET := \033[0m
 # ── Help ────────────────────────────────────────────────────
 help: ## Show this help message
 	@echo ""
-	@echo "$(BLUE)ANS Management Platform$(RESET) — Development Commands"
+	@echo "$(BLUE)ASN Management Platform$(RESET) — Development Commands"
 	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-20s$(RESET) %s\n", $$1, $$2}'

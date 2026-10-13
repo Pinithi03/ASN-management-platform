@@ -1,4 +1,4 @@
-# ANS Management Platform
+# ASN Management Platform
 
 > Multi-company Email Automation & ASN (Advanced Shipping Notice) Management Platform for the Oniverse Group garment manufacturing plants.
 

@@ -144,7 +144,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         {!collapsed && (
           <div className="flex flex-col">
             <span className="text-sm font-semibold text-gray-900">
-              ANS Platform
+              ASN Platform
             </span>
             <span className="text-xs text-gray-500">
               {isAdmin ? "Admin Portal" : "Supplier Portal"}
@@ -293,7 +293,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
             {isAdmin ? "Company / Tenant" : "Supplier Partner"}
           </p>
           <p className="truncate text-sm font-medium text-gray-700">
-            {user.supplier_name || "ANS Portal"}
+            {user.supplier_name || "ASN Portal"}
           </p>
           <p className="text-xs text-gray-400 font-mono">{user.supplier_code || user.role}</p>
         </div>
