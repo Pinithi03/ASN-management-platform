@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     ENVIRONMENT: str = "development"
     API_V1_PREFIX: str = "/api/v1"
+    SECRET_KEY: str = "ans-secret-key-calzedonia-2026-production-salt"
 
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://ans_user:ans_password@localhost:5432/ans_platform"

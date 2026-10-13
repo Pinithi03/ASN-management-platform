@@ -49,9 +49,25 @@ export interface ExcelValidationResult {
   rows: ParsedCartonRow[];
 }
 
+export interface CreatedShipmentItem {
+  id: string;
+  shipment_number: string;
+  plant_code: string;
+  status: string;
+  total_boxes: number;
+  total_pieces: number;
+  ship_date?: string;
+  carrier?: string;
+  handling_units?: string[];
+  asn_record_id?: string;
+  xml_filename?: string;
+}
+
 export interface CreateShipmentResponse {
   success: boolean;
   message: string;
+  count?: number;
+  shipments?: CreatedShipmentItem[];
   shipment: {
     id: string;
     shipment_number: string;
@@ -88,13 +104,14 @@ export const shipmentService = {
   },
 
   /**
-   * Download tailored Excel packing template based on supplier packing setup (Box vs Roll & units count).
+   * Download tailored Excel packing template based on supplier packing setup (Box vs Roll & carton counts).
    */
   async downloadConfiguredTemplate(payload: {
     configs: Array<{
       po_number: string;
       pack_type: "BOX" | "ROLL";
       selected_lines?: string[];
+      line_carton_counts?: Record<string, number>;
     }>;
   }): Promise<Blob> {
     const res = await api.post("/shipments/template/configured", payload, {
@@ -106,10 +123,11 @@ export const shipmentService = {
   /**
    * Validate uploaded Excel packing list file.
    */
-  async validateExcel(file: File, supplierId?: string): Promise<ExcelValidationResult> {
+  async validateExcel(file: File, supplierId?: string, supplierCode?: string): Promise<ExcelValidationResult> {
     const formData = new FormData();
     formData.append("file", file);
     if (supplierId) formData.append("supplier_id", supplierId);
+    if (supplierCode) formData.append("supplier_code", supplierCode);
 
     const res = await api.post<ExcelValidationResult>("/shipments/validate-excel", formData, {
       headers: { "Content-Type": "multipart/form-data" },
