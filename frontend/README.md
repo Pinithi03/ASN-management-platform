@@ -1,6 +1,6 @@
 # Frontend — React Application
 
-Single-page application for the ANS Management Platform.
+Single-page application for the ASN Management Platform.
 
 ## Stack
 

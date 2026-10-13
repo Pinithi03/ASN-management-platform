@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     )
 
     # App
-    APP_NAME: str = "ANS Management Platform"
+    APP_NAME: str = "ASN Management Platform"
     APP_VERSION: str = "0.1.0"
     DEBUG: bool = False
     ENVIRONMENT: str = "development"
