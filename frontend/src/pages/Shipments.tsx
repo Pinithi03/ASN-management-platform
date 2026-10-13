@@ -855,8 +855,9 @@ function WebPackingWizard({
     setPackedItems((prev) => resequenceAllCartons(prev, newStart));
   };
 
-  // Synchronize next sequential HU from database sequence
+  // Synchronize next sequential HU from database sequence (skip if resuming saved draft)
   useEffect(() => {
+    if (shouldResume) return;
     let isMounted = true;
     const fetchSeq = async () => {
       try {
@@ -880,7 +881,7 @@ function WebPackingWizard({
     return () => {
       isMounted = false;
     };
-  }, [user?.supplier_code, user?.supplier_id]);
+  }, [user?.supplier_code, user?.supplier_id, shouldResume]);
 
   const handleDispatchASN = async () => {
     if (!isOnline) {
@@ -1016,7 +1017,10 @@ function WebPackingWizard({
   useEffect(() => {
     if (openLinesData) {
       setItems((prev) => {
-        // Preserve user's restored draft shipping_now or ongoing edits
+        // Preserve user's restored draft items or ongoing edits
+        if (shouldResume && prev.length > 0) {
+          return prev;
+        }
         if (prev.length > 0 && prev.some((p) => (p.shipping_now || 0) > 0)) {
           return prev;
         }
@@ -1027,7 +1031,7 @@ function WebPackingWizard({
         }));
       });
     }
-  }, [openLinesData]);
+  }, [openLinesData, shouldResume]);
 
   const distinctPoNumbers = useMemo(() => {
     return Array.from(new Set(items.map((i) => i.po_number).filter(Boolean)));

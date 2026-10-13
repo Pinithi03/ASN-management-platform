@@ -141,7 +141,18 @@ export function getManualDraft(
   if (!poNumbers || poNumbers.length === 0) return null;
   try {
     const key = buildKey(DRAFT_PREFIX_MANUAL, supplierCode, poNumbers);
-    const raw = localStorage.getItem(key);
+    let raw = localStorage.getItem(key);
+    // Resilient fallback: search by PO numbers if exact supplier key not found
+    if (!raw) {
+      const sortedPos = [...poNumbers].sort().join("_");
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith(DRAFT_PREFIX_MANUAL) && k.endsWith(`_${sortedPos}`)) {
+          raw = localStorage.getItem(k);
+          break;
+        }
+      }
+    }
     if (!raw) return null;
     const parsed: ManualPackingDraft = JSON.parse(raw);
 
@@ -163,6 +174,14 @@ export function clearManualDraft(supplierCode: string, poNumbers: string[]): voi
   try {
     const key = buildKey(DRAFT_PREFIX_MANUAL, supplierCode, poNumbers);
     localStorage.removeItem(key);
+    // Also clear any other keys matching these POs
+    const sortedPos = [...poNumbers].sort().join("_");
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(DRAFT_PREFIX_MANUAL) && k.endsWith(`_${sortedPos}`)) {
+        localStorage.removeItem(k);
+      }
+    }
     notifyDraftsUpdated();
   } catch (err) {
     console.warn("Failed to clear manual packing draft:", err);
@@ -204,7 +223,18 @@ export function getExcelDraft(
   if (!poNumbers || poNumbers.length === 0) return null;
   try {
     const key = buildKey(DRAFT_PREFIX_EXCEL, supplierCode, poNumbers);
-    const raw = localStorage.getItem(key);
+    let raw = localStorage.getItem(key);
+    // Resilient fallback: search by PO numbers if exact supplier key not found
+    if (!raw) {
+      const sortedPos = [...poNumbers].sort().join("_");
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith(DRAFT_PREFIX_EXCEL) && !k.includes("blob_") && k.endsWith(`_${sortedPos}`)) {
+          raw = localStorage.getItem(k);
+          break;
+        }
+      }
+    }
     if (!raw) return null;
     const parsed: ExcelPackingDraft = JSON.parse(raw);
 
@@ -225,6 +255,13 @@ export function clearExcelDraft(supplierCode: string, poNumbers: string[]): void
   try {
     const key = buildKey(DRAFT_PREFIX_EXCEL, supplierCode, poNumbers);
     localStorage.removeItem(key);
+    const sortedPos = [...poNumbers].sort().join("_");
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(DRAFT_PREFIX_EXCEL) && k.endsWith(`_${sortedPos}`)) {
+        localStorage.removeItem(k);
+      }
+    }
     clearExcelFileBlob(supplierCode, poNumbers).catch(() => {});
     notifyDraftsUpdated();
   } catch (err) {
