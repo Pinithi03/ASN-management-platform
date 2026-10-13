@@ -174,26 +174,10 @@ export default function Drafts() {
             <FolderArchive className="w-7 h-7" />
           </div>
           <h3 className="text-base font-bold text-gray-900">No saved drafts</h3>
-          <p className="text-xs text-gray-500 max-w-md mt-1 mb-6">
+          <p className="text-xs text-gray-500 max-w-md mt-1">
             When you enter carton quantities in the Manual Process or upload a packing list in Excel Drop,
             your progress can be saved safely here to resume at any time.
           </p>
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => navigate("/purchase-orders/manual")}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors cursor-pointer"
-            >
-              <Layers className="w-3.5 h-3.5" /> Go to Manual Process
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate("/purchase-orders/excel")}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors cursor-pointer"
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5" /> Go to Excel Drop
-            </button>
-          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
