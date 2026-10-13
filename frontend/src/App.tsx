@@ -41,7 +41,9 @@ export default function App() {
     <Routes>
       <Route element={<MainLayout />}>
         <Route path="/" element={<Dashboard />} />
-        <Route path="/purchase-orders" element={<PurchaseOrders />} />
+        <Route path="/purchase-orders" element={<Navigate to="/purchase-orders/manual" replace />} />
+        <Route path="/purchase-orders/manual" element={<PurchaseOrders mode="manual" />} />
+        <Route path="/purchase-orders/excel" element={<PurchaseOrders mode="excel" />} />
         <Route path="/asn" element={<Navigate to="/shipments" replace />} />
         <Route path="/review" element={<Navigate to="/shipments" replace />} />
         <Route path="/shipments" element={<Shipments />} />
