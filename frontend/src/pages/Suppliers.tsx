@@ -9,7 +9,6 @@ import {
   Plus,
   CheckCircle2,
   Building2,
-  Mail,
   MapPin,
   UserCheck,
   X,
@@ -301,18 +300,24 @@ export default function Suppliers() {
   const [formData, setFormData] = useState({
     name: "",
     supplier_code: "",
-    email: "",
-    contact_name: "",
-    phone: "",
     country: "Sri Lanka",
-    category: "Textiles & Garments",
     profile_picture_url: "",
-    tax_id: "",
-    address: "",
     current_hu_number: "",
     hu_locked: false,
     is_active: true,
   });
+
+  const resetForm = () => {
+    setFormData({
+      name: "",
+      supplier_code: "",
+      country: "Sri Lanka",
+      profile_picture_url: "",
+      current_hu_number: "",
+      hu_locked: false,
+      is_active: true,
+    });
+  };
 
   const handleAcknowledgeSupplierUpdate = (supplier: SupplierItem) => {
     setSuppliers((prev) =>
@@ -329,8 +334,8 @@ export default function Suppliers() {
   // ─── CREATE ───────────────────────────────────────────────────
   const handleCreateSupplier = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name || !formData.supplier_code || !formData.email) {
-      alert("Please fill in mandatory fields: Name, Unique Supplier Code, and Email.");
+    if (!formData.name.trim() || !formData.supplier_code.trim()) {
+      showToast("Please fill in mandatory fields: Name and Supplier Code.");
       return;
     }
 
@@ -338,14 +343,8 @@ export default function Suppliers() {
       const created = await supplierApi.create({
         name: formData.name.trim(),
         supplier_code: formData.supplier_code.trim().toUpperCase(),
-        email: formData.email.trim().toLowerCase(),
-        contact_name: formData.contact_name.trim() || undefined,
-        phone: formData.phone.trim() || undefined,
         country: formData.country.trim() || "Sri Lanka",
-        category: formData.category,
         profile_picture_url: formData.profile_picture_url.trim() || undefined,
-        tax_id: formData.tax_id.trim() || undefined,
-        address: formData.address.trim() || undefined,
         current_hu_number: formData.current_hu_number.trim() || undefined,
         is_active: formData.is_active,
       });
@@ -358,7 +357,7 @@ export default function Suppliers() {
       });
       await queryClient.invalidateQueries({ queryKey: ["suppliers"] });
       refetch();
-      showToast(`Supplier onboarded and login credentials emailed to ${created.email}`);
+      showToast(`Supplier onboarded: ${created.name} (#${created.supplier_code})`);
       setIsAddModalOpen(false);
       resetForm();
     } catch (err: any) {
@@ -390,13 +389,7 @@ export default function Suppliers() {
           ...prev,
           supplier_code: res.supplier_code || prev.supplier_code,
           name: res.name || prev.name,
-          email: res.email || prev.email,
-          contact_name: res.contact_name || prev.contact_name,
-          phone: res.phone || prev.phone,
-          address: res.address || prev.address,
           country: res.country || prev.country,
-          tax_id: res.tax_id || prev.tax_id,
-          category: res.category || prev.category,
         }));
         setXmlFoundBadge(`Auto-filled from ${res.source_filename || "Inbound XML"}`);
         showToast(`Loaded details from XML: ${res.name} (#${res.supplier_code})`);
@@ -424,38 +417,12 @@ export default function Suppliers() {
     setFormData({
       name: supplier.name,
       supplier_code: supplier.supplier_code,
-      email: supplier.email,
-      contact_name: supplier.contact_name || "",
-      phone: supplier.phone || "",
       country: supplier.country || "Sri Lanka",
-      category: supplier.category || "Textiles & Garments",
       profile_picture_url: supplier.profile_picture_url || "",
-      tax_id: supplier.tax_id || "",
-      address: supplier.address || "",
       current_hu_number: supplier.current_hu_number || "",
       hu_locked: Boolean(supplier.hu_locked),
       is_active: supplier.is_active,
     });
-
-    // Auto-enrich missing fields from parsed XML if available
-    if (!supplier.contact_name || !supplier.phone || !supplier.tax_id) {
-      try {
-        const res = await supplierApi.lookupXml(supplier.supplier_code);
-        if (res && res.found) {
-          setFormData((prev) => ({
-            ...prev,
-            contact_name: prev.contact_name || res.contact_name || "",
-            phone: prev.phone || res.phone || "",
-            tax_id: prev.tax_id || res.tax_id || "",
-            address: prev.address || res.address || "",
-            country: prev.country === "Sri Lanka" && res.country && res.country !== "Sri Lanka" ? res.country : prev.country,
-          }));
-          setXmlFoundBadge(`Enriched from Inbound XML (${res.source_filename || "EDI"})`);
-        }
-      } catch (e) {
-        // silently ignore
-      }
-    }
   };
 
   const handleUpdateSupplier = async (e: React.FormEvent) => {
@@ -466,13 +433,7 @@ export default function Suppliers() {
     const changedFields = recordSupplierFieldChanges(editingSupplier, {
       name: formData.name.trim(),
       supplier_code: formData.supplier_code.trim().toUpperCase(),
-      email: formData.email.trim().toLowerCase(),
-      contact_name: formData.contact_name.trim(),
-      phone: formData.phone.trim(),
       country: formData.country.trim(),
-      category: formData.category,
-      tax_id: formData.tax_id.trim(),
-      address: formData.address.trim(),
       is_active: formData.is_active,
     });
 
@@ -480,14 +441,8 @@ export default function Suppliers() {
       const updated = await supplierApi.update(editingSupplier.id, {
         name: formData.name.trim(),
         supplier_code: formData.supplier_code.trim().toUpperCase(),
-        email: formData.email.trim().toLowerCase(),
-        contact_name: formData.contact_name.trim(),
-        phone: formData.phone.trim(),
         country: formData.country.trim(),
-        category: formData.category,
         profile_picture_url: formData.profile_picture_url.trim() || undefined,
-        tax_id: formData.tax_id.trim(),
-        address: formData.address.trim(),
         current_hu_number: formData.current_hu_number.trim() || undefined,
         hu_locked: formData.hu_locked,
         is_active: formData.is_active,
@@ -525,24 +480,6 @@ export default function Suppliers() {
       console.warn("Backend status update failed:", err);
       showToast("Failed to update status on server.");
     }
-  };
-
-  const resetForm = () => {
-    setFormData({
-      name: "",
-      supplier_code: "",
-      email: "",
-      contact_name: "",
-      phone: "",
-      country: "Sri Lanka",
-      category: "Textiles & Garments",
-      profile_picture_url: "",
-      tax_id: "",
-      address: "",
-      current_hu_number: "",
-      hu_locked: false,
-      is_active: true,
-    });
   };
 
   // ─── FILTERING ────────────────────────────────────────────────
@@ -991,11 +928,6 @@ export default function Suppliers() {
                     {s.name}
                   </h3>
 
-                  {/* Subtitle / Category */}
-                  <p className="text-xs text-gray-500 font-medium truncate max-w-full mt-0.5">
-                    {s.category || "Supplier Partner"}
-                  </p>
-
                   {/* Status badge pill & Code */}
                   <div className="mt-2 flex items-center gap-1.5 flex-wrap justify-center">
                     <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 bg-gray-100 text-gray-700 rounded border border-gray-200">
@@ -1016,7 +948,7 @@ export default function Suppliers() {
                     )}
                   </div>
 
-                  {/* Details (HU, Email, Country) */}
+                  {/* Details (HU, Country) */}
                   <div className="mt-3 w-full text-left space-y-1 text-[11px] text-gray-600 border-t border-gray-100 pt-2.5">
                     {s.current_hu_number && (
                       <div className="flex items-center justify-between text-[11px]">
@@ -1026,10 +958,6 @@ export default function Suppliers() {
                         </span>
                       </div>
                     )}
-                    <div className="flex items-center gap-1.5 truncate text-[11px]">
-                      <Mail className="w-3 h-3 text-gray-400 shrink-0" />
-                      <span className="truncate text-gray-600">{s.email}</span>
-                    </div>
                     {s.country && (
                       <div className="flex items-center gap-1.5 truncate text-[11px]">
                         <MapPin className="w-3 h-3 text-gray-400 shrink-0" />
@@ -1108,9 +1036,7 @@ export default function Suppliers() {
                     </button>
                   </th>
                   <th className="py-3 px-4">Partner</th>
-                  <th className="py-3 px-4">Category</th>
                   <th className="py-3 px-4">HU Sequence</th>
-                  <th className="py-3 px-4">Contact & Email</th>
                   <th className="py-3 px-4">Country</th>
                   <th className="py-3 px-4">Status</th>
                   <th className="py-3 px-4 text-right">Actions</th>
@@ -1172,13 +1098,8 @@ export default function Suppliers() {
                           </div>
                         </div>
                       </td>
-                      <td className="py-3 px-4 text-gray-700 font-medium">{s.category || "—"}</td>
                       <td className="py-3 px-4 font-mono font-bold text-gray-800">
                         {s.current_hu_number ? `#${s.current_hu_number}` : <span className="text-gray-400 font-normal">Not Set</span>}
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="truncate max-w-[200px] text-gray-700">{s.email}</div>
-                        {s.contact_name && <div className="text-[10px] text-gray-400">{s.contact_name}</div>}
                       </td>
                       <td className="py-3 px-4 text-gray-600">{s.country || "—"}</td>
                       <td className="py-3 px-4">
@@ -1396,68 +1317,6 @@ export default function Suppliers() {
 
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                    Official Email <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    placeholder="orders@supplier.com"
-                    className="w-full h-10 px-3 text-sm rounded-xl border border-gray-200 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                    Contact Person Name
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.contact_name}
-                    onChange={(e) => setFormData({ ...formData, contact_name: e.target.value })}
-                    placeholder="e.g. Wasitha Maheshitha"
-                    className="w-full h-10 px-3 text-sm rounded-xl border border-gray-200 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                    Phone Number
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    placeholder="+94 11 2345678"
-                    className="w-full h-10 px-3 text-sm rounded-xl border border-gray-200 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                    Category
-                  </label>
-                  <select
-                    value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    className="w-full h-10 px-3 text-sm rounded-xl border border-gray-200 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white"
-                  >
-                    <option value="Textiles & Garments">Textiles & Garments</option>
-                    <option value="Knit & Cotton Fabric">Knit & Cotton Fabric</option>
-                    <option value="Dyed & Printed Fabric">Dyed & Printed Fabric</option>
-                    <option value="Thread & Trims">Thread & Trims</option>
-                    <option value="Elastics & Fasteners">Elastics & Fasteners</option>
-                    <option value="Packaging & Labels">Packaging & Labels</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
                     Country
                   </label>
                   <input
@@ -1465,34 +1324,6 @@ export default function Suppliers() {
                     value={formData.country}
                     onChange={(e) => setFormData({ ...formData, country: e.target.value })}
                     placeholder="Sri Lanka"
-                    className="w-full h-10 px-3 text-sm rounded-xl border border-gray-200 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                    Tax ID / Business Reg
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.tax_id}
-                    onChange={(e) => setFormData({ ...formData, tax_id: e.target.value })}
-                    placeholder="PV-10293847"
-                    className="w-full h-10 px-3 text-sm font-mono rounded-xl border border-gray-200 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                    Operating Facility Address
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.address}
-                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    placeholder="Facility Address, Sri Lanka"
                     className="w-full h-10 px-3 text-sm rounded-xl border border-gray-200 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                   />
                 </div>
@@ -1658,99 +1489,12 @@ export default function Suppliers() {
 
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                    Official Email <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="w-full h-10 px-3 text-sm rounded-xl border border-gray-200 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                    Contact Person Name
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.contact_name}
-                    onChange={(e) => setFormData({ ...formData, contact_name: e.target.value })}
-                    className="w-full h-10 px-3 text-sm rounded-xl border border-gray-200 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                    Phone Number
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className="w-full h-10 px-3 text-sm rounded-xl border border-gray-200 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                    Category
-                  </label>
-                  <select
-                    value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    className="w-full h-10 px-3 text-sm rounded-xl border border-gray-200 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white"
-                  >
-                    <option value="Textiles & Garments">Textiles & Garments</option>
-                    <option value="Knit & Cotton Fabric">Knit & Cotton Fabric</option>
-                    <option value="Dyed & Printed Fabric">Dyed & Printed Fabric</option>
-                    <option value="Thread & Trims">Thread & Trims</option>
-                    <option value="Elastics & Fasteners">Elastics & Fasteners</option>
-                    <option value="Packaging & Labels">Packaging & Labels</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
                     Country
                   </label>
                   <input
                     type="text"
                     value={formData.country}
                     onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-                    className="w-full h-10 px-3 text-sm rounded-xl border border-gray-200 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                    Tax ID / Business Reg
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.tax_id}
-                    onChange={(e) => setFormData({ ...formData, tax_id: e.target.value })}
-                    placeholder="PV-10293847"
-                    className="w-full h-10 px-3 text-sm font-mono rounded-xl border border-gray-200 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                    Operating Facility Address
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.address}
-                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    placeholder="Facility Address, Sri Lanka"
                     className="w-full h-10 px-3 text-sm rounded-xl border border-gray-200 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                   />
                 </div>

@@ -394,50 +394,14 @@ async def save_purchase_order(
             resolved_supplier_id = supp.id
             if (not supp.name or supp.name.startswith("Supplier ")) and parsed_po.supplier_name:
                 supp.name = parsed_po.supplier_name.strip()
-            if full_supp_address and (
-                not supp.address
-                or any(bp in supp.address.lower() for bp in ["omega line", "sirio", "alpha", "benji"])
-                or "kaduwela road" in supp.address.lower()
-                or "western province" in supp.address.lower()
-            ):
-                supp.address = full_supp_address
-            if getattr(parsed_po, "supplier_email", None) and (
-                not supp.email
-                or "oniverse.local" in supp.email
-                or "supplier.com" in supp.email
-                or "gmail.com" in supp.email
-                or "yahoo.com" in supp.email
-            ):
-                supp.email = parsed_po.supplier_email.strip().lower()
             if parsed_po.country and (not supp.country or (supp.country == "Sri Lanka" and parsed_po.country != "Sri Lanka")):
                 supp.country = parsed_po.country.strip()
-            if parsed_po.phone:
-                supp.phone = parsed_po.phone.strip()
-            if parsed_po.tax_id:
-                supp.tax_id = parsed_po.tax_id.strip()
-            if supplier_contact and (
-                not supp.contact_name
-                or supp.contact_name in [
-                    "Duminda Silva",
-                    "Rohan Fernando",
-                    "Pradeep Kumara",
-                    "Operations Team",
-                    "KUSHANI TISSERA",
-                    "Chamika Sewwandi",
-                ]
-            ):
-                supp.contact_name = supplier_contact.strip()
         else:
             new_supp = Supplier(
                 supplier_code=parsed_po.supplier_code,
                 name=parsed_po.supplier_name.strip() if parsed_po.supplier_name else f"Supplier {parsed_po.supplier_code}",
-                email=supplier_email_val,
-                address=full_supp_address,
+                email=f"supplier_{supp_clean or 'partner'}@supplier.local",
                 country=parsed_po.country.strip() if parsed_po.country else "Sri Lanka",
-                phone=parsed_po.phone.strip() if parsed_po.phone else None,
-                tax_id=parsed_po.tax_id.strip() if parsed_po.tax_id else None,
-                contact_name=supplier_contact.strip() if supplier_contact else None,
-                category=parsed_po.category.strip() if parsed_po.category else "Textiles & Garments",
             )
             db.add(new_supp)
             await db.flush()
