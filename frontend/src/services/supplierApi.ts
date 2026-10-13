@@ -7,7 +7,7 @@ import type { SupplierItem } from "@/pages/Suppliers";
 export interface SupplierCreateParams {
   supplier_code: string;
   name: string;
-  email: string;
+  email?: string;
   contact_name?: string;
   phone?: string;
   address?: string;

@@ -162,7 +162,7 @@ class ChangePasswordRequest(BaseModel):
 class SupplierCreateRequest(BaseModel):
     supplier_code: str = Field(..., min_length=2, max_length=50)
     name: str = Field(..., min_length=2, max_length=200)
-    email: str
+    email: Optional[str] = None
     contact_name: Optional[str] = None
     phone: Optional[str] = None
     address: Optional[str] = None
@@ -297,153 +297,53 @@ async def _ensure_seed_and_email_sync(db: AsyncSession) -> None:
                     email_candidate = email_rec.from_address
 
             # Assemble clean physical factory/office address from SdPartner
-            addr_parts = []
-            if raw.get("address"):
-                clean_a = str(raw["address"]).strip().rstrip(",")
-                if clean_a.lower() not in BUYER_PLANT_NAMES and not any(bp in clean_a.lower() for bp in ["omega line", "sirio", "alpha apparel", "benji", "vavuniya"]):
-                    addr_parts.append(clean_a)
-            if raw.get("city") and str(raw["city"]).strip().upper() not in ["", "ZZZ"]:
-                addr_parts.append(str(raw["city"]).strip())
-            if raw.get("zipcode") and str(raw["zipcode"]).strip() not in ["", "0", "0000", "ZZZ"]:
-                addr_parts.append(str(raw["zipcode"]).strip())
-            address_candidate = ", ".join(addr_parts) if addr_parts else None
-
             country_candidate = raw.get("country") or "Sri Lanka"
-            tax_id_candidate = (
-                raw.get("tax_id")
-                or raw.get("vat")
-                or raw.get("fiscal_code")
-                or raw.get("vat_registration")
-                or None
-            )
-            phone_candidate = (
-                raw.get("phone")
-                or raw.get("phone_nr")
-                or raw.get("telephone")
-                or None
-            )
-            contact_candidate = (
-                raw.get("partner_contact")
-                or raw.get("supplier_contact")
-                or raw.get("contact_name")
-            )
-            if not contact_candidate and raw.get("contact_person"):
-                cp = str(raw["contact_person"]).strip()
-                if not any(bm in cp.lower() for bm in ["kushani", "chamika", "merchandiser", "buyer", "calzedonia"]):
-                    contact_candidate = cp
-            if not contact_candidate and email_candidate:
-                lp = str(email_candidate).split("@")[0]
-                toks = [t for t in re.split(r"[._\-+]+", lp) if t and not t.isdigit()]
-                generic_words = {"info", "sales", "order", "orders", "export", "admin", "support", "asn", "shipment", "purchase", "mail", "contact"}
-                if not any(gw in toks for gw in generic_words):
-                    if len(toks) >= 2 and all(len(t) >= 2 for t in toks):
-                        contact_candidate = " ".join(t.capitalize() for t in toks)
-                    elif len(toks) == 1 and len(toks[0]) >= 3:
-                        contact_candidate = toks[0].capitalize()
 
             # Registry fallbacks for real XML values if omitted in XML
             clean_code = s_clean
             if clean_code == "111924":
                 name_candidate = name_candidate or "ORIENT INTERNATIONAL HOLDING SHANGH FOREIGN TRADE CO.,LTD."
-                email_candidate = email_candidate or "detai_xu@vip.163.com"
-                contact_candidate = contact_candidate or "Detai Xu"
-                phone_candidate = phone_candidate or "+86 21 62798888"
-                tax_id_candidate = tax_id_candidate or "91310000132204567A"
-                address_candidate = address_candidate or "LOU SHAN GUAN ROAD, SHANGHAI, 200336"
                 country_candidate = "China"
             elif clean_code == "1122":
                 name_candidate = name_candidate or "HAYLEYS FABRIC PLC"
-                email_candidate = email_candidate or "asn.calzedonia@hayleysfabric.com"
-                contact_candidate = contact_candidate or "Wiraja Wijesundara"
-                phone_candidate = phone_candidate or "+94 34 229 7100"
-                tax_id_candidate = tax_id_candidate or "PV-10293847"
-                address_candidate = address_candidate or "NARTHUPANA ESTATE, NEBODA-SRI LANKA"
                 country_candidate = "Sri Lanka"
             elif clean_code == "18194":
                 name_candidate = name_candidate or "COATS THREAD EXPORTS (PRIVATE) LIMITED"
-                email_candidate = email_candidate or "suhani.athukorala@coats.com"
-                contact_candidate = contact_candidate or "Suhani Athukorala"
-                phone_candidate = phone_candidate or "+94 11 249 1100"
-                tax_id_candidate = tax_id_candidate or "PV-88776655"
-                address_candidate = address_candidate or "NO. 123, BAUDDHALOKA MAWATHA, P.O. BOX 250, COLOMBO"
                 country_candidate = "Sri Lanka"
             elif clean_code == "80589":
                 name_candidate = name_candidate or "SOUTH ASIA TEXTILES (PRIVATE) LIMITED"
-                email_candidate = email_candidate or "chathurika.nuwarapaksha@satextile.com"
-                contact_candidate = contact_candidate or "Chathurika Nuwarapaksha"
-                phone_candidate = phone_candidate or "+94 11 482 1000"
-                tax_id_candidate = tax_id_candidate or "PV-44332211"
-                address_candidate = address_candidate or "70,Felix R Dias Bandaranayake Mawatha, Pugoda"
                 country_candidate = "Sri Lanka"
-            category_candidate = raw.get("category") or "Textiles & Garments"
 
             if not existing:
-                # Option 3: Newly auto-discovered from incoming Iungo email!
+                # Newly auto-discovered from incoming PO/email: only gather name and country
                 new_s = Supplier(
                     supplier_code=s_padded,
                     name=str(name_candidate).strip() if name_candidate else f"Supplier #{s_code_str}",
-                    email=str(email_candidate).strip().lower() if email_candidate else f"supplier_{s_clean or 'partner'}@oniverse.local",
-                    contact_name=str(contact_candidate).strip() if contact_candidate else None,
-                    phone=str(phone_candidate).strip() if phone_candidate else None,
+                    email=f"supplier_{s_clean or 'partner'}@supplier.local",
                     country=str(country_candidate).strip(),
-                    category=str(category_candidate).strip(),
-                    tax_id=str(tax_id_candidate).strip() if tax_id_candidate else None,
-                    address=str(address_candidate).strip() if address_candidate else None,
                     is_active=False,
                 )
                 db.add(new_s)
                 mark_supplier_discovered(
                     supplier_code=new_s.supplier_code,
-                    detected_via="Iungo System Email",
-                    email_subject=email_rec.subject if email_rec else "Inbound Iungo Order",
-                    extracted_data=raw,
+                    detected_via="System PO Ingestion",
+                    email_subject=email_rec.subject if email_rec else "Inbound Order",
+                    extracted_data={"supplier_code": s_padded, "name": new_s.name, "country": new_s.country},
                 )
             else:
-                # Enrich existing supplier details with real XML data, replacing any dummy/placeholder values
+                # Only enrich name and country from POs if missing
                 if name_candidate and (not existing.name or existing.name.startswith("Supplier ")):
                     existing.name = str(name_candidate).strip()
-                if email_candidate and (
-                    not existing.email
-                    or "oniverse.local" in existing.email
-                    or "supplier.com" in existing.email
-                    or "gmail.com" in existing.email
-                    or "yahoo.com" in existing.email
-                ):
-                    existing.email = str(email_candidate).strip().lower()
-                if address_candidate and (
-                    not existing.address
-                    or existing.address in ["Omega Line Ltd", "Sirio Ltd", "Alpha Apparels", "Benji Ltd"]
-                    or any(bp in existing.address.lower() for bp in ["omega line", "sirio ltd", "plant"])
-                    or "kaduwela road" in existing.address.lower()
-                    or "western province" in existing.address.lower()
-                ):
-                    existing.address = str(address_candidate).strip()
                 if country_candidate and (
                     not existing.country
                     or (existing.country == "Sri Lanka" and country_candidate != "Sri Lanka")
                 ):
                     existing.country = str(country_candidate).strip()
-                if tax_id_candidate:
-                    existing.tax_id = str(tax_id_candidate).strip()
-                if phone_candidate:
-                    existing.phone = str(phone_candidate).strip()
-                if contact_candidate and (
-                    not existing.contact_name
-                    or existing.contact_name in [
-                        "Duminda Silva",
-                        "Rohan Fernando",
-                        "Pradeep Kumara",
-                        "Operations Team",
-                        "KUSHANI TISSERA",
-                        "Chamika Sewwandi",
-                    ]
-                ):
-                    existing.contact_name = str(contact_candidate).strip()
                 mark_supplier_discovered(
                     supplier_code=existing.supplier_code,
-                    detected_via="Iungo System Email",
-                    email_subject=email_rec.subject if email_rec else "Inbound Iungo Order",
-                    extracted_data=raw,
+                    detected_via="System PO Ingestion",
+                    email_subject=email_rec.subject if email_rec else "Inbound Order",
+                    extracted_data={"supplier_code": existing.supplier_code, "name": existing.name, "country": existing.country},
                 )
     except Exception as e:
         logger.warning("Error auto-syncing suppliers from email parsed_data: %s", e)
@@ -588,12 +488,7 @@ async def lookup_supplier_xml(
 
     # Aggregate best available fields from all parsed XML records
     best_name = None
-    best_email = None
-    best_contact = None
-    best_phone = None
-    best_address = None
     best_country = None
-    best_tax_id = None
     best_source_file = None
 
     for pd in all_pd:
@@ -606,58 +501,10 @@ async def lookup_supplier_xml(
         if s_name and not best_name and not str(s_name).startswith("Supplier #"):
             best_name = str(s_name).strip()
 
-        # Email
-        s_email = raw.get("supplier_email") or raw.get("partner_email") or raw.get("email")
-        if s_email and not best_email:
-            em = str(s_email).strip().lower()
-            if not any(bd in em for bd in ["@sirioltd.org", "@calzedonia.it", "@oniverse.com", "@oniverse.local"]):
-                best_email = em
-
-        # Contact person
-        c_name = raw.get("partner_contact") or raw.get("supplier_contact")
-        if not c_name and raw.get("contact_person"):
-            cp = str(raw["contact_person"]).strip()
-            if not any(bm in cp.lower() for bm in ["kushani", "chamika", "merchandiser", "buyer", "calzedonia"]):
-                c_name = cp
-        if not c_name and s_email:
-            lp = str(s_email).split("@")[0]
-            toks = [t for t in re.split(r"[._\-+]+", lp) if t and not t.isdigit()]
-            generic_words = {"info", "sales", "order", "orders", "export", "admin", "support", "asn", "shipment", "purchase", "mail", "contact"}
-            if not any(gw in toks for gw in generic_words):
-                if len(toks) >= 2 and all(len(t) >= 2 for t in toks):
-                    c_name = " ".join(t.capitalize() for t in toks)
-                elif len(toks) == 1 and len(toks[0]) >= 3:
-                    c_name = toks[0].capitalize()
-        if c_name and not best_contact:
-            best_contact = c_name
-
-        # Phone
-        s_phone = raw.get("phone") or raw.get("phone_nr") or raw.get("telephone")
-        if s_phone and not best_phone and str(s_phone).strip():
-            best_phone = str(s_phone).strip()
-
-        # Tax ID
-        s_tax = raw.get("tax_id") or raw.get("vat") or raw.get("fiscal_code")
-        if s_tax and not best_tax_id and str(s_tax).strip():
-            best_tax_id = str(s_tax).strip()
-
         # Country
         s_country = raw.get("country")
         if s_country and not best_country and str(s_country).strip():
             best_country = str(s_country).strip()
-
-        # Address
-        addr_parts = []
-        if raw.get("address"):
-            ca = str(raw["address"]).strip().rstrip(",")
-            if not any(bp in ca.lower() for bp in ["omega line", "sirio", "alpha apparel", "benji", "vavuniya"]):
-                addr_parts.append(ca)
-        if raw.get("city") and str(raw["city"]).strip().upper() not in ["", "ZZZ"]:
-            addr_parts.append(str(raw["city"]).strip())
-        if raw.get("zipcode") and str(raw["zipcode"]).strip() not in ["", "0", "0000", "ZZZ"]:
-            addr_parts.append(str(raw["zipcode"]).strip())
-        if addr_parts and not best_address:
-            best_address = ", ".join(addr_parts)
 
         if not best_source_file and raw.get("source_filename"):
             best_source_file = raw.get("source_filename")
@@ -666,67 +513,31 @@ async def lookup_supplier_xml(
     if existing_supp:
         if not best_name and existing_supp.name:
             best_name = existing_supp.name
-        if not best_email and existing_supp.email:
-            best_email = existing_supp.email
-        if not best_contact and existing_supp.contact_name:
-            best_contact = existing_supp.contact_name
-        if not best_phone and existing_supp.phone:
-            best_phone = existing_supp.phone
-        if not best_address and existing_supp.address:
-            best_address = existing_supp.address
         if not best_country and existing_supp.country:
             best_country = existing_supp.country
-        if not best_tax_id and existing_supp.tax_id:
-            best_tax_id = existing_supp.tax_id
 
     # Verified fallbacks for known partner codes
     if code_clean == "111924":
         best_name = best_name or "ORIENT INTERNATIONAL HOLDING SHANGH FOREIGN TRADE CO.,LTD."
-        best_email = best_email or "detai_xu@vip.163.com"
-        best_phone = best_phone or "+86 21 62798888"
-        best_tax_id = best_tax_id or "91310000132204567A"
-        best_contact = best_contact or "Detai Xu"
-        best_address = best_address or "LOU SHAN GUAN ROAD, SHANGHAI, 200336"
         best_country = best_country or "China"
     elif code_clean == "1122":
         best_name = best_name or "HAYLEYS FABRIC PLC"
-        best_email = best_email or "asn.calzedonia@hayleysfabric.com"
-        best_phone = best_phone or "+94 34 229 7100"
-        best_tax_id = best_tax_id or "PV-10293847"
-        best_contact = best_contact or "Wiraja Wijesundara"
-        best_address = best_address or "NARTHUPANA ESTATE, NEBODA-SRI LANKA"
         best_country = best_country or "Sri Lanka"
     elif code_clean == "18194":
         best_name = best_name or "COATS THREAD EXPORTS (PRIVATE) LIMITED"
-        best_email = best_email or "suhani.athukorala@coats.com"
-        best_phone = best_phone or "+94 11 249 1100"
-        best_tax_id = best_tax_id or "PV-88776655"
-        best_contact = best_contact or "Suhani Athukorala"
-        best_address = best_address or "NO. 123, BAUDDHALOKA MAWATHA, P.O. BOX 250, COLOMBO"
         best_country = best_country or "Sri Lanka"
     elif code_clean == "80589":
         best_name = best_name or "SOUTH ASIA TEXTILES (PRIVATE) LIMITED"
-        best_email = best_email or "chathurika.nuwarapaksha@satextile.com"
-        best_phone = best_phone or "+94 11 482 1000"
-        best_tax_id = best_tax_id or "PV-44332211"
-        best_contact = best_contact or "Chathurika Nuwarapaksha"
-        best_address = best_address or "70,Felix R Dias Bandaranayake Mawatha, Pugoda"
         best_country = best_country or "Sri Lanka"
 
-    if not all_pd and not existing_supp and not best_name and not best_phone and not best_tax_id:
+    if not all_pd and not existing_supp and not best_name:
         return {"found": False, "supplier_code": code_padded}
 
     return {
         "found": True,
         "supplier_code": code_padded,
         "name": best_name or f"Supplier #{code_padded}",
-        "email": best_email or f"supplier_{code_clean}@oniverse.local",
-        "contact_name": best_contact or "",
-        "phone": best_phone or "",
-        "address": best_address or "",
         "country": best_country or ("China" if code_clean == "111924" else "Sri Lanka"),
-        "tax_id": best_tax_id or "",
-        "category": "Textiles & Garments",
         "source_filename": best_source_file or "Inbound XML",
     }
 
@@ -754,12 +565,8 @@ async def create_supplier(
     xml_data = await lookup_supplier_xml(payload.supplier_code.strip(), db)
 
     supp_name = payload.name.strip() if payload.name else (xml_data.get("name") if xml_data.get("found") else f"Supplier #{payload.supplier_code}")
-    supp_email = payload.email.strip().lower() if payload.email else (xml_data.get("email") if xml_data.get("found") else f"supplier_{payload.supplier_code}@oniverse.local")
-    supp_contact = payload.contact_name.strip() if payload.contact_name else (xml_data.get("contact_name") if xml_data.get("found") else None)
-    supp_phone = payload.phone.strip() if payload.phone else (xml_data.get("phone") if xml_data.get("found") else None)
-    supp_address = payload.address.strip() if payload.address else (xml_data.get("address") if xml_data.get("found") else None)
+    supp_email = payload.email.strip().lower() if payload.email else f"supplier_{payload.supplier_code.strip().lower()}@supplier.local"
     supp_country = payload.country.strip() if payload.country else (xml_data.get("country") if xml_data.get("found") else "Sri Lanka")
-    supp_tax_id = payload.tax_id.strip() if payload.tax_id else (xml_data.get("tax_id") if xml_data.get("found") else None)
 
     has_hu = bool(payload.current_hu_number and payload.current_hu_number.strip())
     hu_str = payload.current_hu_number.strip() if has_hu else None
@@ -768,11 +575,11 @@ async def create_supplier(
         supplier_code=payload.supplier_code.strip(),
         name=supp_name,
         email=supp_email,
-        contact_name=supp_contact,
-        phone=supp_phone,
-        address=supp_address,
+        contact_name=payload.contact_name.strip() if payload.contact_name else None,
+        phone=payload.phone.strip() if payload.phone else None,
+        address=payload.address.strip() if payload.address else None,
         country=supp_country,
-        tax_id=supp_tax_id,
+        tax_id=payload.tax_id.strip() if payload.tax_id else None,
         category=payload.category.strip() if payload.category else "Textiles & Garments",
         profile_picture_url=payload.profile_picture_url.strip() if payload.profile_picture_url else None,
         current_hu_number=hu_str,

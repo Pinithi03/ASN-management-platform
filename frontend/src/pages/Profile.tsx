@@ -1,14 +1,9 @@
 import { useState, useRef } from "react";
 import {
   Building2,
-  Mail,
-  Phone,
-  MapPin,
   ShieldCheck,
   Globe,
   Tag,
-  UserCheck,
-  FileText,
   Boxes,
   Lock,
   AlertCircle,
@@ -523,7 +518,7 @@ export default function Profile() {
           </div>
 
           {/* Profile Attributes Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {/* Field 1: Registered Company Name */}
             <div className="p-4 rounded-xl border border-gray-200/80 bg-gray-50/60 relative group">
               <div className="mb-1.5">
@@ -555,63 +550,7 @@ export default function Profile() {
               <p className="text-[11px] text-emerald-700/80 mt-1">Unique supply chain routing identifier</p>
             </div>
 
-            {/* Field 3: Official Orders Email */}
-            <div className="p-4 rounded-xl border border-gray-200/80 bg-gray-50/60 relative">
-              <div className="mb-1.5">
-                <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                  Official Orders Email
-                </span>
-              </div>
-              <div className="text-sm font-medium text-gray-900 flex items-center gap-2">
-                <Mail className="w-4 h-4 text-gray-500 shrink-0" />
-                <span className="truncate font-mono text-xs font-semibold">{matchedSupplier.email}</span>
-              </div>
-              <p className="text-[11px] text-gray-400 mt-1">Destination for automated PO notifications</p>
-            </div>
-
-            {/* Field 4: Primary Contact Person */}
-            <div className="p-4 rounded-xl border border-gray-200/80 bg-gray-50/60 relative">
-              <div className="mb-1.5">
-                <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                  Primary Contact Person
-                </span>
-              </div>
-              <div className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                <UserCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>{matchedSupplier.contact_name || "Not Specified"}</span>
-              </div>
-              <p className="text-[11px] text-gray-400 mt-1">Designated account liaison officer</p>
-            </div>
-
-            {/* Field 5: Direct Phone / Mobile */}
-            <div className="p-4 rounded-xl border border-gray-200/80 bg-gray-50/60 relative">
-              <div className="mb-1.5">
-                <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                  Direct Phone / Hotline
-                </span>
-              </div>
-              <div className="text-sm font-medium text-gray-900 flex items-center gap-2">
-                <Phone className="w-4 h-4 text-gray-500 shrink-0" />
-                <span className="font-mono text-xs">{matchedSupplier.phone || "Not Specified"}</span>
-              </div>
-              <p className="text-[11px] text-gray-400 mt-1">Dispatches & order coordination</p>
-            </div>
-
-            {/* Field 6: Manufacturing Category */}
-            <div className="p-4 rounded-xl border border-gray-200/80 bg-gray-50/60 relative">
-              <div className="mb-1.5">
-                <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                  Manufacturing Category
-                </span>
-              </div>
-              <div className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                <Tag className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>{matchedSupplier.category || "Textiles & Garments"}</span>
-              </div>
-              <p className="text-[11px] text-gray-400 mt-1">Raw material & textile classification</p>
-            </div>
-
-            {/* Field 7: Country / Region */}
+            {/* Field 3: Country / Region */}
             <div className="p-4 rounded-xl border border-gray-200/80 bg-gray-50/60 relative">
               <div className="mb-1.5">
                 <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
@@ -623,34 +562,6 @@ export default function Profile() {
                 <span>{matchedSupplier.country || "Sri Lanka"}</span>
               </div>
               <p className="text-[11px] text-gray-400 mt-1">Operating manufacturing jurisdiction</p>
-            </div>
-
-            {/* Field 8: Business Registration / Tax ID */}
-            <div className="p-4 rounded-xl border border-gray-200/80 bg-gray-50/60 relative">
-              <div className="mb-1.5">
-                <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                  Business Reg / Tax ID
-                </span>
-              </div>
-              <div className="text-sm font-mono font-bold text-gray-900 flex items-center gap-2">
-                <FileText className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>{matchedSupplier.tax_id || "PV-10293847"}</span>
-              </div>
-              <p className="text-[11px] text-gray-400 mt-1">Corporate statutory registration number</p>
-            </div>
-
-            {/* Field 9: Facility Address */}
-            <div className="p-4 rounded-xl border border-gray-200/80 bg-gray-50/60 relative">
-              <div className="mb-1.5">
-                <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                  Facility / Operating Address
-                </span>
-              </div>
-              <div className="text-sm font-medium text-gray-900 flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-gray-500 shrink-0" />
-                <span className="truncate">{matchedSupplier.address || "Sri Lanka Manufacturing Plant"}</span>
-              </div>
-              <p className="text-[11px] text-gray-400 mt-1">Physical plant dispatch terminal</p>
             </div>
           </div>
 
