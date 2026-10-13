@@ -459,6 +459,15 @@ async def create_shipment_from_excel(
         group_code = "OMEGALINENEW"
 
     # ─── 3. Generate or use provided 20-digit Handling Units (HUs) ──
+    prefix = "1" + actual_supp_code.lstrip("0").zfill(9)
+    for r in validation_res.rows:
+        if getattr(r, "hu_number", None) and str(r.hu_number).strip():
+            clean = re.sub(r"\D", "", str(r.hu_number).strip())
+            if len(clean) == 20:
+                r.hu_number = clean
+            elif 0 < len(clean) <= 10:
+                r.hu_number = f"{prefix}{clean.zfill(10)}"
+
     total_cartons = len(validation_res.rows)
     provided_hus = [
         r.hu_number.strip()
