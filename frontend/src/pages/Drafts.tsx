@@ -89,14 +89,14 @@ export default function Drafts() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-6">
       {/* ─── HEADER ────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl font-bold tracking-tight text-gray-900">Saved Drafts</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-semibold text-gray-900">Saved Drafts</h1>
             {totalCount > 0 && (
-              <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-blue-100 text-blue-800 border border-blue-200">
+              <span className="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 border border-blue-200">
                 {totalCount} Active
               </span>
             )}
@@ -128,55 +128,85 @@ export default function Drafts() {
       </div>
 
       {/* ─── TABS FILTER ───────────────────────────────────────── */}
-      <div className="flex items-center gap-2 border-b border-gray-200 pb-2">
+      <div className="flex items-center gap-1 border-b border-gray-200">
         <button
           type="button"
           onClick={() => setFilterTab("all")}
           className={cn(
-            "px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer",
+            "flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-all cursor-pointer -mb-px",
             filterTab === "all"
-              ? "bg-gray-900 text-white shadow-2xs"
-              : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+              ? "border-blue-600 text-blue-600"
+              : "border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300"
           )}
         >
-          All Drafts ({totalCount})
+          All Drafts
+          <span
+            className={cn(
+              "px-2 py-0.5 text-[11px] rounded-full font-bold",
+              filterTab === "all"
+                ? "bg-blue-50 text-blue-700 border border-blue-200"
+                : "bg-gray-100 text-gray-600"
+            )}
+          >
+            {totalCount}
+          </span>
         </button>
         <button
           type="button"
           onClick={() => setFilterTab("manual")}
           className={cn(
-            "inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer",
+            "flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-all cursor-pointer -mb-px",
             filterTab === "manual"
-              ? "bg-blue-600 text-white shadow-2xs"
-              : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+              ? "border-blue-600 text-blue-600"
+              : "border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300"
           )}
         >
-          <Layers className="w-3.5 h-3.5" /> Manual Packing ({manualDrafts.length})
+          <Layers className="w-3.5 h-3.5" />
+          Manual Packing
+          <span
+            className={cn(
+              "px-2 py-0.5 text-[11px] rounded-full font-bold",
+              filterTab === "manual"
+                ? "bg-blue-50 text-blue-700 border border-blue-200"
+                : "bg-gray-100 text-gray-600"
+            )}
+          >
+            {manualDrafts.length}
+          </span>
         </button>
         <button
           type="button"
           onClick={() => setFilterTab("excel")}
           className={cn(
-            "inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer",
+            "flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-all cursor-pointer -mb-px",
             filterTab === "excel"
-              ? "bg-emerald-600 text-white shadow-2xs"
-              : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+              ? "border-emerald-600 text-emerald-600"
+              : "border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300"
           )}
         >
-          <FileSpreadsheet className="w-3.5 h-3.5" /> Excel Drops ({excelDrafts.length})
+          <FileSpreadsheet className="w-3.5 h-3.5" />
+          Excel Drops
+          <span
+            className={cn(
+              "px-2 py-0.5 text-[11px] rounded-full font-bold",
+              filterTab === "excel"
+                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                : "bg-gray-100 text-gray-600"
+            )}
+          >
+            {excelDrafts.length}
+          </span>
         </button>
       </div>
 
       {/* ─── DRAFTS LIST ───────────────────────────────────────── */}
       {totalCount === 0 ? (
-        <div className="flex flex-col items-center justify-center p-12 bg-white rounded-2xl border border-gray-200 text-center shadow-xs">
-          <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center text-gray-400 mb-4">
-            <FolderArchive className="w-7 h-7" />
-          </div>
-          <h3 className="text-base font-bold text-gray-900">No saved drafts</h3>
-          <p className="text-xs text-gray-500 max-w-md mt-1">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-16 text-center">
+          <FolderArchive className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+          <p className="font-semibold text-gray-700 text-base">No saved drafts</p>
+          <p className="text-xs text-gray-400 mt-1 max-w-md mx-auto">
             When you enter carton quantities in the Manual Process or upload a packing list in Excel Drop,
-            your progress can be saved safely here to resume at any time.
+            your progress is saved safely here to resume at any time.
           </p>
         </div>
       ) : (
