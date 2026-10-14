@@ -262,8 +262,13 @@ def _parse_sd_data_slice_all(root: etree._Element, filename: str) -> list[Parsed
             po.all_supplier_emails = partner_all_emails
             po.contact_person = (
                 _xpath_text(order_elem, ".//ContactPerson")
-                or partner_contact
                 or _xpath_text(root, ".//ContactPerson")
+                or partner_contact
+                or ""
+            ).strip()
+            po.contact_email = (
+                _xpath_text(order_elem, ".//AuxHead1")
+                or _xpath_text(root, ".//AuxHead1")
                 or ""
             ).strip()
             po.payment = (_xpath_text(order_elem, ".//Payment") or _xpath_text(root, ".//Payment") or "").strip()
@@ -421,8 +426,17 @@ def _parse_sd_data_slice_all(root: etree._Element, filename: str) -> list[Parsed
                 po.country = partner_country
                 po.phone = partner_phone
                 po.tax_id = partner_tax_id
-                po.category = partner_category
-                po.contact_person = partner_contact or ""
+                po.contact_person = (
+                    _xpath_text(slip_elem, ".//ContactPerson")
+                    or _xpath_text(root, ".//ContactPerson")
+                    or partner_contact
+                    or ""
+                ).strip()
+                po.contact_email = (
+                    _xpath_text(slip_elem, ".//AuxHead1")
+                    or _xpath_text(root, ".//AuxHead1")
+                    or ""
+                ).strip()
 
                 first_order_date = ""
                 for le in lines:
@@ -508,6 +522,7 @@ def _parse_generic(root: etree._Element, filename: str) -> ParsedPO:
     """Parse generic PurchaseOrder XML format."""
     po = ParsedPO(raw_source="xml", source_filename=filename)
     po.notations = (_xpath_text(root, ".//AuxHead8") or "").strip()
+    po.contact_email = (_xpath_text(root, ".//AuxHead1") or "").strip()
 
     po.po_number = normalize_po_number(
         _xpath_text(root, ".//PurchaseOrderNumber")

@@ -88,6 +88,7 @@ class ParsedPO:
     delivery_date: str = ""
     destination: str = ""
     contact_person: str = ""       # <ContactPerson> from XML
+    contact_email: str = ""        # <AuxHead1> from XML
     delivery_address: str = ""     # <DeliveryAddress> from XML
     payment: str = ""              # <Payment> from XML
     # Supplier address & contact details (from SdPartner / SdCompanyHeader)

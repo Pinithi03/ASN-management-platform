@@ -48,6 +48,22 @@ const STATUS_BADGES: Record<string, string> = {
   CANCELLED: "bg-red-50 text-red-700 border border-red-200",
 };
 
+const formatDateDisplay = (dateStr?: string | null) => {
+  if (!dateStr) return "—";
+  try {
+    const s = dateStr.trim();
+    if (/^\d{2}-\d{2}-\d{4}$/.test(s)) {
+      const [d, m, y] = s.split("-");
+      return format(new Date(parseInt(y), parseInt(m) - 1, parseInt(d)), "MMM d, yyyy");
+    }
+    const d = new Date(s);
+    if (isNaN(d.getTime())) return s;
+    return format(d, "MMM d, yyyy");
+  } catch {
+    return dateStr;
+  }
+};
+
 interface POLineItemRow {
   line_number: string;
   item_code: string;
@@ -461,11 +477,11 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                     </button>
                   </th>
                   <th className="px-4 py-3.5">PO Number</th>
-                  <th className="px-4 py-3.5">Client / Destination</th>
-                  <th className="px-4 py-3.5">Item Code</th>
-                  <th className="px-4 py-3.5">Notations</th>
-                  <th className="px-4 py-3.5 text-right">Quantity</th>
+                  <th className="px-4 py-3.5">Order Date</th>
                   <th className="px-4 py-3.5">Delivery Date</th>
+                  <th className="px-4 py-3.5">Contact</th>
+                  <th className="px-4 py-3.5">Notation</th>
+                  <th className="px-4 py-3.5 text-right">Quantity</th>
                   <th className="px-4 py-3.5">Status</th>
                 </tr>
               </thead>
@@ -518,29 +534,62 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                             isSupplier ? "group-hover:text-emerald-600" : "group-hover:text-blue-600"
                           )}
                         >
-                          <span>{po.po_number || " "}</span>
+                          <span>{po.po_number || "—"}</span>
                         </div>
                       </td>
 
-                      {/* Client / Destination */}
+                      {/* Order Date */}
+                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
+                          <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                          <span>{formatDateDisplay(po.order_date || (po.extra_data as any)?.order_date)}</span>
+                        </div>
+                      </td>
+
+                      {/* Delivery Date */}
+                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
+                          <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                          <span>{formatDateDisplay(po.delivery_date)}</span>
+                        </div>
+                      </td>
+
+                      {/* Contact (<ContactPerson> on top, <AuxHead1> email underneath) */}
                       <td className="px-4 py-3 text-gray-700">
-                        <div className="font-medium text-gray-900">{po.destination || po.client_code || " "}</div>
-                        {po.client_code && po.destination && po.client_code !== po.destination && (
-                          <div className="text-xs text-gray-400">{po.client_code}</div>
+                        {po.contact_person || (po.extra_data as any)?.contact_person ? (
+                          <div>
+                            <div className="font-medium text-gray-900 leading-tight">
+                              {po.contact_person || (po.extra_data as any)?.contact_person}
+                            </div>
+                            {(po.contact_email || (po.extra_data as any)?.contact_email) && (
+                              <a
+                                href={`mailto:${po.contact_email || (po.extra_data as any)?.contact_email}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="text-xs text-blue-600 hover:underline hover:text-blue-700 block truncate max-w-[220px] mt-0.5"
+                                title={po.contact_email || (po.extra_data as any)?.contact_email}
+                              >
+                                {po.contact_email || (po.extra_data as any)?.contact_email}
+                              </a>
+                            )}
+                          </div>
+                        ) : (po.contact_email || (po.extra_data as any)?.contact_email) ? (
+                          <a
+                            href={`mailto:${po.contact_email || (po.extra_data as any)?.contact_email}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-xs text-blue-600 hover:underline hover:text-blue-700 block truncate max-w-[220px]"
+                            title={po.contact_email || (po.extra_data as any)?.contact_email}
+                          >
+                            {po.contact_email || (po.extra_data as any)?.contact_email}
+                          </a>
+                        ) : (
+                          <span className="text-gray-400">—</span>
                         )}
                       </td>
 
-                      {/* Item Code */}
-                      <td className="px-4 py-3 text-gray-700">
-                        <div className="font-semibold text-gray-900 font-mono">
-                          {po.item_code || ((po.extra_data as any)?.items?.[0]?.item_code) || po.style_number || "—"}
-                        </div>
-                      </td>
-
-                      {/* Notations */}
-                      <td className="px-4 py-3 text-gray-700">
+                      {/* Notation */}
+                      <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
                         {po.notations || (po.extra_data as any)?.notations || (po.extra_data as any)?.aux_head8 ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
                             {po.notations || (po.extra_data as any)?.notations || (po.extra_data as any)?.aux_head8}
                           </span>
                         ) : (
@@ -550,15 +599,7 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
 
                       {/* Quantity */}
                       <td className="px-4 py-3 text-right font-mono font-semibold text-gray-900">
-                        {po.quantity?.toLocaleString() ?? " "}
-                      </td>
-
-                      {/* Delivery Date */}
-                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
-                        <div className="flex items-center gap-1.5">
-                          <Calendar className="w-3.5 h-3.5 text-gray-400" />
-                          {po.delivery_date ? format(new Date(po.delivery_date), "MMM d, yyyy") : " "}
-                        </div>
+                        {po.quantity?.toLocaleString() ?? "—"}
                       </td>
 
                       {/* Status */}
@@ -678,11 +719,14 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                     <span>
                       Plant: <strong className="text-gray-800 font-medium">{plantInfo.fullName}</strong>
                     </span>
-                    {(activePO.item_code || ((activePO.extra_data as any)?.items?.[0]?.item_code) || activePO.style_number) && (
+                    {(activePO.contact_person || (activePO.extra_data as any)?.contact_person) && (
                       <>
                         <span className="text-gray-300">•</span>
                         <span>
-                          Item Code: <strong className="text-gray-800 font-mono">{activePO.item_code || ((activePO.extra_data as any)?.items?.[0]?.item_code) || activePO.style_number}</strong>
+                          Contact: <strong className="text-gray-800 font-medium">{activePO.contact_person || (activePO.extra_data as any)?.contact_person}</strong>
+                          {(activePO.contact_email || (activePO.extra_data as any)?.contact_email) && (
+                            <span className="text-gray-500 ml-1">({activePO.contact_email || (activePO.extra_data as any)?.contact_email})</span>
+                          )}
                         </span>
                       </>
                     )}
@@ -690,7 +734,7 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                       <>
                         <span className="text-gray-300">•</span>
                         <span>
-                          Notations: <strong className="text-amber-800 font-semibold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">{activePO.notations || (activePO.extra_data as any)?.notations || (activePO.extra_data as any)?.aux_head8}</strong>
+                          Notation: <strong className="text-amber-800 font-semibold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">{activePO.notations || (activePO.extra_data as any)?.notations || (activePO.extra_data as any)?.aux_head8}</strong>
                         </span>
                       </>
                     )}

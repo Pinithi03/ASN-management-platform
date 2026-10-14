@@ -80,9 +80,12 @@ export interface PurchaseOrder {
   id: string;
   company_id: string;
   po_number: string | null;
+  order_date?: string | null;
   client_code: string | null;
   style_number: string | null;
   item_code?: string | null;
+  contact_person?: string | null;
+  contact_email?: string | null;
   notations?: string | null;
   description: string | null;
   quantity: number | null;

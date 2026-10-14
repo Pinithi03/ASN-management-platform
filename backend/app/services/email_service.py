@@ -284,6 +284,9 @@ async def save_parsed_data(
             "total_quantity": parsed_po.total_quantity,
             "total_value": parsed_po.total_value,
             "line_count": len(parsed_po.line_items),
+            "order_date": parsed_po.order_date or "",
+            "contact_person": parsed_po.contact_person or "",
+            "contact_email": getattr(parsed_po, "contact_email", "") or "",
             "notations": getattr(parsed_po, "notations", "") or "",
         }
         existing_pd.po_number_extracted = clean_po or None
@@ -308,6 +311,9 @@ async def save_parsed_data(
             "total_quantity": parsed_po.total_quantity,
             "total_value": parsed_po.total_value,
             "line_count": len(parsed_po.line_items),
+            "order_date": parsed_po.order_date or "",
+            "contact_person": parsed_po.contact_person or "",
+            "contact_email": getattr(parsed_po, "contact_email", "") or "",
             "notations": getattr(parsed_po, "notations", "") or "",
         },
         validation_errors=[],
@@ -440,6 +446,9 @@ async def save_purchase_order(
     notations_str = getattr(parsed_po, "notations", "") or ""
     extra_info = {
         "order_type": order_type_str,
+        "order_date": parsed_po.order_date or "",
+        "contact_person": parsed_po.contact_person or "",
+        "contact_email": getattr(parsed_po, "contact_email", "") or "",
         "notations": notations_str,
         "items": items_data,
     }

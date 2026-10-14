@@ -42,9 +42,12 @@ class POListItem(BaseModel):
     company_id: str
     supplier_id: Optional[str] = None
     po_number: Optional[str] = None
+    order_date: Optional[str] = None
     client_code: Optional[str] = None
     style_number: Optional[str] = None
     item_code: Optional[str] = None
+    contact_person: Optional[str] = None
+    contact_email: Optional[str] = None
     notations: Optional[str] = None
     description: Optional[str] = None
     quantity: Optional[int] = None
@@ -67,9 +70,12 @@ class PODetailResponse(BaseModel):
     id: str
     company_id: str
     po_number: Optional[str] = None
+    order_date: Optional[str] = None
     client_code: Optional[str] = None
     style_number: Optional[str] = None
     item_code: Optional[str] = None
+    contact_person: Optional[str] = None
+    contact_email: Optional[str] = None
     notations: Optional[str] = None
     description: Optional[str] = None
     quantity: Optional[int] = None
@@ -206,12 +212,15 @@ async def list_purchase_orders(
                 company_id=str(r.company_id),
                 supplier_id=str(r.supplier_id) if r.supplier_id else None,
                 po_number=r.po_number,
+                order_date=(r.extra_data.get("order_date") if r.extra_data else None),
                 client_code=r.client_code,
                 style_number=r.style_number,
                 item_code=(
                     (r.extra_data.get("items", [{}])[0].get("item_code") if r.extra_data and r.extra_data.get("items") else None)
                     or r.style_number
                 ),
+                contact_person=(r.extra_data.get("contact_person") if r.extra_data else None),
+                contact_email=(r.extra_data.get("contact_email") if r.extra_data else None),
                 notations=(r.extra_data.get("notations") if r.extra_data else None),
                 description=r.description,
                 quantity=r.quantity,
@@ -479,12 +488,15 @@ async def get_purchase_order(
         id=str(po.id),
         company_id=str(po.company_id),
         po_number=po.po_number,
+        order_date=(po.extra_data.get("order_date") if po.extra_data else None),
         client_code=po.client_code,
         style_number=po.style_number,
         item_code=(
             (po.extra_data.get("items", [{}])[0].get("item_code") if po.extra_data and po.extra_data.get("items") else None)
             or po.style_number
         ),
+        contact_person=(po.extra_data.get("contact_person") if po.extra_data else None),
+        contact_email=(po.extra_data.get("contact_email") if po.extra_data else None),
         notations=(po.extra_data.get("notations") if po.extra_data else None),
         description=po.description,
         quantity=po.quantity,
