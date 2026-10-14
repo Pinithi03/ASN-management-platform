@@ -82,6 +82,8 @@ export interface PurchaseOrder {
   po_number: string | null;
   client_code: string | null;
   style_number: string | null;
+  item_code?: string | null;
+  notations?: string | null;
   description: string | null;
   quantity: number | null;
   unit_price: number | null;

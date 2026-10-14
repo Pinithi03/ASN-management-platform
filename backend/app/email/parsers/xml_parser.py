@@ -237,6 +237,11 @@ def _parse_sd_data_slice_all(root: etree._Element, filename: str) -> list[Parsed
             po.legal_name = legal_name or po.buyer_name
             po.iungo_email_address = iungo_email_address or partner_email
             po.transmission_date = transmission_date
+            po.notations = (
+                _xpath_text(order_elem, ".//AuxHead8")
+                or _xpath_text(root, ".//AuxHead8")
+                or ""
+            ).strip()
             po.order_date = _xpath_text(order_elem, ".//OrderDate") or ""
             po.currency = (
                 _xpath_text(order_elem, ".//Currency")
@@ -313,7 +318,7 @@ def _parse_sd_data_slice_all(root: etree._Element, filename: str) -> list[Parsed
                     item_description=clean_item_desc,
                     qty_unit=qty_unit,
                     uom=qty_unit,
-                    style=clean_partner_item or clean_code,
+                    style=clean_code or clean_partner_item,
                     description=clean_item_desc,
                     color="",
                     size=qty_unit,
@@ -402,6 +407,11 @@ def _parse_sd_data_slice_all(root: etree._Element, filename: str) -> list[Parsed
                 po.legal_name = legal_name or po.buyer_name
                 po.iungo_email_address = iungo_email_address or partner_email
                 po.transmission_date = transmission_date
+                po.notations = (
+                    _xpath_text(slip_elem, ".//AuxHead8")
+                    or _xpath_text(root, ".//AuxHead8")
+                    or ""
+                ).strip()
                 po.delivery_date = slip_delivery
                 po.currency = "EUR"
                 po.address = partner_address
@@ -497,6 +507,7 @@ def _parse_sd_data_slice_all(root: etree._Element, filename: str) -> list[Parsed
 def _parse_generic(root: etree._Element, filename: str) -> ParsedPO:
     """Parse generic PurchaseOrder XML format."""
     po = ParsedPO(raw_source="xml", source_filename=filename)
+    po.notations = (_xpath_text(root, ".//AuxHead8") or "").strip()
 
     po.po_number = normalize_po_number(
         _xpath_text(root, ".//PurchaseOrderNumber")
@@ -634,7 +645,7 @@ def _parse_generic(root: etree._Element, filename: str) -> ParsedPO:
             partner_code=clean_partner_item,
             item_description=clean_item_desc,
             qty_unit=uom,
-            style=clean_partner_item or style_clean,
+            style=style_clean or clean_partner_item,
             color=_xpath_text(elem, ".//Color") or _xpath_text(elem, ".//Colour") or "",
             size=uom,
             uom=uom,

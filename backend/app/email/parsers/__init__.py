@@ -112,6 +112,7 @@ class ParsedPO:
     legal_name: str = ""           # <LegalName> from SdCompanyHeader / SdPartner
     iungo_email_address: str = ""  # <IungoEmailAddress> from XML root/header
     transmission_date: str = ""    # <TransmissionDate> from SdCompanyHeader / XML
+    notations: str = ""            # <AuxHead8> from XML
 
 
 def parse_xml(xml_bytes: bytes, filename: str = "") -> ParsedPO:

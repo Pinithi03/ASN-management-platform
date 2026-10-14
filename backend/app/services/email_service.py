@@ -284,6 +284,7 @@ async def save_parsed_data(
             "total_quantity": parsed_po.total_quantity,
             "total_value": parsed_po.total_value,
             "line_count": len(parsed_po.line_items),
+            "notations": getattr(parsed_po, "notations", "") or "",
         }
         existing_pd.po_number_extracted = clean_po or None
         existing_pd.supplier_id_extracted = parsed_po.supplier_code or None
@@ -307,6 +308,7 @@ async def save_parsed_data(
             "total_quantity": parsed_po.total_quantity,
             "total_value": parsed_po.total_value,
             "line_count": len(parsed_po.line_items),
+            "notations": getattr(parsed_po, "notations", "") or "",
         },
         validation_errors=[],
         po_number_extracted=clean_po or None,
@@ -410,7 +412,8 @@ async def save_purchase_order(
     # Filter out any non-positive line items
     active_line_items = [li for li in parsed_po.line_items if getattr(li, "quantity", 0) > 0]
     first_item = active_line_items[0] if active_line_items else (parsed_po.line_items[0] if parsed_po.line_items else None)
-    primary_style = first_item.style[:50] if first_item and first_item.style else None
+    first_code = (getattr(first_item, "item_code", "") or getattr(first_item, "style", "")) if first_item else ""
+    primary_style = first_code[:50] if first_code else None
     primary_desc = first_item.description if first_item and first_item.description else None
     buyer_code = (parsed_po.buyer_name or "CALZ")[:50]
 
@@ -434,8 +437,10 @@ async def save_purchase_order(
         for li in active_line_items
     ]
     order_type_str = getattr(parsed_po, "order_type", "") or "ZA6A"
+    notations_str = getattr(parsed_po, "notations", "") or ""
     extra_info = {
         "order_type": order_type_str,
+        "notations": notations_str,
         "items": items_data,
     }
 

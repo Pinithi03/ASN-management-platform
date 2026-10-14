@@ -462,7 +462,8 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                   </th>
                   <th className="px-4 py-3.5">PO Number</th>
                   <th className="px-4 py-3.5">Client / Destination</th>
-                  <th className="px-4 py-3.5">Style / Material</th>
+                  <th className="px-4 py-3.5">Item Code</th>
+                  <th className="px-4 py-3.5">Notations</th>
                   <th className="px-4 py-3.5 text-right">Quantity</th>
                   <th className="px-4 py-3.5">Delivery Date</th>
                   <th className="px-4 py-3.5">Status</th>
@@ -529,11 +530,21 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                         )}
                       </td>
 
-                      {/* Style */}
+                      {/* Item Code */}
                       <td className="px-4 py-3 text-gray-700">
-                        <div className="font-medium text-gray-900">{po.style_number || " "}</div>
-                        {po.description && (
-                          <div className="text-xs text-gray-400 truncate max-w-xs">{po.description}</div>
+                        <div className="font-semibold text-gray-900 font-mono">
+                          {po.item_code || ((po.extra_data as any)?.items?.[0]?.item_code) || po.style_number || "—"}
+                        </div>
+                      </td>
+
+                      {/* Notations */}
+                      <td className="px-4 py-3 text-gray-700">
+                        {po.notations || (po.extra_data as any)?.notations || (po.extra_data as any)?.aux_head8 ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                            {po.notations || (po.extra_data as any)?.notations || (po.extra_data as any)?.aux_head8}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">—</span>
                         )}
                       </td>
 
@@ -667,11 +678,19 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                     <span>
                       Plant: <strong className="text-gray-800 font-medium">{plantInfo.fullName}</strong>
                     </span>
-                    {activePO.style_number && (
+                    {(activePO.item_code || ((activePO.extra_data as any)?.items?.[0]?.item_code) || activePO.style_number) && (
                       <>
                         <span className="text-gray-300">•</span>
                         <span>
-                          Primary Style: <strong className="text-gray-800 font-mono">{activePO.style_number}</strong>
+                          Item Code: <strong className="text-gray-800 font-mono">{activePO.item_code || ((activePO.extra_data as any)?.items?.[0]?.item_code) || activePO.style_number}</strong>
+                        </span>
+                      </>
+                    )}
+                    {(activePO.notations || (activePO.extra_data as any)?.notations || (activePO.extra_data as any)?.aux_head8) && (
+                      <>
+                        <span className="text-gray-300">•</span>
+                        <span>
+                          Notations: <strong className="text-amber-800 font-semibold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">{activePO.notations || (activePO.extra_data as any)?.notations || (activePO.extra_data as any)?.aux_head8}</strong>
                         </span>
                       </>
                     )}

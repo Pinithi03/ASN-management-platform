@@ -44,6 +44,8 @@ class POListItem(BaseModel):
     po_number: Optional[str] = None
     client_code: Optional[str] = None
     style_number: Optional[str] = None
+    item_code: Optional[str] = None
+    notations: Optional[str] = None
     description: Optional[str] = None
     quantity: Optional[int] = None
     unit_price: Optional[float] = None
@@ -67,6 +69,8 @@ class PODetailResponse(BaseModel):
     po_number: Optional[str] = None
     client_code: Optional[str] = None
     style_number: Optional[str] = None
+    item_code: Optional[str] = None
+    notations: Optional[str] = None
     description: Optional[str] = None
     quantity: Optional[int] = None
     unit_price: Optional[float] = None
@@ -204,6 +208,11 @@ async def list_purchase_orders(
                 po_number=r.po_number,
                 client_code=r.client_code,
                 style_number=r.style_number,
+                item_code=(
+                    (r.extra_data.get("items", [{}])[0].get("item_code") if r.extra_data and r.extra_data.get("items") else None)
+                    or r.style_number
+                ),
+                notations=(r.extra_data.get("notations") if r.extra_data else None),
                 description=r.description,
                 quantity=r.quantity,
                 unit_price=float(r.unit_price) if r.unit_price else None,
@@ -472,6 +481,11 @@ async def get_purchase_order(
         po_number=po.po_number,
         client_code=po.client_code,
         style_number=po.style_number,
+        item_code=(
+            (po.extra_data.get("items", [{}])[0].get("item_code") if po.extra_data and po.extra_data.get("items") else None)
+            or po.style_number
+        ),
+        notations=(po.extra_data.get("notations") if po.extra_data else None),
         description=po.description,
         quantity=po.quantity,
         unit_price=float(po.unit_price) if po.unit_price else None,
