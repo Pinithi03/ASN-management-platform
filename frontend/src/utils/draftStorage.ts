@@ -466,3 +466,126 @@ export function formatDraftTime(timestamp: number): string {
   });
 }
 
+/**
+ * Estimate storage used by drafts in localStorage and total draft count.
+ */
+export function getDraftStorageEstimate(filterSupplierCode?: string): {
+  draftCount: number;
+  approxSizeKb: number;
+} {
+  const { manualDrafts, excelDrafts } = getAllDrafts(filterSupplierCode);
+  const targetCode = filterSupplierCode ? filterSupplierCode.trim().toLowerCase() : null;
+  let totalBytes = 0;
+
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key) continue;
+      if (key.startsWith(DRAFT_PREFIX_MANUAL) || key.startsWith(DRAFT_PREFIX_EXCEL)) {
+        if (
+          !targetCode ||
+          key.toLowerCase().includes(`_${targetCode}_`) ||
+          key.toLowerCase().startsWith(`${DRAFT_PREFIX_MANUAL}${targetCode}_`) ||
+          key.toLowerCase().startsWith(`${DRAFT_PREFIX_EXCEL}${targetCode}_`)
+        ) {
+          const val = localStorage.getItem(key);
+          if (val) {
+            totalBytes += key.length + val.length;
+          }
+        }
+      }
+    }
+  } catch {}
+
+  const count = manualDrafts.length + excelDrafts.length;
+  return {
+    draftCount: count,
+    approxSizeKb: count > 0 ? Math.max(1, Math.round(totalBytes / 1024)) : 0,
+  };
+}
+
+/**
+ * Clear all drafts and IndexedDB cached files for a supplier (or all if omitted).
+ */
+export async function clearAllSupplierDrafts(filterSupplierCode?: string): Promise<{
+  clearedDrafts: number;
+  clearedFiles: number;
+}> {
+  const targetCode = filterSupplierCode ? filterSupplierCode.trim().toLowerCase() : null;
+  let clearedDrafts = 0;
+  let clearedFiles = 0;
+
+  // 1. Clear LocalStorage drafts
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key) continue;
+      if (key.startsWith(DRAFT_PREFIX_MANUAL) || key.startsWith(DRAFT_PREFIX_EXCEL)) {
+        if (!targetCode) {
+          keysToRemove.push(key);
+        } else {
+          const raw = localStorage.getItem(key);
+          let belongs =
+            key.toLowerCase().includes(`_${targetCode}_`) ||
+            key.toLowerCase().startsWith(`${DRAFT_PREFIX_MANUAL}${targetCode}_`) ||
+            key.toLowerCase().startsWith(`${DRAFT_PREFIX_EXCEL}${targetCode}_`);
+          if (!belongs && raw) {
+            try {
+              const parsed = JSON.parse(raw);
+              if (parsed.supplierCode && parsed.supplierCode.trim().toLowerCase() === targetCode) {
+                belongs = true;
+              }
+            } catch {}
+          }
+          if (belongs) {
+            keysToRemove.push(key);
+          }
+        }
+      }
+    }
+
+    for (const k of keysToRemove) {
+      localStorage.removeItem(k);
+      clearedDrafts++;
+    }
+  } catch (err) {
+    console.warn("Error clearing drafts from localStorage:", err);
+  }
+
+  // 2. Clear IndexedDB blobs
+  if (typeof indexedDB !== "undefined") {
+    try {
+      const db = await openIndexedDb();
+      await new Promise<void>((resolve) => {
+        const tx = db.transaction("draft_files", "readwrite");
+        const store = tx.objectStore("draft_files");
+        const req = store.openCursor();
+        req.onsuccess = () => {
+          const cursor = req.result;
+          if (cursor) {
+            const keyStr = String(cursor.key);
+            if (
+              !targetCode ||
+              keyStr.toLowerCase().includes(`_${targetCode}_`) ||
+              keyStr.toLowerCase().includes(targetCode)
+            ) {
+              cursor.delete();
+              clearedFiles++;
+            }
+            cursor.continue();
+          } else {
+            resolve();
+          }
+        };
+        req.onerror = () => resolve();
+      });
+    } catch (err) {
+      console.warn("Error clearing drafts from IndexedDB:", err);
+    }
+  }
+
+  notifyDraftsUpdated();
+  return { clearedDrafts, clearedFiles };
+}
+
