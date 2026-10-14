@@ -20,6 +20,7 @@ import Settings from "@/pages/Settings";
 import UserManagement from "@/pages/UserManagement";
 import Suppliers from "@/pages/Suppliers";
 import Shipments from "@/pages/Shipments";
+import Drafts from "@/pages/Drafts";
 import Profile from "@/pages/Profile";
 
 /** Guard: user must hold ALL listed permissions (ADMIN's "*" passes everything). */
@@ -47,6 +48,7 @@ export default function App() {
         <Route path="/asn" element={<Navigate to="/shipments" replace />} />
         <Route path="/review" element={<Navigate to="/shipments" replace />} />
         <Route path="/shipments" element={<Shipments />} />
+        <Route path="/drafts" element={<Drafts />} />
 
         <Route path="/emails" element={<EmailInbox />} />
         <Route path="/emails/:emailId" element={<EmailDetailPage />} />

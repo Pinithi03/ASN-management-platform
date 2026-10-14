@@ -22,7 +22,9 @@ import {
   UserCircle,
   FileSpreadsheet,
   Layers,
+  FileEdit,
 } from "lucide-react";
+import { useDraftCount } from "@/utils/draftStorage";
 
 interface SidebarProps {
   collapsed: boolean;
@@ -55,6 +57,7 @@ const adminMainNav: NavItem[] = [
       { to: "/purchase-orders/excel", icon: FileSpreadsheet, label: "Excel Drop" },
     ],
   },
+  { to: "/drafts", icon: FileEdit, label: "Drafts" },
   { to: "/shipments", icon: PackagePlus, label: "Shipments" },
   { to: "/suppliers", icon: Truck, label: "Suppliers" },
 ];
@@ -77,6 +80,7 @@ const supplierMainNav: NavItem[] = [
       { to: "/purchase-orders/excel", icon: FileSpreadsheet, label: "Excel Drop" },
     ],
   },
+  { to: "/drafts", icon: FileEdit, label: "Drafts" },
   { to: "/shipments", icon: PackagePlus, label: "Shipments" },
 ];
 
@@ -92,6 +96,8 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const isAdmin = user?.role === "ADMIN" || user?.role === "SUPER_ADMIN";
   const mainNav = isAdmin ? adminMainNav : supplierMainNav;
   const settingsNav = isAdmin ? adminSettingsNav : supplierSettingsNav;
+
+  const draftCount = useDraftCount(user?.role === "SUPPLIER" ? (user.supplier_code || undefined) : undefined);
 
   const searchParams = new URLSearchParams(location.search);
   const poParam = searchParams.get("pos") || searchParams.get("po");
@@ -240,12 +246,13 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
             );
           }
 
+          const isDraftItem = item.to === "/drafts";
           return (
             <NavLink
               key={item.to}
               to={item.to}
               className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                "flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                 isActive(item.to)
                   ? isAdmin
                     ? "bg-brand-50 text-brand-700"
@@ -253,8 +260,15 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
               )}
             >
-              <item.icon className="h-5 w-5 flex-shrink-0" />
-              {!collapsed && <span>{item.label}</span>}
+              <div className="flex items-center gap-3">
+                <item.icon className="h-5 w-5 flex-shrink-0" />
+                {!collapsed && <span>{item.label}</span>}
+              </div>
+              {!collapsed && isDraftItem && draftCount > 0 && (
+                <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-blue-100 text-blue-700 border border-blue-200">
+                  {draftCount}
+                </span>
+              )}
             </NavLink>
           );
         })}

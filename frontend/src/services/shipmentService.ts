@@ -311,5 +311,14 @@ export const shipmentService = {
     const res = await api.get(`/shipments/next-hu-sequence?${params.toString()}`);
     return res.data;
   },
+
+  /**
+   * Delete a shipment and revert all allocated PO quantities.
+   */
+  async deleteShipment(shipmentId: string): Promise<{ success: boolean; message: string; affected_pos: string[] }> {
+    const res = await api.delete(`/shipments/${shipmentId}`);
+    return res.data;
+  },
 };
+
 

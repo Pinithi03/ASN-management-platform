@@ -32,6 +32,10 @@ import {
   Eye,
   SlidersHorizontal,
   Clock,
+  Wifi,
+  WifiOff,
+  FileEdit,
+  RotateCcw,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { cn } from "@/utils/cn";
@@ -41,7 +45,18 @@ import {
   CreateShipmentResponse,
 } from "@/services/shipmentService";
 import { poApi } from "@/services/poApi";
-import { useDraftPersistence } from "@/hooks/useDraftPersistence";
+import { ensureFreshToken } from "@/lib/keycloak";
+import {
+  useNetworkStatus,
+  saveManualDraft,
+  getManualDraft,
+  clearManualDraft,
+  saveExcelDraft,
+  getExcelDraft,
+  clearExcelDraft,
+  saveExcelFileBlob,
+  getExcelFileBlob,
+} from "@/utils/draftStorage";
 
 const statusColor: Record<string, string> = {
   DRAFT: "bg-gray-50 text-gray-700 border-gray-200",
@@ -258,6 +273,23 @@ export default function Shipments() {
       setTimeout(() => window.URL.revokeObjectURL(url), 60000);
     } catch (e: any) {
       alert(`Failed to download labels: ${e?.response?.data?.detail || e.message || e}`);
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  // Delete / Revert Shipment and restore PO balances
+  const handleDeleteShipment = async (s: any) => {
+    const confirmMsg = `Are you sure you want to revert Shipment #${s.shipment_number}?\n\nThis will delete this delivery record and restore all carton line quantities back to the Purchase Order(s).`;
+    if (!window.confirm(confirmMsg)) return;
+
+    setActionLoadingId(`delete-${s.id}`);
+    try {
+      const res = await shipmentService.deleteShipment(s.id);
+      alert(res.message || `Shipment #${s.shipment_number} reverted successfully!`);
+      await loadShipments();
+    } catch (err: any) {
+      alert(err?.response?.data?.detail || "Failed to revert shipment. Please try again.");
     } finally {
       setActionLoadingId(null);
     }
@@ -558,6 +590,20 @@ export default function Shipments() {
                               )}
                               ASN XML
                             </button>
+
+                            <button
+                              onClick={() => handleDeleteShipment(s)}
+                              disabled={actionLoadingId === `delete-${s.id}`}
+                              title="Revert shipment and restore all line items back to Purchase Order"
+                              className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200 shadow-2xs transition-colors disabled:opacity-50 cursor-pointer"
+                            >
+                              {actionLoadingId === `delete-${s.id}` ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin text-rose-600" />
+                              ) : (
+                                <RotateCcw className="h-3.5 w-3.5 text-rose-600" />
+                              )}
+                              Revert
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -714,24 +760,92 @@ function WebPackingWizard({
   const [startingSeq, setStartingSeq] = useState<number>(1);
   const [packingSlipNumber, setPackingSlipNumber] = useState("");
 
-  const draftKey = `asn_wizard_draft_${user?.supplier_code || "0000018194"}_${poQuery || "common"}`;
-  const { draftAvailable, restoreDraft, discardDraft, clearDraft } = useDraftPersistence<PackedItem>(
-    draftKey,
-    {
-      poQuery,
-      step,
-      packingSlipNumber,
-      packedItems,
-    },
-    React.useCallback((draft) => {
-      if (draft.packingSlipNumber) setPackingSlipNumber(draft.packingSlipNumber);
-      if (draft.packedItems && draft.packedItems.length > 0) setPackedItems(draft.packedItems);
-      if (draft.step) setStep(draft.step as any);
-    }, [])
-  );
-
-  // Split configuration state per item: mode ('qty' or 'count') and input value
   const [splitConfigs, setSplitConfigs] = useState<Record<string, { mode: "qty" | "count"; value: string }>>({});
+  const [searchParams] = useSearchParams();
+  const shouldResume = searchParams.get("resume") === "true";
+  const [draftSavedToast, setDraftSavedToast] = useState(false);
+  const isOnline = useNetworkStatus();
+  const [unresumedDraft, setUnresumedDraft] = useState<any>(null);
+
+  // Check for existing saved draft on load (auto-resume if navigated from Drafts page, or offer restore)
+  useEffect(() => {
+    const suppCode = user?.supplier_code || "0000018194";
+    const draft = getManualDraft(suppCode, poNumbers);
+    if (draft) {
+      if (shouldResume) {
+        if (draft.items && draft.items.length > 0) setItems(draft.items);
+        if (draft.packedItems && draft.packedItems.length > 0) setPackedItems(draft.packedItems);
+        if (draft.step) setStep(draft.step);
+        if (draft.startingSeq) setStartingSeq(draft.startingSeq);
+        if (draft.packingSlipNumber) setPackingSlipNumber(draft.packingSlipNumber);
+      } else {
+        setUnresumedDraft(draft);
+      }
+    }
+  }, [user?.supplier_code, poNumbers.join(","), shouldResume]);
+
+  const restoreDraft = () => {
+    if (unresumedDraft) {
+      if (unresumedDraft.items && unresumedDraft.items.length > 0) setItems(unresumedDraft.items);
+      if (unresumedDraft.packedItems && unresumedDraft.packedItems.length > 0) setPackedItems(unresumedDraft.packedItems);
+      if (unresumedDraft.step) setStep(unresumedDraft.step);
+      if (unresumedDraft.startingSeq) setStartingSeq(unresumedDraft.startingSeq);
+      if (unresumedDraft.packingSlipNumber) setPackingSlipNumber(unresumedDraft.packingSlipNumber);
+      setUnresumedDraft(null);
+    }
+  };
+
+  const discardDraft = () => {
+    const suppCode = user?.supplier_code || "0000018194";
+    clearManualDraft(suppCode, poNumbers);
+    setUnresumedDraft(null);
+  };
+
+  const handleManualSaveDraft = () => {
+    const suppCode = user?.supplier_code || "0000018194";
+    saveManualDraft(suppCode, poNumbers, {
+      step,
+      items,
+      packedItems,
+      startingSeq,
+      packingSlipNumber,
+    });
+    setDraftSavedToast(true);
+    setTimeout(() => setDraftSavedToast(false), 2500);
+  };
+
+  // Debounced auto-save to localStorage
+  useEffect(() => {
+    if (submitSuccessResult) return;
+    const suppCode = user?.supplier_code || "0000018194";
+    const hasData =
+      packedItems.length > 0 ||
+      items.some((i) => (i.shipping_now || 0) > 0) ||
+      Boolean(packingSlipNumber.trim());
+
+    if (!hasData) return;
+
+    const timer = setTimeout(() => {
+      saveManualDraft(suppCode, poNumbers, {
+        step,
+        items,
+        packedItems,
+        startingSeq,
+        packingSlipNumber,
+      });
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, [
+    items,
+    packedItems,
+    step,
+    startingSeq,
+    packingSlipNumber,
+    submitSuccessResult,
+    user?.supplier_code,
+    poNumbers.join(","),
+  ]);
 
   // Optional columns configuration for Step 2 Web Workbench (Batch, Supplier Ref, Width, Pack No)
   type OptionalColumnKey = "batch" | "supplier_ref" | "width" | "pack_no";
@@ -766,6 +880,7 @@ function WebPackingWizard({
 
   // Synchronize next sequential HU from database sequence
   useEffect(() => {
+    if (shouldResume) return;
     let isMounted = true;
     const fetchSeq = async () => {
       try {
@@ -789,9 +904,13 @@ function WebPackingWizard({
     return () => {
       isMounted = false;
     };
-  }, [user?.supplier_code, user?.supplier_id]);
+  }, [user?.supplier_code, user?.supplier_id, shouldResume]);
 
   const handleDispatchASN = async () => {
+    if (!isOnline) {
+      alert("You are currently offline. Please reconnect to the internet before dispatching the ASN to EDI.");
+      return;
+    }
     const trimmedPs = packingSlipNumber.trim();
     if (!trimmedPs) {
       alert("Please enter Packing Slip / Delivery Note Number before dispatching.");
@@ -799,6 +918,9 @@ function WebPackingWizard({
     }
     setIsSubmitting(true);
     try {
+      // Proactively refresh JWT before making network call to avoid mid-dispatch 401
+      await ensureFreshToken(60);
+
       const firstItem = packedItems[0];
       const targetPlant = matchPlant(firstItem?.destination);
       const activeSupplierCode = user?.supplier_code || "0000018194";
@@ -836,7 +958,7 @@ function WebPackingWizard({
       });
 
       setSubmitSuccessResult(res);
-      clearDraft();
+      clearManualDraft(activeSupplierCode, poNumbers);
     } catch (err: any) {
       alert("Submission error: " + (err?.response?.data?.detail || err?.message || "Failed to create shipment"));
     } finally {
@@ -917,15 +1039,22 @@ function WebPackingWizard({
 
   useEffect(() => {
     if (openLinesData) {
-      setItems(
-        openLinesData.map((line) => ({
+      setItems((prev) => {
+        // Preserve user's restored draft items or ongoing edits
+        if (shouldResume && prev.length > 0) {
+          return prev;
+        }
+        if (prev.length > 0 && prev.some((p) => (p.shipping_now || 0) > 0)) {
+          return prev;
+        }
+        return openLinesData.map((line) => ({
           ...line,
           packaging_type: line.packaging_type || "BOX",
           shipping_now: 0, // Always default to 0 — user enters qty or clicks Max
-        }))
-      );
+        }));
+      });
     }
-  }, [openLinesData]);
+  }, [openLinesData, shouldResume]);
 
   const distinctPoNumbers = useMemo(() => {
     return Array.from(new Set(items.map((i) => i.po_number).filter(Boolean)));
@@ -1168,17 +1297,16 @@ function WebPackingWizard({
 
   return (
     <div className="space-y-4 font-sans text-gray-800">
-      {draftAvailable && (
+      {unresumedDraft && (
         <div className="flex items-center justify-between gap-4 p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 shadow-sm animate-in fade-in slide-in-from-top duration-300">
           <div className="flex items-center gap-2.5">
             <Clock className="h-4 w-4 text-amber-600 shrink-0" />
             <span className="text-xs font-semibold">
               Unsaved draft recovered: Packing Slip{" "}
               <strong className="font-mono text-amber-800">
-                {draftAvailable.packingSlipNumber || "(In Progress)"}
+                {unresumedDraft.packingSlipNumber || "(In Progress)"}
               </strong>{" "}
-              ({draftAvailable.packedItems?.length || 0} items, saved{" "}
-              {new Date(draftAvailable.savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})
+              ({unresumedDraft.packedItems?.length || 0} items)
             </span>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -1233,6 +1361,37 @@ function WebPackingWizard({
                 <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
                 Excel Drop
               </button>
+            )}
+
+            <button
+              type="button"
+              onClick={handleManualSaveDraft}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 rounded-lg border border-gray-300 shadow-2xs transition-colors cursor-pointer"
+              title="Save current progress to Drafts in the sidebar"
+            >
+              <FileEdit className="w-3.5 h-3.5 text-blue-600" />
+              {draftSavedToast ? "Saved to Drafts!" : "Save Draft"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigate("/drafts")}
+              className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
+              title="View all saved drafts in sidebar"
+            >
+              Drafts
+            </button>
+
+            {isOnline ? (
+              <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <Wifi className="w-3.5 h-3.5 text-emerald-600" />
+                Online
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200 shadow-xs">
+                <WifiOff className="w-3.5 h-3.5 text-amber-600" />
+                Offline
+              </span>
             )}
           </div>
 
@@ -2224,6 +2383,70 @@ function ExcelPackingWorkflow({
   const [dispatchingAsn, setDispatchingAsn] = useState(false);
   const [dispatchedSuccess, setDispatchedSuccess] = useState(false);
 
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const shouldResume = searchParams.get("resume") === "true";
+  const [draftSavedToast, setDraftSavedToast] = useState(false);
+  const isOnline = useNetworkStatus();
+  // Check for saved Excel draft on load (auto-resume if navigated with ?resume=true)
+  useEffect(() => {
+    if (activePos.length === 0) return;
+    const suppCode = user?.supplier_code || "0000018194";
+    const draft = getExcelDraft(suppCode, activePos);
+    if (draft && shouldResume) {
+      if (draft.validationResult) setValidationResult(draft.validationResult);
+      if (draft.plantCode) setPlantCode(draft.plantCode);
+      if (draft.estimatedArrival) setEstimatedArrival(draft.estimatedArrival);
+      if (draft.packingSlipNumber) setPackingSlipNumber(draft.packingSlipNumber);
+      getExcelFileBlob(suppCode, activePos)
+        .then((storedFile) => {
+          if (storedFile) setSelectedFile(storedFile);
+        })
+        .catch(() => {});
+    }
+  }, [user?.supplier_code, activePos.join(","), shouldResume]);
+
+  const handleManualSaveDraft = () => {
+    const suppCode = user?.supplier_code || "0000018194";
+    saveExcelDraft(suppCode, activePos, {
+      plantCode,
+      estimatedArrival,
+      packingSlipNumber,
+      validationResult,
+      fileName: selectedFile?.name,
+    });
+    if (selectedFile) {
+      saveExcelFileBlob(suppCode, activePos, selectedFile).catch(() => {});
+    }
+    setDraftSavedToast(true);
+    setTimeout(() => setDraftSavedToast(false), 2500);
+  };
+
+  // Reactive auto-save when packing slip, dates, or validation status updates
+  useEffect(() => {
+    if (createdResponse || dispatchedSuccess) return;
+    const suppCode = user?.supplier_code || "0000018194";
+    if (validationResult || packingSlipNumber.trim()) {
+      saveExcelDraft(suppCode, activePos, {
+        plantCode,
+        estimatedArrival,
+        packingSlipNumber,
+        validationResult,
+        fileName: selectedFile?.name,
+      });
+    }
+  }, [
+    plantCode,
+    estimatedArrival,
+    packingSlipNumber,
+    validationResult,
+    selectedFile?.name,
+    createdResponse,
+    dispatchedSuccess,
+    user?.supplier_code,
+    activePos.join(","),
+  ]);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -2371,6 +2594,15 @@ function ExcelPackingWorkflow({
       const supplierId = user?.role === "SUPPLIER" ? (user.supplier_id || undefined) : undefined;
       const res = await shipmentService.validateExcel(file, supplierId, user?.supplier_code || undefined);
       setValidationResult(res);
+      const suppCode = user?.supplier_code || "0000018194";
+      saveExcelFileBlob(suppCode, activePos, file).catch(() => {});
+      saveExcelDraft(suppCode, activePos, {
+        plantCode,
+        estimatedArrival,
+        packingSlipNumber,
+        validationResult: res,
+        fileName: file.name,
+      });
     } catch (e: any) {
       console.error("Excel validation error:", e);
       const detail = e?.response?.data?.detail;
@@ -2425,7 +2657,14 @@ function ExcelPackingWorkflow({
   };
 
   const handleCreateShipment = async () => {
-    if (!selectedFile) return;
+    if (!isOnline) {
+      alert("You are currently offline. Please reconnect to the network before creating the shipment.");
+      return;
+    }
+    if (!selectedFile) {
+      alert("Please upload or select the validated Excel file before creating the shipment.");
+      return;
+    }
     const trimmedPs = packingSlipNumber.trim();
     if (!trimmedPs) {
       alert("Please enter Packing Slip / Delivery Note Number before creating shipment.");
@@ -2433,6 +2672,9 @@ function ExcelPackingWorkflow({
     }
     setSubmitting(true);
     try {
+      // Proactively refresh JWT before making network call to avoid mid-submission 401
+      await ensureFreshToken(60);
+
       const res = await shipmentService.createFromExcel({
         file: selectedFile,
         packing_slip_number: trimmedPs,
@@ -2514,11 +2756,18 @@ function ExcelPackingWorkflow({
   };
 
   const handleDispatchAsn = async () => {
+    if (!isOnline) {
+      alert("You are currently offline. Please reconnect to the network before dispatching the ASN to EDI.");
+      return;
+    }
     if (!createdResponse) return;
     setDispatchingAsn(true);
     try {
+      await ensureFreshToken(60);
       await shipmentService.sendASN(createdResponse.asn.id);
       setDispatchedSuccess(true);
+      const suppCode = user?.supplier_code || "0000018194";
+      clearExcelDraft(suppCode, activePos);
     } catch (err: any) {
       alert(`Failed to dispatch ASN: ${err?.response?.data?.detail || err.message || err}`);
     } finally {
@@ -2584,6 +2833,36 @@ function ExcelPackingWorkflow({
               </div>
 
               <div className="flex items-center gap-2">
+                 <button
+                   type="button"
+                   onClick={handleManualSaveDraft}
+                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 rounded-lg border border-gray-300 shadow-2xs transition-colors cursor-pointer"
+                   title="Save current validated state to Drafts"
+                 >
+                   <FileEdit className="w-3.5 h-3.5 text-emerald-600" />
+                   {draftSavedToast ? "Saved to Drafts!" : "Save Draft"}
+                 </button>
+
+                 <button
+                   type="button"
+                   onClick={() => navigate("/drafts")}
+                   className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
+                   title="View all saved drafts in sidebar"
+                 >
+                   Drafts
+                 </button>
+
+                 {isOnline ? (
+                   <span className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                     <Wifi className="w-3.5 h-3.5 text-emerald-600" />
+                     Online
+                   </span>
+                 ) : (
+                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200 shadow-xs">
+                     <WifiOff className="w-3.5 h-3.5 text-amber-600" />
+                     Offline
+                   </span>
+                 )}
                  <button onClick={handleDownloadTailoredTemplate} disabled={downloadingTailored || activePos.length === 0} className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-3.5 py-2 rounded-lg transition-colors border border-emerald-200 flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50">
                     {downloadingTailored ? <Loader2 className="w-4 h-4 animate-spin"/> : <Download className="w-4 h-4"/>} Tailored Sheet
                  </button>
