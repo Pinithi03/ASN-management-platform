@@ -1181,7 +1181,7 @@ function WebPackingWizard({
         }
         return { ...item, boxes: newBoxes };
       });
-      return updated;
+      return resequenceAllCartons(updated, startingSeq);
     });
   };
 
@@ -1721,15 +1721,6 @@ function WebPackingWizard({
                 )}
               </div>
             </div>
-
-            {/* Interactive HU Starting Sequence */}
-            <div className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-600 shadow-2xs">
-              <span className="text-[11px] font-semibold text-slate-700">Handling Units:</span>
-              <span className="font-mono text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                Automated Allocation
-              </span>
-              <span className="text-[11px] text-slate-400 hidden sm:inline">Assigned atomically upon dispatch</span>
-            </div>
           </div>
 
           <div className="space-y-4">
@@ -1916,15 +1907,11 @@ function WebPackingWizard({
                               {idx + 1}
                             </td>
 
-                            {/* 2. HU Number (Automated Lazy Allocation on Dispatch) */}
+                            {/* 2. 20-digit HU Number */}
                             <td className="px-3 py-1.5">
-                              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-slate-200 bg-slate-50 text-slate-700 font-mono text-xs shadow-2xs select-none">
-                                <span className="text-[10px] uppercase font-bold text-slate-400">Box</span>
-                                <span className="font-bold text-slate-800">#{idx + 1}</span>
-                                <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-100/70 border border-emerald-200 px-1.5 rounded">
-                                  Auto HU
-                                </span>
-                              </div>
+                              <span className="inline-block font-mono text-xs font-bold text-gray-800 bg-gray-50 border border-gray-200 px-2.5 py-1 rounded-md tracking-wider select-all shadow-2xs">
+                                {box.hu_number || formatHu(startingSeq + idx)}
+                              </span>
                             </td>
 
                             {/* 3. Qty (pre-filled, auto-split) */}
