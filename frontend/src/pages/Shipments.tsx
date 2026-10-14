@@ -967,9 +967,74 @@ function WebPackingWizard({
   };
 
   // Fetch open PO lines
+  // Fetch open PO lines
   const { data: openLinesData, isLoading } = useQuery({
     queryKey: ["open_lines_wizard", poNumbers, user?.supplier_id],
     queryFn: async () => {
+      // 1. First, fetch real PO items directly from PO details (matching Excel packing workflow)
+      const realLines: POLineItem[] = [];
+      for (const po of poNumbers) {
+        try {
+          const res = await poApi.list({ search: po });
+          const found = res.items?.find((p) => p.po_number === po) || res.items?.[0];
+          if (found) {
+            const fullPo = await poApi.getById(found.id);
+            const itemsList = (fullPo as any)?.extra_data?.items;
+            if (Array.isArray(itemsList) && itemsList.length > 0) {
+              itemsList.forEach((it: any, idx: number) => {
+                if (Number(it.quantity || 0) > 0) {
+                  const lineNum = String(it.order_line_number || it.line_number || idx + 1).trim();
+                  const qty = Number(it.quantity || 0);
+                  realLines.push({
+                    id: `${po}-${lineNum}`,
+                    po_number: po,
+                    po_item: lineNum,
+                    item_code: it.material_code || it.item_code || found.style_number || "ITEM-" + idx,
+                    partner_product_code: it.partner_item_code || it.partner_code || "",
+                    description: it.description || it.item_description || found.description || "PO Line Item",
+                    ordered_qty: qty,
+                    shipped_qty: 0,
+                    remaining_qty: qty,
+                    shipping_now: 0,
+                    packaging_type: "BOX",
+                    uom: it.size || it.qty_unit || it.uom || "M",
+                    destination: found.destination || "",
+                    delivery_date: found.delivery_date || "",
+                    order_date: (found as any).order_date || "",
+                    supplier_id: (found as any).supplier_id || "",
+                  });
+                }
+              });
+            } else {
+              realLines.push({
+                id: `${po}-line-1`,
+                po_number: po,
+                po_item: "00100",
+                item_code: found.style_number || "ITEM-1",
+                partner_product_code: "",
+                description: found.description || "PO Line Item",
+                ordered_qty: Number(found.quantity || 1000),
+                shipped_qty: 0,
+                remaining_qty: Number(found.quantity || 1000),
+                shipping_now: 0,
+                packaging_type: "BOX",
+                uom: "M",
+                destination: found.destination || "",
+                delivery_date: found.delivery_date || "",
+                supplier_id: (found as any).supplier_id || "",
+              });
+            }
+          }
+        } catch (e) {
+          console.warn(`Could not fetch details for PO ${po}:`, e);
+        }
+      }
+
+      if (realLines.length > 0) {
+        return realLines;
+      }
+
+      // 2. Secondary fallback: try open-lines endpoint
       try {
         const supplierId = user?.role === "SUPPLIER" ? user.supplier_id : undefined;
         const lines = await poApi.getOpenLines(supplierId ? { supplier_id: supplierId } : undefined);
@@ -997,43 +1062,10 @@ function WebPackingWizard({
           }
         }
       } catch (err) {
-        console.warn("Could not fetch real open lines, falling back to PO numbers:", err);
+        console.warn("Could not fetch real open lines:", err);
       }
 
-      // Default mock for selected PO numbers
-      const fallback: POLineItem[] = [];
-      const list = poNumbers.length > 0 ? poNumbers : ["2001297727"];
-      list.forEach((po) => {
-        fallback.push({
-          id: `${po}-line-1`,
-          po_number: po,
-          po_item: "00100",
-          item_code: "ELST1K 000615",
-          partner_product_code: "SK104546-015.0-61851",
-          description: "Elastic tape 15mm black - Sirio Spec",
-          ordered_qty: 2450,
-          shipped_qty: 0,
-          remaining_qty: 2450,
-          shipping_now: 0,
-          uom: "M",
-          destination: "Omega Line Ltd (PPA1)",
-        });
-        fallback.push({
-          id: `${po}-line-2`,
-          po_number: po,
-          po_item: "00200",
-          item_code: "RECT0724DKK0000000",
-          partner_product_code: "TH002500-120.0-SETA",
-          description: "RE-Thread-EP-2500m, 120tkt, SETA",
-          ordered_qty: 1200,
-          shipped_qty: 0,
-          remaining_qty: 1200,
-          shipping_now: 0,
-          uom: "M",
-          destination: "Omega Line Ltd (PPA1)",
-        });
-      });
-      return fallback;
+      return [];
     },
   });
 
