@@ -37,3 +37,20 @@ keycloak.onTokenExpired = () => {
     keycloak.login();
   });
 };
+
+/**
+ * Proactively verify and refresh JWT token before major submissions.
+ * Returns true if the token is valid or successfully refreshed.
+ */
+export async function ensureFreshToken(minValidity = 60): Promise<boolean> {
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    return false;
+  }
+  try {
+    await keycloak.updateToken(minValidity);
+    return true;
+  } catch (err) {
+    console.warn("Keycloak proactive token refresh error:", err);
+    return false;
+  }
+}

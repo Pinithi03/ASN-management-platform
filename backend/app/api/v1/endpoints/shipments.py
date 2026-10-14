@@ -1398,3 +1398,82 @@ async def download_shipment_labels(
     except Exception as e:
         logger.error("Label generation failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to generate labels: {str(e)}")
+
+
+@router.delete("/{shipment_id}")
+async def delete_shipment(
+    shipment_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """
+    Delete a shipment and restore allocated Purchase Order quantities and statuses.
+    1. Collects all affected PO numbers from shipment_lines and packing_slips.
+    2. Deletes associated ASNRecord and PackingSlip entries.
+    3. Deletes ShipmentLine and Shipment.
+    4. Automatically recalculates and restores PO statuses back to ACTIVE / open balance.
+    """
+    stmt = (
+        select(Shipment)
+        .options(
+            selectinload(Shipment.lines),
+            selectinload(Shipment.packing_slips),
+            selectinload(Shipment.asn_records),
+        )
+        .where(Shipment.id == shipment_id)
+    )
+    res = await db.execute(stmt)
+    shipment = res.scalar_one_or_none()
+    if not shipment:
+        raise HTTPException(status_code=404, detail="Shipment not found")
+
+    # Collect affected PO numbers
+    affected_pos = set()
+    for line in shipment.lines:
+        if line.po_number:
+            affected_pos.add(line.po_number.strip())
+    for ps in shipment.packing_slips:
+        if ps.dimensions and isinstance(ps.dimensions, dict):
+            po_num = ps.dimensions.get("po_number")
+            if po_num:
+                affected_pos.add(str(po_num).strip())
+
+    shipment_num = shipment.shipment_number
+
+    # 1. Delete associated ASNRecords
+    for asn_rec in shipment.asn_records:
+        await db.delete(asn_rec)
+    asn_fallback = await db.execute(select(ASNRecord).where(ASNRecord.shipment_id == shipment_id))
+    for extra_asn in asn_fallback.scalars().all():
+        await db.delete(extra_asn)
+
+    # 2. Delete associated PackingSlips
+    for ps_rec in shipment.packing_slips:
+        await db.delete(ps_rec)
+    ps_fallback = await db.execute(select(PackingSlip).where(PackingSlip.shipment_id == shipment_id))
+    for extra_ps in ps_fallback.scalars().all():
+        await db.delete(extra_ps)
+
+    # 3. Delete ShipmentLines
+    for sl_rec in shipment.lines:
+        await db.delete(sl_rec)
+    sl_fallback = await db.execute(select(ShipmentLine).where(ShipmentLine.shipment_id == shipment_id))
+    for extra_sl in sl_fallback.scalars().all():
+        await db.delete(extra_sl)
+
+    # 4. Delete Shipment
+    await db.delete(shipment)
+    await db.flush()
+
+    # 5. Recalculate PO statuses for all affected POs so they return to ACTIVE and 100% balance
+    if affected_pos:
+        await update_po_statuses(db, list(affected_pos))
+
+    await db.commit()
+    logger.info("Deleted shipment %s and restored PO balances for %s", shipment_num, list(affected_pos))
+
+    return {
+        "success": True,
+        "message": f"Shipment {shipment_num} deleted and PO balances successfully restored",
+        "affected_pos": list(affected_pos),
+    }
+
