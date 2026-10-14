@@ -432,7 +432,7 @@ async def save_purchase_order(
             "partner_code": getattr(li, "partner_code", "") or getattr(li, "partner_item_code", "") or "",
             "item_description": getattr(li, "item_description", None) or getattr(li, "description", "") or "",
             "qty_unit": getattr(li, "qty_unit", None) or getattr(li, "uom", "") or getattr(li, "size", "") or "M",
-            "material_code": getattr(li, "partner_item_code", "") or getattr(li, "item_code", "") or getattr(li, "style", ""),
+            "material_code": getattr(li, "item_code", None) or getattr(li, "style", "") or getattr(li, "partner_item_code", "") or "",
             "description": getattr(li, "item_description", None) or getattr(li, "description", "") or "",
             "color": getattr(li, "color", "") or "",
             "size": getattr(li, "size", "") or getattr(li, "qty_unit", "") or "M",

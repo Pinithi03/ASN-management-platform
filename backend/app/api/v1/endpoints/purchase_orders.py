@@ -402,8 +402,8 @@ async def list_open_po_lines(
 
                 line_num = str(line_val).strip()
                 ordered = float(item.get("quantity", 0))
-                material = item.get("material_code") or item.get("item_code") or po.style_number or ""
-                partner = item.get("partner_code") or item.get("partner_item_code", "")
+                material = item.get("item_code") or item.get("material_code") or po.style_number or ""
+                partner = item.get("partner_item_code") or item.get("partner_code") or ""
                 desc = item.get("description") or item.get("item_description", po.description or "")
                 
                 # Retrieve shipped quantity for this line
