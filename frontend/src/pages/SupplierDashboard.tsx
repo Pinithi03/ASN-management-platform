@@ -111,6 +111,32 @@ const formatDateSafe = (dateStr: string | null | undefined): string => {
   }
 };
 
+const getPoUom = (po: any): string => {
+  if (po?.extra_data?.items && Array.isArray(po.extra_data.items) && po.extra_data.items[0]?.uom) {
+    return po.extra_data.items[0].uom;
+  }
+  return po?.uom || "pcs";
+};
+
+const getCleanDestination = (dest: string | null | undefined): string => {
+  if (!dest || !dest.trim()) return "Omega Line Ltd (PPA1)";
+  const clean = dest.trim();
+  const plantKey = clean.split(/[- ]/)[0].toUpperCase();
+  if (PLANT_LABELS[plantKey]) {
+    return `${PLANT_LABELS[plantKey].name} (${plantKey})`;
+  }
+  return clean;
+};
+
+const getPoProductDesc = (po: any): string => {
+  const itemCode = po?.item_code || po?.extra_data?.items?.[0]?.item_code || po?.style_number;
+  const desc = po?.description || po?.extra_data?.items?.[0]?.description;
+  if (itemCode && desc && itemCode !== desc) {
+    return `${itemCode} — ${desc}`;
+  }
+  return itemCode || desc || "Apparel Item";
+};
+
 export default function SupplierDashboard() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
@@ -191,8 +217,24 @@ export default function SupplierDashboard() {
       }
     });
 
-    // Sort queue by closest deadline
-    queue.sort((a, b) => (a.daysLeft ?? 999) - (b.daysLeft ?? 999));
+    // Smart operational sorting:
+    // Priority 1: Due Today (0 days) & Due Tomorrow (1 day)
+    // Priority 2: Due soon (2 to 14 days)
+    // Priority 3: Recently Overdue (1 to 14 days overdue: -1, -2, -3... sorted closest to today first)
+    // Priority 4: Due in 15 to 30 days
+    // Priority 5: Stale / historical backlog (>14 days overdue)
+    queue.sort((a, b) => {
+      const getPriority = (d: number | null) => {
+        if (d === null) return 999999;
+        if (d === 0) return 0;
+        if (d > 0 && d <= 7) return d;
+        if (d < 0 && d >= -14) return 10 + Math.abs(d);
+        if (d > 7 && d <= 30) return 30 + d;
+        if (d < -14 && d >= -60) return 100 + Math.abs(d);
+        return 1000 + Math.abs(d);
+      };
+      return getPriority(a.daysLeft) - getPriority(b.daysLeft);
+    });
 
     const chartBuckets = [
       { name: "Overdue", count: overdue, fill: "#ef4444" },
@@ -770,11 +812,18 @@ export default function SupplierDashboard() {
                     const days = po.daysLeft;
                     const isOverdue = days !== null && days < 0;
                     const isUrgent = days !== null && days >= 0 && days <= 3;
+                    const uom = getPoUom(po);
+                    const isPartial = po.status === "PARTIAL";
+                    const cleanDest = getCleanDestination(po.destination);
+                    const productDesc = getPoProductDesc(po);
 
                     return (
-                      <div key={po.id} className="py-3 flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
+                      <div
+                        key={po.id}
+                        className="py-3 flex items-center justify-between gap-3 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 px-2 rounded-xl transition-colors"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-xs font-extrabold text-slate-900 dark:text-white font-mono">
                               {po.po_number || "Unnamed PO"}
                             </span>
@@ -791,14 +840,35 @@ export default function SupplierDashboard() {
                                 ? `Overdue (${Math.abs(days)}d)`
                                 : days === 0
                                 ? "Due Today"
+                                : days === 1
+                                ? "Due Tomorrow"
                                 : `${days}d left`}
                             </span>
+                            {isPartial && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30">
+                                Partial
+                              </span>
+                            )}
                           </div>
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
-                            {po.destination || "Plant"} · {po.style_number || po.description || "Apparel item"}
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 truncate">
+                            <span className="font-medium text-slate-700 dark:text-slate-300">{cleanDest}</span>
+                            {" · "}
+                            <span>{productDesc}</span>
                           </p>
                           <p className="text-[10px] text-slate-400 mt-0.5">
-                            Target: {formatDateSafe(po.delivery_date)} · Quantity: {(po.quantity || 0).toLocaleString()} {po.currency || "pcs"}
+                            Target: {formatDateSafe(po.delivery_date)} · Quantity:{" "}
+                            {isPartial && po.remaining_quantity != null ? (
+                              <span className="font-semibold text-slate-700 dark:text-slate-300">
+                                {Math.round(po.remaining_quantity).toLocaleString()}{" "}
+                                <span className="font-normal text-slate-400">/ {(po.quantity || 0).toLocaleString()}</span>{" "}
+                                <span className="text-emerald-600 dark:text-emerald-400">{uom}</span>
+                              </span>
+                            ) : (
+                              <span className="font-semibold text-slate-700 dark:text-slate-300">
+                                {(po.quantity || 0).toLocaleString()}{" "}
+                                <span className="text-emerald-600 dark:text-emerald-400">{uom}</span>
+                              </span>
+                            )}
                           </p>
                         </div>
 
