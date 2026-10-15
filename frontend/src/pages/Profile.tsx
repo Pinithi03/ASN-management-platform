@@ -459,7 +459,7 @@ export default function Profile() {
             <div className="p-5 rounded-xl border border-gray-200 bg-gray-50/70 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block mb-1">
-                  Active Generating Handling Unit Number
+                  Last Used Handling Unit (HU) Number
                 </span>
                 <div className="font-mono text-xl sm:text-2xl font-bold text-gray-900 flex items-center gap-2">
                   <span className="text-emerald-600">#</span>
@@ -501,15 +501,15 @@ export default function Profile() {
                 </p>
                 <p className="mt-0.5 text-rose-800 leading-relaxed">
                   {isAdminEditOpen
-                    ? "As a System Administrator, you can update this supplier's current generating HU number. This will update the supplier record and realign the system sequence."
-                    : "Please enter the current Handling Unit (HU) number your factory or packing line is currently generating. Once you confirm and save this value, it will be locked and cannot be altered from this portal without administrator assistance."}
+                    ? "As a System Administrator, you can update this supplier's last used HU number. Next carton generation will resume from this number + 1."
+                    : "Please enter the last used Handling Unit (HU) number from your factory or packing line (enter 0 if you are starting brand new). The system will generate your next cartons starting from this number + 1 (e.g. 0 ➔ 1)."}
                 </p>
               </div>
             </div>
 
             <div className="p-4 rounded-xl border border-gray-200 bg-white space-y-3">
               <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider">
-                Current Generating HU Number
+                Last Used Handling Unit (HU) Number
               </label>
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                 <div className="relative flex-1">
@@ -517,11 +517,14 @@ export default function Profile() {
                     type="text"
                     value={huInput}
                     onChange={(e) => setHuInput(e.target.value)}
-                    placeholder="e.g. 10000000000000000001 or current running serial"
+                    placeholder="e.g. 0 (if starting fresh) or last used serial (e.g. 50)"
                     className="w-full h-11 px-3.5 text-sm font-mono rounded-xl border border-gray-200 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 bg-gray-50/50 focus:bg-white transition-colors"
                     disabled={isSavingHu}
                     required
                   />
+                  <span className="text-[11px] text-gray-500 mt-1 block">
+                    💡 Enter your last used 20-digit HU or serial number (enter 0 if you are starting brand new). Your next created shipment carton will start directly from this number + 1 (e.g. 0 ➔ 1, or 50 ➔ 51).
+                  </span>
                 </div>
                 <button
                   type="submit"

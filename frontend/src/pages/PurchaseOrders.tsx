@@ -22,8 +22,9 @@ import {
   Mail,
   History,
   FileSpreadsheet,
-  Truck,
   Layers,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
 import { poApi } from "../services/poApi";
 import { useAuthStore } from "../store/authStore";
@@ -48,6 +49,22 @@ const STATUS_BADGES: Record<string, string> = {
   CANCELLED: "bg-red-50 text-red-700 border border-red-200",
 };
 
+const formatDateDisplay = (dateStr?: string | null) => {
+  if (!dateStr) return "—";
+  try {
+    const s = dateStr.trim();
+    if (/^\d{2}-\d{2}-\d{4}$/.test(s)) {
+      const [d, m, y] = s.split("-");
+      return format(new Date(parseInt(y), parseInt(m) - 1, parseInt(d)), "MMM d, yyyy");
+    }
+    const d = new Date(s);
+    if (isNaN(d.getTime())) return s;
+    return format(d, "MMM d, yyyy");
+  } catch {
+    return dateStr;
+  }
+};
+
 interface POLineItemRow {
   line_number: string;
   item_code: string;
@@ -56,19 +73,33 @@ interface POLineItemRow {
   color?: string;
   size?: string;
   quantity: number;
+  shipped_quantity?: number;
+  remaining_quantity?: number;
   unit_price?: number;
 }
 
 // Plant matcher helper to identify plant code and standard company name
 export const getPlantInfo = (clientOrDest?: string | null) => {
   if (!clientOrDest) return { code: "PPA1", name: "Omega Line Ltd", fullName: "Omega Line (PPA1)" };
-  const s = clientOrDest.toLowerCase();
-  if (s.includes("alpha") || s.includes("ppb1")) return { code: "PPB1", name: "Alpha Apparels Ltd", fullName: "Alpha Apparels (PPB1)" };
-  if (s.includes("benji") || s.includes("ppc1")) return { code: "PPC1", name: "Benji Ltd", fullName: "Benji (PPC1)" };
-  if (s.includes("sirio") || s.includes("ppd1")) return { code: "PPD1", name: "Sirio Ltd", fullName: "Sirio (PPD1)" };
-  if (s.includes("vavuniya") || s.includes("ppe1") || s.includes("ppa4")) return { code: "PPE1", name: "Vavuniya Apparels", fullName: "Vavuniya Apparels (PPE1)" };
-  if (s.includes("omega") || s.includes("ppa1") || s.includes("ppa2") || s.includes("bauddhaloka")) return { code: "PPA1", name: "Omega Line Ltd", fullName: "Omega Line (PPA1)" };
-  return { code: "PPA1", name: clientOrDest, fullName: clientOrDest };
+  const trimmed = clientOrDest.trim();
+  const codeMatch = trimmed.match(/\b(PP[A-E]\d(?:-[0-9A-Z]+)?)\b/i);
+  const plantCode = codeMatch ? codeMatch[1].toUpperCase() : "";
+
+  const s = trimmed.toLowerCase();
+  let baseName = "Omega Line Ltd";
+  if (s.includes("alpha") || s.includes("ppb1")) baseName = "Alpha Apparels Ltd";
+  else if (s.includes("benji") || s.includes("ppc1")) baseName = "Benji Ltd";
+  else if (s.includes("sirio") || s.includes("ppd1")) baseName = "Sirio Ltd";
+  else if (s.includes("vavuniya") || s.includes("ppe1") || s.includes("ppa4")) baseName = "Vavuniya Apparels";
+  else if (s.includes("omega") || s.includes("ppa1") || s.includes("ppa2") || s.includes("bauddhaloka")) baseName = "Omega Line Ltd";
+  else if (trimmed) baseName = trimmed;
+
+  const code = plantCode || (baseName === "Alpha Apparels Ltd" ? "PPB1" : baseName === "Benji Ltd" ? "PPC1" : baseName === "Sirio Ltd" ? "PPD1" : baseName === "Vavuniya Apparels" ? "PPE1" : "PPA1");
+  return {
+    code,
+    name: baseName,
+    fullName: `${baseName} (${code})`,
+  };
 };
 
 export interface PurchaseOrdersProps {
@@ -136,7 +167,15 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
       : `${startItem.toLocaleString()}–${endItem.toLocaleString()} of ${totalOrders.toLocaleString()}`;
 
 
+  const selectableOrders = orders.filter(
+    (p) => p.status !== "COMPLETED" && p.status !== "CANCELLED" && Boolean(p.po_number)
+  );
+
   const togglePOSelection = (poNumber: string) => {
+    const poObj = orders.find((p) => p.po_number === poNumber);
+    if (poObj && (poObj.status === "COMPLETED" || poObj.status === "CANCELLED")) {
+      return;
+    }
     const newSelection = new Set(selectedPOs);
     if (newSelection.has(poNumber)) {
       newSelection.delete(poNumber);
@@ -147,10 +186,10 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
   };
 
   const toggleAllSelection = () => {
-    if (selectedPOs.size === orders.length && orders.length > 0) {
+    if (selectedPOs.size === selectableOrders.length && selectableOrders.length > 0) {
       setSelectedPOs(new Set());
     } else {
-      const allNumbers = orders
+      const allNumbers = selectableOrders
         .map((p) => p.po_number)
         .filter((num): num is string => Boolean(num));
       setSelectedPOs(new Set(allNumbers));
@@ -176,6 +215,8 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
       const partnerCode = it.partner_item_code || it.partner_code || "";
       const desc = it.item_description || it.description || activePO?.description || " ";
       const qty = Number(it.quantity || 0);
+      const shipped = Number(it.shipped_quantity ?? 0);
+      const remaining = it.remaining_quantity !== undefined ? Number(it.remaining_quantity) : Math.max(0, qty - shipped);
 
       let unitPrice: number | undefined = undefined;
       if (it.unit_price !== undefined && it.unit_price !== null && Number(it.unit_price) > 0) {
@@ -192,6 +233,8 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
         color: it.color || "",
         size: it.size || it.qty_unit || it.uom || "M",
         quantity: qty,
+        shipped_quantity: shipped,
+        remaining_quantity: remaining,
         unit_price: unitPrice,
       };
     })
@@ -205,12 +248,23 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
           color: "",
           size: "PCS",
           quantity: activePO.quantity || 0,
+          shipped_quantity: Number((activePO as any).shipped_quantity || 0),
+          remaining_quantity: (activePO as any).remaining_quantity !== undefined
+            ? Number((activePO as any).remaining_quantity)
+            : Math.max(0, Number(activePO.quantity || 0) - Number((activePO as any).shipped_quantity || 0)),
           unit_price: activePO.unit_price ? Number(activePO.unit_price) : undefined,
         },
       ]
       : [];
 
   const totalLineQuantity = lineItems.reduce((acc, item) => acc + (item.quantity || 0), 0);
+  const totalShippedQuantity = (activePO as any)?.shipped_quantity !== undefined
+    ? Number((activePO as any).shipped_quantity)
+    : lineItems.reduce((acc, item) => acc + (item.shipped_quantity || 0), 0);
+  const totalRemainingQuantity = (activePO as any)?.remaining_quantity !== undefined
+    ? Number((activePO as any).remaining_quantity)
+    : Math.max(0, totalLineQuantity - totalShippedQuantity);
+
   const totalLineValue = lineItems.reduce((acc, item) => {
     if (item.unit_price && item.quantity) {
       return acc + item.quantity * item.unit_price;
@@ -234,7 +288,12 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
       : totalLineValue;
 
   // Resolved plant and order info for the active previewed PO
-  const plantInfo = getPlantInfo(activePO?.client_code || activePO?.destination);
+  const plantInfo = getPlantInfo(
+    activePO?.destination ||
+    (activePO as any)?.delivery_address ||
+    (activePO?.extra_data as any)?.delivery_address ||
+    activePO?.client_code
+  );
   const orderType = (activePO?.extra_data as any)?.order_type || "ZA6A";
   const colSpanBeforeQty = hasDistinctPartner ? 6 : 5;
 
@@ -453,7 +512,7 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                       )}
                       title="Select all"
                     >
-                      {selectedPOs.size === orders.length && orders.length > 0 ? (
+                      {selectedPOs.size === selectableOrders.length && selectableOrders.length > 0 ? (
                         <CheckSquare className={cn("w-4 h-4", isSupplier ? "text-emerald-600" : "text-blue-600")} />
                       ) : (
                         <Square className="w-4 h-4" />
@@ -461,10 +520,11 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                     </button>
                   </th>
                   <th className="px-4 py-3.5">PO Number</th>
-                  <th className="px-4 py-3.5">Client / Destination</th>
-                  <th className="px-4 py-3.5">Style / Material</th>
-                  <th className="px-4 py-3.5 text-right">Quantity</th>
+                  <th className="px-4 py-3.5">Order Date</th>
                   <th className="px-4 py-3.5">Delivery Date</th>
+                  <th className="px-4 py-3.5">Contact</th>
+                  <th className="px-4 py-3.5">Notation</th>
+                  <th className="px-4 py-3.5 text-right">Quantity</th>
                   <th className="px-4 py-3.5">Status</th>
                 </tr>
               </thead>
@@ -488,17 +548,31 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                     >
                       {/* Selection Checkbox */}
                       <td
-                        className="px-4 py-3 text-center"
+                        className={cn(
+                          "px-4 py-3 text-center",
+                          (po.status === "COMPLETED" || po.status === "CANCELLED") ? "cursor-not-allowed opacity-40" : "cursor-pointer"
+                        )}
                         onClick={(e) => {
                           e.stopPropagation();
+                          if (po.status === "COMPLETED" || po.status === "CANCELLED") return;
                           if (po.po_number) togglePOSelection(po.po_number);
                         }}
                       >
                         <button
                           type="button"
+                          disabled={po.status === "COMPLETED" || po.status === "CANCELLED"}
+                          title={
+                            po.status === "COMPLETED"
+                              ? "This PO is fully fulfilled (Completed)"
+                              : po.status === "CANCELLED"
+                              ? "This PO is cancelled"
+                              : "Select PO"
+                          }
                           className={cn(
                             "text-gray-300 transition-colors",
-                            isSupplier ? "hover:text-emerald-600" : "hover:text-blue-600"
+                            (po.status === "COMPLETED" || po.status === "CANCELLED")
+                              ? "cursor-not-allowed"
+                              : isSupplier ? "hover:text-emerald-600" : "hover:text-blue-600"
                           )}
                         >
                           {isSelected ? (
@@ -517,37 +591,88 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                             isSupplier ? "group-hover:text-emerald-600" : "group-hover:text-blue-600"
                           )}
                         >
-                          <span>{po.po_number || " "}</span>
+                          <span>{po.po_number || "—"}</span>
                         </div>
                       </td>
 
-                      {/* Client / Destination */}
-                      <td className="px-4 py-3 text-gray-700">
-                        <div className="font-medium text-gray-900">{po.destination || po.client_code || " "}</div>
-                        {po.client_code && po.destination && po.client_code !== po.destination && (
-                          <div className="text-xs text-gray-400">{po.client_code}</div>
-                        )}
-                      </td>
-
-                      {/* Style */}
-                      <td className="px-4 py-3 text-gray-700">
-                        <div className="font-medium text-gray-900">{po.style_number || " "}</div>
-                        {po.description && (
-                          <div className="text-xs text-gray-400 truncate max-w-xs">{po.description}</div>
-                        )}
-                      </td>
-
-                      {/* Quantity */}
-                      <td className="px-4 py-3 text-right font-mono font-semibold text-gray-900">
-                        {po.quantity?.toLocaleString() ?? " "}
+                      {/* Order Date */}
+                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
+                          <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                          <span>{formatDateDisplay(po.order_date || (po.extra_data as any)?.order_date)}</span>
+                        </div>
                       </td>
 
                       {/* Delivery Date */}
                       <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
                         <div className="flex items-center gap-1.5">
                           <Calendar className="w-3.5 h-3.5 text-gray-400" />
-                          {po.delivery_date ? format(new Date(po.delivery_date), "MMM d, yyyy") : " "}
+                          <span>{formatDateDisplay(po.delivery_date)}</span>
                         </div>
+                      </td>
+
+                      {/* Contact (<ContactPerson> on top, <AuxHead1> email underneath) */}
+                      <td className="px-4 py-3 text-gray-700">
+                        {po.contact_person || (po.extra_data as any)?.contact_person ? (
+                          <div>
+                            <div className="font-medium text-gray-900 leading-tight">
+                              {po.contact_person || (po.extra_data as any)?.contact_person}
+                            </div>
+                            {(po.contact_email || (po.extra_data as any)?.contact_email) && (
+                              <a
+                                href={`mailto:${po.contact_email || (po.extra_data as any)?.contact_email}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="text-xs text-blue-600 hover:underline hover:text-blue-700 block truncate max-w-[220px] mt-0.5"
+                                title={po.contact_email || (po.extra_data as any)?.contact_email}
+                              >
+                                {po.contact_email || (po.extra_data as any)?.contact_email}
+                              </a>
+                            )}
+                          </div>
+                        ) : (po.contact_email || (po.extra_data as any)?.contact_email) ? (
+                          <a
+                            href={`mailto:${po.contact_email || (po.extra_data as any)?.contact_email}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-xs text-blue-600 hover:underline hover:text-blue-700 block truncate max-w-[220px]"
+                            title={po.contact_email || (po.extra_data as any)?.contact_email}
+                          >
+                            {po.contact_email || (po.extra_data as any)?.contact_email}
+                          </a>
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
+                      </td>
+
+                      {/* Notation */}
+                      <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
+                        {po.notations || (po.extra_data as any)?.notations || (po.extra_data as any)?.aux_head8 || (
+                          <span className="text-gray-400">—</span>
+                        )}
+                      </td>
+
+                      {/* Quantity */}
+                      <td className="px-4 py-3 text-right font-mono">
+                        {po.status === "PARTIAL" && po.remaining_quantity !== undefined && po.remaining_quantity !== null ? (
+                          <div>
+                            <div className="font-bold text-orange-600">
+                              {po.remaining_quantity.toLocaleString()}
+                            </div>
+                            <div className="text-[11px] text-gray-400">
+                              bal of {po.quantity?.toLocaleString()}
+                            </div>
+                          </div>
+                        ) : po.status === "COMPLETED" ? (
+                          <div>
+                            <div className="font-bold text-emerald-600">0</div>
+                            <div className="text-[11px] text-gray-400">
+                              fulfilled ({po.quantity?.toLocaleString()})
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="font-semibold text-gray-900">
+                            {po.quantity?.toLocaleString() ?? "—"}
+                          </div>
+                        )}
                       </td>
 
                       {/* Status */}
@@ -645,6 +770,23 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                     <span className="px-2 py-0.5 text-xs font-semibold bg-blue-50 text-blue-700 rounded-md border border-blue-200 font-mono">
                       Type: {orderType}
                     </span>
+                    {activePO.delivery_date && (
+                      <span className="px-2.5 py-0.5 text-xs font-medium bg-amber-50 text-amber-800 rounded-md border border-amber-200 inline-flex items-center gap-1.5 font-sans">
+                        <Calendar className="w-3 h-3 text-amber-600" />
+                        Delivery: <strong className="font-semibold">{format(new Date(activePO.delivery_date), "MMM d, yyyy")}</strong>
+                      </span>
+                    )}
+                    <span className="px-2.5 py-0.5 text-xs font-medium bg-emerald-50 text-emerald-800 rounded-md border border-emerald-200 inline-flex items-center gap-1.5 font-sans">
+                      <Package className="w-3 h-3 text-emerald-600" />
+                      Balance: <strong className="font-mono font-bold text-emerald-900">{totalRemainingQuantity.toLocaleString()}</strong>
+                      <span className="text-emerald-700 font-normal">/ {totalLineQuantity.toLocaleString()}</span>
+                    </span>
+                    {displayTotalValue > 0 && (
+                      <span className="px-2.5 py-0.5 text-xs font-medium bg-purple-50 text-purple-800 rounded-md border border-purple-200 font-mono inline-flex items-center gap-1.5">
+                        <DollarSign className="w-3 h-3 text-purple-600" />
+                        <strong>{activePO.currency || "USD"} {displayTotalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                      </span>
+                    )}
                     {activePO.po_number && (
                       <button
                         type="button"
@@ -663,15 +805,33 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                       </button>
                     )}
                   </div>
-                  <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500 mt-1">
-                    <span>
-                      Plant: <strong className="text-gray-800 font-medium">{plantInfo.fullName}</strong>
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500 mt-2">
+                    <span className="inline-flex items-center gap-1.5">
+                      <Building className="w-3.5 h-3.5 text-blue-600" />
+                      Plant:{" "}
+                      <strong className="text-blue-900 font-bold font-mono bg-blue-50 px-2 py-0.5 rounded border border-blue-200 text-xs">
+                        {plantInfo.code}
+                      </strong>
+                      <span className="text-gray-700 font-medium">
+                        ({plantInfo.name})
+                      </span>
                     </span>
-                    {activePO.style_number && (
+                    {(activePO.contact_person || (activePO.extra_data as any)?.contact_person) && (
                       <>
                         <span className="text-gray-300">•</span>
                         <span>
-                          Primary Style: <strong className="text-gray-800 font-mono">{activePO.style_number}</strong>
+                          Contact: <strong className="text-gray-800 font-medium">{activePO.contact_person || (activePO.extra_data as any)?.contact_person}</strong>
+                          {(activePO.contact_email || (activePO.extra_data as any)?.contact_email) && (
+                            <span className="text-gray-500 ml-1">({activePO.contact_email || (activePO.extra_data as any)?.contact_email})</span>
+                          )}
+                        </span>
+                      </>
+                    )}
+                    {(activePO.notations || (activePO.extra_data as any)?.notations || (activePO.extra_data as any)?.aux_head8) && (
+                      <>
+                        <span className="text-gray-300">•</span>
+                        <span>
+                          Notation: <span className="text-gray-800 font-medium">{activePO.notations || (activePO.extra_data as any)?.notations || (activePO.extra_data as any)?.aux_head8}</span>
                         </span>
                       </>
                     )}
@@ -690,93 +850,7 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
             </div>
 
             {/* Modal Body - Scrollable */}
-            <div className="p-6 overflow-y-auto space-y-6 flex-1 text-sm">
-              {/* Summary Overview Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-                {/* Card 1: Plant & Destination */}
-                <div className="bg-gradient-to-br from-gray-50 to-white p-4 rounded-xl border border-gray-200/90 shadow-2xs">
-                  <div className="flex items-center justify-between text-xs text-gray-500 mb-1.5">
-                    <span className="flex items-center gap-1.5 font-medium">
-                      <Building className="w-3.5 h-3.5 text-blue-600" />
-                      Plant & Destination
-                    </span>
-                    <span className="px-1.5 py-0.5 font-bold font-mono text-[10px] bg-blue-50 text-blue-700 rounded border border-blue-200">
-                      {plantInfo.code}
-                    </span>
-                  </div>
-                  <p className="font-bold text-gray-900 text-sm leading-snug">
-                    {plantInfo.name}
-                  </p>
-                  <p className="text-xs text-gray-600 mt-1 break-words">
-                    {activePO.destination || activePO.client_code || "Direct Delivery"}
-                  </p>
-                </div>
-
-                {/* Card 2: Dates & Transit */}
-                <div className="bg-gradient-to-br from-gray-50 to-white p-4 rounded-xl border border-gray-200/90 shadow-2xs">
-                  <div className="flex items-center justify-between text-xs text-gray-500 mb-1.5">
-                    <span className="flex items-center gap-1.5 font-medium">
-                      <Calendar className="w-3.5 h-3.5 text-amber-600" />
-                      Delivery Schedule
-                    </span>
-                    {activePO.ship_date && (
-                      <span className="text-[10px] text-gray-400 font-mono">
-                        Ship: {format(new Date(activePO.ship_date), "MMM d")}
-                      </span>
-                    )}
-                  </div>
-                  <p className="font-bold text-gray-900 text-sm">
-                    {activePO.delivery_date ? format(new Date(activePO.delivery_date), "MMM d, yyyy") : "Not Specified"}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
-                    <Truck className="w-3 h-3 text-gray-400" />
-                    {activePO.ship_date ? `Scheduled Ship: ${format(new Date(activePO.ship_date), "MMM d, yyyy")}` : "Standard Factory Transit"}
-                  </p>
-                </div>
-
-                {/* Card 3: Total Quantities */}
-                <div className="bg-gradient-to-br from-gray-50 to-white p-4 rounded-xl border border-gray-200/90 shadow-2xs">
-                  <div className="flex items-center justify-between text-xs text-gray-500 mb-1.5">
-                    <span className="flex items-center gap-1.5 font-medium">
-                      <Package className="w-3.5 h-3.5 text-emerald-600" />
-                      Total Quantity
-                    </span>
-                    <span className="px-1.5 py-0.5 font-medium text-[10px] bg-emerald-50 text-emerald-700 rounded border border-emerald-200">
-                      {lineItems.length} {lineItems.length === 1 ? "line" : "lines"}
-                    </span>
-                  </div>
-                  <p className="font-extrabold text-gray-900 text-xl font-mono">
-                    {(activePO.quantity || totalLineQuantity).toLocaleString()}
-                    <span className="text-xs font-normal text-gray-500 ml-1.5">units</span>
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Across {lineItems.length} active order line{lineItems.length === 1 ? "" : "s"}
-                  </p>
-                </div>
-
-                {/* Card 4: Order Valuation */}
-                <div className="bg-gradient-to-br from-gray-50 to-white p-4 rounded-xl border border-gray-200/90 shadow-2xs">
-                  <div className="flex items-center justify-between text-xs text-gray-500 mb-1.5">
-                    <span className="flex items-center gap-1.5 font-medium">
-                      <DollarSign className="w-3.5 h-3.5 text-purple-600" />
-                      Total Order Value
-                    </span>
-                    <span className="px-1.5 py-0.5 font-bold font-mono text-[10px] bg-purple-50 text-purple-700 rounded border border-purple-200">
-                      {activePO.currency || "USD"}
-                    </span>
-                  </div>
-                  <p className="font-extrabold text-gray-900 text-xl font-mono">
-                    {activePO.currency || "USD"}{" "}
-                    {displayTotalValue.toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {hasPricing ? "Valued via email line items" : "Standard procurement rate"}
-                  </p>
-                </div>
-              </div>
+            <div className="p-6 overflow-y-auto space-y-5 flex-1 text-sm">
 
               {/* Ingestion Source Email (if present) */}
               {activePO.source_email_subject && (
@@ -806,27 +880,32 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                 <div className="border border-gray-200 rounded-xl overflow-x-auto shadow-xs bg-white">
                   <table className="w-full text-left text-xs">
                     <thead>
-                      <tr className="bg-gray-50/90 border-b border-gray-200 text-gray-500 font-semibold uppercase tracking-wider">
+                      <tr className="bg-gray-50/90 border-b border-gray-200 text-gray-500 font-semibold uppercase tracking-wider text-[11px]">
                         <th className="px-3 py-2.5 w-10 text-center">#</th>
-                        <th className="px-3 py-2.5 min-w-[150px]">Item / Material Code</th>
+                        <th className="px-3 py-2.5 min-w-[140px]">Item / Material Code</th>
                         {hasDistinctPartner && (
                           <th className="px-3 py-2.5 min-w-[110px]">Partner Code</th>
                         )}
-                        <th className="px-3 py-2.5 min-w-[180px]">Description</th>
-                        <th className="px-2.5 py-2.5 min-w-[80px]">Color</th>
-                        <th className="px-2.5 py-2.5 text-center w-20">Size / UOM</th>
-                        <th className="px-3 py-2.5 text-right font-semibold min-w-[90px]">Quantity</th>
+                        <th className="px-3 py-2.5 min-w-[160px]">Description</th>
+                        <th className="px-2.5 py-2.5 min-w-[70px]">Color</th>
+                        <th className="px-2.5 py-2.5 text-center w-16">UOM</th>
+                        <th className="px-3 py-2.5 text-right font-semibold min-w-[85px]">Ordered</th>
+                        <th className="px-3 py-2.5 text-right font-semibold min-w-[85px]">Shipped</th>
+                        <th className="px-3 py-2.5 text-right font-semibold min-w-[95px]">Open Balance</th>
+                        <th className="px-3 py-2.5 text-center min-w-[90px]">Status</th>
                         {hasPricing && (
-                          <th className="px-3 py-2.5 text-right min-w-[95px]">Unit Price</th>
+                          <th className="px-3 py-2.5 text-right min-w-[90px]">Unit Price</th>
                         )}
                         {hasPricing && (
-                          <th className="px-3 py-2.5 text-right font-semibold min-w-[105px]">Subtotal</th>
+                          <th className="px-3 py-2.5 text-right font-semibold min-w-[100px]">Subtotal</th>
                         )}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 bg-white">
                       {lineItems.map((item, idx) => {
                         const lineSubtotal = item.unit_price ? item.quantity * item.unit_price : undefined;
+                        const lineRem = item.remaining_quantity !== undefined ? item.remaining_quantity : Math.max(0, item.quantity - (item.shipped_quantity || 0));
+                        const lineShip = item.shipped_quantity || 0;
                         return (
                           <tr key={idx} className="hover:bg-blue-50/20 transition-colors">
                             <td className="px-3 py-2.5 text-center font-mono text-gray-400">
@@ -866,8 +945,29 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                                 {item.size || "M"}
                               </span>
                             </td>
-                            <td className="px-3 py-2.5 text-right font-mono font-bold text-gray-900 text-sm whitespace-nowrap">
+                            <td className="px-3 py-2.5 text-right font-mono text-gray-700 whitespace-nowrap">
                               {item.quantity.toLocaleString()}
+                            </td>
+                            <td className="px-3 py-2.5 text-right font-mono text-emerald-700 font-semibold whitespace-nowrap">
+                              {lineShip.toLocaleString()}
+                            </td>
+                            <td className="px-3 py-2.5 text-right font-mono font-bold text-gray-900 whitespace-nowrap">
+                              {lineRem.toLocaleString()}
+                            </td>
+                            <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                              {lineRem <= 0 ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Fulfilled
+                                </span>
+                              ) : lineShip > 0 ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-50 text-orange-700 border border-orange-200">
+                                  Partial
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                  Pending
+                                </span>
+                              )}
                             </td>
                             {hasPricing && (
                               <td className="px-3 py-2.5 text-right font-mono text-gray-600 whitespace-nowrap">
@@ -890,11 +990,18 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                     <tfoot className="bg-gray-50/90 border-t-2 border-gray-200 font-semibold text-gray-900">
                       <tr>
                         <td colSpan={colSpanBeforeQty} className="px-3 py-2.5 text-right text-gray-600 text-xs">
-                          Total Order Quantity ({lineItems.length} lines):
+                          Totals ({lineItems.length} lines):
                         </td>
-                        <td className="px-3 py-2.5 text-right font-mono text-sm font-bold text-blue-600 whitespace-nowrap">
+                        <td className="px-3 py-2.5 text-right font-mono text-xs text-gray-700 whitespace-nowrap">
                           {totalLineQuantity.toLocaleString()}
                         </td>
+                        <td className="px-3 py-2.5 text-right font-mono text-xs font-bold text-emerald-700 whitespace-nowrap">
+                          {totalShippedQuantity.toLocaleString()}
+                        </td>
+                        <td className="px-3 py-2.5 text-right font-mono text-sm font-bold text-blue-600 whitespace-nowrap">
+                          {totalRemainingQuantity.toLocaleString()}
+                        </td>
+                        <td className="px-3 py-2.5"></td>
                         {hasPricing && <td className="px-3 py-2.5"></td>}
                         {hasPricing && (
                           <td className="px-3 py-2.5 text-right font-mono text-sm font-bold text-gray-900 whitespace-nowrap">
@@ -943,7 +1050,7 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
             {/* Modal Sticky Footer Actions */}
             <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
               <div className="flex items-center gap-2">
-                {activePO.po_number && (
+                {activePO.po_number && activePO.status !== "COMPLETED" && activePO.status !== "CANCELLED" && (
                   <button
                     type="button"
                     onClick={() => {
@@ -975,7 +1082,17 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                   Close
                 </button>
 
-                {activeMode === "excel" ? (
+                {activePO.status === "COMPLETED" ? (
+                  <div className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Fully Fulfilled (Completed)</span>
+                  </div>
+                ) : activePO.status === "CANCELLED" ? (
+                  <div className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-red-50 border border-red-200 text-red-800 text-xs font-semibold">
+                    <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                    <span>Cancelled PO</span>
+                  </div>
+                ) : activeMode === "excel" ? (
                   <button
                     type="button"
                     onClick={() => {

@@ -20,20 +20,21 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Add current_hu_number and hu_locked to suppliers
-    op.add_column('suppliers', sa.Column('current_hu_number', sa.String(length=50), nullable=True))
-    op.add_column('suppliers', sa.Column('hu_locked', sa.Boolean(), server_default='false', nullable=False))
+    # Add current_hu_number and hu_locked to suppliers if not exists
+    op.execute("ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS current_hu_number VARCHAR(50);")
+    op.execute("ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS hu_locked BOOLEAN NOT NULL DEFAULT FALSE;")
 
     # Create hu_sequences table if not exists
-    op.create_table(
-        'hu_sequences',
-        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column('supplier_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('suppliers.id', ondelete='CASCADE'), nullable=False),
-        sa.Column('last_number', sa.BigInteger(), server_default='0', nullable=False),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-    )
-    op.create_index(op.f('ix_hu_sequences_supplier_id'), 'hu_sequences', ['supplier_id'], unique=True)
+    op.execute("""
+    CREATE TABLE IF NOT EXISTS hu_sequences (
+        id UUID PRIMARY KEY,
+        supplier_id UUID NOT NULL REFERENCES suppliers(id) ON DELETE CASCADE,
+        last_number BIGINT NOT NULL DEFAULT 0,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+    );
+    """)
+    op.execute("CREATE UNIQUE INDEX IF NOT EXISTS ix_hu_sequences_supplier_id ON hu_sequences (supplier_id);")
 
 
 def downgrade() -> None:

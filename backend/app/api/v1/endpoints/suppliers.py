@@ -80,19 +80,51 @@ async def get_optional_current_user(
 async def set_supplier_hu_sequence(db: AsyncSession, supplier_id: uuid.UUID, hu_number_str: str) -> None:
     """Synchronize a supplier's current HU number with the atomic hu_sequences sequence tracker."""
     from app.models.hu_sequence import HUSequence
+    from app.models.packing_slip import PackingSlip
+    from app.models.shipment import Shipment
+
     clean = hu_number_str.strip()
     digits = "".join(filter(str.isdigit, clean))
     if not digits:
         return
-    # If standard 20-digit or longer Calzedonia HU, extract last 10 digits as running sequence
     running_seq = int(digits[-10:]) if len(digits) >= 10 else int(digits)
+
+    # Check if this supplier already has packing slips/shipments using higher or equal HU serials
+    max_hu_stmt = (
+        select(PackingSlip.hu_number)
+        .join(Shipment, PackingSlip.shipment_id == Shipment.id)
+        .where(
+            Shipment.supplier_id == supplier_id,
+            Shipment.status != "CANCELLED",
+        )
+    )
+    existing_res = await db.execute(max_hu_stmt)
+    existing_hus = existing_res.scalars().all()
+    serials = [int(h[10:]) for h in existing_hus if len(h) == 20 and h[10:].isdigit()]
+    if serials:
+        max_used = max(serials)
+        if running_seq < max_used:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"Cannot set last used HU sequence to #{running_seq}. "
+                    f"Handling Units up to #{max_used} have already been used in existing active shipments. "
+                    f"Last used sequence must be at least #{max_used} (next carton will be #{running_seq + 1}). "
+                    f"To start from a lower number, please delete or cancel the existing test shipments first."
+                ),
+            )
+
+    # The number entered by the user is the LAST USED number (e.g. 0 for new supplier, or 50 if already used up to 50).
+    # Since get_next_hu_sequence and generate_hu_numbers allocate starting from last_number + 1,
+    # we directly store running_seq as last_number so the very next carton generated is running_seq + 1.
+    last_num = max(0, running_seq)
     stmt = select(HUSequence).where(HUSequence.supplier_id == supplier_id)
     res = await db.execute(stmt)
     seq = res.scalar_one_or_none()
     if seq:
-        seq.last_number = running_seq
+        seq.last_number = last_num
     else:
-        seq = HUSequence(supplier_id=supplier_id, last_number=running_seq)
+        seq = HUSequence(supplier_id=supplier_id, last_number=last_num)
         db.add(seq)
 
 
@@ -570,6 +602,12 @@ async def create_supplier(
 
     has_hu = bool(payload.current_hu_number and payload.current_hu_number.strip())
     hu_str = payload.current_hu_number.strip() if has_hu else None
+    if hu_str:
+        digits = "".join(filter(str.isdigit, hu_str))
+        if digits:
+            running_seq = int(digits[-10:]) if len(digits) >= 10 else int(digits)
+            clean_code = payload.supplier_code.strip().lstrip("0").zfill(9)
+            hu_str = f"1{clean_code}{str(running_seq).zfill(10)}"
 
     new_supp = Supplier(
         supplier_code=payload.supplier_code.strip(),
@@ -735,12 +773,26 @@ async def update_supplier(
         supp.profile_picture_url = payload.profile_picture_url.strip() or None
     if payload.current_hu_number is not None:
         hu_val = payload.current_hu_number.strip() if payload.current_hu_number else None
-        supp.current_hu_number = hu_val
         if hu_val:
+            digits = "".join(filter(str.isdigit, hu_val))
+            if digits:
+                running_seq = int(digits[-10:]) if len(digits) >= 10 else int(digits)
+                clean_code = (supp.supplier_code or "").lstrip("0").zfill(9)
+                formatted_hu = f"1{clean_code}{str(running_seq).zfill(10)}"
+                supp.current_hu_number = formatted_hu
+            else:
+                supp.current_hu_number = hu_val
             supp.hu_locked = True
             await set_supplier_hu_sequence(db, supp.id, hu_val)
         else:
+            supp.current_hu_number = None
             supp.hu_locked = False
+            from app.models.hu_sequence import HUSequence
+            stmt = select(HUSequence).where(HUSequence.supplier_id == supp.id)
+            res = await db.execute(stmt)
+            seq = res.scalar_one_or_none()
+            if seq:
+                seq.last_number = 0
     if payload.hu_locked is not None:
         supp.hu_locked = payload.hu_locked
     if payload.is_active is not None:
@@ -1237,7 +1289,15 @@ async def set_supplier_hu_number(
             detail="HU Number cannot be empty.",
         )
 
-    supp.current_hu_number = hu_val
+    digits = "".join(filter(str.isdigit, hu_val))
+    if digits:
+        running_seq = int(digits[-10:]) if len(digits) >= 10 else int(digits)
+        clean_code = (supp.supplier_code or "0000018194").lstrip("0").zfill(9)
+        formatted_hu = f"1{clean_code}{str(running_seq).zfill(10)}"
+        supp.current_hu_number = formatted_hu
+    else:
+        supp.current_hu_number = hu_val
+
     supp.hu_locked = True
     await set_supplier_hu_sequence(db, supp.id, hu_val)
     await db.commit()

@@ -168,12 +168,16 @@ export interface PurchaseOrder {
   style_number?: string;
   description?: string;
   quantity?: number;
+  shipped_quantity?: number;
+  remaining_quantity?: number;
   unit_price?: number;
   total_value?: number;
   currency: string;
   delivery_date?: string;
   ship_date?: string;
   destination?: string;
+  delivery_address?: string;
+  extra_data?: any;
   status: POStatus;
   version: number;
   created_at: string;

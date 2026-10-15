@@ -26,6 +26,7 @@ export interface ManualPackingDraft {
   packedItems: any[];
   startingSeq: number;
   packingSlipNumber: string;
+  deliveryDate?: string;
   updatedAt: number;
 }
 

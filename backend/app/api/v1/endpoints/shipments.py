@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import io
 import logging
+import re
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
@@ -46,6 +47,7 @@ from app.services.asn_xml_generator_service import (
 from app.services.barcode_label_service import generate_batch_labels
 from app.services.hu_service import format_hu_number, generate_batch_hu
 from app.services.packing_excel_service import (
+    ParsedCartonRow,
     generate_packing_template,
     validate_packing_excel,
 )
@@ -110,7 +112,7 @@ async def get_next_hu_sequence(
     Ensures sequential continuity across cartons and shipments without gaps or random numbers.
     """
     supp = None
-    if supplier_id:
+    if supplier_id and isinstance(supplier_id, str):
         try:
             res = await db.execute(select(Supplier).where(Supplier.id == uuid.UUID(supplier_id)))
             supp = res.scalar_one_or_none()
@@ -140,10 +142,38 @@ async def get_next_hu_sequence(
     )
     seq = seq_res.scalar_one_or_none()
     last_num = seq.last_number if seq else 0
-    next_num = last_num + 1
 
     clean_code = resolved_code.lstrip("0")
     prefix = f"1{clean_code.zfill(9)}"
+
+    # Check database packing slips to ensure we never duplicate any previously used HU
+    try:
+        from app.models.packing_slip import PackingSlip
+        max_hu_stmt = (
+            select(PackingSlip.hu_number)
+            .join(Shipment, PackingSlip.shipment_id == Shipment.id)
+            .where(
+                Shipment.supplier_id == resolved_id,
+                PackingSlip.hu_number.like(f"{prefix}%"),
+            )
+        )
+        existing_res = await db.execute(max_hu_stmt)
+        existing_hus = existing_res.scalars().all()
+        serials = [int(h[10:]) for h in existing_hus if len(h) == 20 and h[10:].isdigit()]
+        if serials:
+            max_used = max(serials)
+            if max_used > last_num:
+                last_num = max_used
+                if seq:
+                    seq.last_number = max_used
+                else:
+                    seq = HUSequence(supplier_id=resolved_id, last_number=max_used)
+                    db.add(seq)
+                await db.flush()
+    except Exception as e:
+        logger.warning("Could not auto-calibrate HU sequence from existing cartons: %s", e)
+
+    next_num = last_num + 1
     next_hu = f"{prefix}{str(next_num).zfill(10)}"
 
     return {
@@ -173,12 +203,12 @@ async def download_packing_template(
             po = res.scalar_one_or_none()
             if po and po.extra_data and "items" in po.extra_data:
                 sample_lines = []
-                for idx, item in enumerate(po.extra_data["items"], start=1):
+                for it_idx, item in enumerate(po.extra_data["items"], start=1):
                     sample_lines.append({
                         "po_number": po.po_number,
                         "po_item": str(item.get("order_line_number") or item.get("line_number", "1")).strip(),
                         "pack_number": "PACK-01",
-                        "carton_number": idx,
+                        "carton_number": f"1 ({it_idx}-1)",
                         "supplier_carton_ref": "",
                         "product_code": item.get("material_code", "ELST1K 000615"),
                         "lot_number": "LOT-01",
@@ -207,6 +237,7 @@ class PoPackConfig(BaseModel):
     po_number: str
     pack_type: str = "BOX"
     selected_lines: Optional[list[str]] = None
+    line_carton_counts: Optional[dict[str, int]] = None
 
 class ConfigureTemplateRequest(BaseModel):
     configs: list[PoPackConfig]
@@ -218,10 +249,13 @@ async def download_configured_packing_template(
 ) -> StreamingResponse:
     """
     Generate a tailored Calzedonia packing list Excel template based on supplier's
-    packaging setup (Box vs Roll per PO).
+    packaging setup (Box vs Roll per PO) and carton/roll count per line item.
+    Cryptographically signs the template and leaves carton quantities blank for real measurement.
     """
     sample_lines = []
     running_carton_idx = 1
+    supp_code = ""
+    line_item_seq = 0
     
     for cfg in payload.configs:
         stmt = select(PurchaseOrder).where(PurchaseOrder.po_number == cfg.po_number)
@@ -229,6 +263,13 @@ async def download_configured_packing_template(
         po = res.scalar_one_or_none()
         if not po:
             continue
+
+        if not supp_code and po.supplier_id:
+            try:
+                supp_res = await db.execute(select(Supplier.supplier_code).where(Supplier.id == po.supplier_id))
+                supp_code = supp_res.scalar_one_or_none() or ""
+            except Exception:
+                pass
 
         raw_items = po.extra_data.get("items") if (po.extra_data and isinstance(po.extra_data, dict)) else None
         if not raw_items:
@@ -240,31 +281,66 @@ async def download_configured_packing_template(
                 "uom": "M",
             }]
 
-        for it in raw_items:
-            norm_key = str(it.get("order_line_number") or it.get("line_number", "1")).strip()
-            if cfg.selected_lines is not None and norm_key not in cfg.selected_lines:
-                continue
+        selected_keys = cfg.selected_lines if cfg.selected_lines is not None else [
+            str(it.get("order_line_number") or it.get("line_number", "1")).strip() for it in raw_items
+        ]
+
+        for sel_key in selected_keys:
+            clean_sel = str(sel_key).strip()
+            # Match against raw_items
+            it = next(
+                (
+                    item for item in raw_items
+                    if str(item.get("order_line_number") or item.get("line_number", "")).strip() == clean_sel
+                    or str(item.get("order_line_number") or item.get("line_number", "")).strip().lstrip("0") == clean_sel.lstrip("0")
+                    or str(item.get("order_line_number") or item.get("line_number", "")).strip().zfill(5) == clean_sel.zfill(5)
+                ),
+                None
+            )
+            if not it:
+                it = {
+                    "line_number": clean_sel,
+                    "material_code": po.style_number or "ELST1K 000615",
+                    "description": po.description or "PO Line Item",
+                    "quantity": float(po.quantity or 500),
+                    "uom": "M",
+                }
+
+            line_item_seq += 1
+            norm_key = str(it.get("order_line_number") or it.get("line_number") or clean_sel).strip()
             pack_type = cfg.pack_type.upper()
             ref_prefix = "RL" if pack_type == "ROLL" else "CTN"
-            carton_ref = f"{ref_prefix}-{str(running_carton_idx).zfill(2)}"
-            
-            sample_lines.append({
-                "po_number": po.po_number,
-                "po_item": norm_key,
-                "pack_number": "",
-                "carton_number": running_carton_idx,
-                "supplier_carton_ref": "",
-                "product_code": it.get("material_code", "ELST1K 000615"),
-                "lot_number": "",
-                "width": "",
-                "gw": "",
-                "nw": "",
-                "quantity": float(it.get("quantity", 0)),
-                "uom": it.get("uom") or it.get("size") or "M",
-            })
-            running_carton_idx += 1
 
-    excel_bytes = generate_packing_template(sample_lines)
+            # Determine number of blank rows for this line based on user's carton count configuration
+            carton_count = 1
+            if cfg.line_carton_counts:
+                c_val = cfg.line_carton_counts.get(clean_sel) or cfg.line_carton_counts.get(norm_key)
+                if c_val is not None:
+                    try:
+                        carton_count = max(1, int(c_val))
+                    except (ValueError, TypeError):
+                        carton_count = 1
+
+            for box_idx in range(1, carton_count + 1):
+                carton_ref = f"{ref_prefix}-{str(running_carton_idx).zfill(2)}"
+                carton_no_formatted = f"{box_idx} ({line_item_seq}-{box_idx})"
+                sample_lines.append({
+                    "po_number": po.po_number,
+                    "po_item": norm_key,
+                    "pack_number": "",
+                    "carton_number": carton_no_formatted,
+                    "supplier_carton_ref": "",
+                    "product_code": it.get("material_code", "ELST1K 000615"),
+                    "lot_number": "",
+                    "width": "",
+                    "gw": "",
+                    "nw": "",
+                    "quantity": "",  # Blank: user enters actual roll/carton meters/pieces without auto-split
+                    "uom": it.get("uom") or it.get("size") or "M",
+                })
+                running_carton_idx += 1
+
+    excel_bytes = generate_packing_template(sample_lines, supplier_code=supp_code)
     filename = "Packing_List_Tailored.xlsx"
     if len(payload.configs) == 1:
         filename = f"Packing_List_{payload.configs[0].po_number}_Tailored.xlsx"
@@ -283,6 +359,7 @@ async def download_configured_packing_template(
 async def validate_excel_packing_list(
     file: UploadFile = File(...),
     supplier_id: Optional[str] = Form(None),
+    supplier_code: Optional[str] = Form(None),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """
@@ -310,6 +387,7 @@ async def validate_excel_packing_list(
         file_bytes=file_bytes,
         db=db,
         supplier_id=supplier_uuid,
+        supplier_code=supplier_code,
     )
 
     return validation_result.to_dict()
@@ -318,7 +396,7 @@ async def validate_excel_packing_list(
 @router.post("/create-from-excel")
 async def create_shipment_from_excel(
     file: UploadFile = File(...),
-    packing_slip_number: str = Form(...),
+    packing_slip_number: Optional[str] = Form(None),
     supplier_code: str = Form("0000018194"),
     supplier_name: str = Form("COATS THREAD EXPORTS (PVT) LTD"),
     supplier_id: Optional[str] = Form(None),
@@ -342,22 +420,6 @@ async def create_shipment_from_excel(
         raise HTTPException(status_code=400, detail="Only Excel files (.xlsx) are accepted")
 
     ps_clean = str(packing_slip_number or "").strip()
-    if not ps_clean:
-        raise HTTPException(
-            status_code=422,
-            detail="Packing Slip / Delivery Note Number is required",
-        )
-
-    # Check for duplicate shipment / packing slip number
-    existing_shipment = await db.scalar(
-        select(Shipment.id).where(Shipment.shipment_number == ps_clean)
-    )
-    if existing_shipment:
-        raise HTTPException(
-            status_code=409,
-            detail=f"Packing slip / Shipment number '{ps_clean}' already exists. Please enter a unique number.",
-        )
-
     file_bytes = await file.read()
     if not file_bytes:
         raise HTTPException(status_code=400, detail="File is empty")
@@ -515,7 +577,34 @@ async def create_shipment_from_excel(
     for idx, r in enumerate(validation_res.rows):
         r.hu_number = hu_numbers[idx]
 
-    # ─── 4. Build Shipment & Packing Slip Entities ──────────────────
+    if supp and hu_numbers:
+        supp.current_hu_number = hu_numbers[-1]
+
+    # ─── 4. Group Cartons by Packing Slip ID (Multi-Pack Slip support) ───
+    groups_by_ps: dict[str, list[ParsedCartonRow]] = {}
+    for r in validation_res.rows:
+        row_ps = r.pack_number.strip() if r.pack_number and r.pack_number.strip() else ps_clean
+        if not row_ps:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Row {r.row_index}: Packing Slip Number is missing. Please provide in 'Packing Slip No.' column.",
+            )
+        groups_by_ps.setdefault(row_ps, []).append(r)
+
+    # All-or-Nothing check for existing shipment numbers in DB
+    distinct_ps = list(groups_by_ps.keys())
+    existing_stmt = select(Shipment.shipment_number).where(
+        Shipment.shipment_number.in_(distinct_ps),
+        Shipment.status != "CANCELLED",
+    )
+    existing_res = await db.scalars(existing_stmt)
+    existing_list = list(existing_res.all())
+    if existing_list:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Packing slip / Shipment number(s) '{', '.join(existing_list)}' already exist. Please use unique numbers.",
+        )
+
     shipment_date = date.today()
     est_arrival_date = None
     if estimated_arrival:
@@ -524,203 +613,225 @@ async def create_shipment_from_excel(
         except ValueError:
             pass
 
-    # Use supplier-provided packing slip / delivery note number as shipment number
-    shipment_number = ps_clean
-
-    shipment = Shipment(
-        id=uuid.uuid4(),
-        company_id=company_id,
-        supplier_id=supplier_id,
-        shipment_number=shipment_number,
-        plant_code=plant_code,
-        storage_location=storage_location,
-        status=ShipmentStatus.PACKED.value,
-        total_boxes=total_cartons,
-        total_pieces=int(validation_res.total_quantity),
-        ship_date=shipment_date,
-        estimated_arrival=est_arrival_date,
-        carrier=carrier,
-        tracking_number=tracking_number,
-    )
-
-    boxes_for_xml: list[dict[str, Any]] = []
-    packing_slips: list[PackingSlip] = []
-
     po_items_list = (po_obj.extra_data or {}).get("items", []) if po_obj else []
     po_order_date = getattr(po_obj, "order_date", None) or shipment_date
 
-    for idx, row in enumerate(validation_res.rows):
-        hu_num = hu_numbers[idx]
-        slip_number = f"PS-{shipment_number}-{idx + 1}"
+    processed_shipments: list[dict[str, Any]] = []
 
-        carton_meta = {
-            "po_number": row.po_number,
-            "po_line": row.po_item,
-            "product_code": row.product_code,
-            "lot_number": row.lot_number,
-            "width": row.width,
-            "supplier_carton_ref": row.supplier_carton_ref,
-            "quantity": row.quantity,
-            "uom": row.uom,
-            "box_index": idx + 1,
-            "total_boxes": total_cartons,
-        }
+    for s_num, group_rows in groups_by_ps.items():
+        sub_total_cartons = len(group_rows)
+        sub_total_qty = int(sum(r.quantity for r in group_rows))
 
-        ps = PackingSlip(
+        shipment = Shipment(
             id=uuid.uuid4(),
             company_id=company_id,
-            shipment_id=shipment.id,
-            slip_number=slip_number,
-            box_number=idx + 1,
-            hu_number=hu_num,
-            barcode_data=hu_num,
-            net_weight=Decimal(str(row.net_weight)),
-            gross_weight=Decimal(str(row.gross_weight)),
-            dimensions=carton_meta,
-            status="PACKED",
+            supplier_id=supplier_id,
+            shipment_number=s_num,
+            plant_code=plant_code,
+            storage_location=storage_location,
+            status=ShipmentStatus.PACKED.value,
+            total_boxes=sub_total_cartons,
+            total_pieces=sub_total_qty,
+            ship_date=shipment_date,
+            estimated_arrival=est_arrival_date,
+            carrier=carrier,
+            tracking_number=tracking_number,
         )
-        packing_slips.append(ps)
 
-        clean_row_item = str(row.po_item).split("-")[0].zfill(5)
-        po_item_info = next(
-            (
-                it for it in po_items_list
-                if str(it.get("order_line_number") or it.get("line_number", "")).split("-")[0].zfill(5) == clean_row_item
-            ),
-            None
+        boxes_for_xml: list[dict[str, Any]] = []
+        packing_slips: list[PackingSlip] = []
+
+        for b_idx, row in enumerate(group_rows, start=1):
+            hu_num = row.hu_number
+            slip_number = f"PS-{s_num}-{b_idx}"
+
+            carton_meta = {
+                "po_number": row.po_number,
+                "po_line": row.po_item,
+                "product_code": row.product_code,
+                "lot_number": row.lot_number,
+                "width": row.width,
+                "supplier_carton_ref": row.supplier_carton_ref,
+                "quantity": row.quantity,
+                "uom": row.uom,
+                "box_index": b_idx,
+                "total_boxes": sub_total_cartons,
+                "carton_number": str(row.carton_number),
+            }
+
+            ps = PackingSlip(
+                id=uuid.uuid4(),
+                company_id=company_id,
+                shipment_id=shipment.id,
+                slip_number=slip_number,
+                box_number=b_idx,
+                hu_number=hu_num,
+                barcode_data=hu_num,
+                net_weight=Decimal(str(row.net_weight)),
+                gross_weight=Decimal(str(row.gross_weight)),
+                dimensions=carton_meta,
+                status="PACKED",
+            )
+            packing_slips.append(ps)
+
+            clean_row_item = str(row.po_item).split("-")[0].zfill(5)
+            po_item_info = next(
+                (
+                    it for it in po_items_list
+                    if str(it.get("order_line_number") or it.get("line_number", "")).split("-")[0].zfill(5) == clean_row_item
+                ),
+                None
+            )
+            mat_desc = (po_item_info.get("description") or po_item_info.get("item_description") or "") if po_item_info else ""
+            partner_code = (
+                (po_item_info.get("partner_item_code") or po_item_info.get("partner_code") or po_item_info.get("partner_product_code"))
+                if po_item_info else ""
+            ) or ""
+
+            official_line = (
+                str(po_item_info.get("order_line_number") or po_item_info.get("line_number", "")).strip()
+                if po_item_info
+                else str(row.po_item).strip()
+            ) or str(row.po_item).strip()
+
+            boxes_for_xml.append({
+                "po_number": row.po_number,
+                "po_line": official_line,
+                "order_date": po_order_date,
+                "order_type": "ZA6A",
+                "hu_number": hu_num,
+                "material_code": row.product_code,
+                "material_desc": mat_desc,
+                "partner_product_code": partner_code,
+                "lot_number": row.lot_number,
+                "supplier_carton_ref": row.supplier_carton_ref,
+                "quantity": row.quantity,
+                "uom": row.uom,
+                "gross_weight": row.gross_weight,
+                "net_weight": row.net_weight,
+            })
+
+        # Group lines for ShipmentLine
+        line_map: dict[tuple[str, str], float] = {}
+        for row in group_rows:
+            k = (row.po_number, row.po_item)
+            line_map[k] = line_map.get(k, 0.0) + row.quantity
+
+        shipment_lines: list[ShipmentLine] = []
+        for (po_num, po_item), total_qty in line_map.items():
+            try:
+                line_int = int(po_item.split("-")[0])
+            except ValueError:
+                line_int = 100
+
+            sl = ShipmentLine(
+                id=uuid.uuid4(),
+                company_id=company_id,
+                shipment_id=shipment.id,
+                po_id=po_obj.id if po_obj else None,
+                po_number=po_num,
+                po_line_number=line_int,
+                material_number=group_rows[0].product_code,
+                quantity=int(total_qty),
+                unit_of_measure=group_rows[0].uom,
+            )
+            shipment_lines.append(sl)
+
+        # ─── Generate Calzedonia ASN XML (SdDataSlice) per Pack Slip ───
+        xml_content = generate_asn_xml(
+            company_name=company_name,
+            group_code=group_code,
+            supplier_code=actual_supp_code,
+            packing_slip_number=s_num,
+            packing_slip_date=shipment_date,
+            delivery_date=est_arrival_date or shipment_date,
+            boxes=boxes_for_xml,
+            note=note or "",
         )
-        mat_desc = (po_item_info.get("description") or po_item_info.get("item_description") or "") if po_item_info else ""
-        partner_code = (
-            (po_item_info.get("partner_item_code") or po_item_info.get("partner_code") or po_item_info.get("partner_product_code"))
-            if po_item_info else ""
-        ) or ""
 
-        official_line = (
-            str(po_item_info.get("order_line_number") or po_item_info.get("line_number", "")).strip()
-            if po_item_info
-            else str(row.po_item).strip()
-        ) or str(row.po_item).strip()
+        val_xml_result = validate_asn_xml(
+            xml_content=xml_content,
+            supplier_code=actual_supp_code,
+        )
+        is_xml_valid = val_xml_result.valid
 
-        boxes_for_xml.append({
-            "po_number": row.po_number,
-            "po_line": official_line,
-            "order_date": po_order_date,
-            "order_type": "ZA6A",
-            "hu_number": hu_num,
-            "material_code": row.product_code,
-            "material_desc": mat_desc,
-            "partner_product_code": partner_code,
-            "lot_number": row.lot_number,
-            "supplier_carton_ref": row.supplier_carton_ref,
-            "quantity": row.quantity,
-            "uom": row.uom,
-            "gross_weight": row.gross_weight,
-            "net_weight": row.net_weight,
-        })
-
-    # Group lines for ShipmentLine
-    line_map: dict[tuple[str, str], float] = {}
-    for row in validation_res.rows:
-        k = (row.po_number, row.po_item)
-        line_map[k] = line_map.get(k, 0.0) + row.quantity
-
-    shipment_lines: list[ShipmentLine] = []
-    for (po_num, po_item), total_qty in line_map.items():
-        try:
-            line_int = int(po_item.split("-")[0])
-        except ValueError:
-            line_int = 100
-
-        sl = ShipmentLine(
+        asn_number = f"ASN-{s_num}"
+        asn_record = ASNRecord(
             id=uuid.uuid4(),
             company_id=company_id,
+            supplier_id=supplier_id,
             shipment_id=shipment.id,
-            po_id=po_obj.id if po_obj else None,
-            po_number=po_num,
-            po_line_number=line_int,
-            material_number=validation_res.rows[0].product_code,
-            quantity=int(total_qty),
-            unit_of_measure=validation_res.rows[0].uom,
+            asn_number=asn_number,
+            xml_content=xml_content,
+            xml_validated=is_xml_valid,
+            status=ASNStatus.VALIDATED.value if is_xml_valid else ASNStatus.DRAFT.value,
         )
-        shipment_lines.append(sl)
 
-    # ─── 5. Generate Calzedonia ASN XML (SdDataSlice) ───────────────
-    xml_content = generate_asn_xml(
-        company_name=company_name,
-        group_code=group_code,
-        supplier_code=actual_supp_code,
-        packing_slip_number=shipment_number,
-        packing_slip_date=shipment_date,
-        delivery_date=est_arrival_date or shipment_date,
-        boxes=boxes_for_xml,
-        note=note or "",
-    )
-
-    # ─── 6. Validate ASN XML with Two-Phase Validator ───────────────
-    val_xml_result = validate_asn_xml(
-        xml_content=xml_content,
-        supplier_code=actual_supp_code,
-    )
-    is_xml_valid = val_xml_result.valid
-
-    asn_number = f"ASN-{shipment_number}"
-    asn_record = ASNRecord(
-        id=uuid.uuid4(),
-        company_id=company_id,
-        supplier_id=supplier_id,
-        shipment_id=shipment.id,
-        asn_number=asn_number,
-        xml_content=xml_content,
-        xml_validated=is_xml_valid,
-        status=ASNStatus.VALIDATED.value if is_xml_valid else ASNStatus.DRAFT.value,
-    )
-
-    # ─── 7. Save to Database ────────────────────────────────────────
-    try:
         db.add(shipment)
         for ps in packing_slips:
             db.add(ps)
         for sl in shipment_lines:
             db.add(sl)
         db.add(asn_record)
-        await db.flush()
 
+        processed_shipments.append({
+            "shipment": shipment,
+            "asn": asn_record,
+            "rows": group_rows,
+            "val_xml": val_xml_result,
+            "xml_content": xml_content,
+        })
+
+    # ─── Atomic Database Commit ─────────────────────────────────────
+    try:
+        await db.flush()
         # Update PO statuses (PARTIAL / COMPLETED)
         affected_pos = list({row.po_number for row in validation_res.rows if row.po_number})
         await update_po_statuses(db, affected_pos)
-
         await db.commit()
     except Exception as e:
-        logger.error("DB commit failed for shipment: %s", e)
+        logger.error("DB commit failed for multi-shipment creation: %s", e)
         await db.rollback()
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to save shipment to database: {str(e)}",
+            detail=f"Failed to save shipment(s) to database: {str(e)}",
         )
 
+    created_list = [
+        {
+            "id": str(item["shipment"].id),
+            "shipment_number": item["shipment"].shipment_number,
+            "plant_code": item["shipment"].plant_code,
+            "status": item["shipment"].status,
+            "total_boxes": item["shipment"].total_boxes,
+            "total_pieces": item["shipment"].total_pieces,
+            "ship_date": item["shipment"].ship_date.isoformat() if item["shipment"].ship_date else None,
+            "carrier": item["shipment"].carrier,
+            "handling_units": [r.hu_number for r in item["rows"]],
+            "asn_record_id": str(item["asn"].id),
+            "xml_filename": get_asn_xml_filename(item["shipment"].shipment_number, actual_supp_code),
+        }
+        for item in processed_shipments
+    ]
+
+    first = processed_shipments[0]
     return {
         "success": True,
-        "message": f"Shipment {shipment_number} created successfully with {total_cartons} cartons",
-        "shipment": {
-            "id": str(shipment.id),
-            "shipment_number": shipment.shipment_number,
-            "plant_code": shipment.plant_code,
-            "status": shipment.status,
-            "total_boxes": shipment.total_boxes,
-            "total_pieces": shipment.total_pieces,
-            "ship_date": shipment.ship_date.isoformat() if shipment.ship_date else None,
-            "carrier": shipment.carrier,
-        },
+        "message": f"Successfully created {len(processed_shipments)} shipment(s) with {total_cartons} total cartons",
+        "count": len(processed_shipments),
+        "shipments": created_list,
+        # Backwards compatibility fields for single-shipment consumers
+        "shipment": created_list[0],
         "asn": {
-            "id": str(asn_record.id),
-            "asn_number": asn_record.asn_number,
-            "status": asn_record.status,
-            "xml_validated": asn_record.xml_validated,
-            "xml_filename": get_asn_xml_filename(shipment_number, actual_supp_code),
-            "email_subject": get_asn_email_subject(shipment_number, shipment_date, actual_supp_code),
+            "id": str(first["asn"].id),
+            "asn_number": first["asn"].asn_number,
+            "status": first["asn"].status,
+            "xml_validated": first["asn"].xml_validated,
+            "xml_filename": get_asn_xml_filename(first["shipment"].shipment_number, actual_supp_code),
+            "email_subject": get_asn_email_subject(first["shipment"].shipment_number, shipment_date, actual_supp_code),
         },
         "handling_units": hu_numbers,
-        "xml_validation": val_xml_result.to_dict(),
+        "xml_validation": first["val_xml"].to_dict(),
     }
 
 
@@ -814,8 +925,24 @@ async def create_direct_shipment(
         if not c.lot_number or not c.lot_number.strip():
             c.lot_number = "DEFAULT"
 
+    # Fetch PO from DB to link company_id, supplier_id, and plant destination
+    first_po_num = req.cartons[0].po_number if req.cartons else None
+    po_obj = None
+    if first_po_num:
+        try:
+            po_res = await db.execute(select(PurchaseOrder).where(PurchaseOrder.po_number == first_po_num))
+            po_obj = po_res.scalar_one_or_none()
+        except Exception:
+            pass
+
     # 2. Resolve company and plant details
-    plant_upper = (req.plant_code or "PPA1").upper()
+    effective_plant = req.plant_code
+    if (not effective_plant or effective_plant in ("PPA1", "PPD1")) and po_obj:
+        po_plant = po_obj.destination or po_obj.client_code or ""
+        if po_plant:
+            effective_plant = po_plant
+
+    plant_upper = (effective_plant or "PPA1").upper()
     if "PPA" in plant_upper or "OMEGA" in plant_upper:
         company_name = "Omega Line Ltd"
         group_code = "OMEGALINENEW"
@@ -834,16 +961,6 @@ async def create_direct_shipment(
     else:
         company_name = "Omega Line Ltd"
         group_code = "OMEGALINENEW"
-
-    # Fetch PO from DB to link company_id and supplier_id
-    first_po_num = req.cartons[0].po_number if req.cartons else None
-    po_obj = None
-    if first_po_num:
-        try:
-            po_res = await db.execute(select(PurchaseOrder).where(PurchaseOrder.po_number == first_po_num))
-            po_obj = po_res.scalar_one_or_none()
-        except Exception:
-            pass
 
     company_id = po_obj.company_id if (po_obj and po_obj.company_id) else None
     if not company_id:
@@ -926,6 +1043,9 @@ async def create_direct_shipment(
             base_num = int(datetime.utcnow().timestamp()) % 1000000000
             hu_numbers = [f"{prefix}{str(base_num + i).zfill(10)}" for i in range(total_cartons)]
 
+    if supp and hu_numbers:
+        supp.current_hu_number = hu_numbers[-1]
+
     # 5. Build Shipment entity
     shipment_date = date.today()
     est_arrival_date = None
@@ -945,7 +1065,7 @@ async def create_direct_shipment(
         company_id=company_id,
         supplier_id=supplier_id,
         shipment_number=shipment_number,
-        plant_code=req.plant_code,
+        plant_code=effective_plant or req.plant_code,
         storage_location=req.storage_location or "SL01",
         status=ShipmentStatus.PACKED.value,
         total_boxes=total_cartons,
@@ -1173,7 +1293,7 @@ async def list_shipments(
     """List all shipments with carton, PO, and status details."""
     try:
         stmt = (
-            select(Shipment, ASNRecord.id.label("asn_id"))
+            select(Shipment, ASNRecord.id.label("asn_id"), ASNRecord.xml_content)
             .outerjoin(ASNRecord, ASNRecord.shipment_id == Shipment.id)
             .options(selectinload(Shipment.lines), selectinload(Shipment.packing_slips))
             .order_by(desc(Shipment.created_at))
@@ -1201,7 +1321,7 @@ async def list_shipments(
         rows = res.all()
 
         results = []
-        for s, asn_id in rows:
+        for s, asn_id, xml_content in rows:
             po_set = {line.po_number for line in (s.lines or []) if line.po_number}
             for ps in (s.packing_slips or []):
                 if ps.dimensions and isinstance(ps.dimensions, dict) and ps.dimensions.get("po_number"):
@@ -1217,10 +1337,36 @@ async def list_shipments(
             gw = sum(float(ps.gross_weight or 0) for ps in (s.packing_slips or []))
             nw = sum(float(ps.net_weight or 0) for ps in (s.packing_slips or []))
 
+            # Extract exact destination plant (LegalName) from the official ASN XML
+            destination_plant = None
+            if xml_content:
+                import re
+                m = re.search(r"<LegalName>(.*?)</LegalName>", xml_content)
+                if m:
+                    legal_name = m.group(1).strip()
+                    if s.plant_code and s.plant_code not in legal_name:
+                        destination_plant = f"{legal_name} ({s.plant_code})"
+                    else:
+                        destination_plant = legal_name
+
+            if not destination_plant and s.plant_code:
+                pu = (s.plant_code or "").upper()
+                if "PPB" in pu or "ALPHA" in pu:
+                    destination_plant = f"Alpha Apparels Ltd ({s.plant_code})"
+                elif "PPC" in pu or "BENJI" in pu:
+                    destination_plant = f"Benji Ltd ({s.plant_code})"
+                elif "PPD" in pu or "SIRIO" in pu:
+                    destination_plant = f"Sirio Ltd ({s.plant_code})"
+                elif "PPE" in pu or "VAVUNIYA" in pu:
+                    destination_plant = f"Vavuniya Apparels Ltd ({s.plant_code})"
+                else:
+                    destination_plant = f"Omega Line Ltd ({s.plant_code})"
+
             results.append({
                 "id": str(s.id),
                 "shipment_number": s.shipment_number,
                 "plant_code": s.plant_code,
+                "destination_plant": destination_plant,
                 "storage_location": s.storage_location,
                 "status": s.status,
                 "total_boxes": s.total_boxes,
@@ -1283,10 +1429,35 @@ async def get_shipment_detail(
         gw = sum(float(c.gross_weight or 0) for c in cartons)
         nw = sum(float(c.net_weight or 0) for c in cartons)
 
+        destination_plant = None
+        if asn and asn.xml_content:
+            import re
+            m = re.search(r"<LegalName>(.*?)</LegalName>", asn.xml_content)
+            if m:
+                legal_name = m.group(1).strip()
+                if s.plant_code and s.plant_code not in legal_name:
+                    destination_plant = f"{legal_name} ({s.plant_code})"
+                else:
+                    destination_plant = legal_name
+
+        if not destination_plant and s.plant_code:
+            pu = (s.plant_code or "").upper()
+            if "PPB" in pu or "ALPHA" in pu:
+                destination_plant = f"Alpha Apparels Ltd ({s.plant_code})"
+            elif "PPC" in pu or "BENJI" in pu:
+                destination_plant = f"Benji Ltd ({s.plant_code})"
+            elif "PPD" in pu or "SIRIO" in pu:
+                destination_plant = f"Sirio Ltd ({s.plant_code})"
+            elif "PPE" in pu or "VAVUNIYA" in pu:
+                destination_plant = f"Vavuniya Apparels Ltd ({s.plant_code})"
+            else:
+                destination_plant = f"Omega Line Ltd ({s.plant_code})"
+
         return {
             "id": str(s.id),
             "shipment_number": s.shipment_number,
             "plant_code": s.plant_code,
+            "destination_plant": destination_plant,
             "storage_location": s.storage_location,
             "status": s.status,
             "total_boxes": s.total_boxes,
@@ -1327,11 +1498,12 @@ async def get_shipment_detail(
 @router.get("/{id}/labels")
 async def download_shipment_labels(
     id: uuid.UUID,
+    size: str = Query("6x4", description="Label size: '6x4', '4x6', '4x3', 'a4'"),
     db: AsyncSession = Depends(get_db),
 ) -> StreamingResponse:
     """
-    Generate and stream 6"x4" industrial PDF labels with Code 39 barcodes
-    for all cartons/boxes in this shipment.
+    Generate and stream industrial PDF labels with Code 39 barcodes
+    for all cartons/boxes in this shipment with customizable size.
     """
     try:
         stmt = select(Shipment).where(Shipment.id == id)
@@ -1383,13 +1555,13 @@ async def download_shipment_labels(
                 "label_date": shipment.ship_date.strftime("%d-%m-%Y") if shipment.ship_date else datetime.now().strftime("%d-%m-%Y"),
             })
 
-        pdf_bytes = generate_batch_labels(labels_data)
+        pdf_bytes = generate_batch_labels(labels_data, size=size)
 
         return StreamingResponse(
             io.BytesIO(pdf_bytes),
             media_type="application/pdf",
             headers={
-                "Content-Disposition": f"attachment; filename=Labels_{shipment.shipment_number}.pdf",
+                "Content-Disposition": f"attachment; filename=Labels_{shipment.shipment_number}_{size}.pdf",
                 "Access-Control-Expose-Headers": "Content-Disposition",
             },
         )

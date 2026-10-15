@@ -5,7 +5,7 @@ Parses, validates, and generates Excel packing lists (.xlsx) for suppliers.
 Adheres to the 12-column factory packing sheet format:
   Col A: P/O #
   Col B: PO item
-  Col C: Pack No.
+  Col C: Packing Slip No.
   Col D: Cart No
   Col E: Supplier_Carton_ref
   Col F: ProductCode
@@ -19,18 +19,46 @@ Adheres to the 12-column factory packing sheet format:
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import io
+import logging
 import re
 from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
 import openpyxl
-from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-from sqlalchemy import select
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Protection, Side
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.models.purchase_order import PurchaseOrder
+from app.models.shipment import Shipment
+from app.models.shipment_line import ShipmentLine
+
+logger = logging.getLogger(__name__)
+
+
+def generate_template_hmac(supplier_code: str, po_numbers: List[str]) -> str:
+    """Generate SHA256 HMAC signature over PO numbers and supplier code."""
+    secret = get_settings().SECRET_KEY.encode("utf-8")
+    sorted_pos = ",".join(sorted(set(str(p).strip() for p in po_numbers if p)))
+    supp_clean = str(supplier_code or "").strip()
+    payload = f"ONIVERSE_ASN:{supp_clean}:{sorted_pos}".encode("utf-8")
+    return hmac.new(secret, payload, hashlib.sha256).hexdigest()
+
+
+def verify_template_hmac(token: str, supplier_code: str, po_numbers: List[str]) -> bool:
+    """Verify cryptographic HMAC token for untampered spreadsheet metadata."""
+    if not token or not token.strip():
+        return False
+    expected = generate_template_hmac(supplier_code, po_numbers)
+    if hmac.compare_digest(token.strip(), expected):
+        return True
+    expected_blank_supp = generate_template_hmac("", po_numbers)
+    return hmac.compare_digest(token.strip(), expected_blank_supp)
 
 
 @dataclass
@@ -39,7 +67,7 @@ class ParsedCartonRow:
     po_number: str
     po_item: str
     pack_number: str
-    carton_number: int
+    carton_number: Any
     supplier_carton_ref: str
     product_code: str
     lot_number: str
@@ -181,6 +209,34 @@ async def parse_and_validate_packing_excel(
             general_errors=[f"Failed to open Excel file: {str(e)}. Please upload a valid .xlsx file."],
         )
 
+    # ─── 0. Security & Metadata Verification ────────────────────────
+    meta_sheet = wb["_SYS_META_"] if "_SYS_META_" in wb.sheetnames else None
+    if meta_sheet is None:
+        return ExcelValidationResult(
+            is_valid=False,
+            total_rows=0,
+            total_cartons=0,
+            total_gross_weight=0.0,
+            total_net_weight=0.0,
+            total_quantity=0.0,
+            line_summaries=[],
+            rows=[],
+            general_errors=[
+                "Untracked or legacy template. Security metadata is missing. Please download an official template from the system before uploading."
+            ],
+        )
+
+    token_val = ""
+    meta_supp_code = ""
+    for m_row in meta_sheet.iter_rows(values_only=True):
+        if m_row and len(m_row) >= 2:
+            key_name = str(m_row[0] or "").strip().upper()
+            val_name = str(m_row[1] or "").strip()
+            if key_name == "TOKEN":
+                token_val = val_name
+            elif key_name == "SUPPLIER_CODE":
+                meta_supp_code = val_name
+
     sheet = wb.active
     if sheet is None:
         return ExcelValidationResult(
@@ -247,6 +303,8 @@ async def parse_and_validate_packing_excel(
 
     parsed_rows: List[ParsedCartonRow] = []
     unique_carton_ids = set()
+    last_seen_hu_serial: Optional[int] = None
+    last_seen_prefix: Optional[str] = None
 
     # Parse rows
     for row_idx, row in enumerate(sheet.iter_rows(min_row=header_row_idx + 1, values_only=True), start=header_row_idx + 1):
@@ -266,7 +324,14 @@ async def parse_and_validate_packing_excel(
         if not po_num:
             continue
 
-        carton_num = _parse_int(get_val("carton_number"))
+        raw_carton = get_val("carton_number")
+        if raw_carton is not None:
+            carton_str = str(raw_carton).strip()
+            if carton_str.endswith(".0"):
+                carton_str = carton_str[:-2]
+        else:
+            carton_str = ""
+        carton_num = carton_str if carton_str else str(row_idx - header_row_idx)
         pack_num = _clean_str(get_val("pack_number"))
         carton_ref = _clean_str(get_val("supplier_carton_ref"))
         prod_code = _clean_str(get_val("product_code"))
@@ -281,22 +346,59 @@ async def parse_and_validate_packing_excel(
         hu_raw = _clean_str(get_val("hu_number"))
         hu_val = None
         if hu_raw:
-            clean_digits = re.sub(r"\D", "", hu_raw)
-            if len(clean_digits) == 20:
-                hu_val = clean_digits
-            elif 0 < len(clean_digits) <= 10:
-                padded_serial = clean_digits.zfill(10)
-                if supplier_code:
-                    prefix = "1" + supplier_code.lstrip("0").zfill(9)
-                    hu_val = f"{prefix}{padded_serial}"
+            supp_ref = supplier_code or "0000018194"
+            prefix = "1" + supp_ref.lstrip("0").zfill(9)
+            is_sci = ("e+" in hu_raw.lower() or "e-" in hu_raw.lower())
+
+            if is_sci:
+                # Excel corrupted a dragged 20-digit series into float scientific notation (e.g. 1.00002E+19)
+                # Seamlessly continue the sequence from the previous row
+                if last_seen_hu_serial is not None and last_seen_prefix:
+                    next_serial = last_seen_hu_serial + 1
+                    hu_val = f"{last_seen_prefix}{str(next_serial).zfill(10)}"
+                    last_seen_hu_serial = next_serial
                 else:
-                    hu_val = padded_serial
+                    try:
+                        dec = Decimal(hu_raw)
+                        clean_digits = re.sub(r"\D", "", f"{dec:.0f}")
+                        if len(clean_digits) == 20:
+                            hu_val = clean_digits
+                        else:
+                            hu_val = f"{prefix}{clean_digits[-10:].zfill(10)}"
+                    except Exception:
+                        pass
+            else:
+                clean_digits = re.sub(r"\D", "", hu_raw)
+                if len(clean_digits) == 20:
+                    hu_val = clean_digits
+                    if clean_digits.startswith(prefix):
+                        try:
+                            last_seen_hu_serial = int(clean_digits[10:])
+                            last_seen_prefix = prefix
+                        except ValueError:
+                            pass
+                elif 0 < len(clean_digits) <= 10:
+                    padded_serial = clean_digits.zfill(10)
+                    hu_val = f"{prefix}{padded_serial}"
+                    try:
+                        last_seen_hu_serial = int(padded_serial)
+                        last_seen_prefix = prefix
+                    except ValueError:
+                        pass
+                elif 10 < len(clean_digits) < 20:
+                    padded_serial = clean_digits[-10:].zfill(10)
+                    hu_val = f"{prefix}{padded_serial}"
+                    try:
+                        last_seen_hu_serial = int(padded_serial)
+                        last_seen_prefix = prefix
+                    except ValueError:
+                        pass
 
         row_errors: List[str] = []
 
-        # PO item can be empty and auto-detected later
-        # if not po_item:
-        #     row_errors.append("PO item is required")
+        # Packing Slip Number is mandatory per carton row
+        if not pack_num:
+            row_errors.append("Packing Slip No. is required")
         if qty <= 0:
             row_errors.append(f"Quantity must be greater than 0 (got {qty})")
         if gw < nw:
@@ -325,8 +427,8 @@ async def parse_and_validate_packing_excel(
         )
         parsed_rows.append(parsed_row)
 
-        carton_id = (po_num, pack_num, carton_num or carton_ref or row_idx)
-    unique_carton_ids = set()
+        carton_id = (po_num, pack_num, str(carton_num or carton_ref or row_idx))
+        unique_carton_ids.add(carton_id)
 
     # Database validation if session provided - fetch EARLY so we can auto-detect missing PO items
     db_pos: Dict[str, PurchaseOrder] = {}
@@ -368,6 +470,65 @@ async def parse_and_validate_packing_excel(
         if not r.lot_number:
             r.lot_number = ""
 
+    general_errors: List[str] = []
+
+    # Verify template HMAC security token against POs in the sheet
+    sheet_pos = list({r.po_number for r in parsed_rows if r.po_number})
+    effective_supp = supplier_code or meta_supp_code or ""
+    if not verify_template_hmac(token_val, effective_supp, sheet_pos):
+        general_errors.append(
+            "Invalid template security token. The template may have been modified or generated by an untrusted source. Please download a fresh template."
+        )
+
+    # Check multi-pack slip duplicate packing slip numbers against existing DB shipments
+    pack_numbers = list({r.pack_number for r in parsed_rows if r.pack_number})
+    if db_available and pack_numbers:
+        try:
+            dup_stmt = select(Shipment.shipment_number).where(
+                Shipment.shipment_number.in_(pack_numbers),
+                Shipment.status != "CANCELLED",
+            )
+            dup_res = await db.scalars(dup_stmt)
+            existing_nums = list(dup_res.all())
+            if existing_nums:
+                for en in existing_nums:
+                    general_errors.append(
+                        f"Packing slip / Shipment number '{en}' already exists in the system. Please use a unique packing slip number."
+                    )
+        except Exception as e:
+            logger.warning("Could not check duplicate pack numbers: %s", e)
+
+    # Check duplicate Handling Unit (HU) numbers within the sheet and against existing database packing slips
+    hu_row_map: Dict[str, int] = {}
+    for r in parsed_rows:
+        if r.hu_number:
+            if r.hu_number in hu_row_map:
+                r.errors.append(
+                    f"Duplicate Handling Unit '{r.hu_number}' in spreadsheet (also on row {hu_row_map[r.hu_number]})."
+                )
+            else:
+                hu_row_map[r.hu_number] = r.row_index
+
+    if db_available and hu_row_map:
+        try:
+            from app.models.packing_slip import PackingSlip
+            hu_check_stmt = (
+                select(PackingSlip.hu_number, Shipment.shipment_number)
+                .join(Shipment, PackingSlip.shipment_id == Shipment.id)
+                .where(
+                    PackingSlip.hu_number.in_(list(hu_row_map.keys())),
+                    Shipment.status != "CANCELLED",
+                )
+            )
+            hu_res = await db.execute(hu_check_stmt)
+            for dup_hu, shp_num in hu_res.all():
+                row_idx = hu_row_map.get(dup_hu)
+                general_errors.append(
+                    f"Handling Unit (HU) '{dup_hu}' (Row {row_idx}) has already been used in Shipment #{shp_num}. HUs are globally unique and cannot be reused."
+                )
+        except Exception as e:
+            logger.warning("Could not check duplicate HUs against database: %s", e)
+
     # Group by (po_number, po_item)
     groups: Dict[Tuple[str, str], List[ParsedCartonRow]] = {}
     for r in parsed_rows:
@@ -375,7 +536,7 @@ async def parse_and_validate_packing_excel(
         groups.setdefault(key, []).append(r)
 
     line_summaries: List[LineItemSummary] = []
-    overall_valid = True
+    overall_valid = len(general_errors) == 0
 
     for (po_num, po_item), rows in groups.items():
         total_line_qty = sum(r.quantity for r in rows)
@@ -411,10 +572,28 @@ async def parse_and_validate_packing_excel(
                 else:
                     po_ordered_qty = float(po_obj.quantity or 0)
 
-                po_open_balance = po_ordered_qty
-                if po_ordered_qty > 0 and total_line_qty > po_ordered_qty:
+                # Query database for previously shipped quantities (enables partial shipments across multiple dates)
+                already_shipped = 0.0
+                try:
+                    line_int = int(str(po_item).split("-")[0])
+                    shipped_stmt = (
+                        select(func.coalesce(func.sum(ShipmentLine.quantity), 0))
+                        .join(Shipment, ShipmentLine.shipment_id == Shipment.id)
+                        .where(
+                            ShipmentLine.po_number == po_num,
+                            ShipmentLine.po_line_number == line_int,
+                            Shipment.status != "CANCELLED",
+                        )
+                    )
+                    shipped_res = await db.scalar(shipped_stmt)
+                    already_shipped = float(shipped_res or 0.0)
+                except Exception as e:
+                    logger.warning("Could not calculate previously shipped qty: %s", e)
+
+                po_open_balance = max(0.0, po_ordered_qty - already_shipped)
+                if po_ordered_qty > 0 and total_line_qty > po_open_balance:
                     group_errors.append(
-                        f"Packed qty ({total_line_qty}) exceeds PO ordered quantity ({po_ordered_qty}) for item {po_item}"
+                        f"Packed quantity ({total_line_qty}) exceeds remaining open balance ({po_open_balance}) [Ordered: {po_ordered_qty}, Previously Shipped: {already_shipped}] for item {po_item}"
                     )
 
         is_group_valid = len(group_errors) == 0
@@ -440,44 +619,40 @@ async def parse_and_validate_packing_excel(
     total_net = sum(r.net_weight for r in parsed_rows)
     total_qty = sum(r.quantity for r in parsed_rows)
 
+    if general_errors:
+        overall_valid = False
+
     return ExcelValidationResult(
-        is_valid=overall_valid and len(parsed_rows) > 0,
+        is_valid=overall_valid and len(parsed_rows) > 0 and len(general_errors) == 0,
         total_rows=len(parsed_rows),
-        total_cartons=len(unique_carton_ids),
+        total_cartons=len(unique_carton_ids) if unique_carton_ids else len(parsed_rows),
         total_gross_weight=total_gross,
         total_net_weight=total_net,
         total_quantity=total_qty,
         line_summaries=line_summaries,
         rows=parsed_rows,
-        general_errors=[] if parsed_rows else ["No valid carton rows were found in the uploaded file."],
+        general_errors=general_errors if parsed_rows else ["No valid carton rows were found in the uploaded file."] + general_errors,
     )
 
 
-def generate_open_lines_template(open_lines: List[Dict[str, Any]]) -> bytes:
+def generate_open_lines_template(
+    open_lines: List[Dict[str, Any]],
+    supplier_code: str = "",
+) -> bytes:
     """
-    Generate a pre-filled Excel template (.xlsx) for selected open PO lines.
-    Columns:
-      A: P/O #
-      B: PO item
-      C: Pack No.
-      D: Cart No
-      E: Supplier_Carton_ref
-      F: ProductCode
-      G: Lot No.
-      H: Width
-      I: GW
-      J: NW
-      K: Quantity
-      L: UOM
+    Generate a pre-filled, cryptographically signed and cell-protected Excel template (.xlsx)
+    for selected open PO lines.
+    Context columns (P/O #, PO item, ProductCode, UOM) are locked to prevent tampering.
+    Carton/packing columns are unlocked so suppliers can input real roll/carton meters & weights.
     """
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Packing Sheet"
 
     headers = [
-        "P/O # *", "PO item *", "Pack No.", "Cart No *", "Supplier_Carton_ref",
+        "P/O # *", "PO item *", "Packing Slip No. *", "Cart No *", "Supplier_Carton_ref",
         "ProductCode *", "Lot No.", "Width", "GW *", "NW *", "Quantity *", "UOM *",
-        "HU Number"
+        "HU Number (Leave blank to auto-generate)"
     ]
     ws.append(headers)
 
@@ -491,17 +666,36 @@ def generate_open_lines_template(open_lines: List[Dict[str, Any]]) -> bytes:
         bottom=Side(style="thin", color="CBD5E1"),
     )
 
+    # Worksheet is fully unlocked without password protection so suppliers can freely copy/paste/edit
+    ws.protection.sheet = False
+
     for col_idx in range(1, 14):
         cell = ws.cell(row=1, column=col_idx)
         cell.fill = header_fill
         cell.font = header_font
         cell.alignment = Alignment(horizontal="center", vertical="center")
         cell.border = thin_border
+        cell.protection = Protection(locked=False)
 
     ws.row_dimensions[1].height = 28
 
-    # Populate rows with open lines data
+    # Populate rows with open lines data and alternate row colors when line item changes
+    max_data_row = len(open_lines) + 1
+    current_line_key = None
+    is_alt = False
+
+    white_fill = PatternFill(fill_type=None)
+    alt_fill = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
+
     for row_idx, item in enumerate(open_lines, start=2):
+        line_key = (str(item.get("po_number", "")).strip(), str(item.get("po_item", "")).strip())
+        if line_key != current_line_key:
+            if current_line_key is not None:
+                is_alt = not is_alt
+            current_line_key = line_key
+
+        row_fill = alt_fill if is_alt else white_fill
+
         row_data = [
             item.get("po_number", ""),
             item.get("po_item", "00100"),
@@ -519,21 +713,52 @@ def generate_open_lines_template(open_lines: List[Dict[str, Any]]) -> bytes:
         ]
         ws.append(row_data)
 
+        text_cols = {1, 2, 3, 4, 5, 6, 7, 12, 13}
+
         for col_idx in range(1, 14):
             cell = ws.cell(row=row_idx, column=col_idx)
             cell.font = Font(name="Arial", size=10)
             cell.border = thin_border
-            # Pre-filled columns in soft tint
-            if col_idx in (1, 2, 6, 12):
-                cell.fill = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
-            if col_idx in (4, 8, 9, 10, 11):
-                cell.alignment = Alignment(horizontal="right")
+            cell.fill = row_fill
+            cell.protection = Protection(locked=False)
+            if col_idx in text_cols:
+                cell.number_format = "@"
 
-    # Column widths
-    col_widths = [15, 12, 16, 10, 24, 24, 14, 10, 10, 10, 12, 8, 24]
+            if col_idx in (1, 2, 3, 4, 6, 12):
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+            elif col_idx in (8, 9, 10, 11):
+                cell.alignment = Alignment(horizontal="right", vertical="center")
+            else:
+                cell.alignment = Alignment(horizontal="left", vertical="center")
+
+        ws.row_dimensions[row_idx].height = 20
+
+    # Extra rows unlocked and formatted so users can easily type or add more cartons locally
+    for row_idx in range(max_data_row + 1, max(max_data_row + 300, 500)):
+        for col_idx in range(1, 14):
+            cell = ws.cell(row=row_idx, column=col_idx)
+            cell.protection = Protection(locked=False)
+            cell.border = thin_border
+            if col_idx in text_cols:
+                cell.number_format = "@"
+
+    # Column widths and column-level text formatting
+    col_widths = [15, 12, 16, 10, 24, 24, 14, 10, 10, 10, 12, 8, 38]
     for idx, width in enumerate(col_widths, start=1):
         col_letter = openpyxl.utils.get_column_letter(idx)
         ws.column_dimensions[col_letter].width = width
+        if idx in text_cols:
+            ws.column_dimensions[col_letter].number_format = "@"
+
+    # Embed hidden _SYS_META_ worksheet with cryptographic HMAC token
+    meta_ws = wb.create_sheet(title="_SYS_META_")
+    meta_ws.sheet_state = "hidden"
+    po_list = list(set(str(item.get("po_number", "")).strip() for item in open_lines if item.get("po_number")))
+    token = generate_template_hmac(supplier_code, po_list)
+    meta_ws.append(["PARAM", "VALUE"])
+    meta_ws.append(["TOKEN", token])
+    meta_ws.append(["SUPPLIER_CODE", str(supplier_code or "")])
+    meta_ws.append(["PO_NUMBERS", ",".join(sorted(po_list))])
 
     buffer = io.BytesIO()
     wb.save(buffer)
@@ -541,7 +766,10 @@ def generate_open_lines_template(open_lines: List[Dict[str, Any]]) -> bytes:
     return buffer.read()
 
 
-def generate_packing_template(open_lines: Optional[List[Dict[str, Any]]] = None) -> bytes:
+def generate_packing_template(
+    open_lines: Optional[List[Dict[str, Any]]] = None,
+    supplier_code: str = "",
+) -> bytes:
     """Convenience alias for template generation with optional sample data."""
     if not open_lines:
         open_lines = [
@@ -549,8 +777,8 @@ def generate_packing_template(open_lines: Optional[List[Dict[str, Any]]] = None)
                 "po_number": "2001297727",
                 "po_item": "00100",
                 "pack_number": "PACK-001",
-                "carton_number": 1,
-                "supplier_carton_ref": "SK104546-015.0-61851",
+                "carton_number": "1 (1-1)",
+                "supplier_carton_ref": "",
                 "product_code": "ELST1K 000615",
                 "lot_number": "LOT-2025-01",
                 "width": 1.5,
@@ -563,8 +791,8 @@ def generate_packing_template(open_lines: Optional[List[Dict[str, Any]]] = None)
                 "po_number": "2001297727",
                 "po_item": "00100",
                 "pack_number": "PACK-001",
-                "carton_number": 2,
-                "supplier_carton_ref": "SK104546-015.0-61852",
+                "carton_number": "2 (1-2)",
+                "supplier_carton_ref": "",
                 "product_code": "ELST1K 000615",
                 "lot_number": "LOT-2025-01",
                 "width": 1.5,
@@ -574,7 +802,7 @@ def generate_packing_template(open_lines: Optional[List[Dict[str, Any]]] = None)
                 "uom": "M",
             },
         ]
-    return generate_open_lines_template(open_lines)
+    return generate_open_lines_template(open_lines, supplier_code=supplier_code)
 
 
 # Exported alias

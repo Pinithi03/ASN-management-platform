@@ -70,6 +70,8 @@ class POLineItem:
     quantity: int = 0
     unit_price: float = 0.0
     description: str = ""             # legacy/fallback
+    delivery_address: str = ""        # <DeliveryAddress> from XML line
+    delivery_date: str = ""           # <DeliveryDate> from XML line
 
 
 DEFAULT_CURRENCY = "USD"
@@ -88,6 +90,7 @@ class ParsedPO:
     delivery_date: str = ""
     destination: str = ""
     contact_person: str = ""       # <ContactPerson> from XML
+    contact_email: str = ""        # <AuxHead1> from XML
     delivery_address: str = ""     # <DeliveryAddress> from XML
     payment: str = ""              # <Payment> from XML
     # Supplier address & contact details (from SdPartner / SdCompanyHeader)
@@ -112,6 +115,7 @@ class ParsedPO:
     legal_name: str = ""           # <LegalName> from SdCompanyHeader / SdPartner
     iungo_email_address: str = ""  # <IungoEmailAddress> from XML root/header
     transmission_date: str = ""    # <TransmissionDate> from SdCompanyHeader / XML
+    notations: str = ""            # <AuxHead8> from XML
 
 
 def parse_xml(xml_bytes: bytes, filename: str = "") -> ParsedPO:

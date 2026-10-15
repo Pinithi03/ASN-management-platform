@@ -284,6 +284,13 @@ async def save_parsed_data(
             "total_quantity": parsed_po.total_quantity,
             "total_value": parsed_po.total_value,
             "line_count": len(parsed_po.line_items),
+            "order_date": parsed_po.order_date or "",
+            "delivery_date": parsed_po.delivery_date or "",
+            "delivery_address": parsed_po.delivery_address or "",
+            "destination": parsed_po.delivery_address or parsed_po.destination or "",
+            "contact_person": parsed_po.contact_person or "",
+            "contact_email": getattr(parsed_po, "contact_email", "") or "",
+            "notations": getattr(parsed_po, "notations", "") or "",
         }
         existing_pd.po_number_extracted = clean_po or None
         existing_pd.supplier_id_extracted = parsed_po.supplier_code or None
@@ -307,6 +314,13 @@ async def save_parsed_data(
             "total_quantity": parsed_po.total_quantity,
             "total_value": parsed_po.total_value,
             "line_count": len(parsed_po.line_items),
+            "order_date": parsed_po.order_date or "",
+            "delivery_date": parsed_po.delivery_date or "",
+            "delivery_address": parsed_po.delivery_address or "",
+            "destination": parsed_po.delivery_address or parsed_po.destination or "",
+            "contact_person": parsed_po.contact_person or "",
+            "contact_email": getattr(parsed_po, "contact_email", "") or "",
+            "notations": getattr(parsed_po, "notations", "") or "",
         },
         validation_errors=[],
         po_number_extracted=clean_po or None,
@@ -410,7 +424,8 @@ async def save_purchase_order(
     # Filter out any non-positive line items
     active_line_items = [li for li in parsed_po.line_items if getattr(li, "quantity", 0) > 0]
     first_item = active_line_items[0] if active_line_items else (parsed_po.line_items[0] if parsed_po.line_items else None)
-    primary_style = first_item.style[:50] if first_item and first_item.style else None
+    first_code = (getattr(first_item, "item_code", "") or getattr(first_item, "style", "")) if first_item else ""
+    primary_style = first_code[:50] if first_code else None
     primary_desc = first_item.description if first_item and first_item.description else None
     buyer_code = (parsed_po.buyer_name or "CALZ")[:50]
 
@@ -423,19 +438,29 @@ async def save_purchase_order(
             "partner_code": getattr(li, "partner_code", "") or getattr(li, "partner_item_code", "") or "",
             "item_description": getattr(li, "item_description", None) or getattr(li, "description", "") or "",
             "qty_unit": getattr(li, "qty_unit", None) or getattr(li, "uom", "") or getattr(li, "size", "") or "M",
-            "material_code": getattr(li, "partner_item_code", "") or getattr(li, "item_code", "") or getattr(li, "style", ""),
+            "material_code": getattr(li, "item_code", None) or getattr(li, "style", "") or getattr(li, "partner_item_code", "") or "",
             "description": getattr(li, "item_description", None) or getattr(li, "description", "") or "",
             "color": getattr(li, "color", "") or "",
             "size": getattr(li, "size", "") or getattr(li, "qty_unit", "") or "M",
             "uom": getattr(li, "uom", "") or getattr(li, "qty_unit", None) or getattr(li, "size", "") or "M",
             "quantity": li.quantity,
             "unit_price": li.unit_price,
+            "delivery_address": getattr(li, "delivery_address", "") or parsed_po.delivery_address or "",
+            "delivery_date": getattr(li, "delivery_date", "") or parsed_po.delivery_date or "",
         }
         for li in active_line_items
     ]
     order_type_str = getattr(parsed_po, "order_type", "") or "ZA6A"
+    notations_str = getattr(parsed_po, "notations", "") or ""
+    delivery_address_str = parsed_po.delivery_address or ""
     extra_info = {
         "order_type": order_type_str,
+        "order_date": parsed_po.order_date or "",
+        "delivery_date": parsed_po.delivery_date or "",
+        "delivery_address": delivery_address_str,
+        "contact_person": parsed_po.contact_person or "",
+        "contact_email": getattr(parsed_po, "contact_email", "") or "",
+        "notations": notations_str,
         "items": items_data,
     }
 
@@ -448,6 +473,8 @@ async def save_purchase_order(
     )
     result = await db.execute(stmt)
     existing = result.scalar_one_or_none()
+
+    resolved_destination = parsed_po.delivery_address or parsed_po.destination or ""
 
     if existing:
         old_version = existing.version or 1
@@ -487,7 +514,7 @@ async def save_purchase_order(
             existing.status = "ACTIVE"
         existing.quantity = parsed_po.total_quantity
         existing.total_value = parsed_po.total_value
-        existing.destination = parsed_po.destination or existing.destination
+        existing.destination = resolved_destination or existing.destination
         if new_delivery_date:
             existing.delivery_date = new_delivery_date
         existing.currency = parsed_po.currency or existing.currency
@@ -543,7 +570,7 @@ async def save_purchase_order(
             status="ACTIVE",
             quantity=parsed_po.total_quantity,
             total_value=parsed_po.total_value,
-            destination=parsed_po.destination,
+            destination=resolved_destination,
             delivery_date=_parse_date(parsed_po.delivery_date),
             currency=parsed_po.currency,
             version=progressive_version or 1,

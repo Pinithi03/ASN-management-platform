@@ -24,7 +24,7 @@ export interface ParsedCartonRow {
   po_number: string;
   po_item: string;
   pack_number: string;
-  carton_number: number;
+  carton_number: number | string;
   supplier_carton_ref: string;
   product_code: string;
   lot_number: string;
@@ -49,9 +49,25 @@ export interface ExcelValidationResult {
   rows: ParsedCartonRow[];
 }
 
+export interface CreatedShipmentItem {
+  id: string;
+  shipment_number: string;
+  plant_code: string;
+  status: string;
+  total_boxes: number;
+  total_pieces: number;
+  ship_date?: string;
+  carrier?: string;
+  handling_units?: string[];
+  asn_record_id?: string;
+  xml_filename?: string;
+}
+
 export interface CreateShipmentResponse {
   success: boolean;
   message: string;
+  count?: number;
+  shipments?: CreatedShipmentItem[];
   shipment: {
     id: string;
     shipment_number: string;
@@ -88,13 +104,14 @@ export const shipmentService = {
   },
 
   /**
-   * Download tailored Excel packing template based on supplier packing setup (Box vs Roll & units count).
+   * Download tailored Excel packing template based on supplier packing setup (Box vs Roll & carton counts).
    */
   async downloadConfiguredTemplate(payload: {
     configs: Array<{
       po_number: string;
       pack_type: "BOX" | "ROLL";
       selected_lines?: string[];
+      line_carton_counts?: Record<string, number>;
     }>;
   }): Promise<Blob> {
     const res = await api.post("/shipments/template/configured", payload, {
@@ -106,10 +123,11 @@ export const shipmentService = {
   /**
    * Validate uploaded Excel packing list file.
    */
-  async validateExcel(file: File, supplierId?: string): Promise<ExcelValidationResult> {
+  async validateExcel(file: File, supplierId?: string, supplierCode?: string): Promise<ExcelValidationResult> {
     const formData = new FormData();
     formData.append("file", file);
     if (supplierId) formData.append("supplier_id", supplierId);
+    if (supplierCode) formData.append("supplier_code", supplierCode);
 
     const res = await api.post<ExcelValidationResult>("/shipments/validate-excel", formData, {
       headers: { "Content-Type": "multipart/form-data" },
@@ -182,7 +200,7 @@ export const shipmentService = {
    */
   async createFromExcel(params: {
     file: File;
-    packing_slip_number: string;
+    packing_slip_number?: string;
     plant_code: string;
     supplier_code?: string;
     supplier_name?: string;
@@ -194,7 +212,7 @@ export const shipmentService = {
   }): Promise<CreateShipmentResponse> {
     const formData = new FormData();
     formData.append("file", params.file);
-    formData.append("packing_slip_number", params.packing_slip_number);
+    if (params.packing_slip_number) formData.append("packing_slip_number", params.packing_slip_number);
     formData.append("plant_code", params.plant_code);
     if (params.supplier_code) formData.append("supplier_code", params.supplier_code);
     if (params.supplier_name) formData.append("supplier_name", params.supplier_name);
@@ -231,10 +249,13 @@ export const shipmentService = {
   },
 
   /**
-   * Download 6"x4" barcode label PDF.
+   * Download barcode label PDF with customizable size ('6x4', '4x6', '4x3', 'a4').
    */
-  async downloadLabelsPdf(shipmentId: string): Promise<Blob> {
-    const res = await api.get(`/shipments/${shipmentId}/labels`, { responseType: "blob" });
+  async downloadLabelsPdf(shipmentId: string, size: string = "6x4"): Promise<Blob> {
+    const res = await api.get(`/shipments/${shipmentId}/labels`, {
+      params: { size },
+      responseType: "blob",
+    });
     return res.data;
   },
 
