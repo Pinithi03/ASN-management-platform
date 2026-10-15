@@ -13,7 +13,6 @@ import {
   PackagePlus,
   Download,
   UploadCloud,
-  FileSpreadsheet,
   CheckCircle2,
   AlertTriangle,
   Printer,
@@ -32,8 +31,6 @@ import {
   Eye,
   SlidersHorizontal,
   Clock,
-  Wifi,
-  WifiOff,
   FileEdit,
   RotateCcw,
 } from "lucide-react";
@@ -72,29 +69,53 @@ const statusColor: Record<string, string> = {
 
 export const PLANT_NAMES: Record<string, string> = {
   PPA1: "Omega Line Ltd (PPA1)",
+  "PPA1-0198": "Omega Line Ltd (PPA1-0198)",
+  "PPA1-0101": "Omega Line Ltd (PPA1-0101)",
+  "PPA2-0198": "Omega Line Ltd (PPA2-0198)",
+  "PPA2-0101": "Omega Line Ltd (PPA2-0101)",
   PPB1: "Alpha Apparels Ltd (PPB1)",
+  "PPB1-0101": "Alpha Apparels Ltd (PPB1-0101)",
   PPC1: "Benji Ltd (PPC1)",
+  "PPC1-0101": "Benji Ltd (PPC1-0101)",
   PPD1: "Sirio Ltd (PPD1)",
+  "PPD1-0101": "Sirio Ltd (PPD1-0101)",
   PPE1: "Vavuniya Apparels Ltd (PPE1)",
   "1001": "Omega Line Ltd (1001)",
 };
 
-// Helper to accurately match plant code from client_code or destination automatically
+export const formatPlantName = (plantCode?: string | null): string => {
+  if (!plantCode) return "Omega Line Ltd (PPA1)";
+  if (PLANT_NAMES[plantCode]) return PLANT_NAMES[plantCode];
+  const s = plantCode.toUpperCase();
+  if (s.startsWith("PPA")) return `Omega Line Ltd (${plantCode})`;
+  if (s.startsWith("PPB")) return `Alpha Apparels Ltd (${plantCode})`;
+  if (s.startsWith("PPC")) return `Benji Ltd (${plantCode})`;
+  if (s.startsWith("PPD")) return `Sirio Ltd (${plantCode})`;
+  if (s.startsWith("PPE")) return `Vavuniya Apparels Ltd (${plantCode})`;
+  return plantCode;
+};
+
+// Helper to accurately match plant code from client_code or destination automatically (preserving codes like PPA1-0198)
 export const matchPlant = (clientOrDest?: string | null): string => {
   if (!clientOrDest) return "PPA1";
-  const s = clientOrDest.toLowerCase();
-  if (s.includes("alpha") || s.includes("ppb1")) return "PPB1";
-  if (s.includes("benji") || s.includes("ppc1")) return "PPC1";
-  if (s.includes("sirio") || s.includes("ppd1")) return "PPD1";
-  if (s.includes("vavuniya") || s.includes("ppe1") || s.includes("ppa4")) return "PPE1";
-  if (s.includes("omega") || s.includes("ppa1") || s.includes("ppa2")) return "PPA1";
-  return "PPA1";
+  const s = clientOrDest.trim();
+  const codeMatch = s.match(/\b(PP[A-E]\d(?:-[0-9A-Z]+)?)\b/i);
+  if (codeMatch) return codeMatch[1].toUpperCase();
+
+  const lower = s.toLowerCase();
+  if (lower.includes("alpha") || lower.includes("ppb1")) return "PPB1";
+  if (lower.includes("benji") || lower.includes("ppc1")) return "PPC1";
+  if (lower.includes("sirio") || lower.includes("ppd1")) return "PPD1";
+  if (lower.includes("vavuniya") || lower.includes("ppe1") || lower.includes("ppa4")) return "PPE1";
+  if (lower.includes("omega") || lower.includes("ppa1") || lower.includes("ppa2")) return "PPA1";
+  return s || "PPA1";
 };
 
 interface ShipmentDisplayItem {
   id: string;
   shipment_number: string;
   plant_code?: string;
+  destination_plant?: string;
   total_boxes: number;
   total_pieces: number;
   uom?: string;
@@ -131,7 +152,7 @@ type POLineItem = {
 type PackingBox = {
   id: string;
   hu_number: string;
-  qty: number;
+  qty: number | null;
   batch_code: string;
   gross_weight?: number | null;
   net_weight?: number | null;
@@ -154,7 +175,8 @@ export default function Shipments() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const poQuery = searchParams.get("pos") || searchParams.get("po") || "";
-  const initialMode = (searchParams.get("mode") as "web" | "excel") || "web";
+  const modeParam = searchParams.get("mode");
+  const initialMode: "web" | "excel" = modeParam === "excel" ? "excel" : "web";
 
   // Navigation mode: 'list' (dashboard) vs 'create' (creation wizard/excel)
   const [isCreating, setIsCreating] = useState<boolean>(Boolean(poQuery));
@@ -164,8 +186,8 @@ export default function Shipments() {
   useEffect(() => {
     if (poQuery) {
       setIsCreating(true);
-      const modeParam = searchParams.get("mode");
-      setCreationMethod(modeParam === "excel" ? "excel" : "web");
+      const m = searchParams.get("mode");
+      setCreationMethod(m === "excel" ? "excel" : "web");
     }
   }, [poQuery, searchParams]);
 
@@ -210,6 +232,7 @@ export default function Shipments() {
             id: d.id,
             shipment_number: d.shipment_number,
             plant_code: d.plant_code,
+            destination_plant: d.destination_plant,
             total_boxes: d.total_boxes,
             total_pieces: d.total_pieces,
             uom: d.uom || "M",
@@ -333,7 +356,7 @@ export default function Shipments() {
 
   const filteredShipments = shipments.filter((s) => {
     const q = search.toLowerCase();
-    const plantName = (s.plant_code ? PLANT_NAMES[s.plant_code] || s.plant_code : "").toLowerCase();
+    const plantName = (s.plant_code ? formatPlantName(s.plant_code) : "").toLowerCase();
     const matchesSearch = !search || (
       s.shipment_number.toLowerCase().includes(q) ||
       plantName.includes(q) ||
@@ -485,7 +508,7 @@ export default function Shipments() {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {paginatedShipments.map((s) => {
-                    const plantLabel = s.plant_code ? (PLANT_NAMES[s.plant_code] || s.plant_code) : " ";
+                    const plantLabel = s.destination_plant || (s.plant_code ? formatPlantName(s.plant_code) : " ");
                     const uomLabel = s.uom || "M";
                     return (
                       <tr
@@ -497,11 +520,6 @@ export default function Shipments() {
                           <div className="font-mono text-xs font-bold text-gray-900 group-hover:text-blue-600 transition-colors flex items-center gap-1.5">
                             {s.shipment_number}
                           </div>
-                          {s.asn_id && (
-                            <span className="text-[10px] font-mono text-emerald-600 block mt-0.5 font-medium">
-                              ASN Linked
-                            </span>
-                          )}
                         </td>
                         <td className="whitespace-nowrap px-5 py-3.5">
                           {s.po_numbers && s.po_numbers.length > 0 ? (
@@ -673,10 +691,6 @@ export default function Shipments() {
             setSearchParams({});
             loadShipments();
           }}
-          onSwitchToExcel={() => {
-            setCreationMethod("excel");
-            if (poQuery) setSearchParams({ pos: poQuery, mode: "excel" });
-          }}
           onOpenLabelModal={(id, num, count) =>
             setLabelModalData({ open: true, shipmentId: id, shipmentNumber: num, totalBoxes: count })
           }
@@ -738,12 +752,10 @@ export default function Shipments() {
 function WebPackingWizard({
   poQuery,
   onSuccess,
-  onSwitchToExcel,
   onOpenLabelModal,
 }: {
   poQuery: string;
   onSuccess: () => void;
-  onSwitchToExcel?: () => void;
   onOpenLabelModal?: (id: string, num: string, count?: number) => void;
 }) {
   const user = useAuthStore((s) => s.user);
@@ -759,6 +771,7 @@ function WebPackingWizard({
   const [previewXmlModal, setPreviewXmlModal] = useState<string | null>(null);
   const [startingSeq, setStartingSeq] = useState<number>(1);
   const [packingSlipNumber, setPackingSlipNumber] = useState("");
+  const [deliveryDate, setDeliveryDate] = useState("");
 
   const [splitConfigs, setSplitConfigs] = useState<Record<string, { mode: "qty" | "count"; value: string }>>({});
   const [searchParams] = useSearchParams();
@@ -778,6 +791,7 @@ function WebPackingWizard({
         if (draft.step) setStep(draft.step);
         if (draft.startingSeq) setStartingSeq(draft.startingSeq);
         if (draft.packingSlipNumber) setPackingSlipNumber(draft.packingSlipNumber);
+        if (draft.deliveryDate) setDeliveryDate(draft.deliveryDate);
       } else {
         setUnresumedDraft(draft);
       }
@@ -791,6 +805,7 @@ function WebPackingWizard({
       if (unresumedDraft.step) setStep(unresumedDraft.step);
       if (unresumedDraft.startingSeq) setStartingSeq(unresumedDraft.startingSeq);
       if (unresumedDraft.packingSlipNumber) setPackingSlipNumber(unresumedDraft.packingSlipNumber);
+      if (unresumedDraft.deliveryDate) setDeliveryDate(unresumedDraft.deliveryDate);
       setUnresumedDraft(null);
     }
   };
@@ -809,6 +824,7 @@ function WebPackingWizard({
       packedItems,
       startingSeq,
       packingSlipNumber,
+      deliveryDate,
     });
     setDraftSavedToast(true);
     setTimeout(() => setDraftSavedToast(false), 2500);
@@ -821,7 +837,8 @@ function WebPackingWizard({
     const hasData =
       packedItems.length > 0 ||
       items.some((i) => (i.shipping_now || 0) > 0) ||
-      Boolean(packingSlipNumber.trim());
+      Boolean(packingSlipNumber.trim()) ||
+      Boolean(deliveryDate.trim());
 
     if (!hasData) return;
 
@@ -832,6 +849,7 @@ function WebPackingWizard({
         packedItems,
         startingSeq,
         packingSlipNumber,
+        deliveryDate,
       });
     }, 600);
 
@@ -842,15 +860,15 @@ function WebPackingWizard({
     step,
     startingSeq,
     packingSlipNumber,
+    deliveryDate,
     submitSuccessResult,
     user?.supplier_code,
     poNumbers.join(","),
   ]);
 
-  // Optional columns configuration for Step 2 Web Workbench (Batch, Supplier Ref, Width, Pack No)
-  type OptionalColumnKey = "batch" | "supplier_ref" | "width" | "pack_no";
+  // Optional columns configuration for Step 2 Web Workbench (Supplier Ref, Width, Packing Slip No)
+  type OptionalColumnKey = "supplier_ref" | "width" | "pack_no";
   const [visibleColumns, setVisibleColumns] = useState<Record<OptionalColumnKey, boolean>>({
-    batch: true,
     supplier_ref: false,
     width: false,
     pack_no: false,
@@ -916,6 +934,11 @@ function WebPackingWizard({
       alert("Please enter Packing Slip / Delivery Note Number before dispatching.");
       return;
     }
+    const trimmedDate = deliveryDate.trim();
+    if (!trimmedDate) {
+      alert("Please enter or select Delivery Date before dispatching.");
+      return;
+    }
     setIsSubmitting(true);
     try {
       // Proactively refresh JWT before making network call to avoid mid-dispatch 401
@@ -953,12 +976,14 @@ function WebPackingWizard({
         supplier_name: activeSupplierName,
         supplier_id: user?.supplier_id || undefined,
         carrier: "EXPRESS FREIGHT",
+        estimated_arrival: trimmedDate || undefined,
         note: `Online Web Packing Wizard dispatch for PO ${poNumbers.join(", ")}`,
         cartons: cartonsPayload as any,
       });
 
       setSubmitSuccessResult(res);
       clearManualDraft(activeSupplierCode, poNumbers);
+      clearExcelDraft(activeSupplierCode, poNumbers);
     } catch (err: any) {
       alert("Submission error: " + (err?.response?.data?.detail || err?.message || "Failed to create shipment"));
     } finally {
@@ -985,6 +1010,11 @@ function WebPackingWizard({
                 if (Number(it.quantity || 0) > 0) {
                   const lineNum = String(it.order_line_number || it.line_number || idx + 1).trim();
                   const qty = Number(it.quantity || 0);
+                  const shipped = Number(it.shipped_quantity ?? 0);
+                  const remaining = it.remaining_quantity !== undefined
+                    ? Number(it.remaining_quantity)
+                    : Math.max(0, qty - shipped);
+
                   realLines.push({
                     id: `${po}-${lineNum}`,
                     po_number: po,
@@ -993,19 +1023,25 @@ function WebPackingWizard({
                     partner_product_code: it.partner_item_code || it.partner_code || "",
                     description: it.description || it.item_description || found.description || "PO Line Item",
                     ordered_qty: qty,
-                    shipped_qty: 0,
-                    remaining_qty: qty,
+                    shipped_qty: shipped,
+                    remaining_qty: remaining,
                     shipping_now: 0,
                     packaging_type: "BOX",
                     uom: it.size || it.qty_unit || it.uom || "M",
-                    destination: found.destination || "",
-                    delivery_date: found.delivery_date || "",
+                    destination: found.destination || (found as any).delivery_address || (found as any).extra_data?.delivery_address || found.client_code || "",
+                    delivery_date: it.delivery_date || (fullPo as any)?.delivery_date || found.delivery_date || "",
                     order_date: (found as any).order_date || "",
                     supplier_id: (found as any).supplier_id || "",
                   });
                 }
               });
             } else {
+              const fullShipped = Number((fullPo as any)?.shipped_quantity ?? 0);
+              const fullOrdered = Number(found.quantity || 1000);
+              const fullRemaining = (fullPo as any)?.remaining_quantity !== undefined
+                ? Number((fullPo as any).remaining_quantity)
+                : Math.max(0, fullOrdered - fullShipped);
+
               realLines.push({
                 id: `${po}-line-1`,
                 po_number: po,
@@ -1013,13 +1049,13 @@ function WebPackingWizard({
                 item_code: (found as any).item_code || found.style_number || "ITEM-1",
                 partner_product_code: "",
                 description: found.description || "PO Line Item",
-                ordered_qty: Number(found.quantity || 1000),
-                shipped_qty: 0,
-                remaining_qty: Number(found.quantity || 1000),
+                ordered_qty: fullOrdered,
+                shipped_qty: fullShipped,
+                remaining_qty: fullRemaining,
                 shipping_now: 0,
                 packaging_type: "BOX",
                 uom: "M",
-                destination: found.destination || "",
+                destination: found.destination || (found as any).delivery_address || (found as any).extra_data?.delivery_address || found.client_code || "",
                 delivery_date: found.delivery_date || "",
                 supplier_id: (found as any).supplier_id || "",
               });
@@ -1054,7 +1090,7 @@ function WebPackingWizard({
               shipping_now: 0,
               packaging_type: (m.pack_type || m.packaging_type || "BOX") as "BOX" | "ROLL",
               uom: m.uom || "M",
-              destination: m.destination || "",
+              destination: m.destination || m.client_code || "",
               delivery_date: m.delivery_date || "",
               order_date: m.order_date || "",
               supplier_id: m.supplier_id || "",
@@ -1084,6 +1120,17 @@ function WebPackingWizard({
           packaging_type: line.packaging_type || "BOX",
           shipping_now: 0, // Always default to 0 — user enters qty or clicks Max
         }));
+      });
+
+      // Default Delivery Date from PO XML delivery_date if not set from draft
+      setDeliveryDate((prev) => {
+        if (prev) return prev;
+        const rawDate = openLinesData.find((l) => l.delivery_date)?.delivery_date;
+        if (rawDate) {
+          const formatted = rawDate.includes("T") ? rawDate.split("T")[0] : rawDate;
+          if (/^\d{4}-\d{2}-\d{2}$/.test(formatted)) return formatted;
+        }
+        return new Date(Date.now() + 86400000).toISOString().split("T")[0];
       });
     }
   }, [openLinesData, shouldResume]);
@@ -1126,7 +1173,6 @@ function WebPackingWizard({
     let runningSeq = startingSeq;
     const prefix = getHuPrefix();
     const initialPacked: PackedItem[] = toPack.map((item) => {
-      const q = item.shipping_now || 0;
       const packType = item.packaging_type || "BOX";
       return {
         ...item,
@@ -1137,11 +1183,11 @@ function WebPackingWizard({
             id: `box-${Date.now()}-${Math.random()}`,
             hu_number: `${prefix}${String(runningSeq++).padStart(10, "0")}`,
             batch_code: "",
-            qty: q,
+            qty: null,
             gross_weight: null,
             net_weight: null,
             supplier_carton_ref: "",
-            pack_number: "",
+            pack_number: packingSlipNumber || "",
             width: null,
           },
         ],
@@ -1175,7 +1221,7 @@ function WebPackingWizard({
             gross_weight: existing?.gross_weight ?? null,
             net_weight: existing?.net_weight ?? null,
             supplier_carton_ref: existing?.supplier_carton_ref ?? "",
-            pack_number: existing?.pack_number ?? "",
+            pack_number: existing?.pack_number || packingSlipNumber || "",
             width: existing?.width ?? null,
           });
         }
@@ -1195,21 +1241,17 @@ function WebPackingWizard({
 
         for (let i = 0; i < count; i++) {
           const existing = item.boxes[i];
-          if (existing) {
-            newBoxes.push(existing);
-          } else {
-            newBoxes.push({
-              id: `box-${Date.now()}-${i}-${Math.random()}`,
-              hu_number: "",
-              batch_code: item.boxes[0]?.batch_code || "",
-              qty: 0,
-              gross_weight: null,
-              net_weight: null,
-              supplier_carton_ref: "",
-              pack_number: "",
-              width: null,
-            });
-          }
+          newBoxes.push({
+            id: existing ? existing.id : `box-${Date.now()}-${i}-${Math.random()}`,
+            hu_number: "",
+            batch_code: existing?.batch_code || item.boxes[0]?.batch_code || "",
+            qty: null,
+            gross_weight: existing?.gross_weight ?? null,
+            net_weight: existing?.net_weight ?? null,
+            supplier_carton_ref: existing?.supplier_carton_ref ?? "",
+            pack_number: existing?.pack_number || packingSlipNumber || "",
+            width: existing?.width ?? null,
+          });
         }
         return { ...item, boxes: newBoxes };
       });
@@ -1265,7 +1307,7 @@ function WebPackingWizard({
             id: `box-${Date.now()}-${Math.random()}`,
             hu_number: "",
             batch_code: item.boxes[0]?.batch_code || "",
-            qty: 0,
+            qty: null,
             gross_weight: null,
             net_weight: null,
             supplier_carton_ref: "",
@@ -1290,7 +1332,35 @@ function WebPackingWizard({
     });
   };
 
+  const handleMasterPackingSlipChange = (val: string) => {
+    setPackingSlipNumber(val);
+    setPackedItems((prev) =>
+      prev.map((item) => ({
+        ...item,
+        boxes: item.boxes.map((b) => ({ ...b, pack_number: val })),
+      }))
+    );
+  };
+
+  const copyBatchToAllCartons = (itemId: string, batchValue: string) => {
+    if (!batchValue?.trim()) return;
+    setPackedItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== itemId) return item;
+        return {
+          ...item,
+          boxes: item.boxes.map((b) => ({ ...b, batch_code: batchValue.trim() })),
+        };
+      })
+    );
+  };
+
   const handleProceedToReview = () => {
+    if (!packingSlipNumber.trim()) {
+      alert("Please enter Packing Slip / Delivery Note Number before proceeding.");
+      return;
+    }
+
     for (const item of packedItems) {
       const boxTotal = item.boxes.reduce((acc, b) => acc + (Number(b.qty) || 0), 0);
       if (boxTotal !== item.shipping_now) {
@@ -1303,6 +1373,10 @@ function WebPackingWizard({
         const box = item.boxes[bIdx];
         if (!box.qty || box.qty <= 0) {
           alert(`Carton ${bIdx + 1} for item ${item.item_code} has 0 or invalid quantity.`);
+          return;
+        }
+        if (!box.batch_code || !box.batch_code.trim()) {
+          alert(`Carton ${bIdx + 1} for item ${item.item_code}: Batch / Lot number is mandatory.`);
           return;
         }
         const gw = box.gross_weight != null && !isNaN(Number(box.gross_weight)) ? Number(box.gross_weight) : null;
@@ -1383,18 +1457,6 @@ function WebPackingWizard({
               {step === 1 ? (poNumbers.length > 0 ? "Back to Purchase Orders" : "Exit Workbench") : "Back"}
             </button>
 
-            {onSwitchToExcel && (
-              <button
-                type="button"
-                onClick={onSwitchToExcel}
-                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 rounded-lg border border-gray-300 shadow-xs transition-colors cursor-pointer"
-                title="Switch to Excel packing list upload for selected POs"
-              >
-                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                Excel Drop
-              </button>
-            )}
-
             <button
               type="button"
               onClick={handleManualSaveDraft}
@@ -1404,27 +1466,6 @@ function WebPackingWizard({
               <FileEdit className="w-3.5 h-3.5 text-blue-600" />
               {draftSavedToast ? "Saved to Drafts!" : "Save Draft"}
             </button>
-
-            <button
-              type="button"
-              onClick={() => navigate("/drafts")}
-              className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
-              title="View all saved drafts in sidebar"
-            >
-              Drafts
-            </button>
-
-            {isOnline ? (
-              <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-                <Wifi className="w-3.5 h-3.5 text-emerald-600" />
-                Online
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200 shadow-xs">
-                <WifiOff className="w-3.5 h-3.5 text-amber-600" />
-                Offline
-              </span>
-            )}
           </div>
 
           {/* Center: Stepper */}
@@ -1518,9 +1559,15 @@ function WebPackingWizard({
               <button
                 type="button"
                 onClick={handleDispatchASN}
-                disabled={isSubmitting || !packingSlipNumber.trim()}
+                disabled={isSubmitting || !packingSlipNumber.trim() || !deliveryDate.trim()}
                 className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
-                title={!packingSlipNumber.trim() ? "Please enter Packing Slip Number before dispatching" : "Dispatch to EDI"}
+                title={
+                  !packingSlipNumber.trim()
+                    ? "Please enter Packing Slip Number before dispatching"
+                    : !deliveryDate.trim()
+                    ? "Please select Delivery Date before dispatching"
+                    : "Dispatch to EDI"
+                }
               >
                 {isSubmitting ? (
                   <>
@@ -1623,6 +1670,7 @@ function WebPackingWizard({
                             <th className="px-4 py-2.5">Material Code</th>
                             <th className="px-4 py-2.5">Description</th>
                             <th className="px-4 py-2.5 text-right">Ordered</th>
+                            <th className="px-4 py-2.5 text-right">Shipped</th>
                             <th className="px-4 py-2.5 text-right">Open Balance</th>
                             <th className="px-4 py-2.5 text-right w-44">Shipping Qty</th>
                           </tr>
@@ -1640,37 +1688,47 @@ function WebPackingWizard({
                               <td className="px-4 py-2 text-right font-mono text-gray-500">
                                 {item.ordered_qty} {item.uom || "M"}
                               </td>
+                              <td className="px-4 py-2 text-right font-mono text-emerald-700 font-semibold">
+                                {item.shipped_qty || 0} {item.uom || "M"}
+                              </td>
                               <td className="px-4 py-2 text-right font-mono font-bold text-gray-900">
                                 {item.remaining_qty} {item.uom || "M"}
                               </td>
                               <td className="px-4 py-2 text-right">
-                                <div className="flex items-center justify-end gap-1.5">
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    max={item.remaining_qty}
-                                    value={item.shipping_now || 0}
-                                    onChange={(e) => handleShippingNowChange(item.id, parseInt(e.target.value) || 0)}
-                                    className={cn(
-                                      "w-24 h-7 px-2 border border-gray-300 rounded-lg text-right font-mono text-xs font-bold outline-none",
-                                      isSupplier
-                                        ? "focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-                                        : "focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                                    )}
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => handleShippingNowChange(item.id, item.remaining_qty)}
-                                    className={cn(
-                                      "text-[11px] font-semibold px-2 py-1 rounded-md border transition-colors cursor-pointer",
-                                      isSupplier
-                                        ? "text-emerald-700 bg-emerald-50/80 border-emerald-300 hover:bg-emerald-100"
-                                        : "text-blue-700 bg-blue-50/80 border-blue-300 hover:bg-blue-100"
-                                    )}
-                                  >
-                                    Max
-                                  </button>
-                                </div>
+                                {item.remaining_qty <= 0 ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                    Fulfilled
+                                  </span>
+                                ) : (
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max={item.remaining_qty}
+                                      value={item.shipping_now || 0}
+                                      onChange={(e) => handleShippingNowChange(item.id, parseInt(e.target.value) || 0)}
+                                      className={cn(
+                                        "w-24 h-7 px-2 border border-gray-300 rounded-lg text-right font-mono text-xs font-bold outline-none",
+                                        isSupplier
+                                          ? "focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                                          : "focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                      )}
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => handleShippingNowChange(item.id, item.remaining_qty)}
+                                      className={cn(
+                                        "text-[11px] font-semibold px-2 py-1 rounded-md border transition-colors cursor-pointer",
+                                        isSupplier
+                                          ? "text-emerald-700 bg-emerald-50/80 border-emerald-300 hover:bg-emerald-100"
+                                          : "text-blue-700 bg-blue-50/80 border-blue-300 hover:bg-blue-100"
+                                      )}
+                                    >
+                                      Max
+                                    </button>
+                                  </div>
+                                )}
                               </td>
                             </tr>
                           ))}
@@ -1706,14 +1764,14 @@ function WebPackingWizard({
                   <SlidersHorizontal className="w-3.5 h-3.5 text-gray-500" />
                   <span>Optional Columns</span>
                   <span className="px-1.5 py-0.2 bg-gray-100 text-gray-700 text-[10px] rounded-full font-mono font-bold">
-                    {Object.values(visibleColumns).filter(Boolean).length}/4
+                    {Object.values(visibleColumns).filter(Boolean).length}/3
                   </span>
                 </button>
 
                 {showColumnMenu && (
                   <div className="absolute left-0 mt-1.5 w-64 bg-white border border-gray-200 rounded-xl shadow-xl z-50 p-2.5 text-xs space-y-1">
                     <div className="px-2 py-1 font-bold text-gray-500 text-[10px] uppercase tracking-wider border-b border-gray-100 flex items-center justify-between">
-                      <span>Toggle Excel Columns</span>
+                      <span>Toggle Optional Columns</span>
                       <button
                         type="button"
                         onClick={() => setShowColumnMenu(false)}
@@ -1723,10 +1781,9 @@ function WebPackingWizard({
                       </button>
                     </div>
                     {[
-                      { key: "batch", label: "Batch / Lot", desc: "Lot or batch code" },
                       { key: "supplier_ref", label: "Supplier Carton Ref", desc: "Supplier internal ref / barcode" },
                       { key: "width", label: "Width", desc: "Material / roll width" },
-                      { key: "pack_no", label: "Pack No.", desc: "Packing group identifier" },
+                      { key: "pack_no", label: "Packing Slip No.", desc: "Per-carton custom delivery note override" },
                     ].map((col) => (
                       <label
                         key={col.key}
@@ -1755,8 +1812,37 @@ function WebPackingWizard({
             </div>
           </div>
 
+          {/* Master Delivery Note / Packing Slip Number Card (Option 1) */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-blue-50/80 border border-blue-200 rounded-xl shadow-2xs">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center text-blue-700 font-bold shrink-0">
+                <FileText className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-gray-900 uppercase tracking-wide">
+                    Packing Slip / Delivery Note Number
+                  </span>
+                  <span className="text-red-500 font-bold">*</span>
+                </div>
+                <p className="text-[11px] text-gray-600">
+                  Official Delivery Note / Consignment number for this dispatch (auto-applies to all cartons)
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <input
+                type="text"
+                placeholder="e.g. PL-2026-001 / 01007907"
+                value={packingSlipNumber}
+                onChange={(e) => handleMasterPackingSlipChange(e.target.value)}
+                className="w-full sm:w-64 h-9 px-3 text-xs font-mono font-bold rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none bg-white shadow-2xs placeholder:text-gray-400"
+              />
+            </div>
+          </div>
+
           <div className="space-y-4">
-            {packedItems.map((item) => {
+            {packedItems.map((item, itemIdx) => {
               const packedQtySum = item.boxes.reduce((a, b) => a + (Number(b.qty) || 0), 0);
               const isBalanced = packedQtySum === item.shipping_now;
 
@@ -1919,24 +2005,29 @@ function WebPackingWizard({
                     <table className="w-full text-xs text-left">
                       <thead>
                         <tr className="bg-gray-50/80 text-gray-600 border-b border-gray-200 font-semibold text-[11px] uppercase tracking-wider">
-                          <th className="px-3 py-2 text-center w-14">{isRoll ? "Roll" : "Carton"}</th>
+                          <th className="px-3 py-2 text-center w-24" title="Carton sequence and EDI Line Reference">{isRoll ? "Roll" : "Carton"}</th>
                           <th className="px-3 py-2 min-w-[180px]">20-digit HU Number</th>
                           <th className="px-3 py-2 text-right w-24">Qty ({item.uom || "M"})</th>
-                          {visibleColumns.batch && <th className="px-3 py-2 w-28">Batch / Lot</th>}
+                          <th className="px-3 py-2 text-left w-36">
+                            Batch / Lot <span className="text-red-500">*</span>
+                          </th>
                           <th className="px-3 py-2 text-right w-28">Gross Wt (kg)</th>
                           <th className="px-3 py-2 text-right w-28">Net Wt (kg)</th>
                           {visibleColumns.supplier_ref && <th className="px-3 py-2 w-32">Supplier Carton Ref</th>}
                           {visibleColumns.width && <th className="px-3 py-2 text-right w-24">Width</th>}
-                          {visibleColumns.pack_no && <th className="px-3 py-2 w-28">Pack No.</th>}
+                          {visibleColumns.pack_no && <th className="px-3 py-2 w-28">Packing Slip No.</th>}
                           <th className="px-3 py-2 text-center w-12">Action</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
                         {item.boxes.map((box, idx) => (
                           <tr key={box.id} className="hover:bg-gray-50/80 transition-colors">
-                            {/* 1. Carton # (Incremental number like Excel: 1, 2, 3...) */}
-                            <td className="px-3 py-1.5 font-bold text-gray-700 font-mono text-center text-xs">
-                              {idx + 1}
+                            {/* 1. Carton # and Line Reference: e.g. 1 (1-1) */}
+                            <td className="px-3 py-1.5 font-mono text-center text-xs whitespace-nowrap">
+                              <span className="font-bold text-gray-800">{idx + 1}</span>
+                              <span className="text-[11px] text-gray-500 font-medium ml-1.5" title="EDI Line Reference (Item-Carton)">
+                                ({itemIdx + 1}-{idx + 1})
+                              </span>
                             </td>
 
                             {/* 2. 20-digit HU Number */}
@@ -1946,30 +2037,45 @@ function WebPackingWizard({
                               </span>
                             </td>
 
-                            {/* 3. Qty (pre-filled, auto-split) */}
+                            {/* 3. Qty (empty by default for supplier input) */}
                             <td className="px-3 py-1.5 text-right">
                               <input
                                 type="number"
                                 min="0"
                                 step="any"
-                                value={box.qty ?? ""}
-                                onChange={(e) => updateBox(item.id, idx, { qty: Number(e.target.value) || 0 })}
+                                value={box.qty !== null && box.qty !== undefined && box.qty !== 0 ? box.qty : ""}
+                                onChange={(e) =>
+                                  updateBox(item.id, idx, {
+                                    qty: e.target.value === "" ? null : parseFloat(e.target.value) || 0,
+                                  })
+                                }
+                                placeholder=""
                                 className="w-20 h-7 px-2 text-xs text-right border border-gray-300 rounded-md font-mono font-bold focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                               />
                             </td>
 
-                            {/* 4. Batch / Lot (Optional) */}
-                            {visibleColumns.batch && (
-                              <td className="px-3 py-1.5">
+                            {/* 4. Batch / Lot (Mandatory) */}
+                            <td className="px-3 py-1.5">
+                              <div className="flex items-center gap-1">
                                 <input
                                   type="text"
                                   value={box.batch_code || ""}
                                   onChange={(e) => updateBox(item.id, idx, { batch_code: e.target.value })}
-                                  className="w-24 h-7 px-2 text-xs border border-gray-300 rounded-md font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
-                                  placeholder="Optional"
+                                  placeholder=""
+                                  className="w-28 h-7 px-2 text-xs border border-gray-300 rounded-md font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                                 />
-                              </td>
-                            )}
+                                {item.boxes.length > 1 && idx === 0 && Boolean(box.batch_code?.trim()) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => copyBatchToAllCartons(item.id, box.batch_code)}
+                                    className="px-1.5 py-0.5 text-[10px] bg-gray-100 hover:bg-blue-50 text-gray-600 hover:text-blue-700 rounded border border-gray-200 transition-colors cursor-pointer shrink-0 font-medium"
+                                    title="Copy this batch to all cartons of this line item"
+                                  >
+                                    All ↓
+                                  </button>
+                                )}
+                              </div>
+                            </td>
 
                             {/* 5. Gross Weight (Mandatory) */}
                             <td className="px-3 py-1.5 text-right">
@@ -2044,15 +2150,15 @@ function WebPackingWizard({
                               </td>
                             )}
 
-                            {/* 9. Pack No. (Optional) */}
+                            {/* 9. Packing Slip No. (Custom override if toggled) */}
                             {visibleColumns.pack_no && (
                               <td className="px-3 py-1.5">
                                 <input
                                   type="text"
-                                  value={box.pack_number || ""}
+                                  value={box.pack_number || packingSlipNumber || ""}
                                   onChange={(e) => updateBox(item.id, idx, { pack_number: e.target.value })}
                                   className="w-24 h-7 px-2 text-xs border border-gray-300 rounded-md font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
-                                  placeholder="Optional"
+                                  placeholder={packingSlipNumber || "Required *"}
                                 />
                               </td>
                             )}
@@ -2236,13 +2342,14 @@ function WebPackingWizard({
                   Dispatch Verification & Summary
                 </h2>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Review consignment metrics and enter the official Delivery Note / Packing Slip number before EDI transmission.
+                  Review consignment metrics, verify Packing Slip number and delivery date before EDI transmission.
                 </p>
               </div>
 
-              {/* Required Packing Slip / Delivery Note No Card */}
-              <div className="p-4 bg-emerald-50/50 border border-emerald-200/80 rounded-xl">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              {/* Required Dispatch Parameters: Packing Slip & Delivery Date */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* Packing Slip / Delivery Note No */}
+                <div className="p-4 bg-emerald-50/50 border border-emerald-200/80 rounded-xl flex flex-col justify-between gap-3">
                   <div>
                     <label htmlFor="wizard-ps-number" className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
                       Packing Slip / Delivery Note No <span className="text-red-500 font-bold">*</span>
@@ -2251,7 +2358,7 @@ function WebPackingWizard({
                       Supplier Dispatch Note / Delivery Note number. Embedded into EDI XML as &lt;PackingSlipNumber&gt; and used as Shipment No.
                     </p>
                   </div>
-                  <div className="w-full sm:w-auto">
+                  <div>
                     <input
                       id="wizard-ps-number"
                       type="text"
@@ -2260,10 +2367,44 @@ function WebPackingWizard({
                       value={packingSlipNumber}
                       onChange={(e) => setPackingSlipNumber(e.target.value)}
                       className={cn(
-                        "w-full sm:w-64 h-10 px-3.5 text-xs font-mono font-bold rounded-lg border outline-none shadow-2xs transition-colors",
+                        "w-full h-10 px-3.5 text-xs font-mono font-bold rounded-lg border outline-none shadow-2xs transition-colors",
                         !packingSlipNumber.trim()
                           ? "bg-white border-amber-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
                           : "bg-white border-emerald-400 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200"
+                      )}
+                    />
+                  </div>
+                </div>
+
+                {/* Delivery Date / Estimated Arrival */}
+                <div className="p-4 bg-emerald-50/50 border border-emerald-200/80 rounded-xl flex flex-col justify-between gap-3">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <label htmlFor="wizard-delivery-date" className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
+                        Delivery Date (Estimated Arrival) <span className="text-red-500 font-bold">*</span>
+                      </label>
+                      {openLinesData?.some((l) => l.delivery_date) && (
+                        <span className="text-[10px] text-emerald-800 bg-emerald-100/90 font-semibold px-2 py-0.5 rounded border border-emerald-200">
+                          PO XML Default
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-gray-500 mt-0.5">
+                      Expected delivery date at factory. Defaulted from inbound XML &lt;DeliveryDate&gt;, editable by supplier.
+                    </p>
+                  </div>
+                  <div>
+                    <input
+                      id="wizard-delivery-date"
+                      type="date"
+                      required
+                      value={deliveryDate}
+                      onChange={(e) => setDeliveryDate(e.target.value)}
+                      className={cn(
+                        "w-full h-10 px-3.5 text-xs font-mono font-bold rounded-lg border outline-none shadow-2xs transition-colors bg-white cursor-pointer",
+                        !deliveryDate.trim()
+                          ? "border-amber-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
+                          : "border-emerald-400 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200"
                       )}
                     />
                   </div>
@@ -2296,7 +2437,7 @@ function WebPackingWizard({
                 <div className="bg-gray-50/70 p-4 rounded-xl border border-gray-200">
                   <span className="text-[11px] text-gray-500 uppercase font-semibold block">Destination Plant</span>
                   <p className="text-sm font-bold text-gray-900 mt-1 truncate">
-                    {PLANT_NAMES[matchPlant(packedItems[0]?.destination)] || "Omega Line Ltd"}
+                    {formatPlantName(matchPlant(packedItems[0]?.destination))}
                   </p>
                   <span className="text-[10px] text-gray-500 font-mono block">
                     Code: {matchPlant(packedItems[0]?.destination)}
@@ -2402,7 +2543,6 @@ function ExcelPackingWorkflow({
   const [dispatchingAsn, setDispatchingAsn] = useState(false);
   const [dispatchedSuccess, setDispatchedSuccess] = useState(false);
 
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const shouldResume = searchParams.get("resume") === "true";
   const [draftSavedToast, setDraftSavedToast] = useState(false);
@@ -2487,36 +2627,52 @@ function ExcelPackingWorkflow({
           if (found) {
              if (!minDate || (found.delivery_date && found.delivery_date < minDate)) {
                  minDate = found.delivery_date || "";
-                 pCode = matchPlant(found.client_code || found.destination);
+                 pCode = matchPlant(found.destination || found.delivery_address || (found as any).extra_data?.delivery_address || found.client_code);
              }
              
              const fullPo = await poApi.getById(found.id);
              if (fullPo && (fullPo as any).extra_data && Array.isArray((fullPo as any).extra_data.items)) {
-                (fullPo as any).extra_data.items.forEach((it: any) => {
+                (fullPo as any).extra_data.items.forEach((it: any, idx: number) => {
                    if (Number(it.quantity || 0) > 0) {
-                      const poItem = String(it.order_line_number || it.line_number || 1).trim();
+                      const poItem = String(it.order_line_number || it.line_number || idx + 1).trim();
+                      const qty = Number(it.quantity || 0);
+                      const shipped = Number(it.shipped_quantity ?? 0);
+                      const remaining = it.remaining_quantity !== undefined
+                        ? Number(it.remaining_quantity)
+                        : Math.max(0, qty - shipped);
+
                       fetchedLines.push({
                          po_number: po,
                          po_item: poItem,
                          material_code: it.item_code || it.material_code || "",
                          description: it.description || "",
-                         ordered_qty: Number(it.quantity || 0),
+                         ordered_qty: qty,
+                         shipped_qty: shipped,
+                         remaining_qty: remaining,
                          uom: it.size || it.uom || "M",
                       });
-                      newSelected[`${po}|${poItem}`] = true;
+                      newSelected[`${po}|${poItem}`] = remaining > 0;
                    }
                 });
              } else {
                  const poItem = "00100";
+                 const fullOrdered = Number(found.quantity || 500);
+                 const fullShipped = Number((fullPo as any)?.shipped_quantity ?? 0);
+                 const fullRemaining = (fullPo as any)?.remaining_quantity !== undefined
+                   ? Number((fullPo as any).remaining_quantity)
+                   : Math.max(0, fullOrdered - fullShipped);
+
                  fetchedLines.push({
                      po_number: po,
                      po_item: poItem,
                      material_code: found.style_number || "ELST1K 000615",
                      description: found.description || "Elastic Tape",
-                     ordered_qty: found.quantity || 500,
+                     ordered_qty: fullOrdered,
+                     shipped_qty: fullShipped,
+                     remaining_qty: fullRemaining,
                      uom: "M",
                  });
-                 newSelected[`${po}|${poItem}`] = true;
+                 newSelected[`${po}|${poItem}`] = fullRemaining > 0;
              }
           }
         } catch(e) {
@@ -2524,11 +2680,11 @@ function ExcelPackingWorkflow({
         }
       }
 
-      setPlantCode(pCode);
+      setPlantCode((prev) => (shouldResume && prev ? prev : pCode));
       if (minDate) {
-         setEstimatedArrival(minDate.split("T")[0]);
+         setEstimatedArrival((prev) => (shouldResume && prev ? prev : minDate.split("T")[0]));
       } else {
-         setEstimatedArrival(new Date(Date.now() + 86400000).toISOString().split("T")[0]);
+         setEstimatedArrival((prev) => (shouldResume && prev ? prev : new Date(Date.now() + 86400000).toISOString().split("T")[0]));
       }
       
       setPoLines(fetchedLines);
@@ -2547,8 +2703,8 @@ function ExcelPackingWorkflow({
   };
 
   const togglePo = (po: string) => {
-    const linesForPo = poLines.filter(l => l.po_number === po);
-    const allSelected = linesForPo.every(l => selectedLines[`${po}|${l.po_item}`]);
+    const linesForPo = poLines.filter(l => l.po_number === po && (l.remaining_qty === undefined || l.remaining_qty > 0));
+    const allSelected = linesForPo.length > 0 && linesForPo.every(l => selectedLines[`${po}|${l.po_item}`]);
     const newState = { ...selectedLines };
     linesForPo.forEach(l => {
        newState[`${po}|${l.po_item}`] = !allSelected;
@@ -2563,7 +2719,7 @@ function ExcelPackingWorkflow({
       const payload = {
         configs: activePos.map((po) => {
           const selected = poLines
-            .filter((l) => l.po_number === po && selectedLines[`${po}|${l.po_item}`])
+            .filter((l) => l.po_number === po && selectedLines[`${po}|${l.po_item}`] && (l.remaining_qty === undefined || l.remaining_qty > 0))
             .map((l) => l.po_item);
           const counts: Record<string, number> = {};
           selected.forEach((lItem) => {
@@ -2588,11 +2744,26 @@ function ExcelPackingWorkflow({
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `Packing_List_Tailored.xlsx`;
+      const downloadFilename = payload.configs.length === 1
+        ? `Packing_List_${payload.configs[0].po_number}_Tailored.xlsx`
+        : `Packing_List_Tailored.xlsx`;
+      a.download = downloadFilename;
       document.body.appendChild(a);
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
+
+      // Auto-save this session as an Excel draft so user can resume from Drafts page anytime
+      const suppCode = user?.supplier_code || "0000018194";
+      saveExcelDraft(suppCode, activePos, {
+        plantCode,
+        estimatedArrival,
+        packingSlipNumber,
+        validationResult: null,
+        fileName: downloadFilename,
+      });
+      setDraftSavedToast(true);
+      setTimeout(() => setDraftSavedToast(false), 2500);
     } catch (err: any) {
       alert("Failed to download tailored template: " + (err.message || err));
     } finally {
@@ -2613,6 +2784,10 @@ function ExcelPackingWorkflow({
       const supplierId = user?.role === "SUPPLIER" ? (user.supplier_id || undefined) : undefined;
       const res = await shipmentService.validateExcel(file, supplierId, user?.supplier_code || undefined);
       setValidationResult(res);
+      const firstPs = res.rows?.find((r: any) => r.pack_number?.trim())?.pack_number?.trim();
+      if (firstPs) {
+        setPackingSlipNumber(firstPs);
+      }
       const suppCode = user?.supplier_code || "0000018194";
       saveExcelFileBlob(suppCode, activePos, file).catch(() => {});
       saveExcelDraft(suppCode, activePos, {
@@ -2684,11 +2859,6 @@ function ExcelPackingWorkflow({
       alert("Please upload or select the validated Excel file before creating the shipment.");
       return;
     }
-    const trimmedPs = packingSlipNumber.trim();
-    if (!trimmedPs) {
-      alert("Please enter Packing Slip / Delivery Note Number before creating shipment.");
-      return;
-    }
     setSubmitting(true);
     try {
       // Proactively refresh JWT before making network call to avoid mid-submission 401
@@ -2696,7 +2866,7 @@ function ExcelPackingWorkflow({
 
       const res = await shipmentService.createFromExcel({
         file: selectedFile,
-        packing_slip_number: trimmedPs,
+        packing_slip_number: packingSlipNumber.trim() || undefined,
         plant_code: plantCode,
         supplier_code: user?.supplier_code || undefined,
         supplier_name: user?.supplier_name || undefined,
@@ -2704,6 +2874,9 @@ function ExcelPackingWorkflow({
         estimated_arrival: estimatedArrival || undefined,
       });
       setCreatedResponse(res);
+      const suppCode = user?.supplier_code || "0000018194";
+      clearExcelDraft(suppCode, activePos);
+      clearManualDraft(suppCode, activePos);
     } catch (e: any) {
       console.error("Create shipment error:", e);
       const detail = e?.response?.data?.detail;
@@ -2758,15 +2931,32 @@ function ExcelPackingWorkflow({
     if (!createdResponse) return;
     setDownloadingXml(true);
     try {
-      const blob = await shipmentService.downloadASNXml(createdResponse.asn.id);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = createdResponse.asn.xml_filename || `PL_${createdResponse.shipment.shipment_number}.xml`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
+      const shipmentsToDownload = createdResponse.shipments?.length
+        ? createdResponse.shipments
+        : [
+            {
+              asn_record_id: createdResponse.asn.id,
+              xml_filename: createdResponse.asn.xml_filename || `PL_${createdResponse.shipment.shipment_number}.xml`,
+              shipment_number: createdResponse.shipment.shipment_number,
+            },
+          ];
+
+      for (const s of shipmentsToDownload) {
+        if (s.asn_record_id) {
+          const blob = await shipmentService.downloadASNXml(s.asn_record_id);
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = s.xml_filename || `PL_${s.shipment_number}.xml`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          window.URL.revokeObjectURL(url);
+          if (shipmentsToDownload.length > 1) {
+            await new Promise((r) => setTimeout(r, 250));
+          }
+        }
+      }
     } catch (err: any) {
       alert(`Failed to download ASN XML: ${err?.response?.data?.detail || err.message || err}`);
     } finally {
@@ -2783,12 +2973,18 @@ function ExcelPackingWorkflow({
     setDispatchingAsn(true);
     try {
       await ensureFreshToken(60);
-      await shipmentService.sendASN(createdResponse.asn.id);
+      const asnsToDispatch: string[] = createdResponse.shipments?.length
+        ? (createdResponse.shipments.map((s) => s.asn_record_id).filter((id): id is string => Boolean(id)))
+        : [createdResponse.asn.id];
+      for (const asnId of asnsToDispatch) {
+        await shipmentService.sendASN(asnId);
+      }
       setDispatchedSuccess(true);
       const suppCode = user?.supplier_code || "0000018194";
       clearExcelDraft(suppCode, activePos);
+      clearManualDraft(suppCode, activePos);
     } catch (err: any) {
-      alert(`Failed to dispatch ASN: ${err?.response?.data?.detail || err.message || err}`);
+      alert(`Failed to dispatch ASN(s): ${err?.response?.data?.detail || err.message || err}`);
     } finally {
       setDispatchingAsn(false);
     }
@@ -2820,25 +3016,15 @@ function ExcelPackingWorkflow({
                     <>
                        <div className="w-px h-8 bg-gray-300 hidden sm:block"></div>
 
-                       {/* 2. Packing Slip / Delivery Note No */}
-                       <div className="flex items-center gap-2">
-                          <label className="text-xs font-bold text-gray-700 flex items-center gap-1">
-                             Packing Slip No <span className="text-red-500 font-bold">*</span>:
-                          </label>
-                          <input
-                             type="text"
-                             required
-                             placeholder="e.g. 01007907 / DN-2026-001"
-                             value={packingSlipNumber}
-                             onChange={(e) => setPackingSlipNumber(e.target.value)}
-                             className={cn(
-                                "h-9 px-3 text-xs border bg-white rounded-md outline-none font-mono font-bold w-48 shadow-2xs transition-colors",
-                                !packingSlipNumber.trim()
-                                   ? "border-amber-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-                                   : "border-gray-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-                             )}
-                          />
-                       </div>
+                       {/* Detected Packing Slip No(s) from Excel */}
+                        {Array.from(new Set(validationResult.rows.map((r) => r.pack_number).filter(Boolean))).length > 0 && (
+                           <div className="flex items-center gap-2">
+                              <span className="text-xs font-semibold text-gray-600">Packing Slip:</span>
+                              <span className="px-2.5 py-1 bg-white border border-emerald-300 text-emerald-800 rounded-md font-mono font-bold text-xs shadow-2xs">
+                                 {Array.from(new Set(validationResult.rows.map((r) => r.pack_number).filter(Boolean))).join(", ")}
+                              </span>
+                           </div>
+                        )}
 
                        <div className="w-px h-8 bg-gray-300 hidden sm:block"></div>
 
@@ -2861,36 +3047,15 @@ function ExcelPackingWorkflow({
                    <FileEdit className="w-3.5 h-3.5 text-emerald-600" />
                    {draftSavedToast ? "Saved to Drafts!" : "Save Draft"}
                  </button>
-
-                 <button
-                   type="button"
-                   onClick={() => navigate("/drafts")}
-                   className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
-                   title="View all saved drafts in sidebar"
-                 >
-                   Drafts
-                 </button>
-
-                 {isOnline ? (
-                   <span className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-                     <Wifi className="w-3.5 h-3.5 text-emerald-600" />
-                     Online
-                   </span>
-                 ) : (
-                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200 shadow-xs">
-                     <WifiOff className="w-3.5 h-3.5 text-amber-600" />
-                     Offline
-                   </span>
-                 )}
                  <button onClick={handleDownloadTailoredTemplate} disabled={downloadingTailored || activePos.length === 0} className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-3.5 py-2 rounded-lg transition-colors border border-emerald-200 flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50">
                     {downloadingTailored ? <Loader2 className="w-4 h-4 animate-spin"/> : <Download className="w-4 h-4"/>} Tailored Sheet
                  </button>
                  {validationResult?.is_valid && !validating && (
                    <button
-                     disabled={submitting || !packingSlipNumber.trim()}
+                     disabled={submitting}
                      onClick={handleCreateShipment}
                      className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 hover:shadow-md transition-all cursor-pointer disabled:opacity-50"
-                     title={!packingSlipNumber.trim() ? "Please enter Packing Slip Number before creating shipment" : "Create Shipment & Generate HUs"}
+                     title="Create Shipment & Generate HUs"
                    >
                      {submitting ? <><Loader2 className="w-4 h-4 animate-spin"/> Processing...</> : <><PackagePlus className="w-4 h-4"/> Create Shipment & Generate HUs</>}
                    </button>
@@ -2931,14 +3096,7 @@ function ExcelPackingWorkflow({
                        </div>
                     </div>
 
-                    {validationResult.is_valid && !packingSlipNumber.trim() && (
-                      <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 flex items-center gap-2">
-                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                        <span>
-                          <strong>Required:</strong> Please enter the official <strong>Packing Slip No</strong> in the toolbar above to enable shipment creation.
-                        </span>
-                      </div>
-                    )}
+                    
 
                     {/* Summary Table */}
                     <div className="overflow-x-auto rounded-lg border border-gray-200 shadow-xs">
@@ -2997,6 +3155,7 @@ function ExcelPackingWorkflow({
                                 <thead className="sticky top-0 bg-gray-200 text-gray-700 font-bold uppercase tracking-wider">
                                    <tr>
                                       <th className="px-3 py-2 border-b border-gray-300">Unit #</th>
+                                      <th className="px-3 py-2 border-b border-gray-300">Packing Slip No.</th>
                                       <th className="px-3 py-2 border-b border-gray-300">20-digit HU Number</th>
                                       <th className="px-3 py-2 border-b border-gray-300">Ref</th>
                                       <th className="px-3 py-2 border-b border-gray-300">Lot No.</th>
@@ -3006,9 +3165,33 @@ function ExcelPackingWorkflow({
                                    </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-200 bg-white">
-                                   {validationResult.rows.map((r, i) => (
-                                      <tr key={i} className="text-gray-600 hover:bg-gray-50">
-                                         <td className="px-3 py-1.5 font-mono font-semibold">#{r.carton_number}</td>
+                                   {(() => {
+                                      let currentGroup = "";
+                                      let isAlt = false;
+                                      return validationResult.rows.map((r, i) => {
+                                         const groupKey = `${r.po_number || ""}-${r.po_item || ""}`;
+                                         if (groupKey !== currentGroup) {
+                                            if (currentGroup !== "") isAlt = !isAlt;
+                                            currentGroup = groupKey;
+                                         }
+                                         return (
+                                      <tr key={i} className={cn("transition-colors", isAlt ? "bg-slate-50/85 text-gray-700 hover:bg-slate-100" : "bg-white text-gray-600 hover:bg-gray-50")}>
+                                         <td className="px-3 py-1.5 font-mono font-semibold whitespace-nowrap">
+                                            {(() => {
+                                              const cnStr = String(r.carton_number || "").trim();
+                                              const match = cnStr.match(/^(\d+)\s*(\(\d+-\d+\))$/);
+                                              if (match) {
+                                                return (
+                                                  <span className="inline-flex items-center gap-1.5">
+                                                    <span className="font-bold text-gray-800">#{match[1]}</span>
+                                                    <span className="text-[11px] text-gray-500 font-medium">{match[2]}</span>
+                                                  </span>
+                                                );
+                                              }
+                                              return cnStr.startsWith("#") ? cnStr : `#${cnStr || i + 1}`;
+                                            })()}
+                                         </td>
+                                         <td className="px-3 py-1.5 font-mono font-bold text-gray-800">{r.pack_number || "—"}</td>
                                          <td className="px-3 py-1.5 font-mono font-bold text-gray-900 tracking-wider">
                                             {r.hu_number || (
                                                <span className="text-gray-400 font-normal italic">Auto-generates on dispatch</span>
@@ -3020,7 +3203,8 @@ function ExcelPackingWorkflow({
                                          <td className="px-3 py-1.5 font-mono">{r.net_weight}</td>
                                          <td className="px-3 py-1.5 font-mono font-bold text-gray-900 bg-gray-50">{r.quantity}</td>
                                       </tr>
-                                   ))}
+                                      );});
+                                   })()}
                                 </tbody>
                              </table>
                           </div>
@@ -3068,46 +3252,79 @@ function ExcelPackingWorkflow({
                                 </div>
                                 
                                 <div className="divide-y divide-gray-100 bg-white">
-                                   {lines.map((line) => (
-                                      <label key={line.po_item} className="flex items-center gap-4 px-4 py-2 hover:bg-gray-50 transition-colors cursor-pointer">
+                                   {lines.map((line) => {
+                                      const isFulfilled = line.remaining_qty !== undefined && line.remaining_qty <= 0;
+                                      return (
+                                      <label
+                                         key={line.po_item}
+                                         className={cn(
+                                            "flex items-center gap-4 px-4 py-2 transition-colors",
+                                            isFulfilled
+                                               ? "bg-gray-50/70 opacity-60 cursor-not-allowed"
+                                               : "hover:bg-gray-50 cursor-pointer"
+                                         )}
+                                      >
                                          <input 
                                             type="checkbox" 
-                                            checked={selectedLines[`${po}|${line.po_item}`] || false}
-                                            onChange={() => toggleLine(po, line.po_item)}
-                                            className="w-4 h-4 text-emerald-600 rounded border-gray-300 cursor-pointer"
+                                            disabled={isFulfilled}
+                                            checked={!isFulfilled && (selectedLines[`${po}|${line.po_item}`] || false)}
+                                            onChange={() => {
+                                               if (!isFulfilled) toggleLine(po, line.po_item);
+                                            }}
+                                            className={cn(
+                                               "w-4 h-4 rounded border-gray-300",
+                                               isFulfilled ? "cursor-not-allowed text-gray-400" : "text-emerald-600 cursor-pointer"
+                                            )}
                                          />
                                          <div className="flex-1 min-w-0 flex items-center justify-between">
                                             <div className="flex items-center gap-2">
                                                <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-xs font-mono font-bold border border-gray-200 whitespace-nowrap inline-block">{line.po_item}</span>
                                                <span className="text-xs font-bold text-gray-800 font-mono">{line.material_code}</span>
                                                <span className="text-xs text-gray-500 truncate max-w-sm">{line.description}</span>
+                                               {isFulfilled && (
+                                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                     <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Fulfilled
+                                                  </span>
+                                               )}
                                             </div>
                                             <div className="flex items-center gap-3">
-                                               <div className="text-xs font-mono font-bold text-gray-600 bg-gray-50 border border-gray-100 px-2 py-1 rounded shadow-inner">
-                                                  {line.ordered_qty} {line.uom}
-                                               </div>
-                                               <div
-                                                  className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 px-2 py-1 rounded-lg"
-                                                  onClick={(e) => e.stopPropagation()}
-                                               >
-                                                  <span className="text-[11px] text-gray-500 font-medium">Cartons:</span>
-                                                  <input
-                                                     type="number"
-                                                     min="1"
-                                                     max="500"
-                                                     value={lineCartonCounts[`${po}|${line.po_item}`] || 1}
-                                                     onChange={(e) => {
-                                                        const v = Math.max(1, parseInt(e.target.value) || 1);
-                                                        setLineCartonCounts((prev) => ({ ...prev, [`${po}|${line.po_item}`]: v }));
-                                                     }}
-                                                     className="w-12 px-1 py-0.5 text-xs text-center font-bold border border-gray-300 rounded bg-white focus:outline-emerald-500"
-                                                     title="Number of carton/roll rows to generate for this line item in Excel"
-                                                  />
-                                               </div>
+                                               {isFulfilled ? (
+                                                  <div className="text-xs font-mono text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded">
+                                                     Shipped {line.shipped_qty || line.ordered_qty} / {line.ordered_qty} {line.uom}
+                                                  </div>
+                                               ) : (line.shipped_qty || 0) > 0 ? (
+                                                  <div className="text-xs font-mono font-bold text-orange-700 bg-orange-50 border border-orange-200 px-2 py-1 rounded">
+                                                     Open: {line.remaining_qty} / {line.ordered_qty} {line.uom}
+                                                  </div>
+                                               ) : (
+                                                  <div className="text-xs font-mono font-bold text-gray-600 bg-gray-50 border border-gray-100 px-2 py-1 rounded shadow-inner">
+                                                     {line.ordered_qty} {line.uom}
+                                                  </div>
+                                               )}
+                                               {!isFulfilled && (
+                                                  <div
+                                                     className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 px-2 py-1 rounded-lg"
+                                                     onClick={(e) => e.stopPropagation()}
+                                                  >
+                                                     <span className="text-[11px] text-gray-500 font-medium">Cartons:</span>
+                                                     <input
+                                                        type="number"
+                                                        min="1"
+                                                        max="500"
+                                                        value={lineCartonCounts[`${po}|${line.po_item}`] || 1}
+                                                        onChange={(e) => {
+                                                           const v = Math.max(1, parseInt(e.target.value) || 1);
+                                                           setLineCartonCounts((prev) => ({ ...prev, [`${po}|${line.po_item}`]: v }));
+                                                        }}
+                                                        className="w-12 px-1 py-0.5 text-xs text-center font-bold border border-gray-300 rounded bg-white focus:outline-emerald-500"
+                                                        title="Number of carton/roll rows to generate for this line item in Excel"
+                                                     />
+                                                  </div>
+                                               )}
                                             </div>
                                          </div>
                                       </label>
-                                   ))}
+                                   );})}
                                    {lines.length === 0 && (
                                       <div className="px-4 py-3 text-xs text-gray-400 italic">No line items found.</div>
                                    )}
@@ -3164,17 +3381,43 @@ function ExcelPackingWorkflow({
                       </div>
                       <p className="text-[11px] text-gray-400 mt-1">Plant: {s.plant_code} • {s.status}</p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (onOpenLabelModal && s.id) {
-                          onOpenLabelModal(s.id, s.shipment_number, s.total_boxes);
-                        }
-                      }}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs cursor-pointer transition-colors"
-                    >
-                      <Printer className="h-3.5 w-3.5" /> Print Labels
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (onOpenLabelModal && s.id) {
+                            onOpenLabelModal(s.id, s.shipment_number, s.total_boxes);
+                          }
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs cursor-pointer transition-colors"
+                      >
+                        <Printer className="h-3.5 w-3.5" /> Print Labels
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (s.asn_record_id) {
+                            try {
+                              const blob = await shipmentService.downloadASNXml(s.asn_record_id);
+                              const url = window.URL.createObjectURL(blob);
+                              const a = document.createElement("a");
+                              a.href = url;
+                              a.download = s.xml_filename || `PL_${s.shipment_number}.xml`;
+                              document.body.appendChild(a);
+                              a.click();
+                              a.remove();
+                              window.URL.revokeObjectURL(url);
+                            } catch (e: any) {
+                              alert(`Failed to download XML: ${e?.message || e}`);
+                            }
+                          }
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs shadow-xs cursor-pointer transition-colors"
+                        title={`Download XML for Packing Slip ${s.shipment_number}`}
+                      >
+                        <Download className="h-3.5 w-3.5" /> XML
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -3230,7 +3473,7 @@ function ExcelPackingWorkflow({
               className="flex-1 min-w-[200px] flex items-center justify-center gap-2 rounded-xl border-2 border-purple-200 bg-purple-50 px-5 py-3 text-sm font-bold text-purple-700 shadow-sm hover:bg-purple-100 disabled:opacity-50 transition-colors cursor-pointer"
             >
               {downloadingXml ? <Loader2 className="h-5 w-5 animate-spin" /> : <Download className="h-5 w-5" />}
-              ASN XML (.xml)
+              {createdResponse.shipments && createdResponse.shipments.length > 1 ? "Download All XMLs (.xml)" : "ASN XML (.xml)"}
             </button>
 
             {dispatchedSuccess ? (
@@ -3424,7 +3667,7 @@ function ShipmentDetailModal({
     setTimeout(() => setCopiedHu(null), 2000);
   };
 
-  const plantName = data?.plant_code ? (PLANT_NAMES[data.plant_code] || data.plant_code) : "N/A";
+  const plantName = (data as any)?.destination_plant || (data?.plant_code ? formatPlantName(data.plant_code) : "N/A");
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4 backdrop-blur-sm">

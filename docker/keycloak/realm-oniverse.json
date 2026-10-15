@@ -1,7 +1,7 @@
 {
   "id": "96d323c0-cebd-4fa0-b4ed-a23af1a70ef1",
   "realm": "oniverse",
-  "displayName": "ANS Portal",
+  "displayName": "ASN Platform",
   "notBefore": 0,
   "defaultSignatureAlgorithm": "RS256",
   "revokeRefreshToken": false,
@@ -721,7 +721,7 @@
     {
       "id": "124df6d0-8226-4ce8-8de6-f5df60c9444b",
       "clientId": "ans-backend",
-      "name": "ANS Portal (backend API)",
+      "name": "ASN Platform (backend API)",
       "surrogateAuthRequired": false,
       "enabled": true,
       "alwaysDisplayInConsole": false,
@@ -767,7 +767,7 @@
     {
       "id": "98961b0b-4837-431d-9659-a556c42a4c35",
       "clientId": "ans-frontend",
-      "name": "ANS Portal (browser app)",
+      "name": "ASN Platform (browser app)",
       "rootUrl": "${PORTAL_URL:http://localhost:3000}",
       "adminUrl": "${PORTAL_URL:http://localhost:3000}",
       "baseUrl": "/",
@@ -1746,7 +1746,7 @@
     "host": "${SMTP_HOST:mailpit}",
     "port": "${SMTP_PORT:1025}",
     "from": "${SMTP_FROM:noreply@localhost}",
-    "fromDisplayName": "ANS Portal",
+    "fromDisplayName": "ASN Platform",
     "replyTo": "${SMTP_REPLY_TO:}",
     "starttls": "${SMTP_STARTTLS:false}",
     "ssl": "false",

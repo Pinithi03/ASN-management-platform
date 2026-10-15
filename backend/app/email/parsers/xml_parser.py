@@ -314,6 +314,15 @@ def _parse_sd_data_slice_all(root: etree._Element, filename: str) -> list[Parsed
 
                 qty_unit = (_xpath_first_text(line_elem, "QtyUnit", "ProductUnitOfMeasure", "UOM") or "M").strip()
 
+                # Delivery date & address per line overrides order-level
+                line_delivery = (_xpath_text(line_elem, ".//DeliveryDate") or "").strip()
+                if line_delivery and not po.delivery_date:
+                    po.delivery_date = line_delivery
+
+                line_delivery_addr = (_xpath_text(line_elem, ".//DeliveryAddress") or "").strip()
+                if line_delivery_addr and not po.delivery_address:
+                    po.delivery_address = line_delivery_addr
+
                 li = POLineItem(
                     line_number=oln or i,
                     order_line_number=oln,
@@ -329,6 +338,8 @@ def _parse_sd_data_slice_all(root: etree._Element, filename: str) -> list[Parsed
                     size=qty_unit,
                     quantity=qty,
                     unit_price=price,
+                    delivery_address=line_delivery_addr,
+                    delivery_date=line_delivery,
                 )
 
                 # Try to extract color from AuxRow2 or ItemDescription
@@ -340,15 +351,6 @@ def _parse_sd_data_slice_all(root: etree._Element, filename: str) -> list[Parsed
                     if len(parts) >= 2:
                         li.color = parts[1]
 
-                # Delivery date per line overrides order-level
-                line_delivery = _xpath_text(line_elem, ".//DeliveryDate")
-                if line_delivery and not po.delivery_date:
-                    po.delivery_date = line_delivery
-
-                line_delivery_addr = _xpath_text(line_elem, ".//DeliveryAddress")
-                if line_delivery_addr and not po.delivery_address:
-                    po.delivery_address = line_delivery_addr.strip()
-
                 po.line_items.append(li)
 
             # Fallback to line-item DeliveryAddress if empty on order
@@ -358,6 +360,10 @@ def _parse_sd_data_slice_all(root: etree._Element, filename: str) -> list[Parsed
                     if da:
                         po.delivery_address = da
                         break
+
+            # Prioritize line DeliveryAddress (e.g. PPA1-0198) for destination
+            if po.delivery_address:
+                po.destination = po.delivery_address
 
             po.total_quantity = sum(li.quantity for li in po.line_items)
             po.total_value = round(sum(li.quantity * li.unit_price for li in po.line_items), 2)
@@ -615,7 +621,8 @@ def _parse_generic(root: etree._Element, filename: str) -> ParsedPO:
     )
 
     po.destination = (
-        _xpath_text(root, ".//Destination")
+        po.delivery_address
+        or _xpath_text(root, ".//Destination")
         or _xpath_text(root, ".//ShipTo")
         or _xpath_text(root, ".//destination")
         or ""

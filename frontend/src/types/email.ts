@@ -89,12 +89,15 @@ export interface PurchaseOrder {
   notations?: string | null;
   description: string | null;
   quantity: number | null;
+  shipped_quantity?: number | null;
+  remaining_quantity?: number | null;
   unit_price: number | null;
   total_value: number | null;
   currency: string | null;
   delivery_date: string | null;
   ship_date: string | null;
   destination: string | null;
+  delivery_address?: string | null;
   status: POStatus;
   version: number | null;
   extra_data: Record<string, unknown> | null;

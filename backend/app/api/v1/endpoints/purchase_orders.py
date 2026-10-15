@@ -57,9 +57,12 @@ class POListItem(BaseModel):
     delivery_date: Optional[str] = None
     ship_date: Optional[str] = None
     destination: Optional[str] = None
+    delivery_address: Optional[str] = None
     status: Optional[str] = None
     version: Optional[int] = None
     extra_data: Optional[dict] = None
+    shipped_quantity: Optional[float] = None
+    remaining_quantity: Optional[float] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -85,9 +88,12 @@ class PODetailResponse(BaseModel):
     delivery_date: Optional[str] = None
     ship_date: Optional[str] = None
     destination: Optional[str] = None
+    delivery_address: Optional[str] = None
     status: Optional[str] = None
     version: Optional[int] = None
     extra_data: Optional[dict] = None
+    shipped_quantity: Optional[float] = None
+    remaining_quantity: Optional[float] = None
     source_email_id: Optional[str] = None
     source_email_subject: Optional[str] = None
     history: Optional[list[dict[str, Any]]] = None
@@ -203,10 +209,39 @@ async def list_purchase_orders(
     result = await db.execute(query)
     records = result.scalars().all()
 
+    record_pos = [r.po_number for r in records if r.po_number]
+    shipped_map: dict[str, float] = {}
+    if record_pos:
+        from app.models.shipment import Shipment
+        from app.models.shipment_line import ShipmentLine
+        shipped_stmt = (
+            select(
+                ShipmentLine.po_number,
+                func.sum(ShipmentLine.quantity).label("shipped_total"),
+            )
+            .join(Shipment, ShipmentLine.shipment_id == Shipment.id)
+            .where(
+                ShipmentLine.po_number.in_(record_pos),
+                Shipment.status != "CANCELLED",
+            )
+            .group_by(ShipmentLine.po_number)
+        )
+        shipped_res = await db.execute(shipped_stmt)
+        shipped_map = {row.po_number: float(row.shipped_total or 0) for row in shipped_res.all()}
+
     pages = max(1, (total + per_page - 1) // per_page)
 
-    return PaginatedPOResponse(
-        items=[
+    items_list = []
+    for r in records:
+        total_ordered = float(r.quantity or 0)
+        if r.extra_data and isinstance(r.extra_data.get("items"), list):
+            items_sum = sum(float(it.get("quantity", 0)) for it in r.extra_data["items"])
+            if items_sum > 0:
+                total_ordered = items_sum
+        total_shipped = shipped_map.get(r.po_number, 0.0)
+        total_remaining = max(0.0, total_ordered - total_shipped)
+
+        items_list.append(
             POListItem(
                 id=str(r.id),
                 company_id=str(r.company_id),
@@ -230,14 +265,19 @@ async def list_purchase_orders(
                 delivery_date=str(r.delivery_date) if r.delivery_date else None,
                 ship_date=str(r.ship_date) if r.ship_date else None,
                 destination=r.destination,
+                delivery_address=(r.extra_data.get("delivery_address") if r.extra_data else None) or r.destination,
                 status=r.status,
                 version=r.version,
                 extra_data=r.extra_data,
+                shipped_quantity=total_shipped,
+                remaining_quantity=total_remaining,
                 created_at=r.created_at,
                 updated_at=r.updated_at,
             )
-            for r in records
-        ],
+        )
+
+    return PaginatedPOResponse(
+        items=items_list,
         total=total,
         page=page,
         per_page=per_page,
@@ -428,8 +468,9 @@ async def list_open_po_lines(
                     "shipped_qty": shipped,
                     "remaining_qty": remaining,
                     "uom": item.get("uom") or item.get("qty_unit", "M"),
-                    "destination": po.destination,
-                    "delivery_date": str(po.delivery_date) if po.delivery_date else None,
+                    "destination": item.get("delivery_address") or po.destination,
+                    "delivery_address": item.get("delivery_address") or po.destination,
+                    "delivery_date": item.get("delivery_date") or (str(po.delivery_date) if po.delivery_date else None),
                     "order_date": str(getattr(po, "order_date", None) or (po.created_at.date() if po.created_at else "")),
                     "supplier_id": str(po.supplier_id) if po.supplier_id else None,
                 })
@@ -484,6 +525,68 @@ async def get_purchase_order(
     except Exception as e:
         logger.warning("Could not fetch PO history: %s", e)
 
+    # Query shipped quantities per line for this PO
+    from app.models.shipment import Shipment
+    from app.models.shipment_line import ShipmentLine
+
+    line_shipped_map: dict[str, float] = {}
+    total_shipped = 0.0
+    if po.po_number:
+        shipped_stmt = (
+            select(
+                ShipmentLine.po_line_number,
+                func.sum(ShipmentLine.quantity).label("shipped_total"),
+            )
+            .join(Shipment, ShipmentLine.shipment_id == Shipment.id)
+            .where(
+                ShipmentLine.po_number == po.po_number,
+                Shipment.status != "CANCELLED",
+            )
+            .group_by(ShipmentLine.po_line_number)
+        )
+        shipped_res = await db.execute(shipped_stmt)
+        for row in shipped_res.all():
+            line_str = str(row.po_line_number or "").strip()
+            qty = float(row.shipped_total or 0)
+            line_shipped_map[line_str] = qty
+            try:
+                line_int = str(int(line_str))
+                line_shipped_map[line_int] = qty
+            except (ValueError, TypeError):
+                pass
+            total_shipped += qty
+
+    # Enrich extra_data items with shipped_quantity and remaining_quantity
+    enriched_extra_data = None
+    if po.extra_data:
+        import copy
+        enriched_extra_data = copy.deepcopy(po.extra_data)
+        items = enriched_extra_data.get("items")
+        if isinstance(items, list):
+            for idx, item in enumerate(items):
+                line_val = str(item.get("order_line_number") or item.get("line_number", idx + 1)).strip()
+                item_ordered = float(item.get("quantity", 0))
+                item_shipped = line_shipped_map.get(line_val, 0.0)
+                if item_shipped == 0.0:
+                    try:
+                        line_first = line_val.split("-")[0]
+                        item_shipped = line_shipped_map.get(str(int(line_first)), 0.0)
+                    except (ValueError, TypeError):
+                        pass
+                if item_shipped == 0.0 and str(idx + 1) in line_shipped_map:
+                    item_shipped = line_shipped_map[str(idx + 1)]
+
+                item_remaining = max(0.0, item_ordered - item_shipped)
+                item["shipped_quantity"] = item_shipped
+                item["remaining_quantity"] = item_remaining
+
+    total_ordered = float(po.quantity or 0)
+    if enriched_extra_data and isinstance(enriched_extra_data.get("items"), list):
+        items_sum = sum(float(it.get("quantity", 0)) for it in enriched_extra_data["items"])
+        if items_sum > 0:
+            total_ordered = items_sum
+    total_remaining = max(0.0, total_ordered - total_shipped)
+
     return PODetailResponse(
         id=str(po.id),
         company_id=str(po.company_id),
@@ -506,9 +609,12 @@ async def get_purchase_order(
         delivery_date=str(po.delivery_date) if po.delivery_date else None,
         ship_date=str(po.ship_date) if po.ship_date else None,
         destination=po.destination,
+        delivery_address=(po.extra_data.get("delivery_address") if po.extra_data else None) or po.destination,
         status=po.status,
         version=po.version,
-        extra_data=po.extra_data,
+        extra_data=enriched_extra_data or po.extra_data,
+        shipped_quantity=total_shipped,
+        remaining_quantity=total_remaining,
         source_email_id=str(po.source_email_id) if po.source_email_id else None,
         source_email_subject=source_email_subject,
         history=history_list,

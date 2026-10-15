@@ -70,6 +70,8 @@ class POLineItem:
     quantity: int = 0
     unit_price: float = 0.0
     description: str = ""             # legacy/fallback
+    delivery_address: str = ""        # <DeliveryAddress> from XML line
+    delivery_date: str = ""           # <DeliveryDate> from XML line
 
 
 DEFAULT_CURRENCY = "USD"
