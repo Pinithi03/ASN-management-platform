@@ -777,6 +777,7 @@ function WebPackingWizard({
   const [searchParams] = useSearchParams();
   const shouldResume = searchParams.get("resume") === "true";
   const [draftSavedToast, setDraftSavedToast] = useState(false);
+  const [unresumedDraft, setUnresumedDraft] = useState<any>(null);
   const isOnline = useNetworkStatus();
 
   // Fetch open PO lines from live PostgreSQL database
@@ -886,6 +887,9 @@ function WebPackingWizard({
       if (draft.step) setStep(draft.step);
       if (draft.startingSeq) setStartingSeq(draft.startingSeq);
       if (draft.packingSlipNumber) setPackingSlipNumber(draft.packingSlipNumber);
+      if (draft.deliveryDate) setDeliveryDate(draft.deliveryDate);
+    } else if (draft && !shouldResume) {
+      setUnresumedDraft(draft);
     }
   }, [user?.supplier_code, poNumbers.join(","), shouldResume, openLinesData]);
 

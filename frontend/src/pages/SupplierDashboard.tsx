@@ -9,7 +9,6 @@ import {
   AlertTriangle,
   Calendar,
   CheckCircle2,
-  RefreshCw,
   ArrowRight,
   BarChart3,
   Building2,
@@ -17,7 +16,6 @@ import {
   Box,
   Layers,
   FileSpreadsheet,
-  PackagePlus,
   Printer,
   ChevronRight,
 } from "lucide-react";
@@ -146,33 +144,27 @@ export default function SupplierDashboard() {
   const supplierId = user?.supplier_id || user?.supplier_code || undefined;
 
   // 1. Fetch Scoped PO Stats for this supplier
-  const { data: poStats, isLoading: poStatsLoading, refetch: refetchStats } = useQuery({
+  const { data: poStats, isLoading: poStatsLoading } = useQuery({
     queryKey: ["supplierPOStats", supplierId],
     queryFn: () => poApi.getStats(supplierId),
     refetchInterval: 10000,
   });
 
   // 2. Fetch Scoped Purchase Orders for upcoming delivery schedule
-  const { data: poData, isLoading: poListLoading, refetch: refetchPOs } = useQuery({
+  const { data: poData, isLoading: poListLoading } = useQuery({
     queryKey: ["supplierPOsList", supplierId],
     queryFn: () => poApi.list({ per_page: 50, supplier_id: supplierId }),
     refetchInterval: 10000,
   });
 
   // 3. Fetch Shipments scoped to this supplier
-  const { data: shipments, isLoading: shipmentsLoading, refetch: refetchShipments } = useQuery({
+  const { data: shipments, isLoading: shipmentsLoading } = useQuery({
     queryKey: ["supplierShipments", supplierId],
     queryFn: () => shipmentService.getShipments(undefined, undefined, supplierId),
     refetchInterval: 10000,
   });
 
   const isLoading = poStatsLoading || poListLoading || shipmentsLoading;
-
-  const handleRefreshAll = () => {
-    refetchStats();
-    refetchPOs();
-    refetchShipments();
-  };
 
   // ─── Calculations & Visual Metrics ─────────────────────────────
 
@@ -415,42 +407,7 @@ export default function SupplierDashboard() {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-6 md:p-8 space-y-8 font-sans transition-colors">
-      {/* ─── Supplier Portal Header ─────────────────────────────── */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-2 border-b border-slate-200 dark:border-slate-800">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-              Supplier Dispatch & Fulfillment Hub
-            </h1>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800">
-              Vendor Code: {user?.supplier_code || "0000058376"}
-            </span>
-          </div>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-2xl">
-            Live overview of your factory dispatches, upcoming delivery deadlines, and open purchase orders.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2.5">
-          <button
-            onClick={handleRefreshAll}
-            disabled={isLoading}
-            className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-sm active:scale-95 disabled:opacity-50"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
-            Refresh Data
-          </button>
-          <button
-            onClick={() => navigate("/shipments?create=true")}
-            className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all shadow-sm shadow-emerald-600/30 hover:shadow-emerald-600/50 active:scale-95"
-          >
-            <PackagePlus className="w-3.5 h-3.5" />
-            Pack & Create Shipment
-          </button>
-        </div>
-      </div>
-
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-6 md:p-8 space-y-6 font-sans transition-colors">
       {isLoading ? (
         <div className="flex flex-col items-center justify-center py-24 gap-4">
           <div className="w-12 h-12 rounded-full border-4 border-emerald-600/30 border-t-emerald-600 animate-spin" />

@@ -6,7 +6,6 @@ import {
   AlertTriangle,
   Calendar,
   CheckCircle2,
-  RefreshCw,
   ArrowRight,
   BarChart3,
   Building2,
@@ -146,21 +145,21 @@ export default function AdminDashboard() {
   const [hoveredKpi, setHoveredKpi] = useState<number | null>(null);
 
   // 1. Fetch Purchase Orders Statistics (Direct summary from backend)
-  const { data: poStats, isLoading: poStatsLoading, refetch: refetchStats } = useQuery({
+  const { data: poStats, isLoading: poStatsLoading } = useQuery({
     queryKey: ["poStats"],
     queryFn: () => poApi.getStats(),
     refetchInterval: 10000,
   });
 
   // 2. Fetch Live Purchase Orders (For delivery deadlines, urgency & plants)
-  const { data: poData, isLoading: poListLoading, refetch: refetchPOs } = useQuery({
+  const { data: poData, isLoading: poListLoading } = useQuery({
     queryKey: ["adminPOsList"],
     queryFn: () => poApi.list({ per_page: 100 }),
     refetchInterval: 10000,
   });
 
   // 3. Fetch Shipments (For actual shipped cartons, pieces, monthly trends)
-  const { data: shipments, isLoading: shipmentsLoading, refetch: refetchShipments } = useQuery({
+  const { data: shipments, isLoading: shipmentsLoading } = useQuery({
     queryKey: ["adminShipments"],
     queryFn: () => shipmentService.getShipments(),
     refetchInterval: 10000,
@@ -174,12 +173,6 @@ export default function AdminDashboard() {
   });
 
   const isLoading = poStatsLoading || poListLoading || shipmentsLoading || suppliersLoading;
-
-  const handleRefreshAll = () => {
-    refetchStats();
-    refetchPOs();
-    refetchShipments();
-  };
 
   // ─── Core Calculations & Data Science Aggregations ─────────────
 
@@ -478,43 +471,7 @@ export default function AdminDashboard() {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-6 md:p-8 space-y-8 font-sans transition-colors">
-      {/* ─── Control Tower Header ───────────────────────────────── */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-2 border-b border-slate-200 dark:border-slate-800">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-              Supply Chain & ASN Operations Center
-            </h1>
-            <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Live Sync
-            </span>
-          </div>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-2xl">
-            Real-time logistics velocity, supplier fulfillment tracking, and upcoming dispatch deadlines.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2.5">
-          <button
-            onClick={handleRefreshAll}
-            disabled={isLoading}
-            className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-sm active:scale-95 disabled:opacity-50"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
-            Refresh Data
-          </button>
-          <button
-            onClick={() => navigate("/shipments?create=true")}
-            className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all shadow-sm shadow-indigo-600/30 hover:shadow-indigo-600/50 active:scale-95"
-          >
-            <Truck className="w-3.5 h-3.5" />
-            New Shipment
-          </button>
-        </div>
-      </div>
-
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-6 md:p-8 space-y-6 font-sans transition-colors">
       {isLoading ? (
         <div className="flex flex-col items-center justify-center py-24 gap-4">
           <div className="w-12 h-12 rounded-full border-4 border-indigo-600/30 border-t-indigo-600 animate-spin" />
