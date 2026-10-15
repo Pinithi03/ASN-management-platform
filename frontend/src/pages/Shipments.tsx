@@ -724,18 +724,116 @@ function WebPackingWizard({
   const shouldResume = searchParams.get("resume") === "true";
   const [draftSavedToast, setDraftSavedToast] = useState(false);
   const isOnline = useNetworkStatus();
+
+  // Fetch open PO lines from live PostgreSQL database
+  const { data: openLinesData, isLoading } = useQuery({
+    queryKey: ["open_lines_wizard", poNumbers, user?.supplier_id],
+    queryFn: async () => {
+      try {
+        const supplierId = user?.role === "SUPPLIER" ? user.supplier_id : undefined;
+        const lines = await poApi.getOpenLines(supplierId ? { supplier_id: supplierId } : undefined);
+        if (Array.isArray(lines) && lines.length > 0) {
+          const matched = lines.filter((l) => !poNumbers.length || poNumbers.includes(l.po_number));
+          if (matched.length > 0) {
+            return matched.map((m: any, idx: number) => ({
+              id: `${m.po_number}-${m.po_item || idx}`,
+              po_number: m.po_number,
+              po_item: m.po_item ? String(m.po_item).trim() : String(idx + 1),
+              item_code: m.material_code || "ITEM-" + idx,
+              partner_product_code: m.partner_code || m.partner_product_code || "",
+              description: m.material_description || "PO Line Item",
+              ordered_qty: Number(m.ordered_qty || 1000),
+              shipped_qty: Number(m.shipped_qty || 0),
+              remaining_qty: m.remaining_qty !== undefined ? Number(m.remaining_qty) : Number(m.ordered_qty || 1000),
+              shipping_now: 0,
+              packaging_type: (m.pack_type || m.packaging_type || "BOX") as "BOX" | "ROLL",
+              uom: m.uom || "M",
+              destination: m.destination || "",
+              delivery_date: m.delivery_date || "",
+              order_date: m.order_date || "",
+              supplier_id: m.supplier_id || "",
+            }));
+          }
+        }
+      } catch (err) {
+        console.warn("Could not fetch real open lines, falling back to PO numbers:", err);
+      }
+
+      // Default mock for selected PO numbers
+      const fallback: POLineItem[] = [];
+      const list = poNumbers.length > 0 ? poNumbers : ["2001297727"];
+      list.forEach((po) => {
+        fallback.push({
+          id: `${po}-line-1`,
+          po_number: po,
+          po_item: "00100",
+          item_code: "ELST1K 000615",
+          partner_product_code: "SK104546-015.0-61851",
+          description: "Elastic tape 15mm black - Sirio Spec",
+          ordered_qty: 2450,
+          shipped_qty: 0,
+          remaining_qty: 2450,
+          shipping_now: 0,
+          uom: "M",
+          destination: "Omega Line Ltd (PPA1)",
+        });
+        fallback.push({
+          id: `${po}-line-2`,
+          po_number: po,
+          po_item: "00200",
+          item_code: "RECT0724DKK0000000",
+          partner_product_code: "TH002500-120.0-SETA",
+          description: "RE-Thread-EP-2500m, 120tkt, SETA",
+          ordered_qty: 1200,
+          shipped_qty: 0,
+          remaining_qty: 1200,
+          shipping_now: 0,
+          uom: "M",
+          destination: "Omega Line Ltd (PPA1)",
+        });
+      });
+      return fallback;
+    },
+  });
+
   // Check for existing saved draft on load (auto-resume if navigated from Drafts page)
   useEffect(() => {
     const suppCode = user?.supplier_code || "0000018194";
     const draft = getManualDraft(suppCode, poNumbers);
     if (draft && shouldResume) {
-      if (draft.items && draft.items.length > 0) setItems(draft.items);
+      if (draft.items && draft.items.length > 0) {
+        if (openLinesData && openLinesData.length > 0) {
+          const merged = openLinesData.map((liveLine) => {
+            const match = draft.items.find(
+              (p: any) =>
+                p.id === liveLine.id ||
+                (p.po_number === liveLine.po_number &&
+                  String(p.po_item).replace(/^0+/, "") === String(liveLine.po_item).replace(/^0+/, ""))
+            );
+            if (match) {
+              return {
+                ...liveLine,
+                shipping_now: match.shipping_now ?? 0,
+                packaging_type: match.packaging_type || liveLine.packaging_type || "BOX",
+              };
+            }
+            return {
+              ...liveLine,
+              packaging_type: liveLine.packaging_type || "BOX",
+              shipping_now: 0,
+            };
+          });
+          setItems(merged);
+        } else {
+          setItems(draft.items);
+        }
+      }
       if (draft.packedItems && draft.packedItems.length > 0) setPackedItems(draft.packedItems);
       if (draft.step) setStep(draft.step);
       if (draft.startingSeq) setStartingSeq(draft.startingSeq);
       if (draft.packingSlipNumber) setPackingSlipNumber(draft.packingSlipNumber);
     }
-  }, [user?.supplier_code, poNumbers.join(","), shouldResume]);
+  }, [user?.supplier_code, poNumbers.join(","), shouldResume, openLinesData]);
 
   const handleManualSaveDraft = () => {
     const suppCode = user?.supplier_code || "0000018194";
@@ -987,95 +1085,43 @@ function WebPackingWizard({
     }
   };
 
-  // Fetch open PO lines
-  const { data: openLinesData, isLoading } = useQuery({
-    queryKey: ["open_lines_wizard", poNumbers, user?.supplier_id],
-    queryFn: async () => {
-      try {
-        const supplierId = user?.role === "SUPPLIER" ? user.supplier_id : undefined;
-        const lines = await poApi.getOpenLines(supplierId ? { supplier_id: supplierId } : undefined);
-        if (Array.isArray(lines) && lines.length > 0) {
-          const matched = lines.filter((l) => !poNumbers.length || poNumbers.includes(l.po_number));
-          if (matched.length > 0) {
-            return matched.map((m: any, idx: number) => ({
-              id: `${m.po_number}-${m.po_item || idx}`,
-              po_number: m.po_number,
-              po_item: m.po_item ? String(m.po_item).trim() : String(idx + 1),
-              item_code: m.material_code || "ITEM-" + idx,
-              partner_product_code: m.partner_code || m.partner_product_code || "",
-              description: m.material_description || "PO Line Item",
-              ordered_qty: Number(m.ordered_qty || 1000),
-              shipped_qty: Number(m.shipped_qty || 0),
-              remaining_qty: m.remaining_qty !== undefined ? Number(m.remaining_qty) : Number(m.ordered_qty || 1000),
-              shipping_now: 0,
-              packaging_type: (m.pack_type || m.packaging_type || "BOX") as "BOX" | "ROLL",
-              uom: m.uom || "M",
-              destination: m.destination || "",
-              delivery_date: m.delivery_date || "",
-              order_date: m.order_date || "",
-              supplier_id: m.supplier_id || "",
-            }));
-          }
-        }
-      } catch (err) {
-        console.warn("Could not fetch real open lines, falling back to PO numbers:", err);
-      }
-
-      // Default mock for selected PO numbers
-      const fallback: POLineItem[] = [];
-      const list = poNumbers.length > 0 ? poNumbers : ["2001297727"];
-      list.forEach((po) => {
-        fallback.push({
-          id: `${po}-line-1`,
-          po_number: po,
-          po_item: "00100",
-          item_code: "ELST1K 000615",
-          partner_product_code: "SK104546-015.0-61851",
-          description: "Elastic tape 15mm black - Sirio Spec",
-          ordered_qty: 2450,
-          shipped_qty: 0,
-          remaining_qty: 2450,
-          shipping_now: 0,
-          uom: "M",
-          destination: "Omega Line Ltd (PPA1)",
-        });
-        fallback.push({
-          id: `${po}-line-2`,
-          po_number: po,
-          po_item: "00200",
-          item_code: "RECT0724DKK0000000",
-          partner_product_code: "TH002500-120.0-SETA",
-          description: "RE-Thread-EP-2500m, 120tkt, SETA",
-          ordered_qty: 1200,
-          shipped_qty: 0,
-          remaining_qty: 1200,
-          shipping_now: 0,
-          uom: "M",
-          destination: "Omega Line Ltd (PPA1)",
-        });
-      });
-      return fallback;
-    },
-  });
 
   useEffect(() => {
-    if (openLinesData) {
+    if (openLinesData && openLinesData.length > 0) {
       setItems((prev) => {
-        // Preserve user's restored draft items or ongoing edits
-        if (shouldResume && prev.length > 0) {
-          return prev;
-        }
-        if (prev.length > 0 && prev.some((p) => (p.shipping_now || 0) > 0)) {
-          return prev;
+        // If user already has items (either from a restored draft or active editing),
+        // intelligently merge: keep the LIVE database remaining_qty/shipped_qty
+        // while 100% preserving user's edited shipping_now and packaging_type!
+        if (prev.length > 0) {
+          return openLinesData.map((liveLine) => {
+            const match = prev.find(
+              (p) =>
+                p.id === liveLine.id ||
+                (p.po_number === liveLine.po_number &&
+                  String(p.po_item).replace(/^0+/, "") === String(liveLine.po_item).replace(/^0+/, ""))
+            );
+            if (match) {
+              return {
+                ...liveLine, // Live stock & open balance from PostgreSQL
+                shipping_now: match.shipping_now ?? 0, // Preserves user's edited input
+                packaging_type: match.packaging_type || liveLine.packaging_type || "BOX",
+              };
+            }
+            return {
+              ...liveLine,
+              packaging_type: liveLine.packaging_type || "BOX",
+              shipping_now: 0,
+            };
+          });
         }
         return openLinesData.map((line) => ({
           ...line,
           packaging_type: line.packaging_type || "BOX",
-          shipping_now: 0, // Always default to 0 — user enters qty or clicks Max
+          shipping_now: 0,
         }));
       });
     }
-  }, [openLinesData, shouldResume]);
+  }, [openLinesData]);
 
   const distinctPoNumbers = useMemo(() => {
     return Array.from(new Set(items.map((i) => i.po_number).filter(Boolean)));
@@ -1124,6 +1170,21 @@ function WebPackingWizard({
     const toPack = items.filter((i) => (i.shipping_now || 0) > 0);
     if (toPack.length === 0) {
       alert("Please enter a shipping quantity for at least one item.");
+      return;
+    }
+
+    const overBalanceItems = toPack.filter((i) => (i.shipping_now || 0) > (i.remaining_qty || 0));
+    if (overBalanceItems.length > 0) {
+      alert(
+        `Shipping quantity exceeds current open balance for:\n\n` +
+          overBalanceItems
+            .map(
+              (it) =>
+                `• PO ${it.po_number} Item ${it.po_item}: Requested ${it.shipping_now} ${it.uom}, but current open balance is only ${it.remaining_qty} ${it.uom}`
+            )
+            .join("\n") +
+          `\n\nPlease adjust the shipping quantity to not exceed the current available balance.`
+      );
       return;
     }
 

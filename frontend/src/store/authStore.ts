@@ -7,6 +7,7 @@
 
 import { create } from "zustand";
 import { keycloak } from "@/lib/keycloak";
+import { queryClient } from "@/lib/queryClient";
 
 export interface AuthUser {
   keycloak_id: string;
@@ -28,7 +29,7 @@ interface AuthState {
   /** Called by AuthProvider after /auth/me succeeds */
   setProfile: (me: AuthUser) => void;
 
-  /** Log out: ends the Keycloak session and clears the store */
+  /** Log out: ends the Keycloak session, clears in-memory query cache and store */
   logout: () => void;
 
   // --- Convenience getters ---
@@ -47,6 +48,12 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   },
 
   logout: () => {
+    // Purge cached supplier data and server responses from in-memory cache
+    try {
+      queryClient.clear();
+    } catch (e) {
+      console.warn("Failed to clear queryClient cache on logout", e);
+    }
     set({ isAuthenticated: false, user: null });
     keycloak.logout({ redirectUri: window.location.origin });
   },

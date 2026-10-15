@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Building2,
   ShieldCheck,
@@ -12,13 +13,21 @@ import {
   Upload,
   Trash2,
   Loader2,
+  HardDrive,
+  FileEdit,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { SupplierItem } from "@/pages/Suppliers";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supplierApi } from "@/services/supplierApi";
+import {
+  useDraftCount,
+  getDraftStorageEstimate,
+  clearAllSupplierDrafts,
+} from "@/utils/draftStorage";
 
 export default function Profile() {
+  const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
 
@@ -32,6 +41,36 @@ export default function Profile() {
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
   const [avatarSuccess, setAvatarSuccess] = useState<string | null>(null);
+
+  // Offline storage & cache clearing state (Supplier-only)
+  const [isClearingCache, setIsClearingCache] = useState(false);
+  const [cacheSuccessMsg, setCacheSuccessMsg] = useState<string | null>(null);
+  const draftCount = useDraftCount(user?.role === "SUPPLIER" ? (user.supplier_code || undefined) : undefined);
+  const draftStorageInfo = getDraftStorageEstimate(user?.role === "SUPPLIER" ? (user.supplier_code || undefined) : undefined);
+
+  const handleClearCache = async () => {
+    if (
+      !window.confirm(
+        "Are you sure you want to clear your local offline drafts and cached packing configurations? This will reset local unsent draft progress on this device."
+      )
+    ) {
+      return;
+    }
+    setIsClearingCache(true);
+    setCacheSuccessMsg(null);
+    try {
+      const suppCode = user?.role === "SUPPLIER" ? (user.supplier_code || undefined) : undefined;
+      const res = await clearAllSupplierDrafts(suppCode);
+      setCacheSuccessMsg(
+        `Offline cache cleared successfully! (${res.clearedDrafts} draft${res.clearedDrafts === 1 ? "" : "s"} purged)`
+      );
+      setTimeout(() => setCacheSuccessMsg(null), 4000);
+    } catch (err: any) {
+      console.warn("Failed to clear offline cache:", err);
+    } finally {
+      setIsClearingCache(false);
+    }
+  };
 
   // Live query directly from PostgreSQL backend API (/api/v1/suppliers)
   const { data: serverSuppliers } = useQuery({
@@ -574,6 +613,114 @@ export default function Profile() {
           </div>
         </div>
       </div>
+
+      {/* ─── SUPPLIER OFFLINE STORAGE & CACHE MANAGEMENT (SUPPLIER ONLY) ─── */}
+      {!isAdmin && (
+        <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-6 animate-in fade-in duration-150">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-gray-100">
+            <div>
+              <div className="flex items-center gap-2">
+                <HardDrive className="w-5 h-5 text-emerald-600" />
+                <h2 className="text-base font-bold text-gray-900">Offline Drafts & Local Cache</h2>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Manage temporary offline drafts, packing list configurations, and spreadsheet caches stored on this device.
+              </p>
+            </div>
+            {draftCount > 0 && (
+              <span className="self-start sm:self-auto inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                <FileEdit className="w-3.5 h-3.5" />
+                {draftCount} Active {draftCount === 1 ? "Draft" : "Drafts"}
+              </span>
+            )}
+          </div>
+
+          {cacheSuccessMsg && (
+            <div className="p-3.5 bg-emerald-50 rounded-xl border border-emerald-200 flex items-center gap-2.5 text-xs text-emerald-800 animate-in fade-in">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{cacheSuccessMsg}</span>
+            </div>
+          )}
+
+          {/* Metrics summary */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="p-4 rounded-xl border border-gray-100 bg-gray-50/70">
+              <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                Saved Offline Drafts
+              </div>
+              <div className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                <span>{draftStorageInfo.draftCount}</span>
+                <span className="text-xs font-normal text-gray-400">items</span>
+              </div>
+              <p className="text-[11px] text-gray-500 mt-1">Wizard & Excel drop progress</p>
+            </div>
+
+            <div className="p-4 rounded-xl border border-gray-100 bg-gray-50/70">
+              <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                Storage Used
+              </div>
+              <div className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                <span>{draftStorageInfo.approxSizeKb}</span>
+                <span className="text-xs font-normal text-gray-400">KB</span>
+              </div>
+              <p className="text-[11px] text-gray-500 mt-1">Browser storage footprint</p>
+            </div>
+
+            <div className="p-4 rounded-xl border border-gray-100 bg-gray-50/70">
+              <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                Cache Scope
+              </div>
+              <div className="text-sm font-semibold text-emerald-700 flex items-center gap-1.5 mt-1">
+                <ShieldCheck className="w-4 h-4" />
+                <span>Isolated to #{cleanCode || user?.supplier_code || "Supplier"}</span>
+              </div>
+              <p className="text-[11px] text-gray-500 mt-1">Private to this supplier partner</p>
+            </div>
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+            <div className="text-xs text-gray-500 flex items-center gap-1.5">
+              <AlertCircle className="w-4 h-4 text-gray-400 shrink-0" />
+              <span>Clearing cache removes local unsent drafts and uploaded spreadsheet previews without affecting live POs.</span>
+            </div>
+
+            <div className="flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => navigate("/drafts")}
+                className="px-4 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-xl transition-colors shadow-sm inline-flex items-center gap-2"
+              >
+                <FileEdit className="w-3.5 h-3.5 text-gray-500" />
+                View Drafts
+              </button>
+
+              <button
+                type="button"
+                disabled={isClearingCache || draftStorageInfo.draftCount === 0}
+                onClick={handleClearCache}
+                className={`px-4 py-2 text-xs font-semibold rounded-xl transition-all shadow-sm inline-flex items-center gap-2 ${
+                  draftStorageInfo.draftCount === 0
+                    ? "bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed"
+                    : "bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 hover:border-red-300"
+                }`}
+              >
+                {isClearingCache ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Clearing...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                    Clear Offline Cache & Drafts
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
