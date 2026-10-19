@@ -58,6 +58,9 @@ class POListItem(BaseModel):
     ship_date: Optional[str] = None
     destination: Optional[str] = None
     delivery_address: Optional[str] = None
+    plant_code: Optional[str] = None
+    plant_name: Optional[str] = None
+    storage_location: Optional[str] = None
     status: Optional[str] = None
     version: Optional[int] = None
     extra_data: Optional[dict] = None
@@ -89,6 +92,9 @@ class PODetailResponse(BaseModel):
     ship_date: Optional[str] = None
     destination: Optional[str] = None
     delivery_address: Optional[str] = None
+    plant_code: Optional[str] = None
+    plant_name: Optional[str] = None
+    storage_location: Optional[str] = None
     status: Optional[str] = None
     version: Optional[int] = None
     extra_data: Optional[dict] = None
@@ -142,6 +148,8 @@ async def list_purchase_orders(
     status: Optional[str] = Query(None, description="Filter by status"),
     search: Optional[str] = Query(None, description="Search PO#, client, style"),
     supplier_id: Optional[str] = Query(None, description="Filter by supplier UUID"),
+    plant: Optional[str] = Query(None, description="Filter by plant code or name"),
+    storage_location: Optional[str] = Query(None, description="Filter by storage location code"),
     company_id: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
@@ -197,6 +205,19 @@ async def list_purchase_orders(
             | PurchaseOrder.style_number.ilike(search_filter)
             | PurchaseOrder.description.ilike(search_filter)
         )
+    if plant and plant.upper() != "ALL":
+        p_filter = f"%{plant}%"
+        query = query.where(
+            PurchaseOrder.destination.ilike(p_filter)
+            | PurchaseOrder.client_code.ilike(p_filter)
+            | cast(PurchaseOrder.extra_data, String).ilike(p_filter)
+        )
+    if storage_location and storage_location.upper() != "ALL":
+        loc_filter = f"%{storage_location}%"
+        query = query.where(
+            PurchaseOrder.destination.ilike(loc_filter)
+            | cast(PurchaseOrder.extra_data, String).ilike(loc_filter)
+        )
 
     # Count total
     count_query = select(func.count()).select_from(query.subquery())
@@ -241,6 +262,13 @@ async def list_purchase_orders(
         total_shipped = shipped_map.get(r.po_number, 0.0)
         total_remaining = max(0.0, total_ordered - total_shipped)
 
+        p_raw = (r.extra_data.get("delivery_address") if r.extra_data else None) or r.destination or r.client_code or ""
+        from app.core.plant_resolver import resolve_plant_and_location
+        p_resolved = resolve_plant_and_location(p_raw, fallback_client_code=r.client_code)
+        p_code = (r.extra_data.get("plant_code") if r.extra_data else None) or p_resolved["plant_code"]
+        p_name = (r.extra_data.get("plant_name") if r.extra_data else None) or p_resolved["plant_name"]
+        p_loc = (r.extra_data.get("storage_location") if r.extra_data else None) or p_resolved["storage_location"]
+
         items_list.append(
             POListItem(
                 id=str(r.id),
@@ -266,6 +294,9 @@ async def list_purchase_orders(
                 ship_date=str(r.ship_date) if r.ship_date else None,
                 destination=r.destination,
                 delivery_address=(r.extra_data.get("delivery_address") if r.extra_data else None) or r.destination,
+                plant_code=p_code,
+                plant_name=p_name,
+                storage_location=p_loc,
                 status=r.status,
                 version=r.version,
                 extra_data=r.extra_data,
@@ -587,6 +618,10 @@ async def get_purchase_order(
             total_ordered = items_sum
     total_remaining = max(0.0, total_ordered - total_shipped)
 
+    from app.core.plant_resolver import resolve_plant_and_location
+    p_raw = (enriched_extra_data.get("delivery_address") if enriched_extra_data else None) or (po.extra_data.get("delivery_address") if po.extra_data else None) or po.destination or po.client_code or ""
+    plant_info = resolve_plant_and_location(p_raw, fallback_client_code=po.client_code)
+
     return PODetailResponse(
         id=str(po.id),
         company_id=str(po.company_id),
@@ -610,6 +645,9 @@ async def get_purchase_order(
         ship_date=str(po.ship_date) if po.ship_date else None,
         destination=po.destination,
         delivery_address=(po.extra_data.get("delivery_address") if po.extra_data else None) or po.destination,
+        plant_code=(enriched_extra_data.get("plant_code") if enriched_extra_data else None) or (po.extra_data.get("plant_code") if po.extra_data else None) or plant_info["plant_code"],
+        plant_name=(enriched_extra_data.get("plant_name") if enriched_extra_data else None) or (po.extra_data.get("plant_name") if po.extra_data else None) or plant_info["plant_name"],
+        storage_location=(enriched_extra_data.get("storage_location") if enriched_extra_data else None) or (po.extra_data.get("storage_location") if po.extra_data else None) or plant_info["storage_location"],
         status=po.status,
         version=po.version,
         extra_data=enriched_extra_data or po.extra_data,

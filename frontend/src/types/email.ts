@@ -98,6 +98,9 @@ export interface PurchaseOrder {
   ship_date: string | null;
   destination: string | null;
   delivery_address?: string | null;
+  plant_code?: string | null;
+  plant_name?: string | null;
+  storage_location?: string | null;
   status: POStatus;
   version: number | null;
   extra_data: Record<string, unknown> | null;

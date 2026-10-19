@@ -177,6 +177,9 @@ export interface PurchaseOrder {
   ship_date?: string;
   destination?: string;
   delivery_address?: string;
+  plant_code?: string;
+  plant_name?: string;
+  storage_location?: string;
   extra_data?: any;
   status: POStatus;
   version: number;
