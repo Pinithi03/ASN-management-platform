@@ -15,6 +15,8 @@ export interface POListParams {
   search?: string;
   company_id?: string;
   supplier_id?: string;
+  plant?: string;
+  storage_location?: string;
 }
 
 export interface POUpdateBody {

@@ -453,11 +453,21 @@ async def save_purchase_order(
     order_type_str = getattr(parsed_po, "order_type", "") or "ZA6A"
     notations_str = getattr(parsed_po, "notations", "") or ""
     delivery_address_str = parsed_po.delivery_address or ""
+    from app.core.plant_resolver import resolve_plant_and_location
+
+    dest_str = delivery_address_str or parsed_po.destination or ""
+    plant_res = resolve_plant_and_location(dest_str, buyer_name=buyer_code or parsed_po.buyer_name or "", fallback_client_code=buyer_code or "")
+    resolved_destination = plant_res["full_delivery_address"] or dest_str
+
     extra_info = {
         "order_type": order_type_str,
         "order_date": parsed_po.order_date or "",
         "delivery_date": parsed_po.delivery_date or "",
-        "delivery_address": delivery_address_str,
+        "delivery_address": delivery_address_str or plant_res["full_delivery_address"],
+        "plant_code": plant_res["plant_code"],
+        "plant_name": plant_res["plant_name"],
+        "plant_group": plant_res["plant_group"],
+        "storage_location": plant_res["storage_location"],
         "contact_person": parsed_po.contact_person or "",
         "contact_email": getattr(parsed_po, "contact_email", "") or "",
         "notations": notations_str,
@@ -473,8 +483,6 @@ async def save_purchase_order(
     )
     result = await db.execute(stmt)
     existing = result.scalar_one_or_none()
-
-    resolved_destination = parsed_po.delivery_address or parsed_po.destination or ""
 
     if existing:
         old_version = existing.version or 1

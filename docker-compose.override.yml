@@ -81,5 +81,6 @@ services:
     ports:
       - "3000:80"
     volumes:
+      - ./frontend/dist:/usr/share/nginx/html:ro
       - ./frontend:/app
       - /app/node_modules
