@@ -9,7 +9,6 @@ import {
   AlertTriangle,
   Calendar,
   CheckCircle2,
-  RefreshCw,
   ArrowRight,
   BarChart3,
   Building2,
@@ -17,7 +16,6 @@ import {
   Box,
   Layers,
   FileSpreadsheet,
-  PackagePlus,
   Printer,
   ChevronRight,
 } from "lucide-react";
@@ -111,6 +109,32 @@ const formatDateSafe = (dateStr: string | null | undefined): string => {
   }
 };
 
+const getPoUom = (po: any): string => {
+  if (po?.extra_data?.items && Array.isArray(po.extra_data.items) && po.extra_data.items[0]?.uom) {
+    return po.extra_data.items[0].uom;
+  }
+  return po?.uom || "pcs";
+};
+
+const getCleanDestination = (dest: string | null | undefined): string => {
+  if (!dest || !dest.trim()) return "Omega Line Ltd (PPA1)";
+  const clean = dest.trim();
+  const plantKey = clean.split(/[- ]/)[0].toUpperCase();
+  if (PLANT_LABELS[plantKey]) {
+    return `${PLANT_LABELS[plantKey].name} (${plantKey})`;
+  }
+  return clean;
+};
+
+const getPoProductDesc = (po: any): string => {
+  const itemCode = po?.item_code || po?.extra_data?.items?.[0]?.item_code || po?.style_number;
+  const desc = po?.description || po?.extra_data?.items?.[0]?.description;
+  if (itemCode && desc && itemCode !== desc) {
+    return `${itemCode} — ${desc}`;
+  }
+  return itemCode || desc || "Apparel Item";
+};
+
 export default function SupplierDashboard() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
@@ -120,33 +144,27 @@ export default function SupplierDashboard() {
   const supplierId = user?.supplier_id || user?.supplier_code || undefined;
 
   // 1. Fetch Scoped PO Stats for this supplier
-  const { data: poStats, isLoading: poStatsLoading, refetch: refetchStats } = useQuery({
+  const { data: poStats, isLoading: poStatsLoading } = useQuery({
     queryKey: ["supplierPOStats", supplierId],
     queryFn: () => poApi.getStats(supplierId),
     refetchInterval: 10000,
   });
 
   // 2. Fetch Scoped Purchase Orders for upcoming delivery schedule
-  const { data: poData, isLoading: poListLoading, refetch: refetchPOs } = useQuery({
+  const { data: poData, isLoading: poListLoading } = useQuery({
     queryKey: ["supplierPOsList", supplierId],
     queryFn: () => poApi.list({ per_page: 50, supplier_id: supplierId }),
     refetchInterval: 10000,
   });
 
   // 3. Fetch Shipments scoped to this supplier
-  const { data: shipments, isLoading: shipmentsLoading, refetch: refetchShipments } = useQuery({
+  const { data: shipments, isLoading: shipmentsLoading } = useQuery({
     queryKey: ["supplierShipments", supplierId],
     queryFn: () => shipmentService.getShipments(undefined, undefined, supplierId),
     refetchInterval: 10000,
   });
 
   const isLoading = poStatsLoading || poListLoading || shipmentsLoading;
-
-  const handleRefreshAll = () => {
-    refetchStats();
-    refetchPOs();
-    refetchShipments();
-  };
 
   // ─── Calculations & Visual Metrics ─────────────────────────────
 
@@ -191,8 +209,24 @@ export default function SupplierDashboard() {
       }
     });
 
-    // Sort queue by closest deadline
-    queue.sort((a, b) => (a.daysLeft ?? 999) - (b.daysLeft ?? 999));
+    // Smart operational sorting:
+    // Priority 1: Due Today (0 days) & Due Tomorrow (1 day)
+    // Priority 2: Due soon (2 to 14 days)
+    // Priority 3: Recently Overdue (1 to 14 days overdue: -1, -2, -3... sorted closest to today first)
+    // Priority 4: Due in 15 to 30 days
+    // Priority 5: Stale / historical backlog (>14 days overdue)
+    queue.sort((a, b) => {
+      const getPriority = (d: number | null) => {
+        if (d === null) return 999999;
+        if (d === 0) return 0;
+        if (d > 0 && d <= 7) return d;
+        if (d < 0 && d >= -14) return 10 + Math.abs(d);
+        if (d > 7 && d <= 30) return 30 + d;
+        if (d < -14 && d >= -60) return 100 + Math.abs(d);
+        return 1000 + Math.abs(d);
+      };
+      return getPriority(a.daysLeft) - getPriority(b.daysLeft);
+    });
 
     const chartBuckets = [
       { name: "Overdue", count: overdue, fill: "#ef4444" },
@@ -373,42 +407,7 @@ export default function SupplierDashboard() {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-6 md:p-8 space-y-8 font-sans transition-colors">
-      {/* ─── Supplier Portal Header ─────────────────────────────── */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-2 border-b border-slate-200 dark:border-slate-800">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-              Supplier Dispatch & Fulfillment Hub
-            </h1>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800">
-              Vendor Code: {user?.supplier_code || "0000058376"}
-            </span>
-          </div>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-2xl">
-            Live overview of your factory dispatches, upcoming delivery deadlines, and open purchase orders.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2.5">
-          <button
-            onClick={handleRefreshAll}
-            disabled={isLoading}
-            className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-sm active:scale-95 disabled:opacity-50"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
-            Refresh Data
-          </button>
-          <button
-            onClick={() => navigate("/shipments?create=true")}
-            className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all shadow-sm shadow-emerald-600/30 hover:shadow-emerald-600/50 active:scale-95"
-          >
-            <PackagePlus className="w-3.5 h-3.5" />
-            Pack & Create Shipment
-          </button>
-        </div>
-      </div>
-
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-6 md:p-8 space-y-6 font-sans transition-colors">
       {isLoading ? (
         <div className="flex flex-col items-center justify-center py-24 gap-4">
           <div className="w-12 h-12 rounded-full border-4 border-emerald-600/30 border-t-emerald-600 animate-spin" />
@@ -770,11 +769,18 @@ export default function SupplierDashboard() {
                     const days = po.daysLeft;
                     const isOverdue = days !== null && days < 0;
                     const isUrgent = days !== null && days >= 0 && days <= 3;
+                    const uom = getPoUom(po);
+                    const isPartial = po.status === "PARTIAL";
+                    const cleanDest = getCleanDestination(po.destination);
+                    const productDesc = getPoProductDesc(po);
 
                     return (
-                      <div key={po.id} className="py-3 flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
+                      <div
+                        key={po.id}
+                        className="py-3 flex items-center justify-between gap-3 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 px-2 rounded-xl transition-colors"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-xs font-extrabold text-slate-900 dark:text-white font-mono">
                               {po.po_number || "Unnamed PO"}
                             </span>
@@ -791,14 +797,35 @@ export default function SupplierDashboard() {
                                 ? `Overdue (${Math.abs(days)}d)`
                                 : days === 0
                                 ? "Due Today"
+                                : days === 1
+                                ? "Due Tomorrow"
                                 : `${days}d left`}
                             </span>
+                            {isPartial && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30">
+                                Partial
+                              </span>
+                            )}
                           </div>
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
-                            {po.destination || "Plant"} · {po.style_number || po.description || "Apparel item"}
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 truncate">
+                            <span className="font-medium text-slate-700 dark:text-slate-300">{cleanDest}</span>
+                            {" · "}
+                            <span>{productDesc}</span>
                           </p>
                           <p className="text-[10px] text-slate-400 mt-0.5">
-                            Target: {formatDateSafe(po.delivery_date)} · Quantity: {(po.quantity || 0).toLocaleString()} {po.currency || "pcs"}
+                            Target: {formatDateSafe(po.delivery_date)} · Quantity:{" "}
+                            {isPartial && po.remaining_quantity != null ? (
+                              <span className="font-semibold text-slate-700 dark:text-slate-300">
+                                {Math.round(po.remaining_quantity).toLocaleString()}{" "}
+                                <span className="font-normal text-slate-400">/ {(po.quantity || 0).toLocaleString()}</span>{" "}
+                                <span className="text-emerald-600 dark:text-emerald-400">{uom}</span>
+                              </span>
+                            ) : (
+                              <span className="font-semibold text-slate-700 dark:text-slate-300">
+                                {(po.quantity || 0).toLocaleString()}{" "}
+                                <span className="text-emerald-600 dark:text-emerald-400">{uom}</span>
+                              </span>
+                            )}
                           </p>
                         </div>
 

@@ -6,7 +6,6 @@ import {
   AlertTriangle,
   Calendar,
   CheckCircle2,
-  RefreshCw,
   ArrowRight,
   BarChart3,
   Building2,
@@ -106,26 +105,61 @@ const formatDateSafe = (dateStr: string | null | undefined): string => {
   }
 };
 
+const getPoUom = (po: any): string => {
+  if (po?.extra_data?.items && Array.isArray(po.extra_data.items) && po.extra_data.items[0]?.uom) {
+    return po.extra_data.items[0].uom;
+  }
+  return po?.uom || "pcs";
+};
+
+const getCleanDestination = (dest: string | null | undefined): string => {
+  if (!dest || !dest.trim()) return "Omega Line Ltd (PPA1)";
+  const clean = dest.trim();
+  const plantKey = clean.split(/[- ]/)[0].toUpperCase();
+  if (PLANT_LABELS[plantKey]) {
+    return `${PLANT_LABELS[plantKey].name} (${plantKey})`;
+  }
+  return clean;
+};
+
+const getPoProductDesc = (po: any): string => {
+  const itemCode = po?.item_code || po?.extra_data?.items?.[0]?.item_code || po?.style_number;
+  const desc = po?.description || po?.extra_data?.items?.[0]?.description;
+  if (itemCode && desc && itemCode !== desc) {
+    return `${itemCode} — ${desc}`;
+  }
+  return itemCode || desc || "Apparel Item";
+};
+
+const getPoSupplierName = (po: any, map: Record<string, string>): string => {
+  if (po.supplier_id && map[po.supplier_id]) return map[po.supplier_id];
+  if (po.client_code && map[po.client_code]) return map[po.client_code];
+  if (po.extra_data?.supplier_name) return po.extra_data.supplier_name;
+  if (po.extra_data?.vendor_name) return po.extra_data.vendor_name;
+  if (po.client_code) return `Supplier ${po.client_code}`;
+  return "Assigned Supplier";
+};
+
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const [hoveredKpi, setHoveredKpi] = useState<number | null>(null);
 
   // 1. Fetch Purchase Orders Statistics (Direct summary from backend)
-  const { data: poStats, isLoading: poStatsLoading, refetch: refetchStats } = useQuery({
+  const { data: poStats, isLoading: poStatsLoading } = useQuery({
     queryKey: ["poStats"],
     queryFn: () => poApi.getStats(),
     refetchInterval: 10000,
   });
 
   // 2. Fetch Live Purchase Orders (For delivery deadlines, urgency & plants)
-  const { data: poData, isLoading: poListLoading, refetch: refetchPOs } = useQuery({
+  const { data: poData, isLoading: poListLoading } = useQuery({
     queryKey: ["adminPOsList"],
     queryFn: () => poApi.list({ per_page: 100 }),
     refetchInterval: 10000,
   });
 
   // 3. Fetch Shipments (For actual shipped cartons, pieces, monthly trends)
-  const { data: shipments, isLoading: shipmentsLoading, refetch: refetchShipments } = useQuery({
+  const { data: shipments, isLoading: shipmentsLoading } = useQuery({
     queryKey: ["adminShipments"],
     queryFn: () => shipmentService.getShipments(),
     refetchInterval: 10000,
@@ -140,13 +174,19 @@ export default function AdminDashboard() {
 
   const isLoading = poStatsLoading || poListLoading || shipmentsLoading || suppliersLoading;
 
-  const handleRefreshAll = () => {
-    refetchStats();
-    refetchPOs();
-    refetchShipments();
-  };
-
   // ─── Core Calculations & Data Science Aggregations ─────────────
+
+  // Supplier lookup map (ID and code to friendly name)
+  const supplierMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    if (Array.isArray(suppliers)) {
+      suppliers.forEach((s: any) => {
+        if (s.id) map[s.id] = s.name;
+        if (s.supplier_code) map[s.supplier_code] = s.name;
+      });
+    }
+    return map;
+  }, [suppliers]);
 
   // A. Total Shipment Totals
   const shipmentMetrics = useMemo(() => {
@@ -189,8 +229,24 @@ export default function AdminDashboard() {
       }
     });
 
-    // Sort queue by most urgent first
-    queue.sort((a, b) => (a.daysLeft ?? 999) - (b.daysLeft ?? 999));
+    // Smart operational sorting:
+    // Priority 1: Due Today (0 days) & Due Tomorrow (1 day)
+    // Priority 2: Due soon (2 to 14 days)
+    // Priority 3: Recently Overdue (1 to 14 days overdue: -1, -2, -3... sorted closest to today first)
+    // Priority 4: Due in 15 to 30 days
+    // Priority 5: Stale / historical backlog (>14 days overdue)
+    queue.sort((a, b) => {
+      const getPriority = (d: number | null) => {
+        if (d === null) return 999999;
+        if (d === 0) return 0;
+        if (d > 0 && d <= 7) return d;
+        if (d < 0 && d >= -14) return 10 + Math.abs(d);
+        if (d > 7 && d <= 30) return 30 + d;
+        if (d < -14 && d >= -60) return 100 + Math.abs(d);
+        return 1000 + Math.abs(d);
+      };
+      return getPriority(a.daysLeft) - getPriority(b.daysLeft);
+    });
 
     const chartBuckets = [
       { name: "Overdue", count: overdue, fill: "#ef4444" },
@@ -415,43 +471,7 @@ export default function AdminDashboard() {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-6 md:p-8 space-y-8 font-sans transition-colors">
-      {/* ─── Control Tower Header ───────────────────────────────── */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-2 border-b border-slate-200 dark:border-slate-800">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-              Supply Chain & ASN Operations Center
-            </h1>
-            <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Live Sync
-            </span>
-          </div>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-2xl">
-            Real-time logistics velocity, supplier fulfillment tracking, and upcoming dispatch deadlines.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2.5">
-          <button
-            onClick={handleRefreshAll}
-            disabled={isLoading}
-            className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-sm active:scale-95 disabled:opacity-50"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
-            Refresh Data
-          </button>
-          <button
-            onClick={() => navigate("/shipments?create=true")}
-            className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all shadow-sm shadow-indigo-600/30 hover:shadow-indigo-600/50 active:scale-95"
-          >
-            <Truck className="w-3.5 h-3.5" />
-            New Shipment
-          </button>
-        </div>
-      </div>
-
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-6 md:p-8 space-y-6 font-sans transition-colors">
       {isLoading ? (
         <div className="flex flex-col items-center justify-center py-24 gap-4">
           <div className="w-12 h-12 rounded-full border-4 border-indigo-600/30 border-t-indigo-600 animate-spin" />
@@ -866,13 +886,24 @@ export default function AdminDashboard() {
                     const days = po.daysLeft;
                     const isOverdue = days !== null && days < 0;
                     const isUrgent = days !== null && days >= 0 && days <= 3;
+                    const uom = getPoUom(po);
+                    const isPartial = po.status === "PARTIAL";
+                    const supplierName = getPoSupplierName(po, supplierMap);
+                    const cleanDest = getCleanDestination(po.destination);
+                    const productDesc = getPoProductDesc(po);
 
                     return (
-                      <div key={po.id} className="py-3 flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
+                      <div
+                        key={po.id}
+                        className="py-3 flex items-center justify-between gap-3 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 px-2 rounded-xl transition-colors"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-xs font-extrabold text-slate-900 dark:text-white font-mono">
                               {po.po_number || "Unnamed PO"}
+                            </span>
+                            <span className="text-[10px] font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded truncate max-w-[150px]">
+                              {supplierName}
                             </span>
                             <span
                               className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
@@ -887,20 +918,40 @@ export default function AdminDashboard() {
                                 ? `Overdue (${Math.abs(days)}d)`
                                 : days === 0
                                 ? "Due Today"
+                                : days === 1
+                                ? "Due Tomorrow"
                                 : `${days}d left`}
                             </span>
+                            {isPartial && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30">
+                                Partial
+                              </span>
+                            )}
                           </div>
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
-                            {po.destination || "Plant"} · {po.style_number || po.description || "Apparel item"}
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 truncate">
+                            <span className="font-medium text-slate-700 dark:text-slate-300">{cleanDest}</span>
+                            {" · "}
+                            <span>{productDesc}</span>
                           </p>
                         </div>
 
                         <div className="text-right flex-shrink-0">
-                          <p className="text-xs font-bold text-slate-900 dark:text-white">
-                            {(po.quantity || 0).toLocaleString()} {po.currency || "pcs"}
+                          <p className="text-xs font-bold text-slate-900 dark:text-white font-mono">
+                            {isPartial && po.remaining_quantity != null ? (
+                              <span>
+                                {Math.round(po.remaining_quantity).toLocaleString()}{" "}
+                                <span className="text-[10px] font-normal text-slate-400">/ {(po.quantity || 0).toLocaleString()}</span>{" "}
+                                <span className="font-sans text-[11px] font-semibold text-indigo-600 dark:text-indigo-400">{uom}</span>
+                              </span>
+                            ) : (
+                              <span>
+                                {(po.quantity || 0).toLocaleString()}{" "}
+                                <span className="font-sans text-[11px] font-semibold text-indigo-600 dark:text-indigo-400">{uom}</span>
+                              </span>
+                            )}
                           </p>
-                          <p className="text-[10px] text-slate-400">
-                            {formatDateSafe(po.delivery_date)}
+                          <p className="text-[10px] text-slate-400 mt-0.5">
+                            Target: {formatDateSafe(po.delivery_date)}
                           </p>
                         </div>
                       </div>

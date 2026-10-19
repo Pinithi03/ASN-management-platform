@@ -519,13 +519,13 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                       )}
                     </button>
                   </th>
-                  <th className="px-4 py-3.5">PO Number</th>
-                  <th className="px-4 py-3.5">Order Date</th>
-                  <th className="px-4 py-3.5">Delivery Date</th>
-                  <th className="px-4 py-3.5">Contact</th>
-                  <th className="px-4 py-3.5">Notation</th>
-                  <th className="px-4 py-3.5 text-right">Quantity</th>
-                  <th className="px-4 py-3.5">Status</th>
+                  <th className="px-4 py-3.5 whitespace-nowrap">PO Number</th>
+                  <th className="px-4 py-3.5 whitespace-nowrap">Order Date</th>
+                  <th className="px-4 py-3.5 whitespace-nowrap">Delivery Date</th>
+                  <th className="px-4 py-3.5 min-w-[320px]">Contact</th>
+                  <th className="px-4 py-3.5 whitespace-nowrap">Notation</th>
+                  <th className="px-4 py-3.5 text-right whitespace-nowrap">Quantity</th>
+                  <th className="px-4 py-3.5 whitespace-nowrap">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -612,32 +612,38 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                       </td>
 
                       {/* Contact (<ContactPerson> on top, <AuxHead1> email underneath) */}
-                      <td className="px-4 py-3 text-gray-700">
+                      <td className="px-4 py-3 text-gray-700 min-w-[320px]">
                         {po.contact_person || (po.extra_data as any)?.contact_person ? (
-                          <div>
-                            <div className="font-medium text-gray-900 leading-tight">
+                          <div className="space-y-0.5">
+                            <div className="font-semibold text-gray-900 leading-tight">
                               {po.contact_person || (po.extra_data as any)?.contact_person}
                             </div>
                             {(po.contact_email || (po.extra_data as any)?.contact_email) && (
-                              <a
-                                href={`mailto:${po.contact_email || (po.extra_data as any)?.contact_email}`}
-                                onClick={(e) => e.stopPropagation()}
-                                className="text-xs text-blue-600 hover:underline hover:text-blue-700 block truncate max-w-[220px] mt-0.5"
-                                title={po.contact_email || (po.extra_data as any)?.contact_email}
-                              >
-                                {po.contact_email || (po.extra_data as any)?.contact_email}
-                              </a>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <Mail className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                                <a
+                                  href={`mailto:${po.contact_email || (po.extra_data as any)?.contact_email}`}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="text-xs text-blue-600 hover:underline hover:text-blue-700 font-mono tracking-tight select-all"
+                                  title={po.contact_email || (po.extra_data as any)?.contact_email}
+                                >
+                                  {po.contact_email || (po.extra_data as any)?.contact_email}
+                                </a>
+                              </div>
                             )}
                           </div>
                         ) : (po.contact_email || (po.extra_data as any)?.contact_email) ? (
-                          <a
-                            href={`mailto:${po.contact_email || (po.extra_data as any)?.contact_email}`}
-                            onClick={(e) => e.stopPropagation()}
-                            className="text-xs text-blue-600 hover:underline hover:text-blue-700 block truncate max-w-[220px]"
-                            title={po.contact_email || (po.extra_data as any)?.contact_email}
-                          >
-                            {po.contact_email || (po.extra_data as any)?.contact_email}
-                          </a>
+                          <div className="flex items-center gap-1.5">
+                            <Mail className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                            <a
+                              href={`mailto:${po.contact_email || (po.extra_data as any)?.contact_email}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-xs text-blue-600 hover:underline hover:text-blue-700 font-mono tracking-tight select-all"
+                              title={po.contact_email || (po.extra_data as any)?.contact_email}
+                            >
+                              {po.contact_email || (po.extra_data as any)?.contact_email}
+                            </a>
+                          </div>
                         ) : (
                           <span className="text-gray-400">—</span>
                         )}
