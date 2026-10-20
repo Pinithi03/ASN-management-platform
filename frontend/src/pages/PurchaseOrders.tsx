@@ -4,7 +4,6 @@ import { format } from "date-fns";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   FileText,
-  Package,
   Search,
   RefreshCw,
   ChevronLeft,
@@ -18,7 +17,6 @@ import {
   Copy,
   Check,
   Building,
-  DollarSign,
   Mail,
   History,
   FileSpreadsheet,
@@ -112,6 +110,7 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
 
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
+  const [poChips, setPoChips] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState("");
   const [selectedPlant, setSelectedPlant] = useState<string>("ALL");
   const [selectedLocation, setSelectedLocation] = useState<string>("ALL");
@@ -121,20 +120,36 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
     currentPlant: string;
   } | null>(null);
 
-  // State for multi-selecting POs
-  const [selectedPOs, setSelectedPOs] = useState<Set<string>>(new Set());
+  // State for multi-selecting POs. Keeps the PO objects so selections survive
+  // searches that no longer include the selected rows.
+  const [selectedPOMap, setSelectedPOMap] = useState<Map<string, PurchaseOrder>>(new Map());
+  const selectedPOs = useMemo(() => new Set(selectedPOMap.keys()), [selectedPOMap]);
+  const canSelect = selectedPlant !== "ALL";
+
+  const clearSelection = () => {
+    setSelectedPOMap(new Map());
+    setCrossPlantWarning(null);
+  };
+
+  const selectPlant = (plantId: string) => {
+    setSelectedPlant(plantId);
+    setSelectedLocation("ALL");
+    setPage(1);
+    clearSelection();
+  };
 
   // State for previewing a specific PO
   const [selectedPOForPreview, setSelectedPOForPreview] = useState<PurchaseOrder | null>(null);
   const [copiedPO, setCopiedPO] = useState(false);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["purchaseOrders", page, search, statusFilter, supplierId, selectedPlant, selectedLocation],
+    queryKey: ["purchaseOrders", page, search, poChips, statusFilter, supplierId, selectedPlant, selectedLocation],
     queryFn: () =>
       poApi.list({
         page,
         per_page: 50,
-        search: search || undefined,
+        search: poChips.length === 0 && search ? search : undefined,
+        po_numbers: poChips.length > 0 ? poChips.join(",") : undefined,
         status: statusFilter || undefined,
         supplier_id: supplierId,
         plant: selectedPlant !== "ALL" ? selectedPlant : undefined,
@@ -157,21 +172,6 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
   const orders: PurchaseOrder[] = data?.items || [];
   const totalOrders = data?.total || 0;
   const totalPages = data?.pages || 1;
-
-  // Compute Plant Breakdown Counts
-  const plantCounts = useMemo(() => {
-    const counts: Record<string, number> = { ALL: orders.length };
-    Object.keys(KNOWN_PLANTS).forEach((pId) => {
-      counts[pId] = 0;
-    });
-
-    orders.forEach((po) => {
-      const dest = po.delivery_address || po.destination || po.client_code;
-      const res = resolvePlantAndLocation(dest, po.client_code);
-      counts[res.plantGroup] = (counts[res.plantGroup] || 0) + 1;
-    });
-    return counts;
-  }, [orders]);
 
   // Compute available storage locations for the currently selected plant
   const availableLocations = useMemo(() => {
@@ -221,32 +221,30 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
 
   // Determine plant of currently selected POs
   const currentSelectedPlantInfo = useMemo(() => {
-    if (selectedPOs.size === 0) return null;
-    const firstNum = Array.from(selectedPOs)[0];
-    const poObj = orders.find((p) => p.po_number === firstNum);
+    const poObj = selectedPOMap.values().next().value;
     if (!poObj) return null;
     const dest = poObj.delivery_address || poObj.destination || poObj.client_code;
     return resolvePlantAndLocation(dest, poObj.client_code);
-  }, [selectedPOs, orders]);
+  }, [selectedPOMap]);
 
-  const togglePOSelection = (poNumber: string) => {
-    const poObj = orders.find((p) => p.po_number === poNumber);
-    if (poObj && (poObj.status === "COMPLETED" || poObj.status === "CANCELLED")) {
+  const togglePOSelection = (poObj: PurchaseOrder) => {
+    const poNumber = poObj.po_number;
+    if (!canSelect || !poNumber || poObj.status === "COMPLETED" || poObj.status === "CANCELLED") {
       return;
     }
 
-    if (selectedPOs.has(poNumber)) {
-      const newSelection = new Set(selectedPOs);
+    if (selectedPOMap.has(poNumber)) {
+      const newSelection = new Map(selectedPOMap);
       newSelection.delete(poNumber);
-      setSelectedPOs(newSelection);
+      setSelectedPOMap(newSelection);
       if (newSelection.size === 0) {
         setCrossPlantWarning(null);
       }
       return;
     }
 
-    // Check cross-plant conflict
-    if (selectedPOs.size > 0 && currentSelectedPlantInfo && poObj) {
+    // Check cross-plant conflict (safety net; plant cards already scope the list)
+    if (selectedPOMap.size > 0 && currentSelectedPlantInfo) {
       const thisDest = poObj.delivery_address || poObj.destination || poObj.client_code;
       const thisPlant = resolvePlantAndLocation(thisDest, poObj.client_code);
 
@@ -263,48 +261,57 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
 
     // Allow selection
     setCrossPlantWarning(null);
-    const newSelection = new Set(selectedPOs);
-    newSelection.add(poNumber);
-    setSelectedPOs(newSelection);
+    const newSelection = new Map(selectedPOMap);
+    newSelection.set(poNumber, poObj);
+    setSelectedPOMap(newSelection);
   };
+
+  const allSelectableSelected =
+    selectableOrders.length > 0 && selectableOrders.every((p) => selectedPOs.has(p.po_number!));
 
   const toggleAllSelection = () => {
-    const selectableNumbers = selectableOrders
-      .map((p) => p.po_number)
-      .filter((num): num is string => Boolean(num));
-
-    const allSelected = selectableNumbers.length > 0 && selectableNumbers.every((num) => selectedPOs.has(num));
-
-    if (allSelected) {
-      const newSelection = new Set(selectedPOs);
-      selectableNumbers.forEach((n) => newSelection.delete(n));
-      setSelectedPOs(newSelection);
+    if (!canSelect) return;
+    const newSelection = new Map(selectedPOMap);
+    if (allSelectableSelected) {
+      selectableOrders.forEach((p) => newSelection.delete(p.po_number!));
     } else {
-      // If currently on "ALL" plants view and there are multiple plants:
-      if (selectedPlant === "ALL" && selectableOrders.length > 0) {
-        const firstPo = selectableOrders[0];
-        const firstPlant = resolvePlantAndLocation(firstPo.delivery_address || firstPo.destination, firstPo.client_code);
-        // Only select orders belonging to that plant to guarantee NO cross-plant deliveries
-        const samePlantOrders = selectableOrders.filter((p) => {
-          const res = resolvePlantAndLocation(p.delivery_address || p.destination, p.client_code);
-          return res.plantGroup === firstPlant.plantGroup;
-        });
-        const numbers = samePlantOrders.map((p) => p.po_number).filter(Boolean) as string[];
-        setSelectedPOs(new Set(numbers));
-        setCrossPlantWarning({
-          attemptedPO: "Batch",
-          targetPlant: "Other Plants",
-          currentPlant: firstPlant.plantName,
-        });
-      } else {
-        setSelectedPOs(new Set(selectableNumbers));
-        setCrossPlantWarning(null);
-      }
+      selectableOrders.forEach((p) => newSelection.set(p.po_number!, p));
     }
+    setSelectedPOMap(newSelection);
+    setCrossPlantWarning(null);
   };
 
+  // ─── Multi-PO search chips ──────────────────────────────────
+  const normalizePO = (value: string) => value.trim().replace(/^[A-Z0-9]{2,6}\s*[-–—_]\s*(?=\d{6,}$)/i, "");
+  const isPOToken = (value: string) => /^(?:[A-Z0-9]{2,6}\s*[-–—_]\s*)?\d{4,15}$/i.test(value.trim());
+
+  // Turns PO-like tokens into chips; returns the leftover non-PO text.
+  const addPOChips = (text: string): string => {
+    const tokens = text.split(/[\s,;]+/).filter(Boolean);
+    const poTokens = tokens.filter(isPOToken).map(normalizePO);
+    if (poTokens.length > 0) {
+      setPoChips((prev) => Array.from(new Set([...prev, ...poTokens])));
+      setPage(1);
+    }
+    return tokens.filter((t) => !isPOToken(t)).join(" ");
+  };
+
+  const removePOChip = (chip: string) => {
+    setPoChips((prev) => prev.filter((c) => c !== chip));
+    setPage(1);
+  };
+
+  const clearSearch = () => {
+    setPoChips([]);
+    setSearch("");
+    setPage(1);
+  };
+
+  const foundPOs = new Set(orders.map((p) => normalizePO(p.po_number || "")));
+  const missingChips = poChips.filter((c) => !foundPOs.has(c));
+
   const handleCreateShipment = (mode: "web" | "excel" = "web", poNumber?: string) => {
-    const poList = poNumber || Array.from(selectedPOs).join(",");
+    const poList = poNumber || Array.from(selectedPOMap.keys()).join(",");
     navigate(`/shipments?pos=${encodeURIComponent(poList)}&mode=${mode}`);
   };
 
@@ -401,7 +408,6 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
     (activePO?.extra_data as any)?.delivery_address ||
     activePO?.client_code
   );
-  const orderType = (activePO?.extra_data as any)?.order_type || "ZA6A";
   const colSpanBeforeQty = hasDistinctPartner ? 6 : 5;
 
   return (
@@ -437,11 +443,6 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
               </span>
             )}
           </div>
-          <p className="text-xs text-gray-500 mt-1">
-            {activeMode === "manual"
-              ? "Select purchase order lines below to prepare deliveries and assign packings manually using the step-by-step wizard."
-              : "Select purchase orders below to download standard templates or upload completed Excel packing manifests."}
-          </p>
         </div>
       </div>
 
@@ -460,11 +461,10 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
             <button
               type="button"
               onClick={() => {
-                if (crossPlantWarning.attemptedPO && crossPlantWarning.attemptedPO !== "Batch") {
-                  setSelectedPOs(new Set([crossPlantWarning.attemptedPO]));
-                } else {
-                  setSelectedPOs(new Set());
-                }
+                const attempted = orders.find((p) => p.po_number === crossPlantWarning.attemptedPO);
+                setSelectedPOMap(
+                  attempted ? new Map([[crossPlantWarning.attemptedPO, attempted]]) : new Map()
+                );
                 setCrossPlantWarning(null);
               }}
               className="px-3 py-1.5 text-xs font-semibold bg-amber-600 text-white hover:bg-amber-700 rounded-lg shadow-2xs transition-colors cursor-pointer"
@@ -532,10 +532,7 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
           <div className="flex items-center gap-2.5 self-end sm:self-auto">
             <button
               type="button"
-              onClick={() => {
-                setSelectedPOs(new Set());
-                setCrossPlantWarning(null);
-              }}
+              onClick={clearSelection}
               className="h-10 px-4 text-xs font-semibold text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
             >
               <X className="w-3.5 h-3.5 text-gray-400" />
@@ -576,202 +573,166 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
       )}
 
       {/* Level 1: Plant Hierarchy Selector Cards */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Factory className="w-4 h-4 text-gray-500" />
-            <span className="text-xs font-bold uppercase tracking-wider text-gray-600">
-              1. Select Destination Plant (Oniverse Group Factories)
-            </span>
-          </div>
-          {selectedPlant !== "ALL" && (
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5">
+        {[{ id: "ALL", label: "All Plants" }, ...Object.entries(KNOWN_PLANTS).map(([pId, plant]) => ({
+          id: pId,
+          label: plant.name.replace(" Ltd", ""),
+        }))].map((card) => {
+          const isSelected = selectedPlant === card.id;
+          return (
             <button
+              key={card.id}
               type="button"
-              onClick={() => {
-                setSelectedPlant("ALL");
-                setSelectedLocation("ALL");
-                setPage(1);
-              }}
-              className="text-xs text-blue-600 hover:text-blue-800 font-semibold cursor-pointer flex items-center gap-1"
+              onClick={() => selectPlant(card.id)}
+              className={cn(
+                "p-3 min-h-[72px] rounded-xl border text-left transition-all cursor-pointer relative flex items-center",
+                isSelected
+                  ? isSupplier
+                    ? "bg-emerald-50/80 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs"
+                    : "bg-blue-50/80 border-blue-500 ring-2 ring-blue-500/20 shadow-xs"
+                  : "bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50/70"
+              )}
             >
-              <span>Show All Plants</span>
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5">
-          {/* All Plants Tab */}
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedPlant("ALL");
-              setSelectedLocation("ALL");
-              setPage(1);
-            }}
-            className={cn(
-              "p-3 rounded-xl border text-left transition-all cursor-pointer relative flex flex-col justify-between",
-              selectedPlant === "ALL"
-                ? isSupplier
-                  ? "bg-emerald-50/80 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs"
-                  : "bg-blue-50/80 border-blue-500 ring-2 ring-blue-500/20 shadow-xs"
-                : "bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50/70"
-            )}
-          >
-            <div>
-              <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                All Factories
-              </div>
-              <div className="text-xs font-bold text-gray-900 mt-0.5 truncate">
-                All Plants
-              </div>
-            </div>
-            <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100">
-              <span className="text-[10px] text-gray-400">Total POs</span>
-              <span className={cn(
-                "px-2 py-0.5 text-[11px] font-bold rounded-full",
-                selectedPlant === "ALL"
-                  ? isSupplier ? "bg-emerald-600 text-white" : "bg-blue-600 text-white"
-                  : "bg-gray-100 text-gray-700"
-              )}>
-                {orders.length}
+              <span className="text-xs font-bold text-gray-900 truncate" title={card.label}>
+                {card.label}
               </span>
-            </div>
-          </button>
-
-          {/* 5 Oniverse Plants */}
-          {Object.entries(KNOWN_PLANTS).map(([pId, plant]) => {
-            const count = plantCounts[pId] || 0;
-            const isSelected = selectedPlant === pId;
-
-            return (
-              <button
-                key={pId}
-                type="button"
-                onClick={() => {
-                  setSelectedPlant(pId);
-                  setSelectedLocation("ALL");
-                  setPage(1);
-                }}
-                className={cn(
-                  "p-3 rounded-xl border text-left transition-all cursor-pointer relative flex flex-col justify-between",
-                  isSelected
-                    ? isSupplier
-                      ? "bg-emerald-50/80 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs"
-                      : "bg-blue-50/80 border-blue-500 ring-2 ring-blue-500/20 shadow-xs"
-                    : "bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50/70"
-                )}
-              >
-                <div>
-                  <div className="flex items-center justify-between">
-                    <span className={cn(
-                      "px-1.5 py-0.5 text-[10px] font-bold font-mono rounded",
-                      isSelected
-                        ? isSupplier ? "bg-emerald-200/80 text-emerald-900" : "bg-blue-200/80 text-blue-900"
-                        : "bg-gray-100 text-gray-600"
-                    )}>
-                      {plant.codePrefix}
-                    </span>
-                    <span className={cn(
-                      "px-1.5 py-0.2 text-[11px] font-bold rounded-full",
-                      isSelected
-                        ? isSupplier ? "bg-emerald-600 text-white" : "bg-blue-600 text-white"
-                        : "bg-gray-100 text-gray-700"
-                    )}>
-                      {count}
-                    </span>
-                  </div>
-                  <div className="text-xs font-bold text-gray-900 mt-1.5 truncate" title={plant.name}>
-                    {plant.name.replace(" Ltd", "")}
-                  </div>
-                  <div className="text-[10px] text-gray-400 truncate" title={plant.location}>
-                    {plant.location}
-                  </div>
-                </div>
-                <div className="text-[9px] text-gray-400 mt-2 pt-1 border-t border-gray-100 flex items-center justify-between">
-                  <span>Factory</span>
-                  <span className="font-mono font-semibold">{plant.defaultCode}</span>
-                </div>
-              </button>
-            );
-          })}
-        </div>
+            </button>
+          );
+        })}
       </div>
 
-      {/* Level 2: Storage Locations Drilldown Pills */}
-      {availableLocations.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 p-3 bg-gray-50/90 border border-gray-200 rounded-xl">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-700 mr-1 shrink-0">
-            <Warehouse className="w-3.5 h-3.5 text-blue-600" />
-            <span>2. Delivery Location / Dock:</span>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedLocation("ALL");
-              setPage(1);
-            }}
-            className={cn(
-              "px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer",
-              selectedLocation === "ALL"
-                ? isSupplier
-                  ? "bg-emerald-600 text-white shadow-2xs"
-                  : "bg-blue-600 text-white shadow-2xs"
-                : "bg-white text-gray-700 border border-gray-200 hover:bg-gray-100"
-            )}
-          >
-            All Locations ({selectedPlant === "ALL" ? orders.length : (plantCounts[selectedPlant] || 0)})
-          </button>
-
-          {availableLocations.map((loc) => {
-            const isSelected = selectedLocation === loc.code;
-            return (
+      {/* Level 2: Storage Location Cards (only when a plant is selected) */}
+      {selectedPlant !== "ALL" && availableLocations.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-600">
+              <Warehouse className="w-3.5 h-3.5 text-blue-600" />
+              <span>Delivery Locations</span>
+              <span className="text-gray-400 font-normal">— {KNOWN_PLANTS[selectedPlant]?.name.replace(" Ltd", "") || selectedPlant}</span>
+            </div>
+            {selectedLocation !== "ALL" && (
               <button
-                key={loc.code}
                 type="button"
-                onClick={() => {
-                  setSelectedLocation(loc.code);
-                  setPage(1);
-                }}
-                className={cn(
-                  "px-3 py-1 rounded-lg text-xs font-mono font-semibold transition-all cursor-pointer flex items-center gap-1.5",
-                  isSelected
-                    ? isSupplier
-                      ? "bg-emerald-600 text-white shadow-2xs"
-                      : "bg-blue-600 text-white shadow-2xs"
-                    : "bg-white text-gray-700 border border-gray-200 hover:bg-gray-100"
-                )}
+                onClick={() => { setSelectedLocation("ALL"); setPage(1); }}
+                className="text-xs text-blue-600 hover:text-blue-800 font-medium cursor-pointer flex items-center gap-1"
               >
-                <span>{loc.code}</span>
-                <span className={cn(
-                  "px-1.5 py-0.2 text-[10px] rounded-full",
-                  isSelected ? "bg-white/20 text-white" : "bg-gray-100 text-gray-500"
-                )}>
-                  {loc.count}
-                </span>
+                <X className="w-3 h-3" /> Clear filter
               </button>
-            );
-          })}
+            )}
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+            {availableLocations.map((loc) => {
+              const isLocSelected = selectedLocation === loc.code;
+              return (
+                <button
+                  key={loc.code}
+                  type="button"
+                  onClick={() => {
+                    setSelectedLocation(isLocSelected ? "ALL" : loc.code);
+                    setPage(1);
+                  }}
+                  className={cn(
+                    "p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col gap-1",
+                    isLocSelected
+                      ? isSupplier
+                        ? "bg-emerald-50/80 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs"
+                        : "bg-blue-50/80 border-blue-500 ring-2 ring-blue-500/20 shadow-xs"
+                      : "bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50/70"
+                  )}
+                >
+                  <span className="text-xs font-mono font-bold text-gray-900">{loc.code}</span>
+                  <span className={cn(
+                    "text-[10px] font-semibold",
+                    isLocSelected
+                      ? isSupplier ? "text-emerald-600" : "text-blue-600"
+                      : "text-gray-400"
+                  )}>
+                    {loc.count} {loc.count === 1 ? "order" : "orders"}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
 
 
       {/* Search & Filter Bar */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search PO, client, style..."
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-            className="w-full pl-10 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-          />
+      <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+        <div className="flex-1">
+          <div className="relative flex flex-wrap items-center gap-1.5 min-h-[38px] pl-10 pr-9 py-1.5 text-sm border border-gray-200 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 bg-white">
+            <Search className="absolute left-3 top-[11px] w-4 h-4 text-gray-400" />
+            {poChips.map((chip) => (
+              <span
+                key={chip}
+                className={cn(
+                  "inline-flex items-center gap-1 pl-2 pr-1 py-0.5 text-xs font-mono font-semibold rounded-md border",
+                  missingChips.includes(chip)
+                    ? "bg-gray-50 text-gray-400 border-gray-200 line-through"
+                    : isSupplier
+                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                    : "bg-blue-50 text-blue-700 border-blue-200"
+                )}
+              >
+                {chip}
+                <button
+                  type="button"
+                  onClick={() => removePOChip(chip)}
+                  className="p-0.5 rounded hover:bg-black/5 cursor-pointer"
+                  title={`Remove ${chip}`}
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            ))}
+            <input
+              type="text"
+              placeholder={poChips.length > 0 ? "Add PO number..." : "Search PO, client, style, or paste PO numbers..."}
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+              onKeyDown={(e) => {
+                if ((e.key === "Enter" || e.key === ",") && isPOToken(search)) {
+                  e.preventDefault();
+                  setSearch(addPOChips(search));
+                } else if (e.key === "Backspace" && search === "" && poChips.length > 0) {
+                  removePOChip(poChips[poChips.length - 1]);
+                }
+              }}
+              onPaste={(e) => {
+                const pasted = e.clipboardData.getData("text");
+                if (pasted.split(/[\s,;]+/).some(isPOToken)) {
+                  e.preventDefault();
+                  setSearch(addPOChips(`${search} ${pasted}`));
+                }
+              }}
+              className="flex-1 min-w-[160px] py-0.5 bg-transparent focus:outline-none"
+            />
+            {(poChips.length > 0 || search) && (
+              <button
+                type="button"
+                onClick={clearSearch}
+                className="absolute right-2.5 top-[9px] p-0.5 text-gray-400 hover:text-gray-600 rounded cursor-pointer"
+                title="Clear search"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+          {poChips.length > 0 && !isLoading && (
+            <p className="text-xs text-gray-500 mt-1.5">
+              Found {poChips.length - missingChips.length} of {poChips.length}
+              {missingChips.length > 0 && (
+                <span className="text-amber-700">
+                  {" · "}Not found{selectedPlant !== "ALL" ? ` in ${KNOWN_PLANTS[selectedPlant]?.name.replace(" Ltd", "")}` : ""}:{" "}
+                  <span className="font-mono">{missingChips.join(", ")}</span>
+                </span>
+              )}
+            </p>
+          )}
         </div>
         <select
           value={statusFilter}
@@ -842,11 +803,7 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
             {(selectedPlant !== "ALL" || selectedLocation !== "ALL") && (
               <button
                 type="button"
-                onClick={() => {
-                  setSelectedPlant("ALL");
-                  setSelectedLocation("ALL");
-                  setPage(1);
-                }}
+                onClick={() => selectPlant("ALL")}
                 className="mt-4 px-3 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors cursor-pointer"
               >
                 Reset Plant & Location Filters
@@ -858,23 +815,27 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
             <table className="w-full text-sm text-left">
               <thead>
                 <tr className="bg-gray-50/80 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                  <th className="px-4 py-3.5 w-12 text-center">
-                    <button
-                      type="button"
-                      onClick={toggleAllSelection}
-                      className={cn(
-                        "transition-colors cursor-pointer",
-                        isSupplier ? "text-gray-400 hover:text-emerald-600" : "text-gray-400 hover:text-blue-600"
-                      )}
-                      title="Select all"
-                    >
-                      {selectedPOs.size === selectableOrders.length && selectableOrders.length > 0 ? (
-                        <CheckSquare className={cn("w-4 h-4", isSupplier ? "text-emerald-600" : "text-blue-600")} />
-                      ) : (
-                        <Square className="w-4 h-4" />
-                      )}
-                    </button>
-                  </th>
+                  {canSelect && (
+                    <th className="px-4 py-3.5 w-12 text-center">
+                      <button
+                        type="button"
+                        onClick={toggleAllSelection}
+                        className={cn(
+                          "transition-colors cursor-pointer",
+                          isSupplier
+                            ? "text-gray-400 hover:text-emerald-600"
+                            : "text-gray-400 hover:text-blue-600"
+                        )}
+                        title="Select all"
+                      >
+                        {allSelectableSelected ? (
+                          <CheckSquare className={cn("w-4 h-4", isSupplier ? "text-emerald-600" : "text-blue-600")} />
+                        ) : (
+                          <Square className="w-4 h-4" />
+                        )}
+                      </button>
+                    </th>
+                  )}
                   <th className="px-4 py-3.5 whitespace-nowrap">PO Number</th>
                   <th className="px-4 py-3.5 whitespace-nowrap">Plant & Storage</th>
                   <th className="px-4 py-3.5 whitespace-nowrap">Order Date</th>
@@ -892,6 +853,8 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                     po.delivery_address || po.destination || (po.extra_data as any)?.delivery_address,
                     po.client_code
                   );
+                  const isClosed = po.status === "COMPLETED" || po.status === "CANCELLED";
+                  const rowSelectable = canSelect && !isClosed;
                   const isCrossPlant =
                     selectedPOs.size > 0 &&
                     currentSelectedPlantInfo &&
@@ -915,46 +878,47 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                             : "hover:bg-blue-50/30"
                       )}
                     >
-                      {/* Selection Checkbox */}
-                      <td
-                        className={cn(
-                          "px-4 py-3 text-center",
-                          (po.status === "COMPLETED" || po.status === "CANCELLED") ? "cursor-not-allowed opacity-40" : "cursor-pointer"
-                        )}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (po.status === "COMPLETED" || po.status === "CANCELLED") return;
-                          if (po.po_number) togglePOSelection(po.po_number);
-                        }}
-                      >
-                        <button
-                          type="button"
-                          disabled={po.status === "COMPLETED" || po.status === "CANCELLED"}
-                          title={
-                            po.status === "COMPLETED"
-                              ? "This PO is fully fulfilled (Completed)"
-                              : po.status === "CANCELLED"
-                              ? "This PO is cancelled"
-                              : isCrossPlant
-                              ? `Cannot mix plants: Belongs to ${poPlant.plantName}. Current selection is for ${currentSelectedPlantInfo?.plantName}.`
-                              : "Select PO"
-                          }
+                      {/* Selection Checkbox (only when a plant is selected) */}
+                      {canSelect && (
+                        <td
                           className={cn(
-                            "text-gray-300 transition-colors",
-                            (po.status === "COMPLETED" || po.status === "CANCELLED")
-                              ? "cursor-not-allowed"
-                              : isCrossPlant
-                              ? "text-gray-200 hover:text-amber-500"
-                              : isSupplier ? "hover:text-emerald-600" : "hover:text-blue-600"
+                            "px-4 py-3 text-center",
+                            rowSelectable ? "cursor-pointer" : "cursor-not-allowed opacity-40"
                           )}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (rowSelectable) togglePOSelection(po);
+                          }}
                         >
-                          {isSelected ? (
-                            <CheckSquare className={cn("w-4 h-4", isSupplier ? "text-emerald-600" : "text-blue-600")} />
-                          ) : (
-                            <Square className="w-4 h-4" />
-                          )}
-                        </button>
-                      </td>
+                          <button
+                            type="button"
+                            disabled={!rowSelectable}
+                            title={
+                              po.status === "COMPLETED"
+                                ? "This PO is fully fulfilled (Completed)"
+                                : po.status === "CANCELLED"
+                                ? "This PO is cancelled"
+                                : isCrossPlant
+                                ? `Cannot mix plants: Belongs to ${poPlant.plantName}. Current selection is for ${currentSelectedPlantInfo?.plantName}.`
+                                : "Select PO"
+                            }
+                            className={cn(
+                              "text-gray-300 transition-colors",
+                              !rowSelectable
+                                ? "cursor-not-allowed"
+                                : isCrossPlant
+                                ? "text-gray-200 hover:text-amber-500"
+                                : isSupplier ? "hover:text-emerald-600" : "hover:text-blue-600"
+                            )}
+                          >
+                            {isSelected ? (
+                              <CheckSquare className={cn("w-4 h-4", isSupplier ? "text-emerald-600" : "text-blue-600")} />
+                            ) : (
+                              <Square className="w-4 h-4" />
+                            )}
+                          </button>
+                        </td>
+                      )}
 
                       {/* PO Number */}
                       <td className="px-4 py-3">
@@ -1158,32 +1122,6 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                     ) : (
                       <span className="px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-600 rounded-md border border-gray-200">
                         v1 Original
-                      </span>
-                    )}
-                    <span
-                      className={`px-2.5 py-0.5 text-xs font-semibold rounded-full inline-flex items-center ${STATUS_BADGES[activePO.status] || "bg-gray-100 text-gray-700"
-                        }`}
-                    >
-                      {activePO.status}
-                    </span>
-                    <span className="px-2 py-0.5 text-xs font-semibold bg-blue-50 text-blue-700 rounded-md border border-blue-200 font-mono">
-                      Type: {orderType}
-                    </span>
-                    {activePO.delivery_date && (
-                      <span className="px-2.5 py-0.5 text-xs font-medium bg-amber-50 text-amber-800 rounded-md border border-amber-200 inline-flex items-center gap-1.5 font-sans">
-                        <Calendar className="w-3 h-3 text-amber-600" />
-                        Delivery: <strong className="font-semibold">{format(new Date(activePO.delivery_date), "MMM d, yyyy")}</strong>
-                      </span>
-                    )}
-                    <span className="px-2.5 py-0.5 text-xs font-medium bg-emerald-50 text-emerald-800 rounded-md border border-emerald-200 inline-flex items-center gap-1.5 font-sans">
-                      <Package className="w-3 h-3 text-emerald-600" />
-                      Balance: <strong className="font-mono font-bold text-emerald-900">{totalRemainingQuantity.toLocaleString()}</strong>
-                      <span className="text-emerald-700 font-normal">/ {totalLineQuantity.toLocaleString()}</span>
-                    </span>
-                    {displayTotalValue > 0 && (
-                      <span className="px-2.5 py-0.5 text-xs font-medium bg-purple-50 text-purple-800 rounded-md border border-purple-200 font-mono inline-flex items-center gap-1.5">
-                        <DollarSign className="w-3 h-3 text-purple-600" />
-                        <strong>{activePO.currency || "USD"} {displayTotalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
                       </span>
                     )}
                     {activePO.po_number && (
@@ -1452,10 +1390,10 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                 {activePO.po_number && activePO.status !== "COMPLETED" && activePO.status !== "CANCELLED" && (
                   <button
                     type="button"
-                    onClick={() => {
-                      if (activePO.po_number) togglePOSelection(activePO.po_number);
-                    }}
-                    className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+                    onClick={() => togglePOSelection(activePO)}
+                    disabled={!canSelect}
+                    title={canSelect ? undefined : "Open a plant to select POs"}
+                    className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white"
                   >
                     {activePO.po_number && selectedPOs.has(activePO.po_number) ? (
                       <>

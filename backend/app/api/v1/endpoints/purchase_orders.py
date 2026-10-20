@@ -140,6 +140,17 @@ class POStatsResponse(BaseModel):
 
 # ─── GET / — List Purchase Orders ───────────────────────────────
 
+def _resolve_po_plant(r: PurchaseOrder):
+    """Resolve plant/storage for a PO the same way the list response and frontend do."""
+    from app.core.plant_resolver import resolve_plant_and_location
+    p_raw = (r.extra_data.get("delivery_address") if r.extra_data else None) or r.destination or r.client_code or ""
+    resolved = resolve_plant_and_location(p_raw, fallback_client_code=r.client_code)
+    stored_group = r.extra_data.get("plant_group") if r.extra_data else None
+    if stored_group:
+        resolved["plant_group"] = str(stored_group).upper()
+    return resolved
+
+
 @router.get("", response_model=PaginatedPOResponse)
 @router.get("/", response_model=PaginatedPOResponse, include_in_schema=False)
 async def list_purchase_orders(
@@ -150,6 +161,7 @@ async def list_purchase_orders(
     supplier_id: Optional[str] = Query(None, description="Filter by supplier UUID"),
     plant: Optional[str] = Query(None, description="Filter by plant code or name"),
     storage_location: Optional[str] = Query(None, description="Filter by storage location code"),
+    po_numbers: Optional[str] = Query(None, description="Comma-separated list of exact PO numbers"),
     company_id: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
@@ -205,30 +217,42 @@ async def list_purchase_orders(
             | PurchaseOrder.style_number.ilike(search_filter)
             | PurchaseOrder.description.ilike(search_filter)
         )
-    if plant and plant.upper() != "ALL":
-        p_filter = f"%{plant}%"
-        query = query.where(
-            PurchaseOrder.destination.ilike(p_filter)
-            | PurchaseOrder.client_code.ilike(p_filter)
-            | cast(PurchaseOrder.extra_data, String).ilike(p_filter)
-        )
-    if storage_location and storage_location.upper() != "ALL":
-        loc_filter = f"%{storage_location}%"
-        query = query.where(
-            PurchaseOrder.destination.ilike(loc_filter)
-            | cast(PurchaseOrder.extra_data, String).ilike(loc_filter)
-        )
+    if po_numbers:
+        from app.email.parsers import normalize_po_number
+        raw_values = [v.strip() for v in po_numbers.split(",") if v.strip()]
+        wanted = set(raw_values) | {normalize_po_number(v) for v in raw_values}
+        wanted.discard("")
+        if wanted:
+            query = query.where(PurchaseOrder.po_number.in_(wanted))
 
-    # Count total
-    count_query = select(func.count()).select_from(query.subquery())
-    total = (await db.execute(count_query)).scalar() or 0
-
-    # Paginate & sort
     query = query.order_by(desc(PurchaseOrder.created_at))
-    query = query.offset((page - 1) * per_page).limit(per_page)
 
-    result = await db.execute(query)
-    records = result.scalars().all()
+    plant_group = plant.upper() if plant and plant.upper() != "ALL" else None
+    location = storage_location.upper() if storage_location and storage_location.upper() != "ALL" else None
+
+    if plant_group or location:
+        # Plant is derived from free-text destinations (e.g. "PPD1-Katunayake" is Sirio),
+        # so it can't be matched in SQL. Filter on the resolved plant in Python before
+        # counting and paginating; PO volume is small enough for this.
+        all_records = (await db.execute(query)).scalars().all()
+        matching = []
+        for r in all_records:
+            resolved = _resolve_po_plant(r)
+            if plant_group and resolved["plant_group"] != plant_group:
+                continue
+            if location and location not in (
+                resolved["full_delivery_address"].upper(),
+                resolved["storage_location"].upper(),
+            ):
+                continue
+            matching.append(r)
+        total = len(matching)
+        records = matching[(page - 1) * per_page : page * per_page]
+    else:
+        count_query = select(func.count()).select_from(query.subquery())
+        total = (await db.execute(count_query)).scalar() or 0
+        query = query.offset((page - 1) * per_page).limit(per_page)
+        records = (await db.execute(query)).scalars().all()
 
     record_pos = [r.po_number for r in records if r.po_number]
     shipped_map: dict[str, float] = {}
@@ -262,9 +286,7 @@ async def list_purchase_orders(
         total_shipped = shipped_map.get(r.po_number, 0.0)
         total_remaining = max(0.0, total_ordered - total_shipped)
 
-        p_raw = (r.extra_data.get("delivery_address") if r.extra_data else None) or r.destination or r.client_code or ""
-        from app.core.plant_resolver import resolve_plant_and_location
-        p_resolved = resolve_plant_and_location(p_raw, fallback_client_code=r.client_code)
+        p_resolved = _resolve_po_plant(r)
         p_code = (r.extra_data.get("plant_code") if r.extra_data else None) or p_resolved["plant_code"]
         p_name = (r.extra_data.get("plant_name") if r.extra_data else None) or p_resolved["plant_name"]
         p_loc = (r.extra_data.get("storage_location") if r.extra_data else None) or p_resolved["storage_location"]
