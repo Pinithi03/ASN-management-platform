@@ -17,6 +17,8 @@ export interface POListParams {
   supplier_id?: string;
   plant?: string;
   storage_location?: string;
+  /** Comma-separated exact PO numbers */
+  po_numbers?: string;
 }
 
 export interface POUpdateBody {
