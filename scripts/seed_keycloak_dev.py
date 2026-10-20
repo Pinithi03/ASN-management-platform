@@ -44,9 +44,10 @@ def fail(msg: str) -> None:
 
 def load_settings() -> dict[str, str]:
     load_dotenv(ROOT / ".env")
+    kc_url = os.getenv("KEYCLOAK_INTERNAL_URL") or os.getenv("KEYCLOAK_PUBLIC_URL", "http://localhost:8080/auth")
     s = {
         "env": os.getenv("ENVIRONMENT", "development"),
-        "kc_url": os.getenv("KEYCLOAK_PUBLIC_URL", "http://localhost:8080/auth").rstrip("/"),
+        "kc_url": kc_url.rstrip("/"),
         "kc_admin": os.getenv("KC_BOOTSTRAP_ADMIN_USERNAME", "admin"),
         "kc_admin_pw": os.getenv("KC_BOOTSTRAP_ADMIN_PASSWORD", ""),
         "db_url": os.getenv("DATABASE_URL", ""),
@@ -54,8 +55,8 @@ def load_settings() -> dict[str, str]:
     }
     # Hard guard: this script sets known passwords, so it must never touch production.
     host = urlparse(s["kc_url"]).hostname
-    if s["env"].lower() == "production" or host not in ("localhost", "127.0.0.1"):
-        fail(f"refusing to run: ENVIRONMENT={s['env']!r}, Keycloak host={host!r} (dev/localhost only)")
+    if s["env"].lower() == "production" or host not in ("localhost", "127.0.0.1", "keycloak"):
+        fail(f"refusing to run: ENVIRONMENT={s['env']!r}, Keycloak host={host!r} (dev/localhost/keycloak only)")
     if not s["kc_admin_pw"]:
         fail("KC_BOOTSTRAP_ADMIN_PASSWORD is not set in .env")
     return s

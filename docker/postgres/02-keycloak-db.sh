@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # ============================================================
 # Creates Keycloak's own database and login role.
 # ============================================================
@@ -8,7 +8,7 @@
 # Safe to run more than once: it skips what already exists.
 # Needs KEYCLOAK_DB_PASSWORD in the postgres container's env.
 # ============================================================
-set -euo pipefail
+set -eu
 
 if [ -z "${KEYCLOAK_DB_PASSWORD:-}" ]; then
   echo "02-keycloak-db.sh: KEYCLOAK_DB_PASSWORD is not set" >&2
