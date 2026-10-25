@@ -41,8 +41,7 @@ export default function UserManagement() {
     is_active: true,
   });
 
-  // ─── Queries ────────────────────────────────────────────────
-  const { data: apiUsers = [], isLoading, isRefetching, refetch } = useQuery({
+  const { data: apiUsers = [], isLoading } = useQuery({
     queryKey: ["users"],
     queryFn: () => userApi.list(),
   });
@@ -137,23 +136,7 @@ export default function UserManagement() {
       {/* Top Title Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2.5">
-            <Users className="w-7 h-7 text-brand-600" />
-            System Administrators & Roles
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Directory of platform administrators provisioned via Keycloak Identity Provider.
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => refetch()}
-            disabled={isRefetching}
-            className="p-2.5 text-gray-500 hover:text-brand-600 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200"
-            title="Refresh Administrators"
-          >
-            <RefreshCw className={`w-4 h-4 ${isRefetching ? "animate-spin text-brand-600" : ""}`} />
-          </button>
+          <h1 className="text-xl font-semibold text-slate-900">Administrators</h1>
         </div>
       </div>
 
@@ -291,22 +274,22 @@ export default function UserManagement() {
                               is_active: !usr.is_active,
                             })
                           }
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border transition-all ${
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
                             usr.is_active
-                              ? "bg-gray-100 text-black border-gray-300 hover:bg-gray-200"
-                              : "bg-red-50 text-red-700 border-red-300 hover:bg-red-100"
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                              : "bg-red-50 text-red-700 border-red-200 hover:bg-red-100"
                           }`}
                           title="Click to toggle user status"
                         >
                           {usr.is_active ? (
                             <>
-                              <CheckCircle2 className="w-3.5 h-3.5 text-black" />
-                              ACTIVE
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                              Active
                             </>
                           ) : (
                             <>
                               <XCircle className="w-3.5 h-3.5 text-red-600" />
-                              INACTIVE
+                              Inactive
                             </>
                           )}
                         </button>

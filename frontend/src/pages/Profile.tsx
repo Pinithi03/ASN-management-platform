@@ -1,5 +1,4 @@
 import { useState, useRef } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   Building2,
   ShieldCheck,
@@ -27,7 +26,6 @@ import {
 } from "@/utils/draftStorage";
 
 export default function Profile() {
-  const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
 
@@ -481,11 +479,9 @@ export default function Profile() {
             <div className="p-4 bg-amber-50/80 rounded-xl border border-amber-200/80 flex items-start gap-3 text-xs text-amber-900">
               <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
               <div>
-                <p className="font-bold">Sequence Locked to Prevent Collisions</p>
+                <p className="font-bold">Sequence Locked</p>
                 <p className="mt-0.5 text-amber-800 leading-relaxed">
-                  This field is editable only once during onboarding to ensure unique 20-digit handling unit numbering. 
-                  If you need to change, re-align, or increment your current HU sequence, please request assistance from your{" "}
-                  <strong>System Administrator</strong>. Admins can update this field directly from the Admin Dashboard.
+                  To modify or re-align your HU sequence, please contact your System Administrator.
                 </p>
               </div>
             </div>
@@ -501,8 +497,8 @@ export default function Profile() {
                 </p>
                 <p className="mt-0.5 text-rose-800 leading-relaxed">
                   {isAdminEditOpen
-                    ? "As a System Administrator, you can update this supplier's last used HU number. Next carton generation will resume from this number + 1."
-                    : "Please enter the last used Handling Unit (HU) number from your factory or packing line (enter 0 if you are starting brand new). The system will generate your next cartons starting from this number + 1 (e.g. 0 ➔ 1)."}
+                    ? "Next carton generation will resume from this number + 1."
+                    : "Enter last used Handling Unit number (0 if starting fresh). Next carton will generate from this number + 1."}
                 </p>
               </div>
             </div>
@@ -522,8 +518,8 @@ export default function Profile() {
                     disabled={isSavingHu}
                     required
                   />
-                  <span className="text-[11px] text-gray-500 mt-1 block">
-                    💡 Enter your last used 20-digit HU or serial number (enter 0 if you are starting brand new). Your next created shipment carton will start directly from this number + 1 (e.g. 0 ➔ 1, or 50 ➔ 51).
+                  <span className="text-[11px] text-slate-500 mt-1 block">
+                    Next carton will generate from this number + 1 (e.g. 0 ➔ 1).
                   </span>
                 </div>
                 <button
@@ -683,29 +679,20 @@ export default function Profile() {
 
           {/* Action buttons */}
           <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-            <div className="text-xs text-gray-500 flex items-center gap-1.5">
-              <AlertCircle className="w-4 h-4 text-gray-400 shrink-0" />
-              <span>Clearing cache removes local unsent drafts and uploaded spreadsheet previews without affecting live POs.</span>
+            <div className="text-xs text-slate-500 flex items-center gap-1.5">
+              <AlertCircle className="w-4 h-4 text-slate-400 shrink-0" />
+              <span>Clearing cache removes local unsent drafts without affecting live POs.</span>
             </div>
 
             <div className="flex items-center gap-2.5">
               <button
                 type="button"
-                onClick={() => navigate("/drafts")}
-                className="px-4 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-xl transition-colors shadow-sm inline-flex items-center gap-2"
-              >
-                <FileEdit className="w-3.5 h-3.5 text-gray-500" />
-                View Drafts
-              </button>
-
-              <button
-                type="button"
                 disabled={isClearingCache || draftStorageInfo.draftCount === 0}
                 onClick={handleClearCache}
-                className={`px-4 py-2 text-xs font-semibold rounded-xl transition-all shadow-sm inline-flex items-center gap-2 ${
+                className={`px-4 py-2 text-xs font-semibold rounded-xl transition-all inline-flex items-center gap-2 cursor-pointer ${
                   draftStorageInfo.draftCount === 0
-                    ? "bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed"
-                    : "bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 hover:border-red-300"
+                    ? "bg-slate-50 text-slate-300 border border-slate-200 cursor-not-allowed"
+                    : "bg-white text-red-600 border border-slate-200 hover:bg-red-50 hover:border-red-200"
                 }`}
               >
                 {isClearingCache ? (
@@ -716,7 +703,7 @@ export default function Profile() {
                 ) : (
                   <>
                     <Trash2 className="w-3.5 h-3.5 text-red-600" />
-                    Clear Offline Cache & Drafts
+                    Clear Cache
                   </>
                 )}
               </button>

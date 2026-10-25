@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import {
   FileText,
   Search,
@@ -14,6 +14,7 @@ import {
   Calendar,
   X,
   ArrowRight,
+  ArrowLeft,
   Copy,
   Check,
   Building,
@@ -32,6 +33,7 @@ import { useAuthStore } from "../store/authStore";
 import type { PurchaseOrder } from "@/types/email";
 import { cn } from "@/utils/cn";
 import { resolvePlantAndLocation, KNOWN_PLANTS } from "@/utils/plantResolver";
+import PlantAccordionShowcase from "@/components/plants/PlantAccordionShowcase";
 
 const STATUS_OPTIONS = [
   { label: "All Statuses", value: "" },
@@ -99,6 +101,7 @@ export interface PurchaseOrdersProps {
 export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const user = useAuthStore((s) => s.user);
   const isSupplier = user?.role === "SUPPLIER";
   const supplierId = isSupplier ? (user?.supplier_id || user?.supplier_code || undefined) : undefined;
@@ -108,12 +111,24 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
       ? "excel"
       : "manual";
 
+  const plantFromUrl = searchParams.get("plant");
+  const viewFromUrl = searchParams.get("view");
+
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [poChips, setPoChips] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState("");
-  const [selectedPlant, setSelectedPlant] = useState<string>("ALL");
+  const [selectedPlant, setSelectedPlant] = useState<string>(
+    plantFromUrl && KNOWN_PLANTS[plantFromUrl.toUpperCase()] ? plantFromUrl.toUpperCase() : "ALL"
+  );
   const [selectedLocation, setSelectedLocation] = useState<string>("ALL");
+  const [viewMode, setViewMode] = useState<"hub" | "global" | "plant">(
+    plantFromUrl && KNOWN_PLANTS[plantFromUrl.toUpperCase()]
+      ? "plant"
+      : viewFromUrl === "global"
+      ? "global"
+      : "hub"
+  );
   const [crossPlantWarning, setCrossPlantWarning] = useState<{
     attemptedPO: string;
     targetPlant: string;
@@ -124,7 +139,7 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
   // searches that no longer include the selected rows.
   const [selectedPOMap, setSelectedPOMap] = useState<Map<string, PurchaseOrder>>(new Map());
   const selectedPOs = useMemo(() => new Set(selectedPOMap.keys()), [selectedPOMap]);
-  const canSelect = selectedPlant !== "ALL";
+  const canSelect = selectedPlant !== "ALL" || viewMode === "global";
 
   const clearSelection = () => {
     setSelectedPOMap(new Map());
@@ -136,11 +151,66 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
     setSelectedLocation("ALL");
     setPage(1);
     clearSelection();
+
+    const newParams = new URLSearchParams(searchParams);
+    if (plantId === "ALL") {
+      setViewMode("hub");
+      newParams.delete("plant");
+      newParams.delete("view");
+    } else {
+      setViewMode("plant");
+      newParams.set("plant", plantId);
+      newParams.delete("view");
+    }
+    setSearchParams(newParams, { replace: true });
+  };
+
+  const handleOpenWithPO = (plantId: string, poNumber: string) => {
+    setSelectedPlant(plantId);
+    setSelectedLocation("ALL");
+    setPoChips([poNumber.trim()]);
+    setSearch("");
+    setPage(1);
+    clearSelection();
+    setViewMode("plant");
+
+    const newParams = new URLSearchParams(searchParams);
+    newParams.set("plant", plantId);
+    newParams.delete("view");
+    setSearchParams(newParams, { replace: true });
   };
 
   // State for previewing a specific PO
   const [selectedPOForPreview, setSelectedPOForPreview] = useState<PurchaseOrder | null>(null);
   const [copiedPO, setCopiedPO] = useState(false);
+
+  // Query to fetch overview of all orders (used for live 5-plant accordion metrics & quick auto-detect PO search)
+  const { data: allOverviewData } = useQuery({
+    queryKey: ["purchaseOrdersOverviewAll", supplierId],
+    queryFn: () => poApi.list({ per_page: 200, supplier_id: supplierId }),
+    staleTime: 15000,
+    refetchInterval: 10000,
+  });
+  const allOrdersList: PurchaseOrder[] = allOverviewData?.items || [];
+
+  // Live order counts per plant
+  const plantCountsMap = useMemo(() => {
+    const counts: Record<string, number> = {
+      OMEGA: 0,
+      ALPHA: 0,
+      BENJI: 0,
+      SIRIO: 0,
+      VAVUNIYA: 0,
+    };
+    allOrdersList.forEach((po) => {
+      const dest = po.delivery_address || po.destination || po.client_code;
+      const res = resolvePlantAndLocation(dest, po.client_code);
+      if (counts[res.plantGroup] !== undefined) {
+        counts[res.plantGroup] += 1;
+      }
+    });
+    return counts;
+  }, [allOrdersList]);
 
   const { data, isLoading } = useQuery({
     queryKey: ["purchaseOrders", page, search, poChips, statusFilter, supplierId, selectedPlant, selectedLocation],
@@ -176,19 +246,22 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
   // Compute available storage locations for the currently selected plant
   const availableLocations = useMemo(() => {
     const locMap = new Map<string, number>();
-    orders.forEach((po) => {
+    const sourceOrders = selectedPlant === "ALL" ? orders : (allOrdersList.length > 0 ? allOrdersList : orders);
+    sourceOrders.forEach((po) => {
       const dest = po.delivery_address || po.destination || po.client_code;
       const res = resolvePlantAndLocation(dest, po.client_code);
       if (selectedPlant === "ALL" || res.plantGroup === selectedPlant || res.plantCode === selectedPlant) {
         const key = res.fullDeliveryAddress || res.storageLocation;
-        locMap.set(key, (locMap.get(key) || 0) + 1);
+        if (key) {
+          locMap.set(key, (locMap.get(key) || 0) + 1);
+        }
       }
     });
 
     return Array.from(locMap.entries())
       .map(([code, count]) => ({ code, count }))
       .sort((a, b) => b.count - a.count);
-  }, [orders, selectedPlant]);
+  }, [orders, allOrdersList, selectedPlant]);
 
   // Filter orders for display
   const displayedOrders = useMemo(() => {
@@ -412,11 +485,11 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
 
   return (
     <div className="p-6 space-y-6">
-      {/* Page Header */}
+      {/* Page Header with Mode Indicator & View Mode Switcher */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-semibold text-gray-900">Purchase Orders</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-gray-950">Purchase Orders</h1>
             {activeMode === "manual" ? (
               <span
                 className={cn(
@@ -443,349 +516,493 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
               </span>
             )}
           </div>
+          <p className="text-xs text-gray-500 mt-1">
+            Dispatch purchase orders scoped by destination factory plant to prevent delivery conflicts.
+          </p>
+        </div>
+
+        {/* View Switcher: Plant Delivery Hub vs Global Table */}
+        <div className="flex items-center gap-2 bg-gray-100 p-1 rounded-xl border border-gray-200 self-start sm:self-auto shadow-2xs">
+          <button
+            type="button"
+            onClick={() => selectPlant("ALL")}
+            className={cn(
+              "px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer",
+              selectedPlant === "ALL" && viewMode === "hub"
+                ? "bg-white text-gray-900 shadow-xs"
+                : "text-gray-600 hover:text-gray-900"
+            )}
+          >
+            <Factory className="w-3.5 h-3.5 text-blue-600" />
+            <span>Factory Plants (5 Hubs)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedPlant("ALL");
+              setViewMode("global");
+              const p = new URLSearchParams(searchParams);
+              p.set("view", "global");
+              p.delete("plant");
+              setSearchParams(p, { replace: true });
+            }}
+            className={cn(
+              "px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer",
+              viewMode === "global"
+                ? "bg-white text-gray-900 shadow-xs"
+                : "text-gray-600 hover:text-gray-900"
+            )}
+          >
+            <Layers className="w-3.5 h-3.5 text-gray-500" />
+            <span>All Orders ({allOrdersList.length > 0 ? allOrdersList.length : totalOrders})</span>
+          </button>
         </div>
       </div>
 
-      {/* Cross-Plant Selection Mismatch Warning */}
-      {crossPlantWarning && (
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 shadow-sm animate-in fade-in slide-in-from-top-1 duration-200">
-          <div className="flex items-start sm:items-center gap-3">
-            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
-            <div className="text-xs">
-              <span className="font-bold">Cannot Mix Plants in One Delivery: </span>
-              Your current selection contains orders for <span className="font-semibold underline">{crossPlantWarning.currentPlant}</span>.
-              Orders destined for <span className="font-semibold underline">{crossPlantWarning.targetPlant}</span> (e.g. #{crossPlantWarning.attemptedPO}) must be dispatched in a separate delivery.
-            </div>
-          </div>
-          <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
-            <button
-              type="button"
-              onClick={() => {
-                const attempted = orders.find((p) => p.po_number === crossPlantWarning.attemptedPO);
-                setSelectedPOMap(
-                  attempted ? new Map([[crossPlantWarning.attemptedPO, attempted]]) : new Map()
-                );
-                setCrossPlantWarning(null);
-              }}
-              className="px-3 py-1.5 text-xs font-semibold bg-amber-600 text-white hover:bg-amber-700 rounded-lg shadow-2xs transition-colors cursor-pointer"
-            >
-              Clear & Select #{crossPlantWarning.attemptedPO}
-            </button>
-            <button
-              type="button"
-              onClick={() => setCrossPlantWarning(null)}
-              className="p-1 hover:bg-amber-200/60 rounded-md text-amber-700 transition-colors cursor-pointer"
-              title="Dismiss warning"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
+      {/* ─── SHOWCASE MODE: Zone24x7 5-Plant Horizontal Accordion Showcase ─── */}
+      {selectedPlant === "ALL" && viewMode === "hub" ? (
+        <PlantAccordionShowcase
+          orders={allOrdersList.length > 0 ? allOrdersList : orders}
+          onSelectPlant={selectPlant}
+          onOpenWithPO={handleOpenWithPO}
+          onSwitchToGlobalView={() => {
+            setViewMode("global");
+            const p = new URLSearchParams(searchParams);
+            p.set("view", "global");
+            p.delete("plant");
+            setSearchParams(p, { replace: true });
+          }}
+          isSupplier={isSupplier}
+        />
+      ) : (
+        /* ─── PLANT WORKSPACE / GLOBAL LIST MODE ─── */
+        <div className="space-y-6">
+          {/* Breadcrumb & Plant Context Header (When inside a plant) */}
+          {selectedPlant !== "ALL" && KNOWN_PLANTS[selectedPlant] && (
+            <div className="p-5 rounded-2xl bg-gradient-to-r from-gray-900 via-gray-900 to-gray-950 text-white border border-gray-800 shadow-lg space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => selectPlant("ALL")}
+                    className="h-9 px-3 text-xs font-semibold text-gray-300 bg-gray-800 hover:bg-gray-700 hover:text-white rounded-xl border border-gray-700 transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
+                    title="Return to 5-Plant Showcase Hub"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    <span>All Plants</span>
+                  </button>
 
-      {/* Selected Action Banner */}
-      {selectedPOs.size > 0 && (
-        <div
-          className={cn(
-            "w-full flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border shadow-xs transition-all animate-in fade-in slide-in-from-top-1 duration-200",
-            isSupplier
-              ? "bg-emerald-50/80 border-emerald-200"
-              : "bg-blue-50/80 border-blue-200"
-          )}
-        >
-          <div className="flex items-center gap-3.5">
-            <div
-              className={cn(
-                "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg font-bold text-xs text-white shadow-xs",
-                isSupplier ? "bg-emerald-600" : "bg-blue-600"
-              )}
-            >
-              {selectedPOs.size}
-            </div>
-            <div>
-              <p
-                className={cn(
-                  "text-sm font-semibold leading-tight",
-                  isSupplier ? "text-emerald-950" : "text-blue-950"
-                )}
-              >
-                {selectedPOs.size} Purchase Order{selectedPOs.size > 1 ? "s" : ""} Selected
-                {currentSelectedPlantInfo ? (
-                  <span className="font-normal text-xs text-gray-600 ml-1.5">
-                    for <span className="font-semibold text-gray-900">{currentSelectedPlantInfo.plantName}</span> ({currentSelectedPlantInfo.plantCode})
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase text-white shadow-xs"
+                        style={{ backgroundColor: KNOWN_PLANTS[selectedPlant].accentHex }}
+                      >
+                        {KNOWN_PLANTS[selectedPlant].badge}
+                      </span>
+                      <h2 className="text-lg sm:text-xl font-bold tracking-tight text-white flex items-center gap-2">
+                        <span>{KNOWN_PLANTS[selectedPlant].name}</span>
+                        <span className="text-xs font-mono font-normal text-gray-400">
+                          ({KNOWN_PLANTS[selectedPlant].codePrefix}1 / {KNOWN_PLANTS[selectedPlant].codePrefix}2)
+                        </span>
+                      </h2>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {KNOWN_PLANTS[selectedPlant].location} · {KNOWN_PLANTS[selectedPlant].tagline}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-start sm:self-auto">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    Single-Plant Scope Active
                   </span>
-                ) : null}
-              </p>
-              <p
-                className={cn(
-                  "text-xs mt-0.5",
-                  isSupplier ? "text-emerald-700" : "text-blue-700"
-                )}
-              >
-                {activeMode === "manual"
-                  ? "Ready to dispatch via Manual Packing Wizard (Single-Plant Scoped)"
-                  : "Ready to dispatch via 12-Column Excel Drop Manifest"}
-              </p>
+                </div>
+              </div>
+
+              {/* Quick Switcher Bar: Jump directly to another plant without going back */}
+              <div className="pt-3 border-t border-gray-800/80 flex flex-wrap items-center gap-2">
+                <span className="text-xs text-gray-400 mr-1 flex items-center gap-1">
+                  <Factory className="w-3.5 h-3.5 text-gray-400" />
+                  <span>Switch Plant:</span>
+                </span>
+                {Object.entries(KNOWN_PLANTS).map(([pId, plant]) => {
+                  const isCurrent = selectedPlant === pId;
+                  const count = plantCountsMap[pId] || 0;
+                  return (
+                    <button
+                      key={pId}
+                      type="button"
+                      onClick={() => selectPlant(pId)}
+                      className={cn(
+                        "px-3 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer",
+                        isCurrent
+                          ? "bg-white text-gray-950 font-bold shadow-xs"
+                          : "bg-gray-800/80 text-gray-300 hover:bg-gray-700/80 hover:text-white border border-gray-700"
+                      )}
+                    >
+                      <span>{plant.name.replace(" Ltd", "")}</span>
+                      <span
+                        className={cn(
+                          "px-1.5 py-0.2 rounded-full text-[10px] font-mono",
+                          isCurrent ? "bg-gray-200 text-gray-800" : "bg-gray-900 text-gray-400"
+                        )}
+                      >
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
 
-          <div className="flex items-center gap-2.5 self-end sm:self-auto">
-            <button
-              type="button"
-              onClick={clearSelection}
-              className="h-10 px-4 text-xs font-semibold text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
-            >
-              <X className="w-3.5 h-3.5 text-gray-400" />
-              Clear Selection
-            </button>
-
-            {activeMode === "manual" ? (
+          {/* Global View Banner (When viewing all orders across plants) */}
+          {selectedPlant === "ALL" && viewMode === "global" && (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-blue-50 border border-blue-200 text-blue-950 shadow-2xs">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-xs">
+                  ALL
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-blue-950">Global Orders View (Multi-Plant)</h3>
+                  <p className="text-xs text-blue-700 mt-0.5">
+                    Viewing orders across all 5 plants. Deliveries must still be grouped per factory plant.
+                  </p>
+                </div>
+              </div>
               <button
                 type="button"
-                onClick={() => handleCreateShipment("web")}
-                className={cn(
-                  "h-10 px-5 text-xs font-semibold text-white rounded-lg shadow-xs flex items-center gap-2 transition-all active:scale-[0.99] cursor-pointer",
-                  isSupplier
-                    ? "bg-emerald-600 hover:bg-emerald-700"
-                    : "bg-blue-600 hover:bg-blue-700"
-                )}
+                onClick={() => selectPlant("ALL")}
+                className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-white text-blue-700 border border-blue-300 hover:bg-blue-50/80 shadow-2xs transition-colors cursor-pointer self-start sm:self-auto flex items-center gap-1.5"
               >
-                <PackagePlus className="w-4 h-4" />
-                <span>+ Create Delivery</span>
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Return to 5-Plant Hub</span>
               </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => handleCreateShipment("excel")}
-                className={cn(
-                  "h-10 px-5 text-xs font-semibold text-white rounded-lg shadow-xs flex items-center gap-2 transition-all active:scale-[0.99] cursor-pointer",
-                  isSupplier
-                    ? "bg-emerald-600 hover:bg-emerald-700"
-                    : "bg-blue-600 hover:bg-blue-700"
-                )}
-              >
-                <FileSpreadsheet className="w-4 h-4" />
-                <span>Excel Drop Delivery</span>
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Level 1: Plant Hierarchy Selector Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5">
-        {[{ id: "ALL", label: "All Plants" }, ...Object.entries(KNOWN_PLANTS).map(([pId, plant]) => ({
-          id: pId,
-          label: plant.name.replace(" Ltd", ""),
-        }))].map((card) => {
-          const isSelected = selectedPlant === card.id;
-          return (
-            <button
-              key={card.id}
-              type="button"
-              onClick={() => selectPlant(card.id)}
-              className={cn(
-                "p-3 min-h-[72px] rounded-xl border text-left transition-all cursor-pointer relative flex items-center",
-                isSelected
-                  ? isSupplier
-                    ? "bg-emerald-50/80 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs"
-                    : "bg-blue-50/80 border-blue-500 ring-2 ring-blue-500/20 shadow-xs"
-                  : "bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50/70"
-              )}
-            >
-              <span className="text-xs font-bold text-gray-900 truncate" title={card.label}>
-                {card.label}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Level 2: Storage Location Cards (only when a plant is selected) */}
-      {selectedPlant !== "ALL" && availableLocations.length > 0 && (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-600">
-              <Warehouse className="w-3.5 h-3.5 text-blue-600" />
-              <span>Delivery Locations</span>
-              <span className="text-gray-400 font-normal">— {KNOWN_PLANTS[selectedPlant]?.name.replace(" Ltd", "") || selectedPlant}</span>
             </div>
-            {selectedLocation !== "ALL" && (
-              <button
-                type="button"
-                onClick={() => { setSelectedLocation("ALL"); setPage(1); }}
-                className="text-xs text-blue-600 hover:text-blue-800 font-medium cursor-pointer flex items-center gap-1"
-              >
-                <X className="w-3 h-3" /> Clear filter
-              </button>
-            )}
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
-            {availableLocations.map((loc) => {
-              const isLocSelected = selectedLocation === loc.code;
-              return (
+          )}
+
+          {/* Cross-Plant Selection Mismatch Warning */}
+          {crossPlantWarning && (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 shadow-sm animate-in fade-in slide-in-from-top-1 duration-200">
+              <div className="flex items-start sm:items-center gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
+                <div className="text-xs">
+                  <span className="font-bold">Cannot Mix Plants in One Delivery: </span>
+                  Your current selection contains orders for <span className="font-semibold underline">{crossPlantWarning.currentPlant}</span>.
+                  Orders destined for <span className="font-semibold underline">{crossPlantWarning.targetPlant}</span> (e.g. #{crossPlantWarning.attemptedPO}) must be dispatched in a separate delivery.
+                </div>
+              </div>
+              <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
                 <button
-                  key={loc.code}
                   type="button"
                   onClick={() => {
-                    setSelectedLocation(isLocSelected ? "ALL" : loc.code);
+                    const attempted = orders.find((p) => p.po_number === crossPlantWarning.attemptedPO);
+                    setSelectedPOMap(
+                      attempted ? new Map([[crossPlantWarning.attemptedPO, attempted]]) : new Map()
+                    );
+                    setCrossPlantWarning(null);
+                  }}
+                  className="px-3 py-1.5 text-xs font-semibold bg-amber-600 text-white hover:bg-amber-700 rounded-lg shadow-2xs transition-colors cursor-pointer"
+                >
+                  Clear & Select #{crossPlantWarning.attemptedPO}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCrossPlantWarning(null)}
+                  className="p-1 hover:bg-amber-200/60 rounded-md text-amber-700 transition-colors cursor-pointer"
+                  title="Dismiss warning"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Selected Action Banner */}
+          {selectedPOs.size > 0 && (
+            <div
+              className={cn(
+                "w-full flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border shadow-xs transition-all animate-in fade-in slide-in-from-top-1 duration-200",
+                isSupplier
+                  ? "bg-emerald-50/80 border-emerald-200"
+                  : "bg-blue-50/80 border-blue-200"
+              )}
+            >
+              <div className="flex items-center gap-3.5">
+                <div
+                  className={cn(
+                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg font-bold text-xs text-white shadow-xs",
+                    isSupplier ? "bg-emerald-600" : "bg-blue-600"
+                  )}
+                >
+                  {selectedPOs.size}
+                </div>
+                <div>
+                  <p
+                    className={cn(
+                      "text-sm font-semibold leading-tight",
+                      isSupplier ? "text-emerald-950" : "text-blue-950"
+                    )}
+                  >
+                    {selectedPOs.size} Purchase Order{selectedPOs.size > 1 ? "s" : ""} Selected
+                    {currentSelectedPlantInfo ? (
+                      <span className="font-normal text-xs text-gray-600 ml-1.5">
+                        for <span className="font-semibold text-gray-900">{currentSelectedPlantInfo.plantName}</span> ({currentSelectedPlantInfo.plantCode})
+                      </span>
+                    ) : null}
+                  </p>
+                  <p
+                    className={cn(
+                      "text-xs mt-0.5",
+                      isSupplier ? "text-emerald-700" : "text-blue-700"
+                    )}
+                  >
+                    {activeMode === "manual"
+                      ? "Manual Packing Wizard"
+                      : "Excel Drop Manifest"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2.5 self-end sm:self-auto">
+                <button
+                  type="button"
+                  onClick={clearSelection}
+                  className="h-10 px-4 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
+                >
+                  <X className="w-3.5 h-3.5 text-slate-400" />
+                  Clear Selection
+                </button>
+
+                {activeMode === "manual" ? (
+                  <button
+                    type="button"
+                    onClick={() => handleCreateShipment("web")}
+                    className={cn(
+                      "h-10 px-5 text-xs font-semibold text-white rounded-lg shadow-xs flex items-center gap-2 transition-all active:scale-[0.99] cursor-pointer",
+                      isSupplier
+                        ? "bg-emerald-600 hover:bg-emerald-700"
+                        : "bg-blue-600 hover:bg-blue-700"
+                    )}
+                  >
+                    <PackagePlus className="w-4 h-4" />
+                    <span>+ Create Delivery</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleCreateShipment("excel")}
+                    className={cn(
+                      "h-10 px-5 text-xs font-semibold text-white rounded-lg shadow-xs flex items-center gap-2 transition-all active:scale-[0.99] cursor-pointer",
+                      isSupplier
+                        ? "bg-emerald-600 hover:bg-emerald-700"
+                        : "bg-blue-600 hover:bg-blue-700"
+                    )}
+                  >
+                    <FileSpreadsheet className="w-4 h-4" />
+                    <span>Excel Drop Delivery</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Level 2: Storage Location Filter Pills (User: e plant eka athule uda ara storage location ekai search bar ekai thiynwa) */}
+          {selectedPlant !== "ALL" && (
+            <div className="p-4 bg-white rounded-2xl border border-gray-200 shadow-2xs space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-xs font-bold text-gray-800">
+                  <Warehouse className="w-4 h-4 text-blue-600" />
+                  <span>Delivery Storage Locations</span>
+                  <span className="text-gray-400 font-normal">
+                    — {KNOWN_PLANTS[selectedPlant]?.name.replace(" Ltd", "")}
+                  </span>
+                </div>
+                {selectedLocation !== "ALL" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedLocation("ALL");
+                      setPage(1);
+                    }}
+                    className="text-xs text-blue-600 hover:text-blue-800 font-semibold cursor-pointer flex items-center gap-1"
+                  >
+                    <X className="w-3.5 h-3.5" /> Clear Location Filter
+                  </button>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {/* All Locations Pill */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedLocation("ALL");
                     setPage(1);
                   }}
                   className={cn(
-                    "p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col gap-1",
-                    isLocSelected
+                    "px-3.5 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer flex items-center gap-2",
+                    selectedLocation === "ALL"
                       ? isSupplier
-                        ? "bg-emerald-50/80 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs"
-                        : "bg-blue-50/80 border-blue-500 ring-2 ring-blue-500/20 shadow-xs"
-                      : "bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50/70"
+                        ? "bg-emerald-50 text-emerald-900 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs"
+                        : "bg-blue-50 text-blue-900 border-blue-500 ring-2 ring-blue-500/20 shadow-xs"
+                      : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"
                   )}
                 >
-                  <span className="text-xs font-mono font-bold text-gray-900">{loc.code}</span>
-                  <span className={cn(
-                    "text-[10px] font-semibold",
-                    isLocSelected
-                      ? isSupplier ? "text-emerald-600" : "text-blue-600"
-                      : "text-gray-400"
-                  )}>
-                    {loc.count} {loc.count === 1 ? "order" : "orders"}
+                  <span>All Storage Locations</span>
+                  <span
+                    className={cn(
+                      "px-1.5 py-0.2 rounded-full text-[10px] font-mono",
+                      selectedLocation === "ALL"
+                        ? isSupplier ? "bg-emerald-200/80 text-emerald-900" : "bg-blue-200/80 text-blue-900"
+                        : "bg-gray-200 text-gray-700"
+                    )}
+                  >
+                    {totalOrders}
                   </span>
                 </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
+                {/* Specific Location Pills */}
+                {availableLocations.map((loc) => {
+                  const isLocSelected = selectedLocation === loc.code;
+                  return (
+                    <button
+                      key={loc.code}
+                      type="button"
+                      onClick={() => {
+                        setSelectedLocation(isLocSelected ? "ALL" : loc.code);
+                        setPage(1);
+                      }}
+                      className={cn(
+                        "px-3.5 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer flex items-center gap-2",
+                        isLocSelected
+                          ? isSupplier
+                            ? "bg-emerald-50 text-emerald-900 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs"
+                            : "bg-blue-50 text-blue-900 border-blue-500 ring-2 ring-blue-500/20 shadow-xs"
+                          : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50 hover:border-gray-300"
+                      )}
+                    >
+                      <span className="font-mono">{loc.code}</span>
+                      <span
+                        className={cn(
+                          "px-1.5 py-0.2 rounded-full text-[10px] font-mono",
+                          isLocSelected
+                            ? isSupplier ? "bg-emerald-200/80 text-emerald-900" : "bg-blue-200/80 text-blue-900"
+                            : "bg-gray-100 text-gray-600 border border-gray-200"
+                        )}
+                      >
+                        {loc.count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
-
-      {/* Search & Filter Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-start gap-3">
-        <div className="flex-1">
-          <div className="relative flex flex-wrap items-center gap-1.5 min-h-[38px] pl-10 pr-9 py-1.5 text-sm border border-gray-200 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 bg-white">
-            <Search className="absolute left-3 top-[11px] w-4 h-4 text-gray-400" />
-            {poChips.map((chip) => (
-              <span
-                key={chip}
-                className={cn(
-                  "inline-flex items-center gap-1 pl-2 pr-1 py-0.5 text-xs font-mono font-semibold rounded-md border",
-                  missingChips.includes(chip)
-                    ? "bg-gray-50 text-gray-400 border-gray-200 line-through"
-                    : isSupplier
-                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                    : "bg-blue-50 text-blue-700 border-blue-200"
+          {/* Search & Filter Bar (Right below storage locations) */}
+          <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+            <div className="flex-1">
+              <div className="relative flex flex-wrap items-center gap-1.5 min-h-[42px] pl-10 pr-9 py-1.5 text-sm border border-gray-200 rounded-xl focus-within:ring-2 focus-within:ring-blue-500 bg-white shadow-2xs">
+                <Search className="absolute left-3.5 top-[13px] w-4 h-4 text-gray-400" />
+                {poChips.map((chip) => (
+                  <span
+                    key={chip}
+                    className={cn(
+                      "inline-flex items-center gap-1 pl-2 pr-1 py-0.5 text-xs font-mono font-semibold rounded-md border",
+                      missingChips.includes(chip)
+                        ? "bg-gray-50 text-gray-400 border-gray-200 line-through"
+                        : isSupplier
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                        : "bg-blue-50 text-blue-700 border-blue-200"
+                    )}
+                  >
+                    {chip}
+                    <button
+                      type="button"
+                      onClick={() => removePOChip(chip)}
+                      className="p-0.5 rounded hover:bg-black/5 cursor-pointer"
+                      title={`Remove ${chip}`}
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+                <input
+                  type="text"
+                  placeholder={
+                    poChips.length > 0
+                      ? "Add PO number..."
+                      : selectedPlant !== "ALL"
+                      ? `Search PO, style, notation in ${KNOWN_PLANTS[selectedPlant]?.name.replace(" Ltd", "")}...`
+                      : "Search PO, client, style, or paste PO numbers..."
+                  }
+                  value={search}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setPage(1);
+                  }}
+                  onKeyDown={(e) => {
+                    if ((e.key === "Enter" || e.key === ",") && isPOToken(search)) {
+                      e.preventDefault();
+                      setSearch(addPOChips(search));
+                    } else if (e.key === "Backspace" && search === "" && poChips.length > 0) {
+                      removePOChip(poChips[poChips.length - 1]);
+                    }
+                  }}
+                  onPaste={(e) => {
+                    const pasted = e.clipboardData.getData("text");
+                    if (pasted.split(/[\s,;]+/).some(isPOToken)) {
+                      e.preventDefault();
+                      setSearch(addPOChips(`${search} ${pasted}`));
+                    }
+                  }}
+                  className="flex-1 min-w-[160px] py-0.5 bg-transparent focus:outline-none text-sm text-gray-900"
+                />
+                {(poChips.length > 0 || search) && (
+                  <button
+                    type="button"
+                    onClick={clearSearch}
+                    className="absolute right-2.5 top-[11px] p-0.5 text-gray-400 hover:text-gray-600 rounded cursor-pointer"
+                    title="Clear search"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 )}
-              >
-                {chip}
-                <button
-                  type="button"
-                  onClick={() => removePOChip(chip)}
-                  className="p-0.5 rounded hover:bg-black/5 cursor-pointer"
-                  title={`Remove ${chip}`}
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
-            ))}
-            <input
-              type="text"
-              placeholder={poChips.length > 0 ? "Add PO number..." : "Search PO, client, style, or paste PO numbers..."}
-              value={search}
+              </div>
+              {poChips.length > 0 && !isLoading && (
+                <p className="text-xs text-gray-500 mt-1.5">
+                  Found {poChips.length - missingChips.length} of {poChips.length}
+                  {missingChips.length > 0 && (
+                    <span className="text-amber-700">
+                      {" · "}Not found{selectedPlant !== "ALL" ? ` in ${KNOWN_PLANTS[selectedPlant]?.name.replace(" Ltd", "")}` : ""}:{" "}
+                      <span className="font-mono">{missingChips.join(", ")}</span>
+                    </span>
+                  )}
+                </p>
+              )}
+            </div>
+            <select
+              value={statusFilter}
               onChange={(e) => {
-                setSearch(e.target.value);
+                setStatusFilter(e.target.value);
                 setPage(1);
               }}
-              onKeyDown={(e) => {
-                if ((e.key === "Enter" || e.key === ",") && isPOToken(search)) {
-                  e.preventDefault();
-                  setSearch(addPOChips(search));
-                } else if (e.key === "Backspace" && search === "" && poChips.length > 0) {
-                  removePOChip(poChips[poChips.length - 1]);
-                }
-              }}
-              onPaste={(e) => {
-                const pasted = e.clipboardData.getData("text");
-                if (pasted.split(/[\s,;]+/).some(isPOToken)) {
-                  e.preventDefault();
-                  setSearch(addPOChips(`${search} ${pasted}`));
-                }
-              }}
-              className="flex-1 min-w-[160px] py-0.5 bg-transparent focus:outline-none"
-            />
-            {(poChips.length > 0 || search) && (
-              <button
-                type="button"
-                onClick={clearSearch}
-                className="absolute right-2.5 top-[9px] p-0.5 text-gray-400 hover:text-gray-600 rounded cursor-pointer"
-                title="Clear search"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
+              className="px-3.5 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white min-w-[180px] text-gray-700 shadow-2xs font-medium"
+            >
+              {STATUS_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
           </div>
-          {poChips.length > 0 && !isLoading && (
-            <p className="text-xs text-gray-500 mt-1.5">
-              Found {poChips.length - missingChips.length} of {poChips.length}
-              {missingChips.length > 0 && (
-                <span className="text-amber-700">
-                  {" · "}Not found{selectedPlant !== "ALL" ? ` in ${KNOWN_PLANTS[selectedPlant]?.name.replace(" Ltd", "")}` : ""}:{" "}
-                  <span className="font-mono">{missingChips.join(", ")}</span>
-                </span>
-              )}
-            </p>
-          )}
-        </div>
-        <select
-          value={statusFilter}
-          onChange={(e) => {
-            setStatusFilter(e.target.value);
-            setPage(1);
-          }}
-          className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white min-w-[180px] text-gray-700"
-        >
-          {STATUS_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-      </div>
 
       {/* Main Table */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        {/* Google-Style Top Pagination Toolbar */}
-        <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200/90 bg-white select-none">
-          <div className="text-xs text-gray-500 font-medium">
-            <span className="font-semibold text-gray-700">{displayedOrders.length.toLocaleString()}</span> purchase orders
-            {(selectedPlant !== "ALL" || selectedLocation !== "ALL") && (
-              <span className="ml-1 text-gray-400">
-                (filtered from {totalOrders.toLocaleString()})
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-1 text-xs text-gray-600">
-            <span className="px-2 font-normal tracking-tight text-gray-600">
-              {paginationText}
-            </span>
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page <= 1}
-              className="w-8 h-8 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
-              title="Previous page"
-              aria-label="Previous page"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page >= totalPages}
-              className="w-8 h-8 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
-              title="Next page"
-              aria-label="Next page"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+      <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
         {isLoading ? (
           <div className="flex items-center justify-center py-24 text-gray-400">
             <RefreshCw className="w-6 h-6 animate-spin mr-2 text-blue-500" />
@@ -1067,20 +1284,20 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
           </div>
         )}
 
-        {/* Google-Style Bottom Pagination Footer */}
+        {/* Bottom Pagination Footer */}
         {totalOrders > 0 && (
-          <div className="flex items-center justify-between px-6 py-3 border-t border-gray-200 bg-gray-50/70 select-none text-xs text-gray-600">
-            <div className="font-medium text-gray-500">
-              <span className="font-semibold text-gray-700">{totalOrders.toLocaleString()} total orders</span>
+          <div className="flex items-center justify-between px-6 py-3 border-t border-slate-200 bg-slate-50/70 select-none text-xs text-slate-500">
+            <div className="font-medium text-slate-500">
+              <span className="font-semibold text-slate-700">{totalOrders.toLocaleString()} total orders</span>
             </div>
-            <div className="flex items-center gap-1 text-xs text-gray-600">
-              <span className="px-2 font-normal tracking-tight text-gray-600">
+            <div className="flex items-center gap-1 text-xs text-slate-600">
+              <span className="px-2 font-normal tracking-tight text-slate-600">
                 {paginationText}
               </span>
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page <= 1}
-                className="w-8 h-8 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-200/70 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+                className="w-8 h-8 rounded-full flex items-center justify-center text-slate-600 hover:bg-slate-200/70 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
                 title="Previous page"
                 aria-label="Previous page"
               >
@@ -1089,7 +1306,7 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
               <button
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page >= totalPages}
-                className="w-8 h-8 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-200/70 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+                className="w-8 h-8 rounded-full flex items-center justify-center text-slate-600 hover:bg-slate-200/70 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
                 title="Next page"
                 aria-label="Next page"
               >
@@ -1099,8 +1316,10 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
           </div>
         )}
       </div>
+    </div>
+  )}
 
-      {/* PO Preview & Details Modal */}
+  {/* PO Preview & Details Modal */}
       {activePO && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 sm:p-6 animate-in fade-in">
           <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl max-w-6xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">

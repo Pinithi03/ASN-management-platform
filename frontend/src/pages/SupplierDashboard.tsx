@@ -15,7 +15,6 @@ import {
   TrendingUp,
   Box,
   Layers,
-  FileSpreadsheet,
   Printer,
   ChevronRight,
 } from "lucide-react";
@@ -24,7 +23,7 @@ import { shipmentService } from "@/services/shipmentService";
 import { useAuthStore } from "@/store/authStore";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
   AreaChart,
   Area,
@@ -138,7 +137,6 @@ const getPoProductDesc = (po: any): string => {
 export default function SupplierDashboard() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
-  const [hoveredKpi, setHoveredKpi] = useState<number | null>(null);
 
   // Supplier identity identifier
   const supplierId = user?.supplier_id || user?.supplier_code || undefined;
@@ -349,109 +347,87 @@ export default function SupplierDashboard() {
   // ─── Top KPI Cards Definition ──────────────────────────────────
   const kpiCards = [
     {
-      label: "My Dispatched Volume",
+      label: "Dispatched Volume",
       value: shipmentMetrics.totalPieces > 0 ? `${shipmentMetrics.totalPieces.toLocaleString()} pcs` : "0 pcs",
       icon: Truck,
-      gradient: "from-emerald-600 via-teal-600 to-teal-700",
-      bgGlow: "bg-emerald-500/10",
-      iconBg: "bg-emerald-500/20",
-      iconColor: "text-emerald-400",
+      iconBg: "bg-emerald-50 text-emerald-600 border-emerald-100",
       subtitle: `${shipmentMetrics.totalBoxes.toLocaleString()} cartons · ${shipmentMetrics.totalCount} dispatches`,
-      subtitleColor: "text-emerald-200",
-      trendBadge: "Dispatched",
-      badgeColor: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
+      badge: "Dispatched",
+      badgeStyle: "bg-emerald-50 text-emerald-700 border-emerald-200",
       onClick: () => navigate("/shipments"),
     },
     {
-      label: "Upcoming Deliveries Due",
+      label: "Deliveries Due Soon",
       value: `${urgentCount + overdueCount} Orders`,
       icon: AlertTriangle,
-      gradient: overdueCount > 0 ? "from-rose-600 via-rose-700 to-amber-700" : "from-amber-600 via-amber-700 to-orange-700",
-      bgGlow: "bg-amber-500/10",
-      iconBg: "bg-amber-500/20",
-      iconColor: overdueCount > 0 ? "text-rose-400" : "text-amber-400",
-      subtitle: `${overdueCount > 0 ? `${overdueCount} overdue · ` : ""}${urgentCount} urgent (≤3 days)`,
-      subtitleColor: "text-amber-200",
-      trendBadge: overdueCount > 0 ? "Urgent Action" : "Approaching",
-      badgeColor: overdueCount > 0 ? "bg-rose-500/20 text-rose-300 border-rose-500/30" : "bg-amber-500/20 text-amber-300 border-amber-500/30",
+      iconBg: overdueCount > 0 ? "bg-red-50 text-red-600 border-red-100" : "bg-amber-50 text-amber-600 border-amber-100",
+      subtitle: `${overdueCount > 0 ? `${overdueCount} overdue · ` : ""}${urgentCount} urgent (≤3d)`,
+      badge: overdueCount > 0 ? "Attention" : "Approaching",
+      badgeStyle: overdueCount > 0 ? "bg-red-50 text-red-700 border-red-200" : "bg-amber-50 text-amber-700 border-amber-200",
       onClick: () => navigate("/purchase-orders"),
     },
     {
-      label: "Unprocessed Orders (New)",
+      label: "Unprocessed Orders",
       value: `${poStats?.active ?? 0} POs`,
       icon: Package,
-      gradient: "from-blue-600 via-indigo-600 to-indigo-700",
-      bgGlow: "bg-blue-500/10",
-      iconBg: "bg-blue-500/20",
-      iconColor: "text-blue-400",
-      subtitle: `Ready for carton packing & ASN (${unprocessedRate}% of portfolio)`,
-      subtitleColor: "text-blue-200",
-      trendBadge: "Awaiting Action",
-      badgeColor: "bg-blue-500/20 text-blue-300 border-blue-500/30",
+      iconBg: "bg-slate-100 text-slate-700 border-slate-200",
+      subtitle: `${unprocessedRate}% of assigned POs`,
+      badge: "Open",
+      badgeStyle: "bg-slate-100 text-slate-700 border-slate-200",
       onClick: () => navigate("/purchase-orders?status=ACTIVE"),
     },
     {
       label: "Partial Fulfillment",
       value: `${poStats?.partial ?? 0} POs`,
       icon: Layers,
-      gradient: "from-purple-600 via-indigo-600 to-purple-700",
-      bgGlow: "bg-purple-500/10",
-      iconBg: "bg-purple-500/20",
-      iconColor: "text-purple-400",
-      subtitle: `Split shipments active (${fulfillmentRate}% fully fulfilled)`,
-      subtitleColor: "text-purple-200",
-      trendBadge: `${partialRate}% Split Rate`,
-      badgeColor: "bg-purple-500/20 text-purple-300 border-purple-500/30",
+      iconBg: "bg-amber-50 text-amber-600 border-amber-100",
+      subtitle: `${fulfillmentRate}% completed overall`,
+      badge: `${partialRate}% Split`,
+      badgeStyle: "bg-amber-50 text-amber-700 border-amber-200",
       onClick: () => navigate("/purchase-orders?status=PARTIAL"),
     },
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-6 md:p-8 space-y-6 font-sans transition-colors">
+    <div className="p-6 space-y-6 bg-slate-50 min-h-screen text-slate-900 font-sans">
       {isLoading ? (
         <div className="flex flex-col items-center justify-center py-24 gap-4">
-          <div className="w-12 h-12 rounded-full border-4 border-emerald-600/30 border-t-emerald-600 animate-spin" />
-          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 animate-pulse">
-            Loading supplier dispatch analytics & order deadlines...
+          <div className="w-10 h-10 rounded-full border-3 border-emerald-600/30 border-t-emerald-600 animate-spin" />
+          <p className="text-xs font-medium text-slate-500 animate-pulse">
+            Loading supplier dispatch analytics...
           </p>
         </div>
       ) : (
         <>
           {/* ─── Top 4 KPI Metric Cards ───────────────────────────── */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {kpiCards.map((kpi, idx) => {
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {kpiCards.map((kpi) => {
               const Icon = kpi.icon;
               return (
                 <div
                   key={kpi.label}
                   onClick={kpi.onClick}
-                  onMouseEnter={() => setHoveredKpi(idx)}
-                  onMouseLeave={() => setHoveredKpi(null)}
-                  className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${kpi.gradient} p-5 text-white shadow-lg cursor-pointer transition-all duration-300 select-none ${
-                    hoveredKpi === idx ? "scale-[1.02] shadow-2xl -translate-y-1" : "hover:shadow-xl"
-                  }`}
+                  className="rounded-xl bg-white border border-slate-200 p-5 shadow-2xs hover:border-slate-300 hover:shadow-sm cursor-pointer transition-all"
                 >
-                  <div className="absolute -top-12 -right-12 w-32 h-32 rounded-full bg-white/10 blur-2xl pointer-events-none" />
-
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-semibold text-white/80 tracking-wide uppercase">
+                    <span className="text-xs font-semibold text-slate-500">
                       {kpi.label}
                     </span>
-                    <div className="w-9 h-9 rounded-xl bg-white/15 backdrop-blur-md flex items-center justify-center border border-white/20">
-                      <Icon className="w-4 h-4 text-white" />
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center border ${kpi.iconBg}`}>
+                      <Icon className="w-4 h-4" />
                     </div>
                   </div>
 
-                  <div className="text-2xl lg:text-3xl font-extrabold tracking-tight mb-2">
+                  <div className="text-2xl font-bold text-slate-900 tracking-tight mb-2.5">
                     {kpi.value}
                   </div>
 
-                  <div className="flex items-center justify-between pt-2 border-t border-white/15 text-xs">
-                    <span className="text-white/85 font-medium truncate max-w-[180px]">
+                  <div className="flex items-center justify-between pt-2.5 border-t border-slate-100 text-xs">
+                    <span className="text-slate-500 truncate max-w-[180px]">
                       {kpi.subtitle}
                     </span>
-                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${kpi.badgeColor} whitespace-nowrap`}>
-                      {kpi.trendBadge}
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${kpi.badgeStyle}`}>
+                      {kpi.badge}
                     </span>
                   </div>
                 </div>
@@ -462,51 +438,46 @@ export default function SupplierDashboard() {
           {/* ─── Row 1: Shipping Velocity & Order Lifecycle ──────── */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* A. My Monthly Shipping Velocity */}
-            <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-6">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                    <h2 className="text-base font-bold text-slate-900 dark:text-white">
-                      Monthly Dispatch Throughput
-                    </h2>
-                  </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    Monthly pieces dispatched and carton packing volume
-                  </p>
+            <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 p-6 shadow-2xs">
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-emerald-600" />
+                  <h2 className="text-sm font-bold text-slate-900">
+                    Monthly Dispatch Throughput
+                  </h2>
                 </div>
-                <div className="flex items-center gap-3 text-xs">
+                <div className="flex items-center gap-4 text-xs">
                   <div className="flex items-center gap-1.5">
-                    <span className="w-3 h-3 rounded-sm bg-emerald-600" />
-                    <span className="text-slate-600 dark:text-slate-400 font-medium">Pieces Shipped</span>
+                    <span className="w-2.5 h-2.5 rounded-xs bg-emerald-600" />
+                    <span className="text-slate-600 font-medium">Pieces</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <span className="w-3 h-3 rounded-sm bg-teal-300 dark:bg-teal-800" />
-                    <span className="text-slate-600 dark:text-slate-400 font-medium">Cartons</span>
+                    <span className="w-2.5 h-2.5 rounded-xs bg-slate-400" />
+                    <span className="text-slate-600 font-medium">Cartons</span>
                   </div>
                 </div>
               </div>
 
-              <div className="h-64 sm:h-72 w-full">
+              <div className="h-60 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={monthlyProgress} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
                     <defs>
                       <linearGradient id="supplierPiecesGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.25} />
                         <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
                       </linearGradient>
                       <linearGradient id="supplierBoxesGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.25} />
-                        <stop offset="95%" stopColor="#06b6d4" stopOpacity={0.0} />
+                        <stop offset="5%" stopColor="#94a3b8" stopOpacity={0.2} />
+                        <stop offset="95%" stopColor="#94a3b8" stopOpacity={0.0} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" opacity={0.5} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" opacity={0.6} />
                     <XAxis
                       dataKey="label"
                       stroke="#94a3b8"
                       fontSize={11}
                       tickLine={false}
-                      axisLine={{ stroke: "#cbd5e1" }}
+                      axisLine={{ stroke: "#e2e8f0" }}
                     />
                     <YAxis
                       stroke="#94a3b8"
@@ -521,7 +492,7 @@ export default function SupplierDashboard() {
                       dataKey="pieces"
                       name="Pieces Shipped"
                       stroke="#10b981"
-                      strokeWidth={2.5}
+                      strokeWidth={2}
                       fillOpacity={1}
                       fill="url(#supplierPiecesGradient)"
                     />
@@ -529,8 +500,8 @@ export default function SupplierDashboard() {
                       type="monotone"
                       dataKey="boxes"
                       name="Carton Boxes"
-                      stroke="#06b6d4"
-                      strokeWidth={2}
+                      stroke="#64748b"
+                      strokeWidth={1.5}
                       fillOpacity={1}
                       fill="url(#supplierBoxesGradient)"
                     />
@@ -538,18 +509,15 @@ export default function SupplierDashboard() {
                 </ResponsiveContainer>
               </div>
 
-              <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center justify-between gap-3 text-xs">
-                <span className="text-slate-500 dark:text-slate-400">
-                  Current Month: <strong className="text-slate-900 dark:text-white font-bold">{currentMonthPieces.toLocaleString()} pcs</strong>
-                </span>
-                <span className="text-slate-500 dark:text-slate-400">
-                  Avg Packing Density: <strong className="text-slate-900 dark:text-white font-bold">{shipmentMetrics.avgPiecesPerBox} pcs / carton</strong>
+              <div className="mt-4 pt-3.5 border-t border-slate-100 flex items-center justify-between text-xs">
+                <span className="text-slate-500">
+                  This Month: <strong className="text-slate-900 font-semibold">{currentMonthPieces.toLocaleString()} pcs</strong>
                 </span>
                 <button
                   onClick={() => navigate("/shipments")}
-                  className="text-emerald-600 dark:text-emerald-400 hover:underline font-semibold flex items-center gap-1"
+                  className="text-emerald-600 hover:text-emerald-700 font-semibold flex items-center gap-1 cursor-pointer"
                 >
-                  View My Shipments <ArrowRight className="w-3 h-3" />
+                  All Shipments <ArrowRight className="w-3 h-3" />
                 </button>
               </div>
             </div>
@@ -905,30 +873,6 @@ export default function SupplierDashboard() {
                   No shipments dispatched yet. Click "Pack & Create Shipment" to start.
                 </div>
               )}
-            </div>
-          </div>
-
-          {/* ─── Bottom Packaging Compliance & Quick Actions ──────── */}
-          <div className="bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 rounded-2xl border border-slate-800 p-6 shadow-xl text-white flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center">
-                <FileSpreadsheet className="w-5 h-5 text-emerald-400" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold">Standard Calzedonia 12-Column Excel Drop & Web Wizard Active</h3>
-                <p className="text-xs text-white/60">
-                  Direct template generation, auto-split carton allocations, and 20-digit Code 39 barcode labels.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 text-xs">
-              <button
-                onClick={() => navigate("/shipments")}
-                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 font-bold transition-all shadow-sm flex items-center gap-1.5"
-              >
-                Go to Packing Center <ArrowRight className="w-3.5 h-3.5" />
-              </button>
             </div>
           </div>
         </>

@@ -133,26 +133,26 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   return (
     <aside
       className={cn(
-        "flex h-full flex-col border-r border-gray-200 bg-white transition-all duration-300",
+        "flex h-full flex-col border-r border-slate-200 bg-white transition-all duration-300",
         collapsed ? "w-16" : "w-64"
       )}
     >
       {/* Logo */}
-      <div className="flex h-16 items-center gap-3 border-b border-gray-200 px-4">
+      <div className="flex h-16 items-center gap-3 border-b border-slate-200 px-4">
         <div
           className={cn(
             "flex h-8 w-8 items-center justify-center rounded-lg text-white",
-            isAdmin ? "bg-brand-600" : "bg-emerald-600"
+            isAdmin ? "bg-blue-600" : "bg-emerald-600"
           )}
         >
           <Package className="h-5 w-5" />
         </div>
         {!collapsed && (
           <div className="flex flex-col">
-            <span className="text-sm font-semibold text-gray-900">
+            <span className="text-sm font-semibold text-slate-900">
               ASN Platform
             </span>
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-slate-500">
               {isAdmin ? "Admin Portal" : "Supplier Portal"}
             </span>
           </div>
@@ -163,7 +163,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       <nav className="flex-1 space-y-1 overflow-y-auto px-2 py-4">
         <div className={cn("mb-2", !collapsed && "px-2")}>
           {!collapsed && (
-            <span className="text-xs font-medium uppercase tracking-wider text-gray-400">
+            <span className="text-xs font-medium uppercase tracking-wider text-slate-400">
               Main
             </span>
           )}
@@ -195,9 +195,9 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                     "w-full flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors cursor-pointer",
                     isParentActive
                       ? isAdmin
-                        ? "bg-brand-50/80 text-brand-700"
+                        ? "bg-blue-50/80 text-blue-700"
                         : "bg-emerald-50/80 text-emerald-700"
-                      : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                   )}
                   title={collapsed ? item.label : undefined}
                 >
@@ -208,8 +208,8 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   {!collapsed && (
                     <ChevronDown
                       className={cn(
-                        "h-4 w-4 text-gray-400 transition-transform duration-200",
-                        isMenuOpen && "rotate-180 text-gray-600"
+                        "h-4 w-4 text-slate-400 transition-transform duration-200",
+                        isMenuOpen && "rotate-180 text-slate-600"
                       )}
                     />
                   )}
@@ -230,9 +230,9 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                             "flex items-center gap-2.5 rounded-lg pl-6 pr-3 py-1.5 text-xs font-medium transition-colors",
                             isSubActive
                               ? isAdmin
-                                ? "bg-brand-100/80 text-brand-900 font-semibold"
+                                ? "bg-blue-100/80 text-blue-900 font-semibold"
                                 : "bg-emerald-100/80 text-emerald-900 font-semibold"
-                              : "text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                              : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
                           )}
                         >
                           <sub.icon className="h-3.5 w-3.5 flex-shrink-0" />
@@ -255,9 +255,9 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 "flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                 isActive(item.to)
                   ? isAdmin
-                    ? "bg-brand-50 text-brand-700"
-                    : "bg-emerald-50 text-emerald-700"
-                  : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                    ? "bg-blue-50 text-blue-700 font-semibold"
+                    : "bg-emerald-50 text-emerald-700 font-semibold"
+                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
               )}
             >
               <div className="flex items-center gap-3">
@@ -265,7 +265,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 {!collapsed && <span>{item.label}</span>}
               </div>
               {!collapsed && isDraftItem && draftCount > 0 && (
-                <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-blue-100 text-blue-700 border border-blue-200">
+                <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-blue-50 text-blue-700 border border-blue-200">
                   {draftCount}
                 </span>
               )}
@@ -276,7 +276,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         {/* Settings / Profile Section */}
         <div className={cn("mb-2 mt-6", !collapsed && "px-2")}>
           {!collapsed && (
-            <span className="text-xs font-medium uppercase tracking-wider text-gray-400">
+            <span className="text-xs font-medium uppercase tracking-wider text-slate-400">
               {isAdmin ? "Settings" : "Account"}
             </span>
           )}
@@ -289,9 +289,9 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
               "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
               isActive(item.to)
                 ? isAdmin
-                  ? "bg-brand-50 text-brand-700"
-                  : "bg-emerald-50 text-emerald-700"
-                : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                  ? "bg-blue-50 text-blue-700 font-semibold"
+                  : "bg-emerald-50 text-emerald-700 font-semibold"
+                : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
             )}
           >
             <item.icon className="h-5 w-5 flex-shrink-0" />
@@ -302,21 +302,21 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
       {/* Organization info at bottom */}
       {!collapsed && user && (
-        <div className="border-t border-gray-200 px-4 py-3">
-          <p className="text-xs font-medium text-gray-400">
+        <div className="border-t border-slate-200 px-4 py-3">
+          <p className="text-xs font-medium text-slate-400">
             {isAdmin ? "Company / Tenant" : "Supplier Partner"}
           </p>
-          <p className="truncate text-sm font-medium text-gray-700">
+          <p className="truncate text-sm font-medium text-slate-700">
             {user.supplier_name || "ASN Portal"}
           </p>
-          <p className="text-xs text-gray-400 font-mono">{user.supplier_code || user.role}</p>
+          <p className="text-xs text-slate-400 font-mono">{user.supplier_code || user.role}</p>
         </div>
       )}
 
       {/* Collapse Toggle */}
       <button
         onClick={onToggle}
-        className="flex h-12 items-center justify-center border-t border-gray-200 text-gray-400 hover:text-gray-600"
+        className="flex h-12 items-center justify-center border-t border-slate-200 text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors"
       >
         {collapsed ? (
           <ChevronRight className="h-5 w-5" />
