@@ -18,6 +18,14 @@ export interface PlantDefinition {
   color: string;               // Badge / accent color
   bgLight: string;
   borderColor: string;
+  // Zone24x7 visual showcase metadata
+  hashtags: string[];
+  tagline: string;
+  description: string;
+  badge: string;
+  accentHex: string;
+  imageUrl: string;
+  storageLocationsHint: string[];
 }
 
 export const KNOWN_PLANTS: Record<string, PlantDefinition> = {
@@ -30,6 +38,13 @@ export const KNOWN_PLANTS: Record<string, PlantDefinition> = {
     color: "text-blue-700",
     bgLight: "bg-blue-50",
     borderColor: "border-blue-200",
+    hashtags: ["#Sandalankawa", "#PPA1", "#PPA2", "#CentralFabricHub", "#ActiveOrders"],
+    tagline: "Central Production & Raw Fabric Hub",
+    description: "Primary apparel manufacturing hub handling high-capacity raw fabrics, seamless intimate garments, and central supply distribution.",
+    badge: "CENTRAL HUB",
+    accentHex: "#2563eb",
+    imageUrl: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?q=80&w=1200&auto=format&fit=crop",
+    storageLocationsHint: ["0101 Main Store", "0105 Fabric Store", "0102 Trims Store"],
   },
   ALPHA: {
     id: "ALPHA",
@@ -40,6 +55,13 @@ export const KNOWN_PLANTS: Record<string, PlantDefinition> = {
     color: "text-purple-700",
     bgLight: "bg-purple-50",
     borderColor: "border-purple-200",
+    hashtags: ["#Polgahawela", "#PPB1", "#ApparelSewing", "#PrecisionAssembly"],
+    tagline: "Precision Sewing & Garment Assembly",
+    description: "Advanced apparel assembly lines specializing in precision stitching, garment construction, and fast-track line assembly.",
+    badge: "SEWING & ASSEMBLY",
+    accentHex: "#7c3aed",
+    imageUrl: "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?q=80&w=1200&auto=format&fit=crop",
+    storageLocationsHint: ["0101 Main Warehouse", "0102 Material Store"],
   },
   BENJI: {
     id: "BENJI",
@@ -50,6 +72,13 @@ export const KNOWN_PLANTS: Record<string, PlantDefinition> = {
     color: "text-amber-700",
     bgLight: "bg-amber-50",
     borderColor: "border-amber-200",
+    hashtags: ["#Bingiriya", "#PPC1", "#LaceProcessing", "#TextileFinishing"],
+    tagline: "Specialized Lace & Textile Finishing",
+    description: "State-of-the-art facility focused on intricate lace processing, elastic materials, and delicate fabric finishing lines.",
+    badge: "SPECIALIZED FINISHING",
+    accentHex: "#d97706",
+    imageUrl: "https://images.unsplash.com/photo-1504917599217-d4dc5ebe6122?q=80&w=1200&auto=format&fit=crop",
+    storageLocationsHint: ["0101 General Store", "0103 Finishing Bay"],
   },
   SIRIO: {
     id: "SIRIO",
@@ -60,6 +89,13 @@ export const KNOWN_PLANTS: Record<string, PlantDefinition> = {
     color: "text-emerald-700",
     bgLight: "bg-emerald-50",
     borderColor: "border-emerald-200",
+    hashtags: ["#Badalgama", "#Katunayake", "#PPD1", "#ExportLogistics", "#AirHub"],
+    tagline: "Export Manufacturing & Logistics Center",
+    description: "High-volume export manufacturing and automated logistics warehouse, handling direct international shipping dispatches.",
+    badge: "EXPORT LOGISTICS",
+    accentHex: "#059669",
+    imageUrl: "https://images.unsplash.com/photo-1553413077-190dd305871c?q=80&w=1200&auto=format&fit=crop",
+    storageLocationsHint: ["Badalgama Hub", "Katunayake EPZ", "0101 Central Store"],
   },
   VAVUNIYA: {
     id: "VAVUNIYA",
@@ -70,6 +106,13 @@ export const KNOWN_PLANTS: Record<string, PlantDefinition> = {
     color: "text-rose-700",
     bgLight: "bg-rose-50",
     borderColor: "border-rose-200",
+    hashtags: ["#Vavuniya", "#PPE1", "#NorthernApparel", "#RegionalHub"],
+    tagline: "Northern Apparel & Regional Distribution",
+    description: "Strategic northern manufacturing center producing export apparel lines with dedicated regional distribution channels.",
+    badge: "REGIONAL PLANT",
+    accentHex: "#e11d48",
+    imageUrl: "https://images.unsplash.com/photo-1587293852726-70cdb56c2866?q=80&w=1200&auto=format&fit=crop",
+    storageLocationsHint: ["0101 Main Store", "0104 Accessories"],
   },
 };
 

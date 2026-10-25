@@ -386,10 +386,7 @@ export default function Shipments() {
       {!isCreating ? (
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold text-gray-900">Shipments & Outbound Deliveries</h1>
-            <p className="text-sm text-gray-500 mt-1">
-              Manage past deliveries or prepare new ASNs via Outbound Delivery Workbench or Excel upload.
-            </p>
+            <h1 className="text-xl font-semibold text-slate-900">Shipments</h1>
           </div>
         </div>
       ) : creationMethod === "excel" ? (
@@ -461,37 +458,7 @@ export default function Shipments() {
             </select>
           </div>
 
-          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-            {/* Google-Style Top Pagination Toolbar */}
-            <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200/90 bg-white select-none">
-              <div className="text-xs text-gray-500 font-medium">
-                <span className="font-semibold text-gray-700">{totalShipments.toLocaleString()}</span> shipments
-              </div>
-              <div className="flex items-center gap-1 text-xs text-gray-600">
-                <span className="px-2 font-normal tracking-tight text-gray-600">
-                  {paginationText}
-                </span>
-                <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page <= 1}
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
-                  title="Previous page"
-                  aria-label="Previous page"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page >= totalPages}
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
-                  title="Next page"
-                  aria-label="Next page"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xs">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -584,13 +551,13 @@ export default function Shipments() {
                                 })
                               }
                               disabled={actionLoadingId === `labels-${s.id}`}
-                              title="Print or Download Barcode Labels (Customizable Sizes)"
-                              className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 shadow-2xs transition-colors disabled:opacity-50 cursor-pointer"
+                              title="Print or Download Barcode Labels"
+                              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50 cursor-pointer"
                             >
                               {actionLoadingId === `labels-${s.id}` ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-600" />
+                                <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-500" />
                               ) : (
-                                <Printer className="h-3.5 w-3.5 text-emerald-600" />
+                                <Printer className="h-3.5 w-3.5 text-slate-500" />
                               )}
                               Labels
                             </button>
@@ -599,12 +566,12 @@ export default function Shipments() {
                               onClick={() => handlePreviewXml(s)}
                               disabled={actionLoadingId === `xml-${s.id}`}
                               title="View SdDataSlice EDI XML"
-                              className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-purple-50 hover:text-purple-700 hover:border-purple-200 shadow-2xs transition-colors disabled:opacity-50 cursor-pointer"
+                              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50 cursor-pointer"
                             >
                               {actionLoadingId === `xml-${s.id}` ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-600" />
+                                <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-500" />
                               ) : (
-                                <FileCode className="h-3.5 w-3.5 text-purple-600" />
+                                <FileCode className="h-3.5 w-3.5 text-slate-500" />
                               )}
                               ASN XML
                             </button>
@@ -612,13 +579,13 @@ export default function Shipments() {
                             <button
                               onClick={() => handleDeleteShipment(s)}
                               disabled={actionLoadingId === `delete-${s.id}`}
-                              title="Revert shipment and restore all line items back to Purchase Order"
-                              className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200 shadow-2xs transition-colors disabled:opacity-50 cursor-pointer"
+                              title="Revert shipment"
+                              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 hover:border-red-200 transition-colors disabled:opacity-50 cursor-pointer"
                             >
                               {actionLoadingId === `delete-${s.id}` ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin text-rose-600" />
+                                <Loader2 className="h-3.5 w-3.5 animate-spin text-red-600" />
                               ) : (
-                                <RotateCcw className="h-3.5 w-3.5 text-rose-600" />
+                                <RotateCcw className="h-3.5 w-3.5 text-red-600" />
                               )}
                               Revert
                             </button>
@@ -649,20 +616,20 @@ export default function Shipments() {
               </table>
             </div>
 
-            {/* Google-Style Bottom Pagination Footer */}
+            {/* Bottom Pagination Footer */}
             {totalShipments > 0 && (
-              <div className="flex items-center justify-between px-6 py-3 border-t border-gray-200 bg-gray-50/70 select-none text-xs text-gray-600">
-                <div className="font-medium text-gray-500">
-                  <span className="font-semibold text-gray-700">{totalShipments.toLocaleString()} total shipments</span>
+              <div className="flex items-center justify-between px-6 py-3 border-t border-slate-200 bg-slate-50/70 select-none text-xs text-slate-500">
+                <div className="font-medium text-slate-500">
+                  <span className="font-semibold text-slate-700">{totalShipments.toLocaleString()} total shipments</span>
                 </div>
-                <div className="flex items-center gap-1 text-xs text-gray-600">
-                  <span className="px-2 font-normal tracking-tight text-gray-600">
+                <div className="flex items-center gap-1 text-xs text-slate-600">
+                  <span className="px-2 font-normal tracking-tight text-slate-600">
                     {paginationText}
                   </span>
                   <button
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
                     disabled={page <= 1}
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-200/70 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-slate-600 hover:bg-slate-200/70 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
                     title="Previous page"
                     aria-label="Previous page"
                   >
@@ -671,7 +638,7 @@ export default function Shipments() {
                   <button
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                     disabled={page >= totalPages}
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-200/70 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-slate-600 hover:bg-slate-200/70 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
                     title="Next page"
                     aria-label="Next page"
                   >
@@ -1840,8 +1807,8 @@ function WebPackingWizard({
                   </span>
                   <span className="text-red-500 font-bold">*</span>
                 </div>
-                <p className="text-[11px] text-gray-600">
-                  Official Delivery Note / Consignment number for this dispatch (auto-applies to all cartons)
+                <p className="text-[11px] text-slate-500">
+                  Auto-applies to all cartons
                 </p>
               </div>
             </div>

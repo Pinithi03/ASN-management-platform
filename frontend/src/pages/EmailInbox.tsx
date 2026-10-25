@@ -8,11 +8,9 @@ import {
   Mail,
   Search,
   RefreshCw,
-  Eye,
   ChevronLeft,
   ChevronRight,
   FileCheck2,
-  Filter,
   FileText,
   Building2,
 } from "lucide-react";
@@ -39,8 +37,7 @@ export default function EmailInbox() {
     setPage(1);
   }, [search, poNumberFilter, effectiveVendorCode]);
 
-  // ─── Queries ────────────────────────────────────────────────
-  const { data: emailsData, isLoading, isFetching } = useQuery({
+  const { data: emailsData, isLoading } = useQuery({
     queryKey: ["emails", search, poNumberFilter, effectiveVendorCode, page, user?.role],
     queryFn: () =>
       emailApi.list({
@@ -97,47 +94,44 @@ export default function EmailInbox() {
 
   const startItem = totalEmails === 0 ? 0 : (page - 1) * 50 + 1;
   const endItem = Math.min(page * 50, totalEmails);
-  const paginationText = totalEmails === 0 ? "0 of 0" : `${startItem.toLocaleString()}–${endItem.toLocaleString()} of ${totalEmails.toLocaleString()}`;
+  const paginationText =
+    totalEmails === 0
+      ? "0 of 0"
+      : `${startItem.toLocaleString()}–${endItem.toLocaleString()} of ${totalEmails.toLocaleString()}`;
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-5 bg-slate-50 min-h-screen text-slate-900 font-sans">
       {/* Header with Fetch & Sync Emails Button */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900">
-            {isAdmin ? "Email Processing Queue" : "My Inbound Supplier Emails"}
-          </h1>
-          {isAdmin && (
-            <p className="text-sm text-gray-500 mt-1">
-              Autonomous inbound PO email ingestion from EDI & suppliers
-            </p>
-          )}
-        </div>
         <div className="flex items-center gap-3">
-          <div className="hidden sm:flex items-center gap-2 px-3 py-2 bg-emerald-50 text-emerald-800 text-xs font-semibold rounded-lg border border-emerald-200 shadow-2xs">
-            <span className={`w-2 h-2 rounded-full ${isFetching ? "bg-emerald-500 animate-ping" : "bg-emerald-500 animate-pulse"}`} />
-            <span>Auto-Sync Active (Every 5s)</span>
-          </div>
-          <button
-            onClick={handleSyncMailbox}
-            disabled={isSyncing}
-            className={`inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white rounded-lg transition-all shadow-sm ${isAdmin
-                ? "bg-blue-600 hover:bg-blue-700 active:bg-blue-800"
-                : "bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800"
-              } disabled:opacity-60`}
-            title="Immediately trigger an emergency mailbox check"
-          >
-            <RefreshCw className={`w-4 h-4 ${isSyncing ? "animate-spin" : ""}`} />
-            {isSyncing ? "Fetching Mailbox..." : "Fetch Now (Manual)"}
-          </button>
+          <h1 className="text-xl font-semibold text-slate-900">
+            {isAdmin ? "Email Inbox" : "My Emails"}
+          </h1>
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-slate-100 text-slate-600 text-xs font-medium rounded-full border border-slate-200">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            Auto-Sync
+          </span>
         </div>
+
+        <button
+          onClick={handleSyncMailbox}
+          disabled={isSyncing}
+          className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg transition-colors cursor-pointer text-white shadow-2xs ${isAdmin
+              ? "bg-blue-600 hover:bg-blue-700 active:bg-blue-800"
+              : "bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800"
+            } disabled:opacity-60`}
+          title="Immediately trigger a mailbox check"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin" : ""}`} />
+          {isSyncing ? "Syncing..." : "Sync Mailbox"}
+        </button>
       </div>
 
       {syncMessage && (
         <div
-          className={`p-3.5 text-sm rounded-xl flex items-center justify-between shadow-sm ${isAdmin
-              ? "bg-blue-50 border border-blue-200 text-blue-900"
-              : "bg-emerald-50 border border-emerald-200 text-emerald-900"
+          className={`p-3 text-xs rounded-xl flex items-center justify-between border shadow-2xs ${isAdmin
+              ? "bg-blue-50 border-blue-200 text-blue-900"
+              : "bg-emerald-50 border-emerald-200 text-emerald-900"
             }`}
         >
           <div className="flex items-center gap-2">
@@ -146,241 +140,160 @@ export default function EmailInbox() {
           </div>
           <button
             onClick={() => setSyncMessage(null)}
-            className={`font-bold ml-4 text-xs ${isAdmin ? "text-blue-500 hover:text-blue-700" : "text-emerald-500 hover:text-emerald-700"
+            className={`font-semibold ml-4 text-xs cursor-pointer ${isAdmin ? "text-blue-600 hover:text-blue-800" : "text-emerald-600 hover:text-emerald-800"
               }`}
           >
-            ✕ Dismiss
+            ✕
           </button>
         </div>
       )}
 
       {/* Advanced Search & Filtering Controls */}
-      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-            <Filter className={`w-3.5 h-3.5 ${isAdmin ? "text-blue-600" : "text-emerald-600"}`} />
-            Filter & Search Email Queue
-          </div>
-          {hasActiveFilters && (
-            <button
-              onClick={clearFilters}
-              className={`text-xs font-semibold flex items-center gap-1 ${isAdmin ? "text-blue-600 hover:text-blue-800" : "text-emerald-600 hover:text-emerald-800"
-                }`}
-            >
-              ✕ Clear All Filters
-            </button>
-          )}
+      <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs flex flex-col md:flex-row items-center gap-3">
+        <div className="relative flex-1 w-full">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search subject, sender, or keyword..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:bg-white outline-none"
+          />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {/* General Search Input */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search by keywords, POs, vendors, subject, sender..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className={`w-full pl-9 pr-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 outline-none transition-all ${isAdmin
-                  ? "focus:ring-blue-500 focus:border-blue-500"
-                  : "focus:ring-emerald-500 focus:border-emerald-500"
-                }`}
-            />
-          </div>
+        <div className="relative w-full md:w-52">
+          <FileText className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <input
+            type="text"
+            placeholder="PO Number..."
+            value={poNumberFilter}
+            onChange={(e) => setPoNumberFilter(e.target.value)}
+            className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:bg-white outline-none"
+          />
+        </div>
 
-          {/* Filter by PO Number */}
-          <div className="relative">
-            <FileText className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${isAdmin ? "text-blue-500" : "text-emerald-500"}`} />
+        {isAdmin && (
+          <div className="relative w-full md:w-48">
+            <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
               type="text"
-              placeholder="Filter by PO Number (e.g. ZA6A-2001605039)..."
-              value={poNumberFilter}
-              onChange={(e) => setPoNumberFilter(e.target.value)}
-              className={`w-full pl-9 pr-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 outline-none transition-all ${isAdmin
-                  ? "focus:ring-blue-500 focus:border-blue-500"
-                  : "focus:ring-emerald-500 focus:border-emerald-500"
-                }`}
-            />
-          </div>
-
-          {/* Filter by Vendor / Supplier Code */}
-          <div className="relative">
-            <Building2 className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${isAdmin ? "text-blue-500" : "text-emerald-500"}`} />
-            <input
-              type="text"
-              placeholder="Filter by Vendor Code (e.g. SUPP-9901)..."
+              placeholder="Vendor Code..."
               value={vendorCodeFilter}
               onChange={(e) => setVendorCodeFilter(e.target.value)}
-              className={`w-full pl-9 pr-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 outline-none transition-all ${isAdmin
-                  ? "focus:ring-blue-500 focus:border-blue-500"
-                  : "focus:ring-emerald-500 focus:border-emerald-500"
-                }`}
+              className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:bg-white outline-none"
             />
           </div>
-        </div>
+        )}
+
+        {hasActiveFilters && (
+          <button
+            onClick={clearFilters}
+            className="text-xs font-semibold text-slate-500 hover:text-slate-800 px-2 py-1 cursor-pointer shrink-0"
+          >
+            Clear
+          </button>
+        )}
       </div>
 
       {/* Email List Table */}
       <div className="w-full">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-20 text-gray-400 bg-white rounded-xl border border-gray-200">
-              <RefreshCw className="w-6 h-6 animate-spin mr-2 text-blue-500" />
-              Loading email queue...
+        {isLoading ? (
+          <div className="flex items-center justify-center py-20 text-slate-400 bg-white rounded-xl border border-slate-200">
+            <RefreshCw className="w-5 h-5 animate-spin mr-2 text-blue-600" />
+            Loading email queue...
+          </div>
+        ) : emails.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-slate-400 bg-white rounded-xl border border-slate-200">
+            <Mail className="w-10 h-10 mb-2 text-slate-300" />
+            <p className="text-sm font-semibold text-slate-700">No emails matching filters</p>
+          </div>
+        ) : (
+          <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead>
+                  <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider">
+                    <th className="px-4 py-3 w-1/4 sm:w-1/5">Sender</th>
+                    <th className="px-4 py-3">Subject</th>
+                    <th className="px-4 py-3 text-right w-36 whitespace-nowrap">Received</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {emails.map((email) => {
+                    const isUnread = email.status === "QUEUED" || email.status === "PROCESSING" || email.status === "PARSED";
+
+                    return (
+                      <tr
+                        key={email.id}
+                        onClick={() => navigate(`/emails/${email.id}`)}
+                        className={`cursor-pointer transition-colors hover:bg-slate-50 ${
+                          isUnread
+                            ? isAdmin
+                              ? "bg-blue-50/50 font-semibold text-blue-950"
+                              : "bg-emerald-50/50 font-semibold text-emerald-950"
+                            : "text-slate-700"
+                        }`}
+                      >
+                        <td className="px-4 py-3 max-w-[180px] sm:max-w-[220px] truncate font-medium text-slate-900" title={email.from_address || ""}>
+                          <span
+                            className={`w-2 h-2 rounded-full inline-block mr-2 shrink-0 ${
+                              isUnread
+                                ? isAdmin
+                                  ? "bg-blue-600"
+                                  : "bg-emerald-600"
+                                : "bg-slate-300"
+                            }`}
+                          />
+                          {email.from_address || " "}
+                        </td>
+                        <td className="px-4 py-3 max-w-xs sm:max-w-md lg:max-w-xl xl:max-w-3xl truncate text-slate-800" title={email.subject || ""}>
+                          {email.subject || " "}
+                        </td>
+                        <td className="px-4 py-3 text-right text-slate-500 whitespace-nowrap">
+                          {email.received_at
+                            ? format(new Date(email.received_at), "MMM d, HH:mm")
+                            : " "}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-          ) : emails.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-gray-400 bg-white rounded-xl border border-gray-200">
-              <Mail className="w-12 h-12 mb-3 text-gray-300" />
-              <p className="text-lg font-medium text-gray-700">No emails matching filters</p>
-              <p className="text-xs text-gray-400 mt-1">Try clearing filters or click "Fetch & Sync Emails" to check mailbox</p>
-            </div>
-          ) : (
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-              {/* Google-Style Top Pagination Toolbar */}
-              <div className="flex items-center justify-end px-3 py-2 border-b border-gray-200/90 bg-white select-none">
-                {/* Google-style Pagination Controls: 1–50 of 4,069  <  > */}
-                <div className="flex items-center gap-1 text-xs text-gray-600">
-                  <span className="px-2 font-normal tracking-tight text-gray-600">
-                    {paginationText}
-                  </span>
-                  <button
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={page <= 1}
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
-                    title="Newer"
-                    aria-label="Newer emails"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={page >= totalPages}
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
-                    title="Older"
-                    aria-label="Older emails"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
+
+            {/* Google-Style Bottom Pagination Footer */}
+            <div className="flex items-center justify-between px-4 py-2.5 border-t border-slate-200 bg-slate-50/60 select-none text-xs text-slate-500">
+              <div>
+                <span className="font-semibold text-slate-700">{totalEmails.toLocaleString()} total emails</span>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-gray-50/80 border-b border-gray-200">
-                      <th className="text-left px-4 py-3 font-medium text-gray-500 w-1/4 sm:w-1/5">Sender</th>
-                      <th className="text-left px-4 py-3 font-medium text-gray-500">Subject</th>
-                      <th className="text-left px-4 py-3 font-medium text-gray-500 w-36 whitespace-nowrap">Received</th>
-                      <th className="text-right px-4 py-3 font-medium text-gray-500 w-16">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {emails.map((email) => {
-                      const isUnread = email.status === "QUEUED" || email.status === "PROCESSING" || email.status === "PARSED";
-
-                      return (
-                        <tr
-                          key={email.id}
-                          onClick={() => navigate(`/emails/${email.id}`)}
-                          className={`cursor-pointer transition-all hover:bg-gray-50/80 ${
-                            isUnread
-                              ? isAdmin
-                                ? "bg-blue-50/90 border-l-4 border-blue-600 font-semibold text-blue-950 hover:bg-blue-100/70"
-                                : "bg-emerald-50/90 border-l-4 border-emerald-500 font-semibold text-emerald-950 hover:bg-emerald-100/70"
-                              : ""
-                          }`}
-                        >
-                          <td className="px-4 py-3 max-w-[180px] sm:max-w-[220px] truncate text-gray-900 font-bold" title={email.from_address || ""}>
-                            {isAdmin ? (
-                              isUnread ? (
-                                <span
-                                  className="w-2.5 h-2.5 rounded-full bg-blue-600 inline-block mr-2 shrink-0 animate-pulse shadow-xs"
-                                  title="Unread Inbound Email"
-                                />
-                              ) : (
-                                <span
-                                  className="w-2 h-2 rounded-full bg-blue-300 inline-block mr-2 shrink-0"
-                                  title="Processed Email"
-                                />
-                              )
-                            ) : (
-                              isUnread ? (
-                                <span
-                                  className="w-2.5 h-2.5 rounded-full bg-emerald-600 inline-block mr-2 shrink-0 animate-pulse shadow-xs"
-                                  title="Unread Inbound Email"
-                                />
-                              ) : (
-                                <span
-                                  className="w-2 h-2 rounded-full bg-emerald-400 inline-block mr-2 shrink-0"
-                                  title="Processed Email"
-                                />
-                              )
-                            )}
-                            {email.from_address || " "}
-                          </td>
-                          <td className="px-4 py-3 max-w-xs sm:max-w-md lg:max-w-xl xl:max-w-3xl truncate text-gray-800 font-medium" title={email.subject || ""}>
-                            {email.subject || " "}
-                          </td>
-                          <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
-                            {email.received_at
-                              ? format(new Date(email.received_at), "MMM d, HH:mm")
-                              : " "}
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigate(`/emails/${email.id}`);
-                              }}
-                              className={`p-1.5 rounded-lg transition-colors ${
-                                isAdmin
-                                  ? "text-gray-400 hover:text-blue-700 hover:bg-blue-100/50"
-                                  : "text-gray-400 hover:text-emerald-700 hover:bg-emerald-100/50"
-                              }`}
-                              title="View Email Details"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Google-Style Bottom Pagination Footer */}
-              <div className="flex items-center justify-between px-4 py-2.5 border-t border-gray-200 bg-gray-50/70 select-none">
-                <div className="text-xs text-gray-500">
-                  <span className="font-semibold text-gray-700">{totalEmails.toLocaleString()} total emails</span>
-                </div>
-
-                <div className="flex items-center gap-1 text-xs text-gray-600">
-                  <span className="px-2 font-normal tracking-tight text-gray-600">
-                    {paginationText}
-                  </span>
-                  <button
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={page <= 1}
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-200/70 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
-                    title="Newer"
-                    aria-label="Newer emails"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={page >= totalPages}
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-200/70 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
-                    title="Older"
-                    aria-label="Older emails"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
+              <div className="flex items-center gap-1 text-slate-600">
+                <span className="px-2 font-normal tracking-tight">
+                  {paginationText}
+                </span>
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                  className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-600 hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                  title="Newer"
+                  aria-label="Newer emails"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages}
+                  className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-600 hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                  title="Older"
+                  aria-label="Older emails"
+                >
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
               </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

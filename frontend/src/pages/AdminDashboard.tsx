@@ -12,15 +12,13 @@ import {
   TrendingUp,
   Box,
   Layers,
-  ExternalLink,
-  ShieldCheck,
 } from "lucide-react";
 import { poApi } from "@/services/poApi";
 import { shipmentService } from "@/services/shipmentService";
 import { supplierApi } from "@/services/supplierApi";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
   AreaChart,
   Area,
@@ -142,7 +140,6 @@ const getPoSupplierName = (po: any, map: Record<string, string>): string => {
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const [hoveredKpi, setHoveredKpi] = useState<number | null>(null);
 
   // 1. Fetch Purchase Orders Statistics (Direct summary from backend)
   const { data: poStats, isLoading: poStatsLoading } = useQuery({
@@ -416,107 +413,84 @@ export default function AdminDashboard() {
       label: "Total Shipped Volume",
       value: shipmentMetrics.totalPieces > 0 ? `${shipmentMetrics.totalPieces.toLocaleString()} pcs` : "0 pcs",
       icon: Truck,
-      gradient: "from-blue-600 via-indigo-600 to-indigo-700",
-      bgGlow: "bg-blue-500/10",
-      iconBg: "bg-blue-500/20",
-      iconColor: "text-blue-400",
+      iconBg: "bg-blue-50 text-blue-600 border-blue-100",
       subtitle: `${shipmentMetrics.totalBoxes.toLocaleString()} cartons · ${shipmentMetrics.totalCount} dispatches`,
-      subtitleColor: "text-indigo-200",
-      trendBadge: "Live Dispatches",
-      badgeColor: "bg-blue-500/20 text-blue-300 border-blue-500/30",
+      badge: "Dispatched",
+      badgeStyle: "bg-blue-50 text-blue-700 border-blue-200",
       onClick: () => navigate("/shipments"),
     },
     {
       label: "Deliveries Due Soon",
-      value: `${(urgentCount + overdueCount)} Orders`,
+      value: `${urgentCount + overdueCount} Orders`,
       icon: AlertTriangle,
-      gradient: overdueCount > 0 ? "from-rose-600 via-rose-700 to-amber-700" : "from-amber-600 via-amber-700 to-orange-700",
-      bgGlow: "bg-amber-500/10",
-      iconBg: "bg-amber-500/20",
-      iconColor: overdueCount > 0 ? "text-rose-400" : "text-amber-400",
-      subtitle: `${overdueCount > 0 ? `${overdueCount} overdue · ` : ""}${urgentCount} urgent (≤3 days)`,
-      subtitleColor: "text-amber-200",
-      trendBadge: overdueCount > 0 ? "Attention Required" : "Approaching",
-      badgeColor: overdueCount > 0 ? "bg-rose-500/20 text-rose-300 border-rose-500/30" : "bg-amber-500/20 text-amber-300 border-amber-500/30",
+      iconBg: overdueCount > 0 ? "bg-red-50 text-red-600 border-red-100" : "bg-amber-50 text-amber-600 border-amber-100",
+      subtitle: `${overdueCount > 0 ? `${overdueCount} overdue · ` : ""}${urgentCount} urgent (≤3d)`,
+      badge: overdueCount > 0 ? "Attention" : "Approaching",
+      badgeStyle: overdueCount > 0 ? "bg-red-50 text-red-700 border-red-200" : "bg-amber-50 text-amber-700 border-amber-200",
       onClick: () => navigate("/purchase-orders"),
     },
     {
-      label: "Unprocessed Order Backlog",
+      label: "Unprocessed Orders",
       value: `${poStats?.active ?? 0} POs`,
       icon: Package,
-      gradient: "from-sky-600 via-blue-600 to-indigo-700",
-      bgGlow: "bg-sky-500/10",
-      iconBg: "bg-sky-500/20",
-      iconColor: "text-sky-400",
-      subtitle: `Awaiting packing & ASN creation (${unprocessedRate}% of total)`,
-      subtitleColor: "text-sky-200",
-      trendBadge: `${poStats?.total ?? 0} Total POs`,
-      badgeColor: "bg-sky-500/20 text-sky-300 border-sky-500/30",
+      iconBg: "bg-slate-100 text-slate-700 border-slate-200",
+      subtitle: `${unprocessedRate}% of total (${poStats?.total ?? 0} POs)`,
+      badge: "Open",
+      badgeStyle: "bg-slate-100 text-slate-700 border-slate-200",
       onClick: () => navigate("/purchase-orders?status=ACTIVE"),
     },
     {
       label: "Partial Fulfillment",
       value: `${poStats?.partial ?? 0} POs`,
       icon: Layers,
-      gradient: "from-emerald-600 via-teal-600 to-teal-700",
-      bgGlow: "bg-emerald-500/10",
-      iconBg: "bg-emerald-500/20",
-      iconColor: "text-emerald-400",
-      subtitle: `Split shipments active (${fulfillmentRate}% fully completed)`,
-      subtitleColor: "text-emerald-200",
-      trendBadge: `${partialRate}% Partial Ratio`,
-      badgeColor: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
+      iconBg: "bg-amber-50 text-amber-600 border-amber-100",
+      subtitle: `Split shipments (${fulfillmentRate}% completed)`,
+      badge: `${partialRate}% Split`,
+      badgeStyle: "bg-amber-50 text-amber-700 border-amber-200",
       onClick: () => navigate("/purchase-orders?status=PARTIAL"),
     },
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-6 md:p-8 space-y-6 font-sans transition-colors">
+    <div className="p-6 space-y-6 bg-slate-50 min-h-screen text-slate-900 font-sans">
       {isLoading ? (
         <div className="flex flex-col items-center justify-center py-24 gap-4">
-          <div className="w-12 h-12 rounded-full border-4 border-indigo-600/30 border-t-indigo-600 animate-spin" />
-          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 animate-pulse">
-            Analyzing supply chain metrics & dispatch schedules...
+          <div className="w-10 h-10 rounded-full border-3 border-blue-600/30 border-t-blue-600 animate-spin" />
+          <p className="text-xs font-medium text-slate-500 animate-pulse">
+            Loading metrics...
           </p>
         </div>
       ) : (
         <>
-          {/* ─── Top 4 Data Science KPI Cards ─────────────────────── */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {kpiCards.map((kpi, idx) => {
+          {/* ─── Top 4 KPI Cards ─────────────────────── */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {kpiCards.map((kpi) => {
               const Icon = kpi.icon;
               return (
                 <div
                   key={kpi.label}
                   onClick={kpi.onClick}
-                  onMouseEnter={() => setHoveredKpi(idx)}
-                  onMouseLeave={() => setHoveredKpi(null)}
-                  className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${kpi.gradient} p-5 text-white shadow-lg cursor-pointer transition-all duration-300 select-none ${
-                    hoveredKpi === idx ? "scale-[1.02] shadow-2xl -translate-y-1" : "hover:shadow-xl"
-                  }`}
+                  className="rounded-xl bg-white border border-slate-200 p-5 shadow-2xs hover:border-slate-300 hover:shadow-sm cursor-pointer transition-all"
                 >
-                  {/* Subtle background glow pattern */}
-                  <div className="absolute -top-12 -right-12 w-32 h-32 rounded-full bg-white/10 blur-2xl pointer-events-none" />
-
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-semibold text-white/80 tracking-wide uppercase">
+                    <span className="text-xs font-semibold text-slate-500">
                       {kpi.label}
                     </span>
-                    <div className="w-9 h-9 rounded-xl bg-white/15 backdrop-blur-md flex items-center justify-center border border-white/20">
-                      <Icon className="w-4 h-4 text-white" />
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center border ${kpi.iconBg}`}>
+                      <Icon className="w-4 h-4" />
                     </div>
                   </div>
 
-                  <div className="text-2xl lg:text-3xl font-extrabold tracking-tight mb-2">
+                  <div className="text-2xl font-bold text-slate-900 tracking-tight mb-2.5">
                     {kpi.value}
                   </div>
 
-                  <div className="flex items-center justify-between pt-2 border-t border-white/15 text-xs">
-                    <span className="text-white/85 font-medium truncate max-w-[180px]">
+                  <div className="flex items-center justify-between pt-2.5 border-t border-slate-100 text-xs">
+                    <span className="text-slate-500 truncate max-w-[180px]">
                       {kpi.subtitle}
                     </span>
-                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${kpi.badgeColor} whitespace-nowrap`}>
-                      {kpi.trendBadge}
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${kpi.badgeStyle}`}>
+                      {kpi.badge}
                     </span>
                   </div>
                 </div>
@@ -526,52 +500,47 @@ export default function AdminDashboard() {
 
           {/* ─── Row 1: Core Operational Visualizations ───────────── */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* A. Monthly Shipping Velocity & Progress */}
-            <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-6">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                    <h2 className="text-base font-bold text-slate-900 dark:text-white">
-                      Monthly Shipping Velocity & Progress
-                    </h2>
-                  </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    Month-over-month pieces dispatched and physical carton throughput
-                  </p>
+            {/* A. Monthly Shipping Velocity */}
+            <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 p-6 shadow-2xs">
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-blue-600" />
+                  <h2 className="text-sm font-bold text-slate-900">
+                    Monthly Shipping Velocity
+                  </h2>
                 </div>
-                <div className="flex items-center gap-3 text-xs">
+                <div className="flex items-center gap-4 text-xs">
                   <div className="flex items-center gap-1.5">
-                    <span className="w-3 h-3 rounded-sm bg-indigo-600" />
-                    <span className="text-slate-600 dark:text-slate-400 font-medium">Pieces Shipped</span>
+                    <span className="w-2.5 h-2.5 rounded-xs bg-blue-600" />
+                    <span className="text-slate-600 font-medium">Pieces</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <span className="w-3 h-3 rounded-sm bg-indigo-300 dark:bg-indigo-800" />
-                    <span className="text-slate-600 dark:text-slate-400 font-medium">Cartons</span>
+                    <span className="w-2.5 h-2.5 rounded-xs bg-slate-400" />
+                    <span className="text-slate-600 font-medium">Cartons</span>
                   </div>
                 </div>
               </div>
 
-              <div className="h-64 sm:h-72 w-full">
+              <div className="h-60 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={monthlyProgress} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
                     <defs>
                       <linearGradient id="piecesGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4} />
-                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0.0} />
+                        <stop offset="5%" stopColor="#2563eb" stopOpacity={0.25} />
+                        <stop offset="95%" stopColor="#2563eb" stopOpacity={0.0} />
                       </linearGradient>
                       <linearGradient id="boxesGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#a855f7" stopOpacity={0.25} />
-                        <stop offset="95%" stopColor="#a855f7" stopOpacity={0.0} />
+                        <stop offset="5%" stopColor="#94a3b8" stopOpacity={0.2} />
+                        <stop offset="95%" stopColor="#94a3b8" stopOpacity={0.0} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" opacity={0.5} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" opacity={0.6} />
                     <XAxis
                       dataKey="label"
                       stroke="#94a3b8"
                       fontSize={11}
                       tickLine={false}
-                      axisLine={{ stroke: "#cbd5e1" }}
+                      axisLine={{ stroke: "#e2e8f0" }}
                     />
                     <YAxis
                       stroke="#94a3b8"
@@ -585,8 +554,8 @@ export default function AdminDashboard() {
                       type="monotone"
                       dataKey="pieces"
                       name="Pieces Shipped"
-                      stroke="#6366f1"
-                      strokeWidth={2.5}
+                      stroke="#2563eb"
+                      strokeWidth={2}
                       fillOpacity={1}
                       fill="url(#piecesGradient)"
                     />
@@ -594,8 +563,8 @@ export default function AdminDashboard() {
                       type="monotone"
                       dataKey="boxes"
                       name="Carton Boxes"
-                      stroke="#a855f7"
-                      strokeWidth={2}
+                      stroke="#64748b"
+                      strokeWidth={1.5}
                       fillOpacity={1}
                       fill="url(#boxesGradient)"
                     />
@@ -603,49 +572,43 @@ export default function AdminDashboard() {
                 </ResponsiveContainer>
               </div>
 
-              <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center justify-between gap-3 text-xs">
-                <span className="text-slate-500 dark:text-slate-400">
-                  Current Month: <strong className="text-slate-900 dark:text-white font-bold">{currentMonthStats.pieces.toLocaleString()} pcs</strong> ({currentMonthStats.boxes.toLocaleString()} cartons)
-                </span>
-                <span className="text-slate-500 dark:text-slate-400">
-                  Carton Density: <strong className="text-slate-900 dark:text-white font-bold">{shipmentMetrics.avgPiecesPerBox} pcs / carton</strong>
+              <div className="mt-4 pt-3.5 border-t border-slate-100 flex items-center justify-between text-xs">
+                <span className="text-slate-500">
+                  This Month: <strong className="text-slate-900 font-semibold">{currentMonthStats.pieces.toLocaleString()} pcs</strong> ({currentMonthStats.boxes.toLocaleString()} cartons)
                 </span>
                 <button
                   onClick={() => navigate("/shipments")}
-                  className="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold flex items-center gap-1"
+                  className="text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1 cursor-pointer"
                 >
-                  View All Shipments <ArrowRight className="w-3 h-3" />
+                  All Shipments <ArrowRight className="w-3 h-3" />
                 </button>
               </div>
             </div>
 
-            {/* B. Order Lifecycle & Fulfillment Pipeline (Donut Chart) */}
-            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm flex flex-col justify-between">
+            {/* B. Order Lifecycle Donut Chart */}
+            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-2xs flex flex-col justify-between">
               <div>
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
-                    <BarChart3 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                    <h2 className="text-base font-bold text-slate-900 dark:text-white">
-                      Order Lifecycle Pipeline
+                    <BarChart3 className="w-4 h-4 text-blue-600" />
+                    <h2 className="text-sm font-bold text-slate-900">
+                      Order Lifecycle
                     </h2>
                   </div>
-                  <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
                     {fulfillmentRate}% Fulfilled
                   </span>
                 </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-                  Unprocessed backlog vs active partial fulfillment
-                </p>
 
-                <div className="h-52 w-full relative">
+                <div className="h-48 w-full relative">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
                         data={poLifecycleData}
                         cx="50%"
                         cy="50%"
-                        innerRadius={55}
-                        outerRadius={78}
+                        innerRadius={50}
+                        outerRadius={72}
                         paddingAngle={3}
                         dataKey="value"
                       >
@@ -658,10 +621,10 @@ export default function AdminDashboard() {
                   </ResponsiveContainer>
                   {/* Centered Stat in Donut */}
                   <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                    <span className="text-xl font-extrabold text-slate-900 dark:text-white">
+                    <span className="text-xl font-bold text-slate-900">
                       {poStats?.total ?? 0}
                     </span>
-                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                    <span className="text-[10px] font-semibold text-slate-400 uppercase">
                       Total POs
                     </span>
                   </div>
@@ -669,15 +632,15 @@ export default function AdminDashboard() {
               </div>
 
               {/* Legend & Key Metrics */}
-              <div className="space-y-2 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <div className="space-y-2 mt-4 pt-3 border-t border-slate-100 text-xs">
                 {poLifecycleData.map((item) => (
-                  <div key={item.name} className="flex items-center justify-between text-xs">
+                  <div key={item.name} className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-                      <span className="text-slate-600 dark:text-slate-300 font-medium">{item.name}</span>
+                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
+                      <span className="text-slate-600">{item.name}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-slate-900 dark:text-white">{item.value}</span>
+                      <span className="font-semibold text-slate-900">{item.value}</span>
                       <span className="text-slate-400 text-[11px]">
                         ({Math.round((item.value / (poStats?.total || 1)) * 100)}%)
                       </span>
@@ -691,36 +654,33 @@ export default function AdminDashboard() {
           {/* ─── Row 2: Operational Urgency & Plant Allocation ───── */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* A. Delivery Urgency Horizon */}
-            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
+            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-2xs">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-amber-500" />
-                  <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                  <Calendar className="w-4 h-4 text-slate-500" />
+                  <h2 className="text-sm font-bold text-slate-900">
                     Delivery Urgency Horizon
                   </h2>
                 </div>
-                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                <span className="text-xs font-medium text-slate-500">
                   Target Dispatch Timeline
                 </span>
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-                Stratification of active orders by calendar delivery deadline
-              </p>
 
-              <div className="h-56 w-full">
+              <div className="h-52 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={urgencyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" opacity={0.5} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" opacity={0.6} />
                     <XAxis
                       dataKey="name"
                       stroke="#94a3b8"
                       fontSize={11}
                       tickLine={false}
-                      axisLine={{ stroke: "#cbd5e1" }}
+                      axisLine={{ stroke: "#e2e8f0" }}
                     />
                     <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
                     <Tooltip content={<CustomTooltip />} />
-                    <Bar dataKey="count" name="Orders Count" radius={[6, 6, 0, 0]}>
+                    <Bar dataKey="count" name="Orders Count" radius={[4, 4, 0, 0]}>
                       {urgencyData.map((entry, index) => (
                         <Cell key={`bar-${index}`} fill={entry.fill} />
                       ))}
@@ -729,24 +689,24 @@ export default function AdminDashboard() {
                 </ResponsiveContainer>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 text-center">
-                <div className="p-2 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50">
-                  <p className="text-[10px] uppercase font-bold text-rose-600 dark:text-rose-400">Overdue</p>
-                  <p className="text-lg font-extrabold text-rose-700 dark:text-rose-300">{overdueCount}</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4 pt-3 border-t border-slate-100 text-center">
+                <div className="p-2.5 rounded-lg bg-red-50 border border-red-200">
+                  <p className="text-[10px] uppercase font-bold text-red-600">Overdue</p>
+                  <p className="text-base font-bold text-red-700">{overdueCount}</p>
                 </div>
-                <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50">
-                  <p className="text-[10px] uppercase font-bold text-amber-600 dark:text-amber-400">Due ≤ 3 Days</p>
-                  <p className="text-lg font-extrabold text-amber-700 dark:text-amber-300">{urgentCount}</p>
+                <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200">
+                  <p className="text-[10px] uppercase font-bold text-amber-700">Due ≤ 3 Days</p>
+                  <p className="text-base font-bold text-amber-800">{urgentCount}</p>
                 </div>
-                <div className="p-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900/50">
-                  <p className="text-[10px] uppercase font-bold text-indigo-600 dark:text-indigo-400">Due in 7 Days</p>
-                  <p className="text-lg font-extrabold text-indigo-700 dark:text-indigo-300">
+                <div className="p-2.5 rounded-lg bg-blue-50 border border-blue-200">
+                  <p className="text-[10px] uppercase font-bold text-blue-600">Due in 7 Days</p>
+                  <p className="text-base font-bold text-blue-700">
                     {urgencyData.find((u) => u.name.includes("7d"))?.count || 0}
                   </p>
                 </div>
-                <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/50">
-                  <p className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400">On Track</p>
-                  <p className="text-lg font-extrabold text-emerald-700 dark:text-emerald-300">
+                <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200">
+                  <p className="text-[10px] uppercase font-bold text-emerald-600">On Track</p>
+                  <p className="text-base font-bold text-emerald-700">
                     {urgencyData.find((u) => u.name.includes("Track"))?.count || 0}
                   </p>
                 </div>
@@ -754,35 +714,32 @@ export default function AdminDashboard() {
             </div>
 
             {/* B. Destination Manufacturing Plant Distribution */}
-            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm flex flex-col justify-between">
+            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-2xs flex flex-col justify-between">
               <div>
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
-                    <Building2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                    <h2 className="text-base font-bold text-slate-900 dark:text-white">
-                      Manufacturing Plant Allocation
+                    <Building2 className="w-4 h-4 text-slate-500" />
+                    <h2 className="text-sm font-bold text-slate-900">
+                      Plant Allocation
                     </h2>
                   </div>
-                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                    Calzedonia Destinations
+                  <span className="text-xs font-medium text-slate-500">
+                    5 Active Plants
                   </span>
                 </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-                  Physical distribution of shipped volume across manufacturing plants
-                </p>
 
                 <div className="space-y-3.5">
                   {plantDistribution.map((plant) => (
                     <div key={plant.code} className="space-y-1.5">
                       <div className="flex items-center justify-between text-xs">
                         <div className="flex items-center gap-2">
-                          <span className="font-bold text-slate-900 dark:text-white">{plant.name}</span>
-                          <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                          <span className="font-semibold text-slate-900">{plant.name}</span>
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-100 text-slate-600">
                             {plant.code}
                           </span>
                         </div>
                         <div className="text-right">
-                          <span className="font-bold text-slate-900 dark:text-white">
+                          <span className="font-semibold text-slate-900">
                             {plant.pieces.toLocaleString()} pcs
                           </span>
                           <span className="text-slate-400 text-[11px] ml-1.5">
@@ -790,9 +747,9 @@ export default function AdminDashboard() {
                           </span>
                         </div>
                       </div>
-                      <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden flex">
+                      <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden flex">
                         <div
-                          className="bg-indigo-600 dark:bg-indigo-500 h-2 rounded-full transition-all duration-500"
+                          className="bg-blue-600 h-2 rounded-full transition-all duration-500"
                           style={{ width: `${Math.max(plant.percentage, 4)}%` }}
                         />
                       </div>
@@ -800,58 +757,50 @@ export default function AdminDashboard() {
                   ))}
                 </div>
               </div>
-
-              <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-                <span>Standard ASN Format: Calzedonia XML SdDataSlice</span>
-                <span className="font-semibold text-indigo-600 dark:text-indigo-400">5 Active Plants</span>
-              </div>
             </div>
           </div>
 
           {/* ─── Row 3: Supplier Shipping Performance & Urgent Queue ─── */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* A. Supplier Shipping Leaderboard */}
-            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
+            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-2xs">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                  <Box className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                  <h2 className="text-base font-bold text-slate-900 dark:text-white">
-                    Supplier Shipping Performance
+                  <Box className="w-4 h-4 text-slate-500" />
+                  <h2 className="text-sm font-bold text-slate-900">
+                    Supplier Performance
                   </h2>
                 </div>
                 <button
                   onClick={() => navigate("/suppliers")}
-                  className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
+                  className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1 cursor-pointer"
                 >
                   All Suppliers <ArrowRight className="w-3 h-3" />
                 </button>
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-                Total pieces dispatched and physical carton packing activity per supplier
-              </p>
 
-              <div className="divide-y divide-slate-100 dark:divide-slate-800/80">
+              <div className="divide-y divide-slate-100">
                 {supplierLeaderboard.map((supp, rank) => (
                   <div key={supp.code} className="py-3 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
-                      <span className="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs font-bold flex items-center justify-center flex-shrink-0">
+                      <span className="w-6 h-6 rounded-lg bg-slate-100 text-slate-600 text-xs font-bold flex items-center justify-center flex-shrink-0">
                         #{rank + 1}
                       </span>
                       <div className="min-w-0">
-                        <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                        <p className="text-xs font-semibold text-slate-900 truncate">
                           {supp.name}
                         </p>
                         <p className="text-[11px] text-slate-400 font-mono truncate">
-                          Code: {supp.code} · {supp.poCount} Orders
+                          #{supp.code} · {supp.poCount} Orders
                         </p>
                       </div>
                     </div>
 
                     <div className="text-right flex-shrink-0">
-                      <p className="text-xs font-extrabold text-indigo-600 dark:text-indigo-400">
+                      <p className="text-xs font-bold text-slate-900">
                         {supp.pieces > 0 ? `${supp.pieces.toLocaleString()} pcs` : "Pending Dispatch"}
                       </p>
-                      <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                      <p className="text-[10px] text-slate-400">
                         {supp.boxes} cartons · {supp.shipments} shipments
                       </p>
                     </div>
@@ -861,27 +810,24 @@ export default function AdminDashboard() {
             </div>
 
             {/* B. Critical Upcoming Delivery Schedule Queue */}
-            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
+            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-2xs">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-rose-500" />
-                  <h2 className="text-base font-bold text-slate-900 dark:text-white">
-                    Critical Upcoming Deliveries Due
+                  <Clock className="w-4 h-4 text-slate-500" />
+                  <h2 className="text-sm font-bold text-slate-900">
+                    Deliveries Due Soon
                   </h2>
                 </div>
                 <button
                   onClick={() => navigate("/purchase-orders")}
-                  className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
+                  className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1 cursor-pointer"
                 >
-                  View All Orders <ArrowRight className="w-3 h-3" />
+                  All Orders <ArrowRight className="w-3 h-3" />
                 </button>
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-                Orders with closest delivery dates requiring factory dispatch monitoring
-              </p>
 
               {upcomingQueue.length > 0 ? (
-                <div className="divide-y divide-slate-100 dark:divide-slate-800/80">
+                <div className="divide-y divide-slate-100">
                   {upcomingQueue.map((po) => {
                     const days = po.daysLeft;
                     const isOverdue = days !== null && days < 0;
@@ -895,23 +841,23 @@ export default function AdminDashboard() {
                     return (
                       <div
                         key={po.id}
-                        className="py-3 flex items-center justify-between gap-3 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 px-2 rounded-xl transition-colors"
+                        className="py-3 flex items-center justify-between gap-3 hover:bg-slate-50 px-2 rounded-xl transition-colors"
                       >
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-xs font-extrabold text-slate-900 dark:text-white font-mono">
+                            <span className="text-xs font-bold text-slate-900 font-mono">
                               {po.po_number || "Unnamed PO"}
                             </span>
-                            <span className="text-[10px] font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded truncate max-w-[150px]">
+                            <span className="text-[10px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded truncate max-w-[150px]">
                               {supplierName}
                             </span>
                             <span
-                              className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                              className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
                                 isOverdue
-                                  ? "bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400 border-rose-300 dark:border-rose-800"
+                                  ? "bg-red-50 text-red-700 border-red-200"
                                   : isUrgent
-                                  ? "bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-400 border-amber-300 dark:border-amber-800"
-                                  : "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800"
+                                  ? "bg-amber-50 text-amber-800 border-amber-200"
+                                  : "bg-slate-100 text-slate-700 border-slate-200"
                               }`}
                             >
                               {isOverdue
@@ -923,30 +869,30 @@ export default function AdminDashboard() {
                                 : `${days}d left`}
                             </span>
                             {isPartial && (
-                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30">
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
                                 Partial
                               </span>
                             )}
                           </div>
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 truncate">
-                            <span className="font-medium text-slate-700 dark:text-slate-300">{cleanDest}</span>
+                          <p className="text-[11px] text-slate-500 mt-1 truncate">
+                            <span className="font-medium text-slate-700">{cleanDest}</span>
                             {" · "}
                             <span>{productDesc}</span>
                           </p>
                         </div>
 
                         <div className="text-right flex-shrink-0">
-                          <p className="text-xs font-bold text-slate-900 dark:text-white font-mono">
+                          <p className="text-xs font-bold text-slate-900 font-mono">
                             {isPartial && po.remaining_quantity != null ? (
                               <span>
                                 {Math.round(po.remaining_quantity).toLocaleString()}{" "}
                                 <span className="text-[10px] font-normal text-slate-400">/ {(po.quantity || 0).toLocaleString()}</span>{" "}
-                                <span className="font-sans text-[11px] font-semibold text-indigo-600 dark:text-indigo-400">{uom}</span>
+                                <span className="font-sans text-[11px] font-semibold text-blue-600">{uom}</span>
                               </span>
                             ) : (
                               <span>
                                 {(po.quantity || 0).toLocaleString()}{" "}
-                                <span className="font-sans text-[11px] font-semibold text-indigo-600 dark:text-indigo-400">{uom}</span>
+                                <span className="font-sans text-[11px] font-semibold text-blue-600">{uom}</span>
                               </span>
                             )}
                           </p>
@@ -964,30 +910,6 @@ export default function AdminDashboard() {
                   No urgent delivery deadlines pending
                 </div>
               )}
-            </div>
-          </div>
-
-          {/* ─── Bottom Operations Health ─────────────────────────── */}
-          <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-2xl border border-slate-800 p-6 shadow-xl text-white flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center">
-                <ShieldCheck className="w-5 h-5 text-emerald-400" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold">ASN EDI & Packaging Rules Engine Operational</h3>
-                <p className="text-xs text-white/60">
-                  Calzedonia 20-digit Handling Unit sequence active · Weight tolerances (±20% box, ±5% roll) enforced.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 text-xs">
-              <button
-                onClick={() => navigate("/shipments")}
-                className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 font-bold transition-all flex items-center gap-1.5"
-              >
-                Inspect ASNs <ExternalLink className="w-3.5 h-3.5" />
-              </button>
             </div>
           </div>
         </>

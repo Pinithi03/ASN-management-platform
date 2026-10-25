@@ -77,10 +77,7 @@ export default function Settings() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Platform Settings</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Configure corporate identity, automated email ingestion, ASN dispatch engine, and security rules.
-          </p>
+          <h1 className="text-xl font-semibold text-slate-900">Settings</h1>
         </div>
 
         {/* Save Button */}
@@ -198,9 +195,9 @@ export default function Settings() {
               <button
                 onClick={handleTestImap}
                 disabled={testingImap}
-                className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-3 py-1.5 rounded-lg transition-colors"
+                className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
               >
-                {testingImap ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+                {testingImap ? <RefreshCw className="w-3.5 h-3.5 animate-spin text-slate-500" /> : <Zap className="w-3.5 h-3.5 text-blue-600" />}
                 Test Connection
               </button>
             </div>
@@ -479,26 +476,6 @@ export default function Settings() {
                 </div>
               );
             })}
-          </div>
-
-          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm space-y-4">
-            <h2 className="text-base font-semibold text-gray-900 pb-3 border-b border-gray-100">
-              System Diagnostics & Emergency Actions
-            </h2>
-            <div className="flex flex-wrap gap-3">
-              <button
-                onClick={handleTestImap}
-                className="px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5"
-              >
-                <RefreshCw className="w-3.5 h-3.5" /> Trigger Immediate Mailbox Sync
-              </button>
-              <button
-                onClick={handleSave}
-                className="px-4 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5"
-              >
-                <Zap className="w-3.5 h-3.5" /> Flush Redis Cache
-              </button>
-            </div>
           </div>
         </div>
       )}

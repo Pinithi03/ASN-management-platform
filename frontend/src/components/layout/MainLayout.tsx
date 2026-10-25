@@ -48,7 +48,7 @@ export default function MainLayout() {
   const isLockoutActive = isSupplier && supplierAccountState !== "ACTIVE";
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-50">
+    <div className="flex h-screen overflow-hidden bg-slate-50 text-slate-900 font-sans">
       <Sidebar
         collapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}

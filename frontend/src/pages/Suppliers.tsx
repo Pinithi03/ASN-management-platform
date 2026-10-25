@@ -96,7 +96,6 @@ export default function Suppliers() {
   // View Mode & Sorting State (Grid Cards matching reference image by default)
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [sortBy, setSortBy] = useState<"name" | "code" | "recent" | "pos">("name");
-  const [selectedSupplierIds, setSelectedSupplierIds] = useState<Set<string>>(new Set());
 
   // Avatar Upload Refs & State for Grid Cards & Modals
   const cardFileInputRef = useRef<HTMLInputElement>(null);
@@ -197,23 +196,6 @@ export default function Suppliers() {
     } finally {
       setIsUploadingModalAvatar(false);
       if (modalFileInputRef.current) modalFileInputRef.current.value = "";
-    }
-  };
-
-  const toggleSupplierSelection = (id: string) => {
-    setSelectedSupplierIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const toggleSelectAll = (items: SupplierItem[]) => {
-    if (selectedSupplierIds.size === items.length && items.length > 0) {
-      setSelectedSupplierIds(new Set());
-    } else {
-      setSelectedSupplierIds(new Set(items.map((s) => s.id)));
     }
   };
 
@@ -807,29 +789,6 @@ export default function Suppliers() {
             </div>
           </div>
         </div>
-
-        {/* Bulk Selection Actions Bar (if any selected) */}
-        {selectedSupplierIds.size > 0 && (
-          <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-gray-700 animate-in fade-in">
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-brand-700">
-                {selectedSupplierIds.size} partner{selectedSupplierIds.size > 1 ? "s" : ""} selected
-              </span>
-              <button
-                onClick={() => toggleSelectAll(paginatedSuppliers)}
-                className="text-xs text-gray-500 hover:text-gray-800 underline"
-              >
-                {selectedSupplierIds.size === paginatedSuppliers.length ? "Deselect on page" : "Select all on page"}
-              </button>
-            </div>
-            <button
-              onClick={() => setSelectedSupplierIds(new Set())}
-              className="text-xs font-semibold text-gray-500 hover:text-gray-800"
-            >
-              Clear selection
-            </button>
-          </div>
-        )}
       </div>
 
       {viewMode === "grid" ? (
@@ -837,7 +796,6 @@ export default function Suppliers() {
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
           {paginatedSuppliers.map((s) => {
             const isArchived = Boolean(s.is_deleted);
-            const isSelected = selectedSupplierIds.has(s.id);
 
             return (
               <div
@@ -847,25 +805,14 @@ export default function Suppliers() {
                     ? "border-amber-200/90 bg-amber-50/15"
                     : s.recently_updated_by_supplier
                     ? "border-amber-300 ring-2 ring-amber-400/20"
-                    : isSelected
-                    ? "border-brand-500 ring-2 ring-brand-200"
-                    : "border-gray-200/90 hover:border-gray-300"
+                    : "border-slate-200 hover:border-slate-300"
                 }`}
               >
-                {/* Top Header inside Card: Selection circle & options */}
+                {/* Top Header inside Card */}
                 <div className="flex items-center justify-between mb-2">
-                  <button
-                    type="button"
-                    onClick={() => toggleSupplierSelection(s.id)}
-                    className={`w-4.5 h-4.5 rounded-full border flex items-center justify-center transition-colors ${
-                      isSelected
-                        ? "border-brand-600 bg-brand-50"
-                        : "border-gray-300 hover:border-gray-400 bg-white"
-                    }`}
-                    title={isSelected ? "Deselect partner" : "Select partner"}
-                  >
-                    {isSelected && <div className="w-2 h-2 rounded-full bg-brand-600" />}
-                  </button>
+                  <span className="font-mono text-[10px] font-semibold px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded border border-slate-200">
+                    #{s.supplier_code}
+                  </span>
 
                   <div className="flex items-center gap-1">
                     {s.recently_updated_by_supplier && (
@@ -999,15 +946,8 @@ export default function Suppliers() {
 
                       <div className="flex items-center gap-1">
                         <button
-                          onClick={() => handleTriggerCardAvatarUpload(s)}
-                          className="p-1 text-gray-400 hover:text-brand-600 rounded-lg hover:bg-gray-100 transition-colors"
-                          title="Change Profile Picture"
-                        >
-                          <Camera className="w-3.5 h-3.5" />
-                        </button>
-                        <button
                           onClick={() => handleOpenDeleteModal(s)}
-                          className="p-1 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
+                          className="p-1 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
                           title="Archive Supplier"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -1025,20 +965,8 @@ export default function Suppliers() {
         <div className="bg-white rounded-2xl border border-gray-200 shadow-2xs overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs text-gray-600">
-              <thead className="bg-gray-50/80 text-[11px] font-bold text-gray-500 uppercase tracking-wider border-b border-gray-200">
+              <thead className="bg-slate-50/80 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
                 <tr>
-                  <th className="py-3 px-4 w-10">
-                    <button
-                      type="button"
-                      onClick={() => toggleSelectAll(paginatedSuppliers)}
-                      className="w-4 h-4 rounded border border-gray-300 flex items-center justify-center bg-white"
-                      title="Select all"
-                    >
-                      {selectedSupplierIds.size === paginatedSuppliers.length && paginatedSuppliers.length > 0 && (
-                        <div className="w-2 h-2 bg-brand-600 rounded-xs" />
-                      )}
-                    </button>
-                  </th>
                   <th className="py-3 px-4">Partner</th>
                   <th className="py-3 px-4">HU Sequence</th>
                   <th className="py-3 px-4">Country</th>
@@ -1049,26 +977,12 @@ export default function Suppliers() {
               <tbody className="divide-y divide-gray-100">
                 {paginatedSuppliers.map((s) => {
                   const isArchived = Boolean(s.is_deleted);
-                  const isSelected = selectedSupplierIds.has(s.id);
 
                   return (
                     <tr
                       key={s.id}
-                      className={`hover:bg-gray-50/80 transition-colors ${
-                        isSelected ? "bg-brand-50/30" : ""
-                      }`}
+                      className="hover:bg-slate-50 transition-colors"
                     >
-                      <td className="py-3 px-4">
-                        <button
-                          type="button"
-                          onClick={() => toggleSupplierSelection(s.id)}
-                          className={`w-4 h-4 rounded border flex items-center justify-center ${
-                            isSelected ? "border-brand-600 bg-brand-50" : "border-gray-300 bg-white"
-                          }`}
-                        >
-                          {isSelected && <div className="w-2 h-2 bg-brand-600 rounded-xs" />}
-                        </button>
-                      </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
                           <div
@@ -1245,10 +1159,7 @@ export default function Suppliers() {
                   </div>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-gray-800">Partner Profile Picture / Logo</p>
-                  <p className="text-[11px] text-gray-500">
-                    Supports PNG, JPG, or WebP. Auto-optimized for instant loading.
-                  </p>
+                  <p className="text-xs font-semibold text-slate-800">Partner Profile Picture / Logo</p>
                   <div className="mt-1.5 flex items-center gap-2">
                     <button
                       type="button"
@@ -1344,8 +1255,8 @@ export default function Suppliers() {
                   placeholder="e.g. 0 (if starting fresh) or last used serial (e.g. 50)"
                   className="w-full h-10 px-3 text-sm font-mono rounded-xl border border-gray-200 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                 />
-                <span className="text-[10px] text-gray-400 mt-0.5 block">
-                  Last used HU number. Next carton will generate from this number + 1 (Enter 0 if brand new).
+                <span className="text-[10px] text-slate-400 mt-0.5 block">
+                  Next carton sequence will start from this number + 1.
                 </span>
               </div>
 
@@ -1504,8 +1415,8 @@ export default function Suppliers() {
                     placeholder="e.g. 0 (if starting fresh) or last used serial (e.g. 50)"
                     className="w-full h-10 px-3 text-sm font-mono rounded-xl border border-gray-200 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white"
                   />
-                  <span className="text-[10px] text-gray-400 mt-0.5 block">
-                    Admin editable: Last used sequence. Next carton generates from this + 1 (Enter 0 if fresh).
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">
+                    Next carton sequence will start from this number + 1.
                   </span>
                 </div>
 
