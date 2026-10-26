@@ -5,11 +5,10 @@
 import { useState } from "react";
 import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
-import Header from "./Header";
 import { useAuthStore } from "@/store/authStore";
 import { useQuery } from "@tanstack/react-query";
 import { supplierApi } from "@/services/supplierApi";
-import { ShieldAlert, Lock, Building2 } from "lucide-react";
+import { ShieldAlert, Lock, Building2, Menu } from "lucide-react";
 
 export default function MainLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -53,8 +52,19 @@ export default function MainLayout() {
         collapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <Header onMenuToggle={() => setSidebarCollapsed(!sidebarCollapsed)} />
+      <div className="flex flex-1 flex-col overflow-hidden min-w-0">
+        {/* Mobile Header (Only visible on small devices < lg; Desktop has 100% full height for system content) */}
+        <div className="flex h-12 items-center justify-between border-b border-slate-200 bg-white px-4 shrink-0 lg:hidden">
+          <button
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 cursor-pointer"
+            title="Toggle Menu"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+          <span className="text-xs font-bold text-slate-900">ASN Platform</span>
+          <div className="w-8" />
+        </div>
         <main className="flex-1 overflow-y-auto">
           {isLockoutActive ? (
             <div className="flex flex-col items-center justify-center min-h-[75vh] p-6 text-center animate-in fade-in">
