@@ -975,13 +975,21 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                       )}
 
                       {/* PO Number */}
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 whitespace-nowrap">
                         <div
                           className={cn(
                             "flex items-center gap-1.5 font-mono font-semibold text-gray-900 transition-colors",
                             isSupplier ? "group-hover:text-emerald-600" : "group-hover:text-blue-600"
                           )}
                         >
+                          {po.version && po.version > 1 ? (
+                            <span
+                              className="px-1.5 py-0.5 text-[10px] font-bold bg-amber-100 text-amber-800 rounded border border-amber-200 inline-flex items-center shadow-2xs font-sans shrink-0"
+                              title={`Order revised/amended by customer (Version ${po.version})`}
+                            >
+                              V{po.version}
+                            </span>
+                          ) : null}
                           <span>{po.po_number || "—"}</span>
                         </div>
                       </td>
@@ -989,19 +997,13 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                       {/* Plant & Storage Location */}
                       <td className="px-4 py-3 whitespace-nowrap">
                         <div className="space-y-1">
-                          <div className="flex items-center gap-1.5 font-medium text-gray-900 text-xs">
-                            <Factory className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                            <span>{poPlant.plantName}</span>
+                          <div className="font-medium text-gray-900 text-xs">
+                            {poPlant.plantName}
                           </div>
                           <div className="flex items-center gap-1.5">
                             <span className="px-2 py-0.5 text-[11px] font-mono font-semibold bg-gray-100 text-gray-700 border border-gray-200 rounded-md">
                               {poPlant.fullDeliveryAddress}
                             </span>
-                            {poPlant.storageLocation && poPlant.storageLocation !== poPlant.fullDeliveryAddress && (
-                              <span className="text-[10px] text-gray-400 font-mono">
-                                Dock: {poPlant.storageLocation}
-                              </span>
-                            )}
                           </div>
                         </div>
                       </td>
@@ -1094,22 +1096,12 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
 
                       {/* Status */}
                       <td className="px-4 py-3 whitespace-nowrap">
-                        <div className="flex items-center gap-1.5">
-                          <span
-                            className={`px-2.5 py-1 text-xs font-semibold rounded-full inline-flex items-center ${STATUS_BADGES[po.status] || "bg-gray-100 text-gray-700 border border-gray-200"
-                              }`}
-                          >
-                            {po.status}
-                          </span>
-                          {po.version && po.version > 1 ? (
-                            <span
-                              className="px-1.5 py-0.5 text-[10px] font-bold bg-amber-100 text-amber-800 rounded border border-amber-200 inline-flex items-center shadow-2xs"
-                              title={`Order revised/amended by customer (Version ${po.version})`}
-                            >
-                              v{po.version}
-                            </span>
-                          ) : null}
-                        </div>
+                        <span
+                          className={`px-2.5 py-1 text-xs font-semibold rounded-full inline-flex items-center ${STATUS_BADGES[po.status] || "bg-gray-100 text-gray-700 border border-gray-200"
+                            }`}
+                        >
+                          {po.status}
+                        </span>
                       </td>
 
 
