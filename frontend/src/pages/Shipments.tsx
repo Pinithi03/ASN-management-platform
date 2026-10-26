@@ -2653,6 +2653,18 @@ function ExcelPackingWorkflow({
     return packingSlipGroups.map((g) => g.slipNumber).filter((s) => s !== "DEFAULT");
   }, [packingSlipGroups]);
 
+  // Map each packing slip to its first occurrence index in rows
+  const firstIndexForSlip = useMemo(() => {
+    const map: Record<string, number> = {};
+    validationResult?.rows?.forEach((row, idx) => {
+      const ps = (row.pack_number || "").trim() || packingSlipNumber.trim() || "DEFAULT";
+      if (map[ps] === undefined) {
+        map[ps] = idx;
+      }
+    });
+    return map;
+  }, [validationResult?.rows, packingSlipNumber]);
+
   // Submission state
   const [submitting, setSubmitting] = useState(false);
   const [createdResponse, setCreatedResponse] = useState<CreateShipmentResponse | null>(null);
@@ -3548,12 +3560,17 @@ function ExcelPackingWorkflow({
                         return cnStr.replace(/^#+/, "") || String(i + 1);
                       })();
 
+                      const isFirstOccurrence = firstIndexForSlip[rowPs] === i;
+                      const prevRowPs = i > 0 ? ((validationResult.rows[i - 1].pack_number || "").trim() || packingSlipNumber.trim() || "DEFAULT") : null;
+                      const isSlipBoundary = i > 0 && rowPs !== prevRowPs;
+
                       return (
                         <tr
                           key={i}
                           className={cn(
                             "transition-colors",
-                            hasRowErrors ? "bg-red-50/60 hover:bg-red-100/60" : "hover:bg-gray-50/80"
+                            hasRowErrors ? "bg-red-50/60 hover:bg-red-100/60" : "hover:bg-gray-50/80",
+                            isSlipBoundary && "border-t-2 border-slate-200"
                           )}
                         >
                           {/* Ctn */}
@@ -3563,32 +3580,40 @@ function ExcelPackingWorkflow({
 
                           {/* Packing Slip No */}
                           <td className="px-3 py-2 whitespace-nowrap">
-                            <span className="font-mono font-bold text-gray-800 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                              {r.pack_number || packingSlipNumber || "—"}
-                            </span>
+                            {isFirstOccurrence ? (
+                              <span className="font-mono font-bold text-gray-800 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 shadow-2xs">
+                                {r.pack_number || packingSlipNumber || "—"}
+                              </span>
+                            ) : (
+                              <span className="font-mono text-[11px] text-slate-400 pl-1">
+                                {r.pack_number || packingSlipNumber || "—"}
+                              </span>
+                            )}
                           </td>
 
-                          {/* Delivery Date Picker Column */}
+                          {/* Delivery Date Picker Column (Shown only on first row of each packing slip, blank on rest) */}
                           <td className="px-3 py-2 whitespace-nowrap">
-                            <input
-                              type="date"
-                              disabled={Boolean(createdResponse)}
-                              value={rowDate}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setPackingSlipDates((prev) => ({
-                                  ...prev,
-                                  [rowPs]: val,
-                                }));
-                              }}
-                              className={cn(
-                                "h-7 px-2 text-xs font-mono font-bold rounded border bg-white focus:outline-none focus:ring-1 cursor-pointer disabled:bg-slate-100 disabled:text-slate-500 w-32 shadow-2xs",
-                                !rowDate && !createdResponse
-                                  ? "border-amber-400 bg-amber-50/60 text-amber-900 focus:border-amber-500 focus:ring-amber-400"
-                                  : "border-slate-300 text-slate-800 focus:border-emerald-500 focus:ring-emerald-400"
-                              )}
-                              title={rowDate ? `Delivery date for ${rowPs}: ${rowDate}` : `Please select delivery date for ${rowPs}`}
-                            />
+                            {isFirstOccurrence ? (
+                              <input
+                                type="date"
+                                disabled={Boolean(createdResponse)}
+                                value={rowDate}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setPackingSlipDates((prev) => ({
+                                    ...prev,
+                                    [rowPs]: val,
+                                  }));
+                                }}
+                                className={cn(
+                                  "h-7 px-2 text-xs font-mono font-bold rounded border bg-white focus:outline-none focus:ring-1 cursor-pointer disabled:bg-slate-100 disabled:text-slate-500 w-32 shadow-2xs",
+                                  !rowDate && !createdResponse
+                                    ? "border-amber-400 bg-amber-50/60 text-amber-900 focus:border-amber-500 focus:ring-amber-400"
+                                    : "border-slate-300 text-slate-800 focus:border-emerald-500 focus:ring-emerald-400"
+                                )}
+                                title={rowDate ? `Delivery date for ${rowPs}: ${rowDate}` : `Please select delivery date for ${rowPs}`}
+                              />
+                            ) : null}
                           </td>
 
                           {/* Handling Unit (SSCC-20) */}
