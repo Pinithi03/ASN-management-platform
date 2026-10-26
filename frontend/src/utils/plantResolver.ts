@@ -44,7 +44,7 @@ export const KNOWN_PLANTS: Record<string, PlantDefinition> = {
     badge: "PPA1",
     accentHex: "#2563eb",
     imageUrl: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?q=80&w=1200&auto=format&fit=crop",
-    storageLocationsHint: ["0101 Main Store", "0105 Fabric Store", "0102 Trims Store"],
+    storageLocationsHint: ["0101", "0105", "0102"],
   },
   ALPHA: {
     id: "ALPHA",
@@ -61,7 +61,7 @@ export const KNOWN_PLANTS: Record<string, PlantDefinition> = {
     badge: "PPB1",
     accentHex: "#7c3aed",
     imageUrl: "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?q=80&w=1200&auto=format&fit=crop",
-    storageLocationsHint: ["0101 Main Warehouse", "0102 Material Store"],
+    storageLocationsHint: ["0101", "0102"],
   },
   BENJI: {
     id: "BENJI",
@@ -78,7 +78,7 @@ export const KNOWN_PLANTS: Record<string, PlantDefinition> = {
     badge: "PPC1",
     accentHex: "#d97706",
     imageUrl: "https://images.unsplash.com/photo-1504917599217-d4dc5ebe6122?q=80&w=1200&auto=format&fit=crop",
-    storageLocationsHint: ["0101 General Store", "0103 Finishing Bay"],
+    storageLocationsHint: ["0101", "0103"],
   },
   SIRIO: {
     id: "SIRIO",
@@ -95,7 +95,7 @@ export const KNOWN_PLANTS: Record<string, PlantDefinition> = {
     badge: "PPD1",
     accentHex: "#059669",
     imageUrl: "https://images.unsplash.com/photo-1553413077-190dd305871c?q=80&w=1200&auto=format&fit=crop",
-    storageLocationsHint: ["Badalgama Hub", "0101 Central Store"],
+    storageLocationsHint: ["0101", "0102"],
   },
   VAVUNIYA: {
     id: "VAVUNIYA",
@@ -112,7 +112,7 @@ export const KNOWN_PLANTS: Record<string, PlantDefinition> = {
     badge: "PPA2",
     accentHex: "#e11d48",
     imageUrl: "https://images.unsplash.com/photo-1587293852726-70cdb56c2866?q=80&w=1200&auto=format&fit=crop",
-    storageLocationsHint: ["0101 Main Store", "0104 Accessories"],
+    storageLocationsHint: ["0101", "0104"],
   },
 };
 

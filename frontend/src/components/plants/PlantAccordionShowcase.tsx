@@ -261,14 +261,17 @@ export default function PlantAccordionShowcase({
                           <Warehouse className="w-3 h-3 text-gray-400" />
                           Stores:
                         </span>
-                        {plant.storageLocationsHint.map((loc) => (
-                          <span
-                            key={loc}
-                            className="px-2 py-0.5 rounded-md text-[10px] font-mono font-medium bg-white/10 text-gray-200 border border-white/10 backdrop-blur-xs"
-                          >
-                            {loc}
-                          </span>
-                        ))}
+                        {plant.storageLocationsHint.map((loc) => {
+                          const cleanLoc = loc.match(/\b\d{4}\b/)?.[0] || loc.trim();
+                          return (
+                            <span
+                              key={loc}
+                              className="px-2 py-0.5 rounded-md text-[10px] font-mono font-medium bg-white/10 text-gray-200 border border-white/10 backdrop-blur-xs"
+                            >
+                              {cleanLoc}
+                            </span>
+                          );
+                        })}
                       </div>
                     )}
 
