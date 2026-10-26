@@ -3219,56 +3219,31 @@ function ExcelPackingWorkflow({
                 </div>
               )}
 
-              <div className="w-px h-6 bg-gray-300 hidden sm:block" />
-
-              {/* Delivery Date Configuration (Quick fill all or single) */}
-              {detectedPackingSlips.length > 1 ? (
-                <div className="flex items-center gap-2">
-                  <label htmlFor="excel-quick-date" className="text-xs font-semibold text-slate-600 whitespace-nowrap" title="Apply this date to all detected packing slips in table">
-                    Quick Fill Date:
-                  </label>
-                  <input
-                    id="excel-quick-date"
-                    type="date"
-                    value={estimatedArrival}
-                    disabled={Boolean(createdResponse)}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setEstimatedArrival(val);
-                      setPackingSlipDates((prev) => {
-                        const next = { ...prev };
-                        detectedPackingSlips.forEach((ps) => {
-                          next[ps] = val;
-                        });
-                        return next;
-                      });
-                    }}
-                    className="h-8 px-2 text-xs font-mono font-medium rounded-lg border border-slate-300 bg-white focus:border-blue-500 outline-none shadow-2xs cursor-pointer disabled:bg-slate-100 disabled:text-slate-500"
-                    title="Apply this date to all detected packing slips in table"
-                  />
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <label htmlFor="excel-delivery-date" className="text-xs font-bold text-slate-700 whitespace-nowrap">
-                    Delivery Date <span className="text-red-500">*</span>:
-                  </label>
-                  <input
-                    id="excel-delivery-date"
-                    type="date"
-                    value={estimatedArrival || (detectedPackingSlips[0] ? packingSlipDates[detectedPackingSlips[0]] : "") || ""}
-                    disabled={Boolean(createdResponse)}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setEstimatedArrival(val);
-                      const targetKey = detectedPackingSlips[0] || packingSlipNumber.trim() || "DEFAULT";
-                      setPackingSlipDates((prev) => ({
-                        ...prev,
-                        [targetKey]: val,
-                      }));
-                    }}
-                    className="h-8 px-2.5 text-xs font-mono font-bold rounded-lg border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400 outline-none shadow-2xs cursor-pointer disabled:bg-slate-100 disabled:text-slate-500"
-                  />
-                </div>
+              {detectedPackingSlips.length <= 1 && (
+                <>
+                  <div className="w-px h-6 bg-gray-300 hidden sm:block" />
+                  <div className="flex items-center gap-2">
+                    <label htmlFor="excel-delivery-date" className="text-xs font-bold text-slate-700 whitespace-nowrap">
+                      Delivery Date <span className="text-red-500">*</span>:
+                    </label>
+                    <input
+                      id="excel-delivery-date"
+                      type="date"
+                      value={estimatedArrival || (detectedPackingSlips[0] ? packingSlipDates[detectedPackingSlips[0]] : "") || ""}
+                      disabled={Boolean(createdResponse)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setEstimatedArrival(val);
+                        const targetKey = detectedPackingSlips[0] || packingSlipNumber.trim() || "DEFAULT";
+                        setPackingSlipDates((prev) => ({
+                          ...prev,
+                          [targetKey]: val,
+                        }));
+                      }}
+                      className="h-8 px-2.5 text-xs font-mono font-bold rounded-lg border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400 outline-none shadow-2xs cursor-pointer disabled:bg-slate-100 disabled:text-slate-500"
+                    />
+                  </div>
+                </>
               )}
             </>
           )}
