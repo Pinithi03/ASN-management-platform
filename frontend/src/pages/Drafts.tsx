@@ -116,15 +116,17 @@ export default function Drafts() {
       </div>
 
       {/* ─── TABS FILTER ───────────────────────────────────────── */}
-      <div className="flex items-center gap-1 border-b border-gray-200">
+      <div className="flex items-center gap-1 border-b border-slate-200">
         <button
           type="button"
           onClick={() => setFilterTab("all")}
           className={cn(
             "flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-all cursor-pointer -mb-px",
             filterTab === "all"
-              ? "border-blue-600 text-blue-600"
-              : "border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300"
+              ? isSupplier
+                ? "border-emerald-600 text-emerald-700"
+                : "border-brand-600 text-brand-700"
+              : "border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300"
           )}
         >
           All Drafts
@@ -132,8 +134,10 @@ export default function Drafts() {
             className={cn(
               "px-2 py-0.5 text-[11px] rounded-full font-bold",
               filterTab === "all"
-                ? "bg-blue-50 text-blue-700 border border-blue-200"
-                : "bg-gray-100 text-gray-600"
+                ? isSupplier
+                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                  : "bg-brand-50 text-brand-700 border border-brand-200"
+                : "bg-slate-100 text-slate-600"
             )}
           >
             {totalCount}
@@ -145,8 +149,10 @@ export default function Drafts() {
           className={cn(
             "flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-all cursor-pointer -mb-px",
             filterTab === "manual"
-              ? "border-blue-600 text-blue-600"
-              : "border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300"
+              ? isSupplier
+                ? "border-emerald-600 text-emerald-700"
+                : "border-brand-600 text-brand-700"
+              : "border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300"
           )}
         >
           <Layers className="w-3.5 h-3.5" />
@@ -155,8 +161,10 @@ export default function Drafts() {
             className={cn(
               "px-2 py-0.5 text-[11px] rounded-full font-bold",
               filterTab === "manual"
-                ? "bg-blue-50 text-blue-700 border border-blue-200"
-                : "bg-gray-100 text-gray-600"
+                ? isSupplier
+                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                  : "bg-brand-50 text-brand-700 border border-brand-200"
+                : "bg-slate-100 text-slate-600"
             )}
           >
             {manualDrafts.length}
@@ -168,8 +176,10 @@ export default function Drafts() {
           className={cn(
             "flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-all cursor-pointer -mb-px",
             filterTab === "excel"
-              ? "border-emerald-600 text-emerald-600"
-              : "border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300"
+              ? isSupplier
+                ? "border-emerald-600 text-emerald-700"
+                : "border-brand-600 text-brand-700"
+              : "border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300"
           )}
         >
           <FileSpreadsheet className="w-3.5 h-3.5" />
@@ -178,8 +188,10 @@ export default function Drafts() {
             className={cn(
               "px-2 py-0.5 text-[11px] rounded-full font-bold",
               filterTab === "excel"
-                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                : "bg-gray-100 text-gray-600"
+                ? isSupplier
+                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                  : "bg-brand-50 text-brand-700 border border-brand-200"
+                : "bg-slate-100 text-slate-600"
             )}
           >
             {excelDrafts.length}
@@ -269,7 +281,10 @@ export default function Drafts() {
                     <button
                       type="button"
                       onClick={() => handleResumeManual(draft)}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                      className={cn(
+                        "inline-flex items-center gap-1.5 px-4 py-2 text-white rounded-lg text-xs font-semibold shadow-2xs transition-colors cursor-pointer",
+                        isSupplier ? "bg-emerald-600 hover:bg-emerald-700" : "bg-brand-600 hover:bg-brand-700"
+                      )}
                     >
                       Resume Packing <ArrowRight className="w-3.5 h-3.5" />
                     </button>

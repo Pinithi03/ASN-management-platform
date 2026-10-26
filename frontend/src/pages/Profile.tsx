@@ -235,114 +235,88 @@ export default function Profile() {
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto animate-in fade-in duration-200">
-      {/* Top Banner Card: Clean and Elegant */}
-      <div className="bg-gradient-to-r from-emerald-800 via-emerald-700 to-teal-800 rounded-2xl p-6 text-white shadow-sm relative overflow-hidden">
-        <div className="absolute right-0 top-0 translate-x-8 -translate-y-8 w-64 h-64 bg-white/5 rounded-full blur-2xl pointer-events-none" />
-
-        <div className="flex items-center gap-4 relative z-10">
-          {matchedSupplier.profile_picture_url ? (
-            <img
-              src={matchedSupplier.profile_picture_url}
-              alt={matchedSupplier.name}
-              className="w-16 h-16 rounded-2xl object-cover border-2 border-white/40 shadow-md shrink-0 bg-white"
-            />
-          ) : (
-            <div className="w-14 h-14 rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 flex items-center justify-center shrink-0 text-white font-bold text-2xl shadow-inner">
-              <Building2 className="w-7 h-7 text-emerald-200" />
-            </div>
-          )}
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-white">{matchedSupplier.name}</h1>
-            <p className="text-xs text-emerald-100/80 mt-1 font-mono">
-              Supplier Code: <span className="text-white font-semibold">#{matchedSupplier.supplier_code}</span>
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* ─── DEDICATED PROFILE PICTURE & BRANDING SPACE ─── */}
-      <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700">
-              <Camera className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
-                Supplier Profile Picture & Branding
-              </h2>
-              <p className="text-xs text-gray-500 mt-0.5">
-                Upload a company logo or representative picture displayed across the platform and Admin Directory
-              </p>
-            </div>
-          </div>
-        </div>
-
+      {/* Top Profile Header Card: Clean Slate & White Theme with Integrated Logo Branding */}
+      <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-2xs space-y-4">
         {/* Status Alerts */}
         {avatarSuccess && (
-          <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-start gap-3 text-xs text-emerald-800 animate-in fade-in">
+          <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-lg flex items-start gap-2.5 text-xs text-emerald-800 animate-in fade-in">
             <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
             <div>
-              <p className="font-bold">Update Saved</p>
-              <p className="mt-0.5 text-emerald-700">{avatarSuccess}</p>
+              <p className="font-semibold">{avatarSuccess}</p>
             </div>
           </div>
         )}
 
         {avatarError && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3 text-xs text-red-800 animate-in fade-in">
+          <div className="p-3.5 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2.5 text-xs text-red-800 animate-in fade-in">
             <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
             <div>
-              <p className="font-bold">Upload Error</p>
-              <p className="mt-0.5 text-red-700">{avatarError}</p>
+              <p className="font-semibold">{avatarError}</p>
             </div>
           </div>
         )}
 
-        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 p-4 rounded-xl bg-gray-50/70 border border-gray-200/80">
-          {/* Avatar Preview Circle */}
-          <div className="relative group shrink-0">
-            <div className="w-28 h-28 rounded-full border-4 border-white shadow-md overflow-hidden bg-emerald-50 flex items-center justify-center ring-2 ring-emerald-500/20">
-              {matchedSupplier.profile_picture_url ? (
-                <img
-                  src={matchedSupplier.profile_picture_url}
-                  alt={matchedSupplier.name}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-emerald-100 to-teal-100 text-emerald-800">
-                  <span className="text-3xl font-extrabold uppercase">
-                    {matchedSupplier.name ? matchedSupplier.name.charAt(0) : "S"}
-                  </span>
-                  <span className="text-[10px] font-semibold text-emerald-700 mt-0.5">No Photo</span>
-                </div>
-              )}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
+          <div className="flex items-center gap-4">
+            {/* Clickable Profile Avatar / Logo */}
+            <div className="relative group shrink-0">
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                className="w-16 h-16 rounded-xl border border-slate-200 shadow-2xs overflow-hidden bg-slate-50 flex items-center justify-center cursor-pointer group-hover:border-emerald-500 transition-colors"
+                title="Click to upload or change logo"
+              >
+                {matchedSupplier.profile_picture_url ? (
+                  <img
+                    src={matchedSupplier.profile_picture_url}
+                    alt={matchedSupplier.name}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center bg-slate-100 text-slate-700">
+                    <span className="text-xl font-bold uppercase">
+                      {matchedSupplier.name ? matchedSupplier.name.charAt(0) : "S"}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Quick Hover Overlay */}
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploadingAvatar}
+                className="absolute inset-0 rounded-xl bg-black/40 text-white flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-not-allowed"
+                title="Change photo"
+              >
+                <Camera className="w-4 h-4 mb-0.5" />
+                <span className="text-[9px] font-semibold">Change</span>
+              </button>
             </div>
 
-            {/* Quick Hover Overlay to change picture */}
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isUploadingAvatar}
-              className="absolute inset-0 rounded-full bg-black/40 text-white flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-not-allowed"
-              title="Click to change photo"
-            >
-              <Camera className="w-6 h-6 mb-1" />
-              <span className="text-[10px] font-semibold">Change</span>
-            </button>
-          </div>
-
-          {/* Action Buttons & Guidance */}
-          <div className="flex-1 space-y-3 text-center sm:text-left">
             <div>
-              <h3 className="text-sm font-bold text-gray-900">
-                {matchedSupplier.profile_picture_url ? "Current Profile Photo" : "No Profile Photo Set"}
-              </h3>
-              <p className="text-xs text-gray-500 mt-0.5">
-                PNG, JPG or WebP images up to 10MB. Images are automatically optimized and scaled for clean display.
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-lg font-bold tracking-tight text-slate-900">{matchedSupplier.name}</h1>
+                <span className="font-mono text-xs font-semibold px-2 py-0.5 bg-slate-100 text-slate-700 rounded border border-slate-200">
+                  #{matchedSupplier.supplier_code}
+                </span>
+                {matchedSupplier.is_active ? (
+                  <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    Active Supplier
+                  </span>
+                ) : (
+                  <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-red-50 text-red-600 border border-red-200">
+                    Inactive
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                {matchedSupplier.email || "Registered Partner Portal Profile"}
               </p>
             </div>
+          </div>
 
+          {/* Action Buttons for Avatar */}
+          <div className="flex items-center gap-2 self-stretch sm:self-auto justify-end">
             <input
               type="file"
               ref={fileInputRef}
@@ -350,39 +324,36 @@ export default function Profile() {
               accept="image/png, image/jpeg, image/jpg, image/webp"
               className="hidden"
             />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploadingAvatar}
+              className="px-3.5 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-2xs transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            >
+              {isUploadingAvatar ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Processing...</span>
+                </>
+              ) : (
+                <>
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>{matchedSupplier.profile_picture_url ? "Change Logo" : "Upload Logo"}</span>
+                </>
+              )}
+            </button>
 
-            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5 pt-1">
+            {matchedSupplier.profile_picture_url && (
               <button
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
+                onClick={handleRemoveAvatar}
                 disabled={isUploadingAvatar}
-                className="px-4 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-xs transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                className="px-3 py-2 text-xs font-medium text-red-600 hover:text-red-700 bg-white hover:bg-red-50 border border-slate-200 hover:border-red-200 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
-                {isUploadingAvatar ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Processing...</span>
-                  </>
-                ) : (
-                  <>
-                    <Upload className="w-3.5 h-3.5" />
-                    <span>{matchedSupplier.profile_picture_url ? "Change Photo" : "Upload Photo"}</span>
-                  </>
-                )}
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Remove</span>
               </button>
-
-              {matchedSupplier.profile_picture_url && (
-                <button
-                  type="button"
-                  onClick={handleRemoveAvatar}
-                  disabled={isUploadingAvatar}
-                  className="px-3.5 py-2 text-xs font-medium text-red-600 hover:text-red-700 bg-white hover:bg-red-50 border border-red-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-2xs"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Remove Photo</span>
-                </button>
-              )}
-            </div>
+            )}
           </div>
         </div>
       </div>
@@ -519,7 +490,7 @@ export default function Profile() {
                     required
                   />
                   <span className="text-[11px] text-slate-500 mt-1 block">
-                    Next carton will generate from this number + 1 (e.g. 0 ➔ 1).
+                    Next carton will generate from this number + 1 (e.g. 0 to 1).
                   </span>
                 </div>
                 <button

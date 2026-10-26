@@ -195,8 +195,8 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                     "w-full flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors cursor-pointer",
                     isParentActive
                       ? isAdmin
-                        ? "bg-blue-50/80 text-blue-700"
-                        : "bg-emerald-50/80 text-emerald-700"
+                        ? "bg-brand-50 text-brand-700 font-semibold"
+                        : "bg-emerald-50 text-emerald-700 font-semibold"
                       : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                   )}
                   title={collapsed ? item.label : undefined}
@@ -230,8 +230,8 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                             "flex items-center gap-2.5 rounded-lg pl-6 pr-3 py-1.5 text-xs font-medium transition-colors",
                             isSubActive
                               ? isAdmin
-                                ? "bg-blue-100/80 text-blue-900 font-semibold"
-                                : "bg-emerald-100/80 text-emerald-900 font-semibold"
+                                ? "bg-brand-50 text-brand-700 font-semibold"
+                                : "bg-emerald-50 text-emerald-700 font-semibold"
                               : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
                           )}
                         >
@@ -255,7 +255,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 "flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                 isActive(item.to)
                   ? isAdmin
-                    ? "bg-blue-50 text-blue-700 font-semibold"
+                    ? "bg-brand-50 text-brand-700 font-semibold"
                     : "bg-emerald-50 text-emerald-700 font-semibold"
                   : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
               )}
@@ -265,7 +265,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 {!collapsed && <span>{item.label}</span>}
               </div>
               {!collapsed && isDraftItem && draftCount > 0 && (
-                <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-brand-50 text-brand-700 border border-brand-200">
                   {draftCount}
                 </span>
               )}
@@ -289,7 +289,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
               "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
               isActive(item.to)
                 ? isAdmin
-                  ? "bg-blue-50 text-blue-700 font-semibold"
+                  ? "bg-brand-50 text-brand-700 font-semibold"
                   : "bg-emerald-50 text-emerald-700 font-semibold"
                 : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
             )}

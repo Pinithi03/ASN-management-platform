@@ -74,6 +74,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 const PLANT_LABELS: Record<string, { name: string; location: string }> = {
   PPA1: { name: "Omega Line Ltd", location: "Sandalankawa" },
+  PPA2: { name: "Vavuniya Apparels Ltd", location: "Vavuniya" },
   PPB1: { name: "Alpha Apparels Ltd", location: "Polgahawela" },
   PPC1: { name: "Benji Ltd", location: "Bingiriya" },
   PPD1: { name: "Sirio Ltd", location: "Badalgama" },
@@ -378,15 +379,16 @@ export default function AdminDashboard() {
   const plantDistribution = useMemo(() => {
     const counts: Record<string, { boxes: number; pieces: number; shipments: number }> = {
       PPA1: { boxes: 0, pieces: 0, shipments: 0 },
+      PPA2: { boxes: 0, pieces: 0, shipments: 0 },
       PPB1: { boxes: 0, pieces: 0, shipments: 0 },
       PPC1: { boxes: 0, pieces: 0, shipments: 0 },
       PPD1: { boxes: 0, pieces: 0, shipments: 0 },
-      PPE1: { boxes: 0, pieces: 0, shipments: 0 },
     };
 
     if (Array.isArray(shipments)) {
       shipments.forEach((s: any) => {
-        const code = (s.plant_code || "PPA1").toUpperCase();
+        let code = (s.plant_code || "PPA1").toUpperCase();
+        if (code.startsWith("PPE")) code = "PPA2";
         const target = counts[code] || counts["PPA1"];
         target.boxes += Number(s.total_boxes || 0);
         target.pieces += Number(s.total_pieces || 0);

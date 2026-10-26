@@ -8,13 +8,13 @@ import {
   RefreshCw,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   PackagePlus,
   CheckSquare,
   Square,
   Calendar,
   X,
   ArrowRight,
-  ArrowLeft,
   Copy,
   Check,
   Building,
@@ -193,24 +193,7 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
   });
   const allOrdersList: PurchaseOrder[] = allOverviewData?.items || [];
 
-  // Live order counts per plant
-  const plantCountsMap = useMemo(() => {
-    const counts: Record<string, number> = {
-      OMEGA: 0,
-      ALPHA: 0,
-      BENJI: 0,
-      SIRIO: 0,
-      VAVUNIYA: 0,
-    };
-    allOrdersList.forEach((po) => {
-      const dest = po.delivery_address || po.destination || po.client_code;
-      const res = resolvePlantAndLocation(dest, po.client_code);
-      if (counts[res.plantGroup] !== undefined) {
-        counts[res.plantGroup] += 1;
-      }
-    });
-    return counts;
-  }, [allOrdersList]);
+
 
   const { data, isLoading } = useQuery({
     queryKey: ["purchaseOrders", page, search, poChips, statusFilter, supplierId, selectedPlant, selectedLocation],
@@ -515,52 +498,97 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                 Excel Drop
               </span>
             )}
+
+            {selectedPlant !== "ALL" && KNOWN_PLANTS[selectedPlant] && (
+              <div className="inline-flex items-center gap-2 pl-2 border-l border-slate-200">
+                <span
+                  className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase text-white shadow-xs"
+                  style={{ backgroundColor: KNOWN_PLANTS[selectedPlant].accentHex }}
+                >
+                  {KNOWN_PLANTS[selectedPlant].defaultCode}
+                </span>
+                <span className="text-sm font-bold text-slate-800">
+                  {KNOWN_PLANTS[selectedPlant].name}
+                </span>
+                <span className="text-xs text-slate-400 font-normal">
+                  ({KNOWN_PLANTS[selectedPlant].location})
+                </span>
+              </div>
+            )}
           </div>
-          <p className="text-xs text-gray-500 mt-1">
-            Dispatch purchase orders scoped by destination factory plant to prevent delivery conflicts.
-          </p>
         </div>
 
-        {/* View Switcher: Plant Delivery Hub vs Global Table */}
-        <div className="flex items-center gap-2 bg-gray-100 p-1 rounded-xl border border-gray-200 self-start sm:self-auto shadow-2xs">
-          <button
-            type="button"
-            onClick={() => selectPlant("ALL")}
-            className={cn(
-              "px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer",
-              selectedPlant === "ALL" && viewMode === "hub"
-                ? "bg-white text-gray-900 shadow-xs"
-                : "text-gray-600 hover:text-gray-900"
-            )}
-          >
-            <Factory className="w-3.5 h-3.5 text-blue-600" />
-            <span>Factory Plants (5 Hubs)</span>
-          </button>
+        {/* View Switcher & Filter Dropdowns (Top Right) */}
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
 
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedPlant("ALL");
-              setViewMode("global");
-              const p = new URLSearchParams(searchParams);
-              p.set("view", "global");
-              p.delete("plant");
-              setSearchParams(p, { replace: true });
-            }}
-            className={cn(
-              "px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer",
-              viewMode === "global"
-                ? "bg-white text-gray-900 shadow-xs"
-                : "text-gray-600 hover:text-gray-900"
-            )}
-          >
-            <Layers className="w-3.5 h-3.5 text-gray-500" />
-            <span>All Orders ({allOrdersList.length > 0 ? allOrdersList.length : totalOrders})</span>
-          </button>
+
+          {/* Delivery Storage Location Dropdown (Shown when a plant is selected) */}
+          {selectedPlant !== "ALL" && (
+            <div className="relative">
+              <select
+                value={selectedLocation}
+                onChange={(e) => {
+                  setSelectedLocation(e.target.value);
+                  setPage(1);
+                }}
+                className="h-9 pl-8 pr-8 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-700 shadow-2xs hover:border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer appearance-none"
+                title="Filter by Delivery Storage Location"
+              >
+                <option value="ALL">All Locations ({totalOrders})</option>
+                {availableLocations.map((loc) => (
+                  <option key={loc.code} value={loc.code}>
+                    {loc.code} ({loc.count})
+                  </option>
+                ))}
+              </select>
+              <Warehouse className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+          )}
+
+          {/* View Mode Toggle: Factory Plants (5) vs All Orders */}
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 shadow-2xs">
+            <button
+              type="button"
+              onClick={() => selectPlant("ALL")}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer",
+                selectedPlant === "ALL" && viewMode === "hub"
+                  ? "bg-white text-slate-900 shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              )}
+              title="Show Factory Plants Overview"
+            >
+              <Factory className="w-3.5 h-3.5 text-blue-600" />
+              <span>Factory Plants (5)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedPlant("ALL");
+                setViewMode("global");
+                const p = new URLSearchParams(searchParams);
+                p.set("view", "global");
+                p.delete("plant");
+                setSearchParams(p, { replace: true });
+              }}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer",
+                viewMode === "global"
+                  ? "bg-white text-slate-900 shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              )}
+              title="View All Orders Table across all plants"
+            >
+              <Layers className="w-3.5 h-3.5 text-slate-500" />
+              <span>All Orders</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* ─── SHOWCASE MODE: Zone24x7 5-Plant Horizontal Accordion Showcase ─── */}
+      {/* ─── SHOWCASE MODE: 5-Plant Horizontal Accordion Showcase ─── */}
       {selectedPlant === "ALL" && viewMode === "hub" ? (
         <PlantAccordionShowcase
           orders={allOrdersList.length > 0 ? allOrdersList : orders}
@@ -577,112 +605,7 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
         />
       ) : (
         /* ─── PLANT WORKSPACE / GLOBAL LIST MODE ─── */
-        <div className="space-y-6">
-          {/* Breadcrumb & Plant Context Header (When inside a plant) */}
-          {selectedPlant !== "ALL" && KNOWN_PLANTS[selectedPlant] && (
-            <div className="p-5 rounded-2xl bg-gradient-to-r from-gray-900 via-gray-900 to-gray-950 text-white border border-gray-800 shadow-lg space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => selectPlant("ALL")}
-                    className="h-9 px-3 text-xs font-semibold text-gray-300 bg-gray-800 hover:bg-gray-700 hover:text-white rounded-xl border border-gray-700 transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
-                    title="Return to 5-Plant Showcase Hub"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                    <span>All Plants</span>
-                  </button>
-
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase text-white shadow-xs"
-                        style={{ backgroundColor: KNOWN_PLANTS[selectedPlant].accentHex }}
-                      >
-                        {KNOWN_PLANTS[selectedPlant].badge}
-                      </span>
-                      <h2 className="text-lg sm:text-xl font-bold tracking-tight text-white flex items-center gap-2">
-                        <span>{KNOWN_PLANTS[selectedPlant].name}</span>
-                        <span className="text-xs font-mono font-normal text-gray-400">
-                          ({KNOWN_PLANTS[selectedPlant].codePrefix}1 / {KNOWN_PLANTS[selectedPlant].codePrefix}2)
-                        </span>
-                      </h2>
-                    </div>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {KNOWN_PLANTS[selectedPlant].location} · {KNOWN_PLANTS[selectedPlant].tagline}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 self-start sm:self-auto">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                    Single-Plant Scope Active
-                  </span>
-                </div>
-              </div>
-
-              {/* Quick Switcher Bar: Jump directly to another plant without going back */}
-              <div className="pt-3 border-t border-gray-800/80 flex flex-wrap items-center gap-2">
-                <span className="text-xs text-gray-400 mr-1 flex items-center gap-1">
-                  <Factory className="w-3.5 h-3.5 text-gray-400" />
-                  <span>Switch Plant:</span>
-                </span>
-                {Object.entries(KNOWN_PLANTS).map(([pId, plant]) => {
-                  const isCurrent = selectedPlant === pId;
-                  const count = plantCountsMap[pId] || 0;
-                  return (
-                    <button
-                      key={pId}
-                      type="button"
-                      onClick={() => selectPlant(pId)}
-                      className={cn(
-                        "px-3 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer",
-                        isCurrent
-                          ? "bg-white text-gray-950 font-bold shadow-xs"
-                          : "bg-gray-800/80 text-gray-300 hover:bg-gray-700/80 hover:text-white border border-gray-700"
-                      )}
-                    >
-                      <span>{plant.name.replace(" Ltd", "")}</span>
-                      <span
-                        className={cn(
-                          "px-1.5 py-0.2 rounded-full text-[10px] font-mono",
-                          isCurrent ? "bg-gray-200 text-gray-800" : "bg-gray-900 text-gray-400"
-                        )}
-                      >
-                        {count}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Global View Banner (When viewing all orders across plants) */}
-          {selectedPlant === "ALL" && viewMode === "global" && (
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-blue-50 border border-blue-200 text-blue-950 shadow-2xs">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-xs">
-                  ALL
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-blue-950">Global Orders View (Multi-Plant)</h3>
-                  <p className="text-xs text-blue-700 mt-0.5">
-                    Viewing orders across all 5 plants. Deliveries must still be grouped per factory plant.
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => selectPlant("ALL")}
-                className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-white text-blue-700 border border-blue-300 hover:bg-blue-50/80 shadow-2xs transition-colors cursor-pointer self-start sm:self-auto flex items-center gap-1.5"
-              >
-                <ArrowLeft className="w-3.5 h-3.5" />
-                <span>Return to 5-Plant Hub</span>
-              </button>
-            </div>
-          )}
+        <div className="space-y-4">
 
           {/* Cross-Plant Selection Mismatch Warning */}
           {crossPlantWarning && (
@@ -810,100 +733,7 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
             </div>
           )}
 
-          {/* Level 2: Storage Location Filter Pills (User: e plant eka athule uda ara storage location ekai search bar ekai thiynwa) */}
-          {selectedPlant !== "ALL" && (
-            <div className="p-4 bg-white rounded-2xl border border-gray-200 shadow-2xs space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs font-bold text-gray-800">
-                  <Warehouse className="w-4 h-4 text-blue-600" />
-                  <span>Delivery Storage Locations</span>
-                  <span className="text-gray-400 font-normal">
-                    — {KNOWN_PLANTS[selectedPlant]?.name.replace(" Ltd", "")}
-                  </span>
-                </div>
-                {selectedLocation !== "ALL" && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedLocation("ALL");
-                      setPage(1);
-                    }}
-                    className="text-xs text-blue-600 hover:text-blue-800 font-semibold cursor-pointer flex items-center gap-1"
-                  >
-                    <X className="w-3.5 h-3.5" /> Clear Location Filter
-                  </button>
-                )}
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                {/* All Locations Pill */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedLocation("ALL");
-                    setPage(1);
-                  }}
-                  className={cn(
-                    "px-3.5 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer flex items-center gap-2",
-                    selectedLocation === "ALL"
-                      ? isSupplier
-                        ? "bg-emerald-50 text-emerald-900 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs"
-                        : "bg-blue-50 text-blue-900 border-blue-500 ring-2 ring-blue-500/20 shadow-xs"
-                      : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"
-                  )}
-                >
-                  <span>All Storage Locations</span>
-                  <span
-                    className={cn(
-                      "px-1.5 py-0.2 rounded-full text-[10px] font-mono",
-                      selectedLocation === "ALL"
-                        ? isSupplier ? "bg-emerald-200/80 text-emerald-900" : "bg-blue-200/80 text-blue-900"
-                        : "bg-gray-200 text-gray-700"
-                    )}
-                  >
-                    {totalOrders}
-                  </span>
-                </button>
-
-                {/* Specific Location Pills */}
-                {availableLocations.map((loc) => {
-                  const isLocSelected = selectedLocation === loc.code;
-                  return (
-                    <button
-                      key={loc.code}
-                      type="button"
-                      onClick={() => {
-                        setSelectedLocation(isLocSelected ? "ALL" : loc.code);
-                        setPage(1);
-                      }}
-                      className={cn(
-                        "px-3.5 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer flex items-center gap-2",
-                        isLocSelected
-                          ? isSupplier
-                            ? "bg-emerald-50 text-emerald-900 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs"
-                            : "bg-blue-50 text-blue-900 border-blue-500 ring-2 ring-blue-500/20 shadow-xs"
-                          : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50 hover:border-gray-300"
-                      )}
-                    >
-                      <span className="font-mono">{loc.code}</span>
-                      <span
-                        className={cn(
-                          "px-1.5 py-0.2 rounded-full text-[10px] font-mono",
-                          isLocSelected
-                            ? isSupplier ? "bg-emerald-200/80 text-emerald-900" : "bg-blue-200/80 text-blue-900"
-                            : "bg-gray-100 text-gray-600 border border-gray-200"
-                        )}
-                      >
-                        {loc.count}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Search & Filter Bar (Right below storage locations) */}
+          {/* Search & Filter Bar */}
           <div className="flex flex-col sm:flex-row sm:items-start gap-3">
             <div className="flex-1">
               <div className="relative flex flex-wrap items-center gap-1.5 min-h-[42px] pl-10 pr-9 py-1.5 text-sm border border-gray-200 rounded-xl focus-within:ring-2 focus-within:ring-blue-500 bg-white shadow-2xs">

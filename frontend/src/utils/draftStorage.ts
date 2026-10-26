@@ -36,6 +36,7 @@ export interface ExcelPackingDraft {
   plantCode: string;
   estimatedArrival: string;
   packingSlipNumber: string;
+  packingSlipDates?: Record<string, string>;
   validationResult: any | null;
   fileName?: string;
   updatedAt: number;

@@ -255,11 +255,11 @@ export default function UserManagement() {
                       {/* System Role */}
                       <td className="px-6 py-4">
                         {usr.role === "SUPER_ADMIN" ? (
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-black border border-gray-200">
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
                             Super Administrator
                           </span>
                         ) : (
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-black border border-gray-200">
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
                             System Administrator
                           </span>
                         )}

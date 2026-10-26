@@ -405,6 +405,7 @@ async def create_shipment_from_excel(
     carrier: Optional[str] = Form(None),
     tracking_number: Optional[str] = Form(None),
     estimated_arrival: Optional[str] = Form(None),
+    packing_slip_dates: Optional[str] = Form(None),
     note: Optional[str] = Form(None),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
@@ -605,6 +606,22 @@ async def create_shipment_from_excel(
             detail=f"Packing slip / Shipment number(s) '{', '.join(existing_list)}' already exist. Please use unique numbers.",
         )
 
+    # Parse per-packing slip delivery dates if provided as JSON (e.g. {"01007771": "2026-10-28"})
+    ps_dates_map: dict[str, date] = {}
+    if packing_slip_dates:
+        try:
+            import json
+            raw_map = json.loads(packing_slip_dates)
+            if isinstance(raw_map, dict):
+                for k, v in raw_map.items():
+                    if v and str(v).strip():
+                        try:
+                            ps_dates_map[str(k).strip()] = datetime.strptime(str(v).strip(), "%Y-%m-%d").date()
+                        except ValueError:
+                            pass
+        except Exception as e:
+            logger.warning("Could not parse packing_slip_dates JSON: %s", e)
+
     shipment_date = date.today()
     est_arrival_date = None
     if estimated_arrival:
@@ -622,6 +639,8 @@ async def create_shipment_from_excel(
         sub_total_cartons = len(group_rows)
         sub_total_qty = int(sum(r.quantity for r in group_rows))
 
+        ps_arrival_date = ps_dates_map.get(s_num) or est_arrival_date
+
         shipment = Shipment(
             id=uuid.uuid4(),
             company_id=company_id,
@@ -633,7 +652,7 @@ async def create_shipment_from_excel(
             total_boxes=sub_total_cartons,
             total_pieces=sub_total_qty,
             ship_date=shipment_date,
-            estimated_arrival=est_arrival_date,
+            estimated_arrival=ps_arrival_date,
             carrier=carrier,
             tracking_number=tracking_number,
         )
@@ -744,7 +763,7 @@ async def create_shipment_from_excel(
             supplier_code=actual_supp_code,
             packing_slip_number=s_num,
             packing_slip_date=shipment_date,
-            delivery_date=est_arrival_date or shipment_date,
+            delivery_date=ps_arrival_date or shipment_date,
             boxes=boxes_for_xml,
             note=note or "",
         )
@@ -806,6 +825,8 @@ async def create_shipment_from_excel(
             "total_boxes": item["shipment"].total_boxes,
             "total_pieces": item["shipment"].total_pieces,
             "ship_date": item["shipment"].ship_date.isoformat() if item["shipment"].ship_date else None,
+            "estimated_arrival": item["shipment"].estimated_arrival.isoformat() if item["shipment"].estimated_arrival else None,
+            "delivery_date": item["shipment"].estimated_arrival.isoformat() if item["shipment"].estimated_arrival else None,
             "carrier": item["shipment"].carrier,
             "handling_units": [r.hu_number for r in item["rows"]],
             "asn_record_id": str(item["asn"].id),

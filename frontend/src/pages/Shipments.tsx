@@ -33,6 +33,8 @@ import {
   Clock,
   FileEdit,
   RotateCcw,
+  Calendar,
+  Layers,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { cn } from "@/utils/cn";
@@ -56,10 +58,10 @@ import {
 } from "@/utils/draftStorage";
 
 const statusColor: Record<string, string> = {
-  DRAFT: "bg-gray-50 text-gray-700 border-gray-200",
+  DRAFT: "bg-slate-100 text-slate-700 border-slate-200",
   PACKING: "bg-amber-50 text-amber-700 border-amber-200",
   PACKED: "bg-blue-50 text-blue-700 border-blue-200",
-  XML_SENT: "bg-purple-50 text-purple-700 border-purple-200",
+  XML_SENT: "bg-blue-50 text-blue-700 border-blue-200",
   RECEIVED: "bg-blue-50 text-blue-700 border-blue-200",
   ACCEPTED: "bg-emerald-50 text-emerald-700 border-emerald-200",
   REJECTED: "bg-red-50 text-red-700 border-red-200",
@@ -71,15 +73,16 @@ export const PLANT_NAMES: Record<string, string> = {
   PPA1: "Omega Line Ltd (PPA1)",
   "PPA1-0198": "Omega Line Ltd (PPA1-0198)",
   "PPA1-0101": "Omega Line Ltd (PPA1-0101)",
-  "PPA2-0198": "Omega Line Ltd (PPA2-0198)",
-  "PPA2-0101": "Omega Line Ltd (PPA2-0101)",
+  PPA2: "Vavuniya Apparels Ltd (PPA2)",
+  "PPA2-0198": "Vavuniya Apparels Ltd (PPA2-0198)",
+  "PPA2-0101": "Vavuniya Apparels Ltd (PPA2-0101)",
   PPB1: "Alpha Apparels Ltd (PPB1)",
   "PPB1-0101": "Alpha Apparels Ltd (PPB1-0101)",
   PPC1: "Benji Ltd (PPC1)",
   "PPC1-0101": "Benji Ltd (PPC1-0101)",
   PPD1: "Sirio Ltd (PPD1)",
   "PPD1-0101": "Sirio Ltd (PPD1-0101)",
-  PPE1: "Vavuniya Apparels Ltd (PPE1)",
+  PPE1: "Vavuniya Apparels Ltd (PPA2)",
   "1001": "Omega Line Ltd (1001)",
 };
 
@@ -87,11 +90,11 @@ export const formatPlantName = (plantCode?: string | null): string => {
   if (!plantCode) return "Omega Line Ltd (PPA1)";
   if (PLANT_NAMES[plantCode]) return PLANT_NAMES[plantCode];
   const s = plantCode.toUpperCase();
+  if (s.startsWith("PPA2") || s.startsWith("PPE")) return `Vavuniya Apparels Ltd (${plantCode})`;
   if (s.startsWith("PPA")) return `Omega Line Ltd (${plantCode})`;
   if (s.startsWith("PPB")) return `Alpha Apparels Ltd (${plantCode})`;
   if (s.startsWith("PPC")) return `Benji Ltd (${plantCode})`;
   if (s.startsWith("PPD")) return `Sirio Ltd (${plantCode})`;
-  if (s.startsWith("PPE")) return `Vavuniya Apparels Ltd (${plantCode})`;
   return plantCode;
 };
 
@@ -100,14 +103,18 @@ export const matchPlant = (clientOrDest?: string | null): string => {
   if (!clientOrDest) return "PPA1";
   const s = clientOrDest.trim();
   const codeMatch = s.match(/\b(PP[A-E]\d(?:-[0-9A-Z]+)?)\b/i);
-  if (codeMatch) return codeMatch[1].toUpperCase();
+  if (codeMatch) {
+    const matched = codeMatch[1].toUpperCase();
+    if (matched.startsWith("PPE")) return matched.replace("PPE", "PPA2");
+    return matched;
+  }
 
   const lower = s.toLowerCase();
+  if (lower.includes("vavuniya") || lower.includes("ppa2") || lower.includes("ppe1") || lower.includes("ppa4")) return "PPA2";
+  if (lower.includes("omega") || lower.includes("ppa1") || lower.includes("ppa")) return "PPA1";
   if (lower.includes("alpha") || lower.includes("ppb1")) return "PPB1";
   if (lower.includes("benji") || lower.includes("ppc1")) return "PPC1";
   if (lower.includes("sirio") || lower.includes("ppd1")) return "PPD1";
-  if (lower.includes("vavuniya") || lower.includes("ppe1") || lower.includes("ppa4")) return "PPE1";
-  if (lower.includes("omega") || lower.includes("ppa1") || lower.includes("ppa2")) return "PPA1";
   return s || "PPA1";
 };
 
@@ -1590,10 +1597,10 @@ function WebPackingWizard({
                 )}
               >
                 {formatSummary.includes("Mixed")
-                  ? "📦/📜 Mixed (Box & Roll)"
+                  ? "Mixed (Box & Roll)"
                   : formatSummary === "All Rolls"
-                  ? "📜 All Rolls"
-                  : "📦 All Boxes"}
+                  ? "All Rolls"
+                  : "All Boxes"}
               </span>
             </div>
           </div>
@@ -1637,8 +1644,8 @@ function WebPackingWizard({
                           onChange={(e) => handleSetPoPackagingType(poNo, e.target.value as "BOX" | "ROLL")}
                           className="text-xs font-bold bg-white border border-gray-300 rounded-md px-2.5 py-1 outline-none focus:border-emerald-500 shadow-sm cursor-pointer"
                         >
-                          <option value="BOX">📦 Box</option>
-                          <option value="ROLL">📜 Roll</option>
+                          <option value="BOX">Box</option>
+                          <option value="ROLL">Roll</option>
                         </select>
                       </div>
                     </div>
@@ -1845,7 +1852,7 @@ function WebPackingWizard({
                           ? "bg-amber-50 text-amber-800 border-amber-200"
                           : "bg-blue-50 text-blue-800 border-blue-200"
                       )}>
-                        {isRoll ? "📜 Roll Packing" : "📦 Box Packing"}
+                        {isRoll ? "Roll Packing" : "Box Packing"}
                       </span>
                     </div>
 
@@ -2497,6 +2504,7 @@ function ExcelPackingWorkflow({
   onOpenLabelModal?: (id: string, num: string, count?: number) => void;
 }) {
   const user = useAuthStore((s) => s.user);
+  const isSupplier = user?.role === "SUPPLIER";
   const [dragActive, setDragActive] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [validating, setValidating] = useState(false);
@@ -2507,6 +2515,7 @@ function ExcelPackingWorkflow({
   const [plantCode, setPlantCode] = useState("PPA1");
   const [estimatedArrival, setEstimatedArrival] = useState("");
   const [packingSlipNumber, setPackingSlipNumber] = useState("");
+  const [packingSlipDates, setPackingSlipDates] = useState<Record<string, string>>({});
   
   // PO specific configurations
   const [poLines, setPoLines] = useState<any[]>([]);
@@ -2514,6 +2523,49 @@ function ExcelPackingWorkflow({
   const [selectedLines, setSelectedLines] = useState<Record<string, boolean>>({});
   const [lineCartonCounts, setLineCartonCounts] = useState<Record<string, number>>({});
   const [downloadingTailored, setDownloadingTailored] = useState(false);
+
+  // Group cartons by Packing Slip ID from validated Excel rows
+  const packingSlipGroups = useMemo(() => {
+    if (!validationResult?.rows || validationResult.rows.length === 0) return [];
+    const map = new Map<string, {
+      slipNumber: string;
+      cartons: number;
+      totalQuantity: number;
+      uom: string;
+      pos: string[];
+      totalGw: number;
+      totalNw: number;
+    }>();
+
+    validationResult.rows.forEach((r) => {
+      const ps = (r.pack_number || "").trim() || (packingSlipNumber.trim() || "DEFAULT");
+      if (!map.has(ps)) {
+        map.set(ps, {
+          slipNumber: ps,
+          cartons: 0,
+          totalQuantity: 0,
+          uom: r.uom || "M",
+          pos: [],
+          totalGw: 0,
+          totalNw: 0,
+        });
+      }
+      const entry = map.get(ps)!;
+      entry.cartons += 1;
+      entry.totalQuantity += Number(r.quantity) || 0;
+      if (r.po_number && !entry.pos.includes(r.po_number)) {
+        entry.pos.push(r.po_number);
+      }
+      entry.totalGw += Number(r.gross_weight) || 0;
+      entry.totalNw += Number(r.net_weight) || 0;
+    });
+
+    return Array.from(map.values());
+  }, [validationResult?.rows, packingSlipNumber]);
+
+  const detectedPackingSlips = useMemo(() => {
+    return packingSlipGroups.map((g) => g.slipNumber).filter((s) => s !== "DEFAULT");
+  }, [packingSlipGroups]);
 
   // Submission state
   const [submitting, setSubmitting] = useState(false);
@@ -2539,6 +2591,7 @@ function ExcelPackingWorkflow({
       if (draft.plantCode) setPlantCode(draft.plantCode);
       if (draft.estimatedArrival) setEstimatedArrival(draft.estimatedArrival);
       if (draft.packingSlipNumber) setPackingSlipNumber(draft.packingSlipNumber);
+      if (draft.packingSlipDates) setPackingSlipDates(draft.packingSlipDates);
       getExcelFileBlob(suppCode, activePos)
         .then((storedFile) => {
           if (storedFile) setSelectedFile(storedFile);
@@ -2553,6 +2606,7 @@ function ExcelPackingWorkflow({
       plantCode,
       estimatedArrival,
       packingSlipNumber,
+      packingSlipDates,
       validationResult,
       fileName: selectedFile?.name,
     });
@@ -2572,6 +2626,7 @@ function ExcelPackingWorkflow({
         plantCode,
         estimatedArrival,
         packingSlipNumber,
+        packingSlipDates,
         validationResult,
         fileName: selectedFile?.name,
       });
@@ -2580,6 +2635,7 @@ function ExcelPackingWorkflow({
     plantCode,
     estimatedArrival,
     packingSlipNumber,
+    packingSlipDates,
     validationResult,
     selectedFile?.name,
     createdResponse,
@@ -2766,16 +2822,24 @@ function ExcelPackingWorkflow({
       const supplierId = user?.role === "SUPPLIER" ? (user.supplier_id || undefined) : undefined;
       const res = await shipmentService.validateExcel(file, supplierId, user?.supplier_code || undefined);
       setValidationResult(res);
-      const firstPs = res.rows?.find((r: any) => r.pack_number?.trim())?.pack_number?.trim();
-      if (firstPs) {
-        setPackingSlipNumber(firstPs);
+      const detectedPs = Array.from(new Set(res.rows?.map((r: any) => r.pack_number?.trim()).filter(Boolean))) as string[];
+      let updatedDates = { ...packingSlipDates };
+      if (detectedPs.length > 0) {
+        setPackingSlipNumber(detectedPs[0]);
+        detectedPs.forEach((ps) => {
+          if (!updatedDates[ps]) {
+            updatedDates[ps] = estimatedArrival || "";
+          }
+        });
+        setPackingSlipDates(updatedDates);
       }
       const suppCode = user?.supplier_code || "0000018194";
       saveExcelFileBlob(suppCode, activePos, file).catch(() => {});
       saveExcelDraft(suppCode, activePos, {
         plantCode,
         estimatedArrival,
-        packingSlipNumber,
+        packingSlipNumber: detectedPs[0] || packingSlipNumber,
+        packingSlipDates: updatedDates,
         validationResult: res,
         fileName: file.name,
       });
@@ -2841,10 +2905,29 @@ function ExcelPackingWorkflow({
       alert("Please upload or select the validated Excel file before creating the shipment.");
       return;
     }
+
+    if (detectedPackingSlips.length > 1) {
+      const missing = detectedPackingSlips.filter((ps) => !packingSlipDates[ps] && !estimatedArrival);
+      if (missing.length > 0) {
+        alert(`Please select a Delivery Date for Packing Slip(s): ${missing.join(", ")}`);
+        return;
+      }
+    } else if (!estimatedArrival) {
+      alert("Please select a Delivery Date before creating the shipment.");
+      return;
+    }
+
     setSubmitting(true);
     try {
       // Proactively refresh JWT before making network call to avoid mid-submission 401
       await ensureFreshToken(60);
+
+      const datesPayload: Record<string, string> = {};
+      if (detectedPackingSlips.length > 0) {
+        detectedPackingSlips.forEach((ps) => {
+          datesPayload[ps] = packingSlipDates[ps] || estimatedArrival;
+        });
+      }
 
       const res = await shipmentService.createFromExcel({
         file: selectedFile,
@@ -2854,6 +2937,7 @@ function ExcelPackingWorkflow({
         supplier_name: user?.supplier_name || undefined,
         supplier_id: user?.supplier_id || undefined,
         estimated_arrival: estimatedArrival || undefined,
+        packing_slip_dates: Object.keys(datesPayload).length > 0 ? datesPayload : undefined,
       });
       setCreatedResponse(res);
       const suppCode = user?.supplier_code || "0000018194";
@@ -2999,22 +3083,68 @@ function ExcelPackingWorkflow({
                        <div className="w-px h-8 bg-gray-300 hidden sm:block"></div>
 
                        {/* Detected Packing Slip No(s) from Excel */}
-                        {Array.from(new Set(validationResult.rows.map((r) => r.pack_number).filter(Boolean))).length > 0 && (
-                           <div className="flex items-center gap-2">
-                              <span className="text-xs font-semibold text-gray-600">Packing Slip:</span>
-                              <span className="px-2.5 py-1 bg-white border border-emerald-300 text-emerald-800 rounded-md font-mono font-bold text-xs shadow-2xs">
-                                 {Array.from(new Set(validationResult.rows.map((r) => r.pack_number).filter(Boolean))).join(", ")}
+                       {detectedPackingSlips.length > 1 ? (
+                          <>
+                            <div className="flex items-center gap-2">
+                              <span className="px-2.5 py-1 bg-blue-50 border border-blue-200 text-blue-800 rounded-md font-semibold text-xs flex items-center gap-1.5 shadow-2xs">
+                                <Layers className="w-3.5 h-3.5 text-blue-600" />
+                                <span>{detectedPackingSlips.length} Packing Slips</span>
                               </span>
-                           </div>
-                        )}
+                            </div>
 
-                       <div className="w-px h-8 bg-gray-300 hidden sm:block"></div>
+                            <div className="w-px h-8 bg-gray-300 hidden sm:block"></div>
 
-                       {/* 3. Delivery Date */}
-                       <div className="flex items-center gap-2">
-                          <label className="text-xs font-semibold text-gray-700">Delivery Date:</label>
-                          <input type="date" value={estimatedArrival} onChange={(e) => setEstimatedArrival(e.target.value)} className="h-9 px-2 text-xs border border-gray-300 bg-white rounded-md focus:border-emerald-500 outline-none font-medium" />
-                       </div>
+                            <div className="flex items-center gap-2">
+                              <label className="text-xs font-semibold text-gray-700" title="Default date applied to all packing slips unless customized">Default Delivery Date:</label>
+                              <input
+                                type="date"
+                                value={estimatedArrival}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setEstimatedArrival(val);
+                                  setPackingSlipDates((prev) => {
+                                    const next = { ...prev };
+                                    detectedPackingSlips.forEach((ps) => {
+                                      if (!next[ps]) next[ps] = val;
+                                    });
+                                    return next;
+                                  });
+                                }}
+                                className="h-9 px-2 text-xs border border-gray-300 bg-white rounded-md focus:border-emerald-500 outline-none font-medium"
+                              />
+                            </div>
+                          </>
+                       ) : (
+                          <>
+                            {detectedPackingSlips.length === 1 && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-semibold text-gray-600">Packing Slip:</span>
+                                <span className="px-2.5 py-1 bg-white border border-emerald-300 text-emerald-800 rounded-md font-mono font-bold text-xs shadow-2xs">
+                                  {detectedPackingSlips[0]}
+                                </span>
+                              </div>
+                            )}
+
+                            <div className="w-px h-8 bg-gray-300 hidden sm:block"></div>
+
+                            {/* 3. Delivery Date */}
+                            <div className="flex items-center gap-2">
+                              <label className="text-xs font-semibold text-gray-700">Delivery Date:</label>
+                              <input
+                                type="date"
+                                value={estimatedArrival}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setEstimatedArrival(val);
+                                  if (detectedPackingSlips[0]) {
+                                    setPackingSlipDates({ [detectedPackingSlips[0]]: val });
+                                  }
+                                }}
+                                className="h-9 px-2 text-xs border border-gray-300 bg-white rounded-md focus:border-emerald-500 outline-none font-medium"
+                              />
+                            </div>
+                          </>
+                       )}
                     </>
                  )}
               </div>
@@ -3078,7 +3208,92 @@ function ExcelPackingWorkflow({
                        </div>
                     </div>
 
-                    
+                    {/* Multi-Packing Slip Delivery Dates Configuration Card */}
+                    {packingSlipGroups.length > 1 && (
+                      <div className="rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50/40 via-white to-indigo-50/20 p-4 shadow-xs">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-blue-100">
+                          <div>
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-blue-900 flex items-center gap-1.5">
+                              <Calendar className="w-4 h-4 text-blue-600" />
+                              Individual Delivery Dates ({packingSlipGroups.length} Packing Slips Detected)
+                            </h4>
+                            <p className="text-[11px] text-slate-500 mt-0.5">
+                              Each packing slip will generate a separate Calzedonia ASN XML with its own delivery date.
+                            </p>
+                          </div>
+
+                          {/* Quick Apply to All */}
+                          <div className="flex items-center gap-2 self-start sm:self-auto">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!estimatedArrival) {
+                                  alert("Please select a date in the Default Delivery Date box in the top bar first.");
+                                  return;
+                                }
+                                const updated: Record<string, string> = {};
+                                packingSlipGroups.forEach((g) => {
+                                  updated[g.slipNumber] = estimatedArrival;
+                                });
+                                setPackingSlipDates(updated);
+                              }}
+                              className="px-2.5 py-1 text-xs font-semibold text-blue-700 bg-white hover:bg-blue-50 border border-blue-200 rounded-lg shadow-2xs transition-colors cursor-pointer"
+                              title="Apply default delivery date to all packing slips"
+                            >
+                              Apply "{estimatedArrival || "Default Date"}" to All
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Packing Slips Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
+                          {packingSlipGroups.map((group) => {
+                            const currentDate = packingSlipDates[group.slipNumber] || estimatedArrival || "";
+                            return (
+                              <div
+                                key={group.slipNumber}
+                                className="p-3 bg-white rounded-lg border border-slate-200 shadow-2xs flex flex-col justify-between gap-2.5 hover:border-blue-300 transition-colors"
+                              >
+                                <div className="flex items-start justify-between gap-2">
+                                  <div>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="font-mono font-bold text-xs text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                                        #{group.slipNumber}
+                                      </span>
+                                      <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
+                                        {group.cartons} Cartons
+                                      </span>
+                                    </div>
+                                    <p className="text-[11px] text-slate-500 mt-1 font-mono">
+                                      PO: {group.pos.join(", ")} • {group.totalQuantity.toLocaleString()} {group.uom}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                                  <label className="text-[11px] font-semibold text-slate-600 flex items-center gap-1">
+                                    <Calendar className="w-3 h-3 text-slate-400" />
+                                    Delivery Date:
+                                  </label>
+                                  <input
+                                    type="date"
+                                    value={currentDate}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setPackingSlipDates((prev) => ({
+                                        ...prev,
+                                        [group.slipNumber]: val,
+                                      }));
+                                    }}
+                                    className="h-8 px-2 text-xs border border-slate-300 bg-white rounded-md focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 outline-none font-medium text-slate-800"
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Summary Table */}
                     <div className="overflow-x-auto rounded-lg border border-gray-200 shadow-xs">
@@ -3227,8 +3442,8 @@ function ExcelPackingWorkflow({
                                          onChange={(e) => setPoConfigs(prev => ({ ...prev, [po]: e.target.value as "BOX"|"ROLL" }))}
                                          className="text-xs font-bold bg-white border border-gray-300 rounded-md px-2 py-1 outline-none focus:border-emerald-500 shadow-sm cursor-pointer"
                                       >
-                                         <option value="BOX">📦 Box</option>
-                                         <option value="ROLL">📜 Roll</option>
+                                         <option value="BOX">Box</option>
+                                         <option value="ROLL">Roll</option>
                                       </select>
                                    </div>
                                 </div>
@@ -3361,7 +3576,7 @@ function ExcelPackingWorkflow({
                           {s.total_boxes} Cartons / {s.total_pieces} Pcs
                         </span>
                       </div>
-                      <p className="text-[11px] text-gray-400 mt-1">Plant: {s.plant_code} • {s.status}</p>
+                      <p className="text-[11px] text-gray-500 mt-1">Plant: {s.plant_code} • Delivery: <strong className="font-semibold text-slate-700">{s.delivery_date || s.estimated_arrival || "—"}</strong> • {s.status}</p>
                     </div>
                     <div className="flex items-center gap-2">
                       <button
@@ -3415,13 +3630,13 @@ function ExcelPackingWorkflow({
             </div>
           )}
 
-          <div className="rounded-2xl border border-gray-200 bg-gray-900 p-5 text-left w-full max-w-2xl shadow-xl">
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 text-left w-full max-w-2xl shadow-2xs">
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">
               Allocated 20-digit Handling Units ({createdResponse.handling_units.length})
             </p>
             <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
               {createdResponse.handling_units.map((hu, i) => (
-                <span key={i} className="rounded-lg bg-gray-800 px-3 py-1.5 font-mono text-sm font-bold text-emerald-400 border border-gray-700 shadow-inner">
+                <span key={i} className="rounded-lg bg-white px-3 py-1.5 font-mono text-sm font-bold text-slate-800 border border-slate-200 shadow-2xs">
                   {hu}
                 </span>
               ))}
@@ -3442,7 +3657,7 @@ function ExcelPackingWorkflow({
                   handleDownloadLabelsPdf();
                 }
               }}
-              className="flex-1 min-w-[200px] flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3.5 text-sm font-bold text-white shadow-lg hover:bg-emerald-700 hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 transition-all cursor-pointer"
+              className="flex-1 min-w-[200px] flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3.5 text-sm font-semibold text-white shadow-2xs hover:bg-emerald-700 disabled:opacity-50 transition-all cursor-pointer"
             >
               {downloadingLabels ? <Loader2 className="h-5 w-5 animate-spin" /> : <Printer className="h-5 w-5" />}
               Print / Download Labels
@@ -3452,22 +3667,25 @@ function ExcelPackingWorkflow({
               type="button"
               disabled={downloadingXml}
               onClick={handleDownloadAsnXml}
-              className="flex-1 min-w-[200px] flex items-center justify-center gap-2 rounded-xl border-2 border-purple-200 bg-purple-50 px-5 py-3 text-sm font-bold text-purple-700 shadow-sm hover:bg-purple-100 disabled:opacity-50 transition-colors cursor-pointer"
+              className="flex-1 min-w-[200px] flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3.5 text-sm font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 disabled:opacity-50 transition-colors cursor-pointer"
             >
               {downloadingXml ? <Loader2 className="h-5 w-5 animate-spin" /> : <Download className="h-5 w-5" />}
               {createdResponse.shipments && createdResponse.shipments.length > 1 ? "Download All XMLs (.xml)" : "ASN XML (.xml)"}
             </button>
 
             {dispatchedSuccess ? (
-              <span className="flex-1 min-w-[200px] flex items-center justify-center gap-2 rounded-xl bg-emerald-50 px-5 py-3.5 text-sm font-black text-emerald-700 border-2 border-emerald-200 shadow-sm">
-                <Check className="h-5 w-5 stroke-[3]" /> Dispatched to EDI
+              <span className="flex-1 min-w-[200px] flex items-center justify-center gap-2 rounded-xl bg-emerald-50 px-5 py-3.5 text-sm font-bold text-emerald-700 border border-emerald-200 shadow-2xs">
+                <Check className="h-5 w-5 stroke-[2.5]" /> Dispatched to EDI
               </span>
             ) : (
               <button
                 type="button"
                 disabled={dispatchingAsn}
                 onClick={handleDispatchAsn}
-                className="flex-1 min-w-[200px] flex items-center justify-center gap-2 rounded-xl bg-purple-600 px-5 py-3.5 text-sm font-bold text-white shadow-lg hover:bg-purple-700 hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0 transition-all cursor-pointer"
+                className={cn(
+                  "flex-1 min-w-[200px] flex items-center justify-center gap-2 rounded-xl px-5 py-3.5 text-sm font-semibold text-white shadow-2xs disabled:opacity-50 transition-all cursor-pointer",
+                  isSupplier ? "bg-emerald-600 hover:bg-emerald-700" : "bg-brand-600 hover:bg-brand-700"
+                )}
               >
                 {dispatchingAsn ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
                 Dispatch to EDI
@@ -3837,10 +4055,10 @@ function ShipmentDetailModal({
         </div>
 
         {/* Modal Footer Actions */}
-        <div className="flex items-center justify-between border-t border-gray-200 px-6 py-4 bg-gray-50/70">
+        <div className="flex items-center justify-between border-t border-slate-200 px-6 py-4 bg-slate-50/70">
           <button
             onClick={onClose}
-            className="px-4 py-2 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer shadow-xs"
+            className="px-4 py-2 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 transition-colors cursor-pointer"
           >
             Close
           </button>
@@ -3848,21 +4066,21 @@ function ShipmentDetailModal({
           {data && (
             <div className="flex items-center gap-2">
               <button
-                onClick={() => onDownloadLabels(data.id, data.shipment_number, data.total_boxes)}
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer"
-              >
-                <Printer className="w-3.5 h-3.5" />
-                Print / Download Labels
-              </button>
-
-              <button
                 onClick={() => {
                   onPreviewXml(data);
                 }}
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-4 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
               >
-                <FileCode className="w-3.5 h-3.5" />
+                <FileCode className="w-3.5 h-3.5 text-slate-500" />
                 View ASN XML
+              </button>
+
+              <button
+                onClick={() => onDownloadLabels(data.id, data.shipment_number, data.total_boxes)}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                Print / Download Labels
               </button>
             </div>
           )}
@@ -3907,7 +4125,7 @@ function LabelPrintModal({
       subtitle: "Calzedonia Standard (152 × 102 mm)",
       desc: "Standard wide industrial shipping label. Best for thermal sticker rolls.",
       badge: "Standard",
-      badgeColor: "bg-blue-100 text-blue-700 border-blue-200",
+      badgeColor: "bg-blue-50 text-blue-700 border-blue-200",
     },
     {
       id: "4x6",
@@ -3915,7 +4133,7 @@ function LabelPrintModal({
       subtitle: "Logistics Standard Thermal (102 × 152 mm)",
       desc: "Standard vertical shipping label for Zebra & TSC thermal printers.",
       badge: "Thermal Roll",
-      badgeColor: "bg-emerald-100 text-emerald-700 border-emerald-200",
+      badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-200",
     },
     {
       id: "4x3",
@@ -3923,7 +4141,7 @@ function LabelPrintModal({
       subtitle: "Compact Box / Carton (102 × 76 mm)",
       desc: "Optimized for small packages, yarn boxes, and thread cartons.",
       badge: "Compact",
-      badgeColor: "bg-amber-100 text-amber-700 border-amber-200",
+      badgeColor: "bg-amber-50 text-amber-700 border-amber-200",
     },
     {
       id: "a4",
@@ -3931,7 +4149,7 @@ function LabelPrintModal({
       subtitle: "Office Laser / Inkjet (210 × 297 mm)",
       desc: "2×2 grid layout with cut guides. Perfect for standard A4 paper or 4-up sticker sheets.",
       badge: "Office Printer",
-      badgeColor: "bg-purple-100 text-purple-700 border-purple-200",
+      badgeColor: "bg-slate-100 text-slate-700 border-slate-200",
     },
   ];
 
@@ -4006,17 +4224,14 @@ function LabelPrintModal({
             </div>
           </div>
 
-          <p className="text-[11px] text-gray-500 italic bg-gray-50 p-2.5 rounded-lg border border-gray-200">
-            💡 Your preferred size is saved automatically for future label downloads.
-          </p>
         </div>
 
         {/* Footer Actions */}
-        <div className="flex items-center justify-between border-t border-gray-200 px-6 py-4 bg-gray-50/70">
+        <div className="flex items-center justify-between border-t border-slate-200 px-6 py-4 bg-slate-50/70">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer shadow-xs"
+            className="px-4 py-2 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 transition-colors cursor-pointer"
           >
             Cancel
           </button>
@@ -4026,10 +4241,10 @@ function LabelPrintModal({
               type="button"
               disabled={isLoading}
               onClick={() => onDownload(selectedSize, true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 border border-gray-300 bg-white hover:bg-gray-50 text-gray-800 rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
               title="Open print preview directly in browser"
             >
-              {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Printer className="w-3.5 h-3.5 text-gray-600" />}
+              {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Printer className="w-3.5 h-3.5 text-slate-500" />}
               Print Directly
             </button>
 
@@ -4037,7 +4252,7 @@ function LabelPrintModal({
               type="button"
               disabled={isLoading}
               onClick={() => onDownload(selectedSize, false)}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
             >
               {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
               Download PDF
@@ -4048,3 +4263,4 @@ function LabelPrintModal({
     </div>
   );
 }
+

@@ -380,38 +380,51 @@ export default function Header({ onMenuToggle }: HeaderProps) {
           )}
         </div>
 
-        {/* User info + role badge (Only for Admin) */}
-        {isAdmin && (
-          <div className="flex items-center gap-2.5 rounded-lg px-2 py-1">
-            {/* Avatar */}
-            <div className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold text-white shadow-xs bg-blue-600">
-              {user?.name?.charAt(0) ?? "A"}
-            </div>
+        {/* User info + role badge (For both Admin and Supplier) */}
+        <div className="flex items-center gap-2.5 rounded-lg px-2 py-1">
+          {/* Avatar */}
+          <div
+            className={cn(
+              "flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold text-white shadow-xs",
+              isAdmin ? "bg-blue-600" : "bg-emerald-600"
+            )}
+          >
+            {(user?.supplier_name || user?.name || (isAdmin ? "Admin" : "Supplier")).charAt(0).toUpperCase()}
+          </div>
 
-            {/* Name + role */}
-            <div className="hidden text-left sm:block max-w-[180px]">
-              <p className="text-xs font-semibold text-slate-900 truncate">
-                {user?.name || "Admin"}
-              </p>
-              <div className="flex items-center gap-1.5">
-                <span className="inline-block rounded px-1.5 py-0.5 text-[9px] font-bold uppercase leading-none bg-slate-100 text-slate-700">
-                  {user?.role === "SUPER_ADMIN" ? "Super Admin" : "Admin"}
-                </span>
-                <span className="text-[10px] font-mono text-slate-400 truncate">
-                  HQ
-                </span>
-              </div>
+          {/* Name + role */}
+          <div className="hidden text-left sm:block max-w-[180px]">
+            <p className="text-xs font-semibold text-slate-900 truncate">
+              {isAdmin ? (user?.name || "Admin") : (user?.supplier_name || user?.name || "Supplier Partner")}
+            </p>
+            <div className="flex items-center gap-1.5">
+              <span
+                className={cn(
+                  "inline-block rounded px-1.5 py-0.5 text-[9px] font-bold uppercase leading-none border",
+                  isAdmin
+                    ? "bg-blue-50 text-blue-700 border-blue-200"
+                    : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                )}
+              >
+                {isAdmin
+                  ? (user?.role === "SUPER_ADMIN" ? "Super Admin" : "Admin")
+                  : "Supplier"}
+              </span>
+              <span className="text-[10px] font-mono text-slate-400 truncate">
+                {isAdmin ? "HQ" : (user?.supplier_code ? `#${user.supplier_code}` : "")}
+              </span>
             </div>
           </div>
-        )}
+        </div>
 
         {/* Logout */}
         <button
           onClick={handleLogout}
           title="Sign Out"
-          className="rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer"
+          className="rounded-lg px-2.5 py-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200 border border-slate-200 transition-colors cursor-pointer flex items-center gap-1.5"
         >
-          <LogOut className="h-5 w-5" />
+          <LogOut className="h-4 w-4" />
+          <span className="text-xs font-medium hidden md:inline">Sign Out</span>
         </button>
       </div>
 
