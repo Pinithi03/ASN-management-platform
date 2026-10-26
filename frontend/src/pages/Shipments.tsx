@@ -2574,6 +2574,34 @@ function ExcelPackingWorkflow({
   const [estimatedArrival, setEstimatedArrival] = useState("");
   const [packingSlipNumber, setPackingSlipNumber] = useState("");
   const [packingSlipDates, setPackingSlipDates] = useState<Record<string, string>>({});
+  const [startingSeq, setStartingSeq] = useState<number>(1);
+
+  // Synchronize next sequential HU sequence for supplier
+  useEffect(() => {
+    let isMounted = true;
+    const fetchSeq = async () => {
+      try {
+        const suppCode = user?.supplier_code || "0000018194";
+        const suppId = user?.supplier_id || undefined;
+        const res = await shipmentService.getNextHuSequence(suppCode, suppId);
+        if (isMounted && res && typeof res.next_number === "number") {
+          setStartingSeq(res.next_number);
+        }
+      } catch (err) {
+        console.warn("Could not fetch next HU sequence for Excel:", err);
+      }
+    };
+    fetchSeq();
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.supplier_code, user?.supplier_id]);
+
+  const formatHu = (seq: number) => {
+    const suppCodeClean = (user?.supplier_code || "0000018194").replace(/^0+/, "");
+    const prefix = "1" + suppCodeClean.padStart(9, "0");
+    return `${prefix}${String(seq).padStart(10, "0")}`;
+  };
   
   // PO specific configurations
   const [poLines, setPoLines] = useState<any[]>([]);
@@ -2848,6 +2876,15 @@ function ExcelPackingWorkflow({
       setValidationResult(res);
       const detectedPs = Array.from(new Set(res.rows?.map((r: any) => r.pack_number?.trim()).filter(Boolean))) as string[];
       let updatedDates = { ...packingSlipDates };
+
+      // Pre-fill delivery dates parsed directly from Excel rows
+      res.rows?.forEach((r: any) => {
+        const ps = r.pack_number?.trim() || detectedPs[0] || "DEFAULT";
+        if (r.delivery_date && !updatedDates[ps]) {
+          updatedDates[ps] = r.delivery_date;
+        }
+      });
+
       if (detectedPs.length > 0) {
         setPackingSlipNumber(detectedPs[0]);
         detectedPs.forEach((ps) => {
@@ -3079,9 +3116,14 @@ function ExcelPackingWorkflow({
     }
   };
 
-  const isDatesComplete = detectedPackingSlips.length > 1
-    ? detectedPackingSlips.every((ps) => Boolean(packingSlipDates[ps]?.trim()))
-    : Boolean(estimatedArrival.trim()) && Boolean(packingSlipNumber.trim() || (detectedPackingSlips.length > 0 && detectedPackingSlips[0]));
+  const isDatesComplete = useMemo(() => {
+    if (detectedPackingSlips.length > 1) {
+      return detectedPackingSlips.every((ps) => Boolean(packingSlipDates[ps]?.trim()));
+    }
+    const singleDate = estimatedArrival?.trim() || (detectedPackingSlips[0] ? packingSlipDates[detectedPackingSlips[0]]?.trim() : "");
+    const singlePs = packingSlipNumber.trim() || (detectedPackingSlips[0] ? detectedPackingSlips[0] : "");
+    return Boolean(singleDate && singlePs);
+  }, [detectedPackingSlips, packingSlipDates, estimatedArrival, packingSlipNumber]);
 
   return (
     <div
@@ -3136,7 +3178,7 @@ function ExcelPackingWorkflow({
                 <div className="flex items-center gap-2">
                   <span className="px-2.5 py-1 bg-blue-50 border border-blue-200 text-blue-800 rounded-md font-bold text-xs flex items-center gap-1.5 shadow-2xs">
                     <Layers className="w-3.5 h-3.5 text-blue-600" />
-                    <span>{detectedPackingSlips.length} Packing Slips Detected</span>
+                    <span>{detectedPackingSlips.length} Packing Slips</span>
                   </span>
                 </div>
               ) : (
@@ -3149,7 +3191,16 @@ function ExcelPackingWorkflow({
                     type="text"
                     value={packingSlipNumber}
                     disabled={Boolean(createdResponse)}
-                    onChange={(e) => setPackingSlipNumber(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setPackingSlipNumber(val);
+                      if (detectedPackingSlips.length <= 1) {
+                        setPackingSlipDates((prev) => ({
+                          ...prev,
+                          [val || "DEFAULT"]: estimatedArrival || Object.values(prev)[0] || "",
+                        }));
+                      }
+                    }}
                     placeholder="e.g. 01007907"
                     className="h-8 px-2.5 text-xs font-mono font-bold rounded-lg border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400 outline-none shadow-2xs w-36 disabled:bg-slate-100 disabled:text-slate-500"
                   />
@@ -3158,11 +3209,11 @@ function ExcelPackingWorkflow({
 
               <div className="w-px h-6 bg-gray-300 hidden sm:block" />
 
-              {/* Delivery Date Configuration */}
+              {/* Delivery Date Configuration (Quick fill all or single) */}
               {detectedPackingSlips.length > 1 ? (
                 <div className="flex items-center gap-2">
-                  <label htmlFor="excel-quick-date" className="text-xs font-semibold text-slate-600 whitespace-nowrap" title="Apply this date to all detected packing slips">
-                    Quick Fill All:
+                  <label htmlFor="excel-quick-date" className="text-xs font-semibold text-slate-600 whitespace-nowrap" title="Apply this date to all detected packing slips in table">
+                    Quick Fill Date:
                   </label>
                   <input
                     id="excel-quick-date"
@@ -3181,7 +3232,7 @@ function ExcelPackingWorkflow({
                       });
                     }}
                     className="h-8 px-2 text-xs font-mono font-medium rounded-lg border border-slate-300 bg-white focus:border-blue-500 outline-none shadow-2xs cursor-pointer disabled:bg-slate-100 disabled:text-slate-500"
-                    title="Apply this date to all detected packing slips"
+                    title="Apply this date to all detected packing slips in table"
                   />
                 </div>
               ) : (
@@ -3192,14 +3243,16 @@ function ExcelPackingWorkflow({
                   <input
                     id="excel-delivery-date"
                     type="date"
-                    value={estimatedArrival}
+                    value={estimatedArrival || (detectedPackingSlips[0] ? packingSlipDates[detectedPackingSlips[0]] : "") || ""}
                     disabled={Boolean(createdResponse)}
                     onChange={(e) => {
                       const val = e.target.value;
                       setEstimatedArrival(val);
-                      if (detectedPackingSlips.length > 0) {
-                        setPackingSlipDates({ [detectedPackingSlips[0]]: val });
-                      }
+                      const targetKey = detectedPackingSlips[0] || packingSlipNumber.trim() || "DEFAULT";
+                      setPackingSlipDates((prev) => ({
+                        ...prev,
+                        [targetKey]: val,
+                      }));
                     }}
                     className="h-8 px-2.5 text-xs font-mono font-bold rounded-lg border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400 outline-none shadow-2xs cursor-pointer disabled:bg-slate-100 disabled:text-slate-500"
                   />
@@ -3377,89 +3430,7 @@ function ExcelPackingWorkflow({
               </div>
             )}
 
-            {/* 2. Multi-Packing Slip Individual Delivery Dates Card */}
-            {detectedPackingSlips.length > 1 && (
-              <div className="p-3 bg-gradient-to-r from-blue-50/90 via-indigo-50/40 to-slate-50 border border-blue-200 rounded-xl shadow-2xs space-y-2 shrink-0">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-blue-100 pb-1.5">
-                  <div className="flex items-center gap-2">
-                    <Layers className="w-4 h-4 text-blue-600 shrink-0" />
-                    <span className="text-xs font-bold text-blue-950 uppercase tracking-wide">
-                      Select Delivery Date per Packing Slip
-                    </span>
-                    <span className="text-[11px] text-blue-700 font-medium">
-                      ({detectedPackingSlips.length} separate shipments &amp; XMLs)
-                    </span>
-                  </div>
-                  {estimatedArrival && !createdResponse && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const updated: Record<string, string> = {};
-                        detectedPackingSlips.forEach((ps) => {
-                          updated[ps] = estimatedArrival;
-                        });
-                        setPackingSlipDates(updated);
-                      }}
-                      className="text-[11px] text-blue-700 hover:text-blue-900 font-semibold underline cursor-pointer self-start sm:self-auto"
-                    >
-                      Set all to "{estimatedArrival}"
-                    </button>
-                  )}
-                </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 pt-0.5">
-                  {packingSlipGroups.map((group) => {
-                    const currentDate = packingSlipDates[group.slipNumber] || "";
-                    const isMissing = !currentDate.trim();
-                    return (
-                      <div
-                        key={group.slipNumber}
-                        className={cn(
-                          "p-2.5 rounded-lg border bg-white shadow-2xs flex flex-col justify-between gap-2 transition-all",
-                          isMissing && !createdResponse
-                            ? "border-amber-400 ring-1 ring-amber-300/80 bg-amber-50/20"
-                            : "border-slate-200 hover:border-blue-300"
-                        )}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-mono font-bold text-xs text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                            {group.slipNumber}
-                          </span>
-                          <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 font-mono">
-                            {group.cartons} Ctns • {group.totalQuantity.toLocaleString()} {group.uom}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100">
-                          <label className="text-[11px] font-bold text-slate-700 whitespace-nowrap">
-                            Delivery Date <span className="text-red-500">*</span>:
-                          </label>
-                          <input
-                            type="date"
-                            required
-                            disabled={Boolean(createdResponse)}
-                            value={currentDate}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setPackingSlipDates((prev) => ({
-                                ...prev,
-                                [group.slipNumber]: val,
-                              }));
-                            }}
-                            className={cn(
-                              "h-7 px-2 text-xs font-mono font-bold rounded border bg-white focus:outline-none focus:ring-1 cursor-pointer disabled:bg-slate-100 disabled:text-slate-500 w-36",
-                              isMissing && !createdResponse
-                                ? "border-amber-400 focus:border-amber-500 focus:ring-amber-400"
-                                : "border-slate-300 focus:border-blue-500 focus:ring-blue-400"
-                            )}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
 
             {/* 3. Simple Validation Error Alert (Shown when Excel validation fails) */}
             {!validationResult.is_valid && (
@@ -3542,6 +3513,7 @@ function ExcelPackingWorkflow({
                     <tr>
                       <th className="px-3 py-2.5">Ctn</th>
                       <th className="px-3 py-2.5">Packing Slip No.</th>
+                      <th className="px-3 py-2.5">Delivery Date</th>
                       <th className="px-3 py-2.5">Handling Unit (SSCC-20)</th>
                       <th className="px-3 py-2.5">PO & Line</th>
                       <th className="px-3 py-2.5">Product Code</th>
@@ -3554,7 +3526,14 @@ function ExcelPackingWorkflow({
                   <tbody className="divide-y divide-gray-100 bg-white">
                     {validationResult.rows.map((r, i) => {
                       const hasRowErrors = r.errors && r.errors.length > 0;
-                      const generatedHu = createdResponse?.handling_units?.[i] || r.hu_number;
+                      const generatedHu =
+                        createdResponse?.handling_units?.[i] ||
+                        r.hu_number ||
+                        formatHu(startingSeq + i);
+
+                      const rowPs = (r.pack_number || "").trim() || packingSlipNumber.trim() || "DEFAULT";
+                      const rowDate = packingSlipDates[rowPs] || r.delivery_date || estimatedArrival || "";
+
                       const cleanCtn = (() => {
                         const cnStr = String(r.carton_number || "").trim();
                         const match = cnStr.match(/^(\d+)\s*(\(\d+-\d+\))$/);
@@ -3577,63 +3556,92 @@ function ExcelPackingWorkflow({
                             hasRowErrors ? "bg-red-50/60 hover:bg-red-100/60" : "hover:bg-gray-50/80"
                           )}
                         >
+                          {/* Ctn */}
                           <td className="px-3 py-2 font-mono font-bold text-gray-700 whitespace-nowrap">
                             {cleanCtn}
                           </td>
+
+                          {/* Packing Slip No */}
                           <td className="px-3 py-2 whitespace-nowrap">
-                            <div className="flex flex-col">
-                              <span className="font-mono font-bold text-gray-800">
-                                {r.pack_number || packingSlipNumber || "—"}
-                              </span>
-                              {detectedPackingSlips.length > 1 && r.pack_number && packingSlipDates[r.pack_number] && (
-                                <span className="text-[10px] text-blue-600 font-mono font-medium">
-                                  Del: {packingSlipDates[r.pack_number]}
-                                </span>
+                            <span className="font-mono font-bold text-gray-800 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                              {r.pack_number || packingSlipNumber || "—"}
+                            </span>
+                          </td>
+
+                          {/* Delivery Date Picker Column */}
+                          <td className="px-3 py-2 whitespace-nowrap">
+                            <input
+                              type="date"
+                              disabled={Boolean(createdResponse)}
+                              value={rowDate}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setPackingSlipDates((prev) => ({
+                                  ...prev,
+                                  [rowPs]: val,
+                                }));
+                              }}
+                              className={cn(
+                                "h-7 px-2 text-xs font-mono font-bold rounded border bg-white focus:outline-none focus:ring-1 cursor-pointer disabled:bg-slate-100 disabled:text-slate-500 w-32 shadow-2xs",
+                                !rowDate && !createdResponse
+                                  ? "border-amber-400 bg-amber-50/60 text-amber-900 focus:border-amber-500 focus:ring-amber-400"
+                                  : "border-slate-300 text-slate-800 focus:border-emerald-500 focus:ring-emerald-400"
                               )}
+                              title={rowDate ? `Delivery date for ${rowPs}: ${rowDate}` : `Please select delivery date for ${rowPs}`}
+                            />
+                          </td>
+
+                          {/* Handling Unit (SSCC-20) */}
+                          <td className="px-3 py-2 whitespace-nowrap">
+                            <div className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded font-mono font-bold text-xs text-slate-800 shadow-2xs">
+                              <span>{generatedHu}</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(generatedHu);
+                                  setCopiedHu(generatedHu);
+                                  setTimeout(() => setCopiedHu(null), 1500);
+                                }}
+                                className="text-slate-400 hover:text-slate-700 p-0.5 rounded hover:bg-slate-200 transition-colors cursor-pointer"
+                                title="Copy SSCC-20 HU"
+                              >
+                                {copiedHu === generatedHu ? (
+                                  <Check className="w-3 h-3 text-emerald-600" />
+                                ) : (
+                                  <Copy className="w-3 h-3" />
+                                )}
+                              </button>
                             </div>
                           </td>
-                          <td className="px-3 py-2">
-                            {generatedHu ? (
-                              <div className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded font-mono font-bold text-xs text-slate-800">
-                                <span>{generatedHu}</span>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    navigator.clipboard.writeText(generatedHu);
-                                    setCopiedHu(generatedHu);
-                                    setTimeout(() => setCopiedHu(null), 1500);
-                                  }}
-                                  className="text-slate-400 hover:text-slate-700 p-0.5 rounded hover:bg-slate-200 transition-colors cursor-pointer"
-                                  title="Copy SSCC-20 HU"
-                                >
-                                  {copiedHu === generatedHu ? (
-                                    <Check className="w-3 h-3 text-emerald-600" />
-                                  ) : (
-                                    <Copy className="w-3 h-3" />
-                                  )}
-                                </button>
-                              </div>
-                            ) : (
-                              <span className="text-gray-400 font-normal italic text-[11px]">
-                                Auto-generates on send
-                              </span>
-                            )}
+
+                          {/* PO & Line (Clean values without 'PO' or 'Line' labels) */}
+                          <td className="px-3 py-2 font-mono whitespace-nowrap">
+                            <span className="font-semibold text-gray-800">{r.po_number || "—"}</span>
+                            <span className="text-gray-400 mx-1.5">•</span>
+                            <span className="text-gray-600">{r.po_item || "—"}</span>
                           </td>
-                          <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">
-                            PO {r.po_number || "—"} • Line {r.po_item || "—"}
-                          </td>
+
+                          {/* Product Code */}
                           <td className="px-3 py-2 font-mono font-medium text-gray-800">
                             {r.product_code || (r as any).material_code || "—"}
                           </td>
+
+                          {/* Quantity */}
                           <td className="px-3 py-2 text-right font-mono font-bold text-gray-900 bg-gray-50/50">
                             {Number(r.quantity).toLocaleString()} {r.uom || "M"}
                           </td>
+
+                          {/* Gross Wt */}
                           <td className="px-3 py-2 text-right font-mono text-gray-700">
                             {Number(r.gross_weight).toFixed(2)}
                           </td>
+
+                          {/* Net Wt */}
                           <td className="px-3 py-2 text-right font-mono text-gray-700">
                             {Number(r.net_weight).toFixed(2)}
                           </td>
+
+                          {/* Lot / Batch */}
                           <td className="px-3 py-2 font-mono text-gray-700">
                             {r.lot_number || "—"}
                           </td>

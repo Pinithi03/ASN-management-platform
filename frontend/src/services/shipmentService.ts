@@ -33,6 +33,7 @@ export interface ParsedCartonRow {
   net_weight: number;
   quantity: number;
   uom: string;
+  delivery_date?: string;
   hu_number?: string;
   errors: string[];
 }

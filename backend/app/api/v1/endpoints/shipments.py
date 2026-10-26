@@ -337,6 +337,7 @@ async def download_configured_packing_template(
                     "nw": "",
                     "quantity": "",  # Blank: user enters actual roll/carton meters/pieces without auto-split
                     "uom": it.get("uom") or it.get("size") or "M",
+                    "delivery_date": "",  # Blank: user can enter YYYY-MM-DD or leave blank to pick online
                 })
                 running_carton_idx += 1
 
@@ -640,6 +641,14 @@ async def create_shipment_from_excel(
         sub_total_qty = int(sum(r.quantity for r in group_rows))
 
         ps_arrival_date = ps_dates_map.get(s_num) or est_arrival_date
+        if not ps_arrival_date:
+            for gr in group_rows:
+                if getattr(gr, "delivery_date", None):
+                    try:
+                        ps_arrival_date = datetime.strptime(str(gr.delivery_date).strip(), "%Y-%m-%d").date()
+                        break
+                    except Exception:
+                        pass
 
         shipment = Shipment(
             id=uuid.uuid4(),
