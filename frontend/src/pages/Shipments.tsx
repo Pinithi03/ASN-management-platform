@@ -3365,20 +3365,6 @@ function ExcelPackingWorkflow({
                     <p className="text-[11px] text-emerald-800 mt-0.5 font-mono">
                       ASN {createdResponse.asn?.asn_number || `ASN-${packingSlipNumber}`} • {createdResponse.shipment?.total_boxes || validationResult.rows.length} Cartons/Rolls
                     </p>
-
-                    {/* Breakdown of shipments when multi-packing slip */}
-                    {createdResponse.shipments && createdResponse.shipments.length > 1 && (
-                      <div className="flex flex-wrap gap-2 mt-1.5">
-                        {createdResponse.shipments.map((s, idx) => (
-                          <span
-                            key={idx}
-                            className="bg-white/90 border border-emerald-200 px-2 py-0.5 rounded text-[11px] font-mono font-medium text-emerald-950"
-                          >
-                            <strong>{s.shipment_number}</strong> ({s.total_boxes} ctns) • Del: {s.delivery_date || s.estimated_arrival || packingSlipDates[s.shipment_number] || "—"}
-                          </span>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
