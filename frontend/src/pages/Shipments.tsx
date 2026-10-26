@@ -2930,15 +2930,23 @@ function ExcelPackingWorkflow({
       return;
     }
 
-    if (detectedPackingSlips.length > 1) {
-      const missing = detectedPackingSlips.filter((ps) => !packingSlipDates[ps] && !estimatedArrival);
+    const isMultiSlip = detectedPackingSlips.length > 1;
+    if (isMultiSlip) {
+      const missing = detectedPackingSlips.filter((ps) => !packingSlipDates[ps]?.trim());
       if (missing.length > 0) {
         alert(`Please select a Delivery Date for Packing Slip(s): ${missing.join(", ")}`);
         return;
       }
-    } else if (!estimatedArrival) {
-      alert("Please select a Delivery Date before creating the shipment.");
-      return;
+    } else {
+      const singleDate = estimatedArrival?.trim() || (detectedPackingSlips[0] ? packingSlipDates[detectedPackingSlips[0]]?.trim() : "");
+      if (!singleDate) {
+        alert("Please select a Delivery Date before creating the shipment.");
+        return;
+      }
+      if (!packingSlipNumber.trim() && detectedPackingSlips.length === 0) {
+        alert("Please enter a Packing Slip Number before creating the shipment.");
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -2948,7 +2956,8 @@ function ExcelPackingWorkflow({
       const datesPayload: Record<string, string> = {};
       if (detectedPackingSlips.length > 0) {
         detectedPackingSlips.forEach((ps) => {
-          datesPayload[ps] = packingSlipDates[ps] || estimatedArrival;
+          const d = packingSlipDates[ps]?.trim() || estimatedArrival?.trim();
+          if (d) datesPayload[ps] = d;
         });
       }
 
@@ -2959,7 +2968,7 @@ function ExcelPackingWorkflow({
         supplier_code: user?.supplier_code || undefined,
         supplier_name: user?.supplier_name || undefined,
         supplier_id: user?.supplier_id || undefined,
-        estimated_arrival: estimatedArrival || undefined,
+        estimated_arrival: estimatedArrival?.trim() || Object.values(datesPayload)[0] || undefined,
         packing_slip_dates: Object.keys(datesPayload).length > 0 ? datesPayload : undefined,
       });
 
@@ -3070,6 +3079,10 @@ function ExcelPackingWorkflow({
     }
   };
 
+  const isDatesComplete = detectedPackingSlips.length > 1
+    ? detectedPackingSlips.every((ps) => Boolean(packingSlipDates[ps]?.trim()))
+    : Boolean(estimatedArrival.trim()) && Boolean(packingSlipNumber.trim() || (detectedPackingSlips.length > 0 && detectedPackingSlips[0]));
+
   return (
     <div
       onDragEnter={!createdResponse && !validationResult ? handleDrag : undefined}
@@ -3118,12 +3131,12 @@ function ExcelPackingWorkflow({
             <>
               <div className="w-px h-6 bg-gray-300 hidden sm:block" />
 
-              {/* Packing Slip Number */}
+              {/* Packing Slip Number Display / Input */}
               {detectedPackingSlips.length > 1 ? (
                 <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-1 bg-blue-50 border border-blue-200 text-blue-800 rounded-md font-semibold text-xs flex items-center gap-1.5 shadow-2xs">
+                  <span className="px-2.5 py-1 bg-blue-50 border border-blue-200 text-blue-800 rounded-md font-bold text-xs flex items-center gap-1.5 shadow-2xs">
                     <Layers className="w-3.5 h-3.5 text-blue-600" />
-                    <span>{detectedPackingSlips.length} Packing Slips</span>
+                    <span>{detectedPackingSlips.length} Packing Slips Detected</span>
                   </span>
                 </div>
               ) : (
@@ -3145,32 +3158,53 @@ function ExcelPackingWorkflow({
 
               <div className="w-px h-6 bg-gray-300 hidden sm:block" />
 
-              {/* Delivery Date */}
-              <div className="flex items-center gap-2">
-                <label htmlFor="excel-delivery-date" className="text-xs font-bold text-slate-700 whitespace-nowrap">
-                  Delivery Date <span className="text-red-500">*</span>:
-                </label>
-                <input
-                  id="excel-delivery-date"
-                  type="date"
-                  value={estimatedArrival}
-                  disabled={Boolean(createdResponse)}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setEstimatedArrival(val);
-                    if (detectedPackingSlips.length > 0) {
+              {/* Delivery Date Configuration */}
+              {detectedPackingSlips.length > 1 ? (
+                <div className="flex items-center gap-2">
+                  <label htmlFor="excel-quick-date" className="text-xs font-semibold text-slate-600 whitespace-nowrap" title="Apply this date to all detected packing slips">
+                    Quick Fill All:
+                  </label>
+                  <input
+                    id="excel-quick-date"
+                    type="date"
+                    value={estimatedArrival}
+                    disabled={Boolean(createdResponse)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setEstimatedArrival(val);
                       setPackingSlipDates((prev) => {
                         const next = { ...prev };
                         detectedPackingSlips.forEach((ps) => {
-                          if (!next[ps]) next[ps] = val;
+                          next[ps] = val;
                         });
                         return next;
                       });
-                    }
-                  }}
-                  className="h-8 px-2.5 text-xs font-mono font-bold rounded-lg border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400 outline-none shadow-2xs cursor-pointer disabled:bg-slate-100 disabled:text-slate-500"
-                />
-              </div>
+                    }}
+                    className="h-8 px-2 text-xs font-mono font-medium rounded-lg border border-slate-300 bg-white focus:border-blue-500 outline-none shadow-2xs cursor-pointer disabled:bg-slate-100 disabled:text-slate-500"
+                    title="Apply this date to all detected packing slips"
+                  />
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <label htmlFor="excel-delivery-date" className="text-xs font-bold text-slate-700 whitespace-nowrap">
+                    Delivery Date <span className="text-red-500">*</span>:
+                  </label>
+                  <input
+                    id="excel-delivery-date"
+                    type="date"
+                    value={estimatedArrival}
+                    disabled={Boolean(createdResponse)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setEstimatedArrival(val);
+                      if (detectedPackingSlips.length > 0) {
+                        setPackingSlipDates({ [detectedPackingSlips[0]]: val });
+                      }
+                    }}
+                    className="h-8 px-2.5 text-xs font-mono font-bold rounded-lg border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400 outline-none shadow-2xs cursor-pointer disabled:bg-slate-100 disabled:text-slate-500"
+                  />
+                </div>
+              )}
             </>
           )}
         </div>
@@ -3205,13 +3239,15 @@ function ExcelPackingWorkflow({
             ) : (
               <button
                 type="button"
-                disabled={submitting || !validationResult.is_valid || !packingSlipNumber.trim() || !estimatedArrival.trim()}
+                disabled={submitting || !validationResult.is_valid || !isDatesComplete}
                 onClick={handleCreateShipment}
                 className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
                 title={
                   !validationResult.is_valid
                     ? "Please fix Excel validation errors before sending"
-                    : !packingSlipNumber.trim()
+                    : detectedPackingSlips.length > 1 && !isDatesComplete
+                    ? "Please select a Delivery Date for each Packing Slip"
+                    : !packingSlipNumber.trim() && detectedPackingSlips.length === 0
                     ? "Please enter Packing Slip Number before sending"
                     : !estimatedArrival.trim()
                     ? "Please select Delivery Date before sending"
@@ -3264,6 +3300,20 @@ function ExcelPackingWorkflow({
                     <p className="text-[11px] text-emerald-800 mt-0.5 font-mono">
                       ASN {createdResponse.asn?.asn_number || `ASN-${packingSlipNumber}`} • {createdResponse.shipment?.total_boxes || validationResult.rows.length} Cartons/Rolls
                     </p>
+
+                    {/* Breakdown of shipments when multi-packing slip */}
+                    {createdResponse.shipments && createdResponse.shipments.length > 1 && (
+                      <div className="flex flex-wrap gap-2 mt-1.5">
+                        {createdResponse.shipments.map((s, idx) => (
+                          <span
+                            key={idx}
+                            className="bg-white/90 border border-emerald-200 px-2 py-0.5 rounded text-[11px] font-mono font-medium text-emerald-950"
+                          >
+                            <strong>{s.shipment_number}</strong> ({s.total_boxes} ctns) • Del: {s.delivery_date || s.estimated_arrival || packingSlipDates[s.shipment_number] || "—"}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -3327,7 +3377,91 @@ function ExcelPackingWorkflow({
               </div>
             )}
 
-            {/* 2. Simple Validation Error Alert (Shown when Excel validation fails) */}
+            {/* 2. Multi-Packing Slip Individual Delivery Dates Card */}
+            {detectedPackingSlips.length > 1 && (
+              <div className="p-3 bg-gradient-to-r from-blue-50/90 via-indigo-50/40 to-slate-50 border border-blue-200 rounded-xl shadow-2xs space-y-2 shrink-0">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-blue-100 pb-1.5">
+                  <div className="flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-blue-600 shrink-0" />
+                    <span className="text-xs font-bold text-blue-950 uppercase tracking-wide">
+                      Select Delivery Date per Packing Slip
+                    </span>
+                    <span className="text-[11px] text-blue-700 font-medium">
+                      ({detectedPackingSlips.length} separate shipments &amp; XMLs)
+                    </span>
+                  </div>
+                  {estimatedArrival && !createdResponse && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const updated: Record<string, string> = {};
+                        detectedPackingSlips.forEach((ps) => {
+                          updated[ps] = estimatedArrival;
+                        });
+                        setPackingSlipDates(updated);
+                      }}
+                      className="text-[11px] text-blue-700 hover:text-blue-900 font-semibold underline cursor-pointer self-start sm:self-auto"
+                    >
+                      Set all to "{estimatedArrival}"
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 pt-0.5">
+                  {packingSlipGroups.map((group) => {
+                    const currentDate = packingSlipDates[group.slipNumber] || "";
+                    const isMissing = !currentDate.trim();
+                    return (
+                      <div
+                        key={group.slipNumber}
+                        className={cn(
+                          "p-2.5 rounded-lg border bg-white shadow-2xs flex flex-col justify-between gap-2 transition-all",
+                          isMissing && !createdResponse
+                            ? "border-amber-400 ring-1 ring-amber-300/80 bg-amber-50/20"
+                            : "border-slate-200 hover:border-blue-300"
+                        )}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-mono font-bold text-xs text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                            {group.slipNumber}
+                          </span>
+                          <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 font-mono">
+                            {group.cartons} Ctns • {group.totalQuantity.toLocaleString()} {group.uom}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100">
+                          <label className="text-[11px] font-bold text-slate-700 whitespace-nowrap">
+                            Delivery Date <span className="text-red-500">*</span>:
+                          </label>
+                          <input
+                            type="date"
+                            required
+                            disabled={Boolean(createdResponse)}
+                            value={currentDate}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setPackingSlipDates((prev) => ({
+                                ...prev,
+                                [group.slipNumber]: val,
+                              }));
+                            }}
+                            className={cn(
+                              "h-7 px-2 text-xs font-mono font-bold rounded border bg-white focus:outline-none focus:ring-1 cursor-pointer disabled:bg-slate-100 disabled:text-slate-500 w-36",
+                              isMissing && !createdResponse
+                                ? "border-amber-400 focus:border-amber-500 focus:ring-amber-400"
+                                : "border-slate-300 focus:border-blue-500 focus:ring-blue-400"
+                            )}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* 3. Simple Validation Error Alert (Shown when Excel validation fails) */}
             {!validationResult.is_valid && (
               <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl space-y-2 text-xs shrink-0">
                 <div className="flex items-center gap-2 text-red-800 font-bold">
@@ -3375,7 +3509,7 @@ function ExcelPackingWorkflow({
               </div>
             )}
 
-            {/* 3. Handling Units & Packing Breakdown (Clean Table View matching Manual Process) */}
+            {/* 4. Handling Units & Packing Breakdown (Clean Table View matching Manual Process) */}
             <div className="flex-1 rounded-xl border border-gray-200 bg-white overflow-hidden shadow-2xs flex flex-col min-h-0">
               <div className="p-3 bg-gray-50/80 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shrink-0">
                 <div className="flex items-center gap-2">
@@ -3446,8 +3580,17 @@ function ExcelPackingWorkflow({
                           <td className="px-3 py-2 font-mono font-bold text-gray-700 whitespace-nowrap">
                             {cleanCtn}
                           </td>
-                          <td className="px-3 py-2 font-mono font-bold text-gray-800">
-                            {r.pack_number || packingSlipNumber || "—"}
+                          <td className="px-3 py-2 whitespace-nowrap">
+                            <div className="flex flex-col">
+                              <span className="font-mono font-bold text-gray-800">
+                                {r.pack_number || packingSlipNumber || "—"}
+                              </span>
+                              {detectedPackingSlips.length > 1 && r.pack_number && packingSlipDates[r.pack_number] && (
+                                <span className="text-[10px] text-blue-600 font-mono font-medium">
+                                  Del: {packingSlipDates[r.pack_number]}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-3 py-2">
                             {generatedHu ? (
