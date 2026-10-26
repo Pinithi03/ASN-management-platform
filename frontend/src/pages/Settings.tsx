@@ -1,4 +1,4 @@
-﻿// ─── Admin Settings Hub ─────────────────────────────────────────────
+// ─── Admin Settings Hub ─────────────────────────────────────────────
 // frontend/src/pages/Settings.tsx
 
 import { useState } from "react";
@@ -272,7 +272,7 @@ export default function Settings() {
                   desc: "Parses HTML order tables, line items, delivery dates, & supplier metadata.",
                 },
                 {
-                  id: "calzedonia_xml",
+                  id: "standard_xml",
                   name: "Standard XML Parser",
                   desc: "Parses structured XML attachments and purchase order revisions.",
                 },

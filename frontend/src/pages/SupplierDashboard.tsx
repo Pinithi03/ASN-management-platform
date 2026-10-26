@@ -701,7 +701,7 @@ export default function SupplierDashboard() {
               </div>
 
               <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-                <span>Calzedonia DTD XML & 20-digit SSCC labels</span>
+                <span>Standard DTD XML & 20-digit SSCC labels</span>
                 <span className="font-semibold text-emerald-600">Plant Validated</span>
               </div>
             </div>

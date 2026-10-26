@@ -1564,7 +1564,7 @@ async def download_shipment_labels(
                 "po_number": meta.get("po_number", "N/A"),
                 "po_line_number": str(meta.get("po_line", "100")),
                 "material_code": meta.get("product_code", "MATERIAL"),
-                "material_description": f"Calzedonia Item {meta.get('product_code', '')}",
+                "material_description": f"Item {meta.get('product_code', '')}",
                 "product_code_partner": meta.get("supplier_carton_ref", ""),
                 "qty": float(meta.get("quantity", 0.0)),
                 "unit_of_measure": meta.get("uom", "M"),

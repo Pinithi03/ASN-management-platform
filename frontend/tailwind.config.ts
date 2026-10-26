@@ -34,7 +34,7 @@ const config: Config = {
           foreground: "hsl(var(--destructive-foreground))",
         },
         border: "hsl(var(--border))",
-        // Custom brand colors — update with Oniverse brand guide
+        // Custom brand colors — update with ASN Platform brand guide
         brand: {
           50: "#eff6ff",
           100: "#dbeafe",

@@ -266,7 +266,7 @@ export const shipmentService = {
   },
 
   /**
-   * Preview Calzedonia SdDataSlice XML.
+   * Preview SdDataSlice XML.
    */
   async getASNXmlPreview(asnId: string) {
     const res = await api.get<{ asn_number: string; xml_content: string; xml_validated: boolean }>(
@@ -276,7 +276,7 @@ export const shipmentService = {
   },
 
   /**
-   * Download Calzedonia XML file.
+   * Download ASN XML file.
    */
   async downloadASNXml(asnId: string): Promise<Blob> {
     const res = await api.get(`/asn/${asnId}/download-xml`, { responseType: "blob" });
@@ -292,7 +292,7 @@ export const shipmentService = {
   },
 
   /**
-   * Dispatch ASN XML to Calzedonia.
+   * Dispatch ASN XML.
    */
   async sendASN(asnId: string, recipientEmail?: string) {
     const url = recipientEmail ? `/asn/${asnId}/send?recipient_email=${encodeURIComponent(recipientEmail)}` : `/asn/${asnId}/send`;

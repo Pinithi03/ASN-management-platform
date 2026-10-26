@@ -145,7 +145,7 @@ export function resolvePlantAndLocation(
     };
   }
 
-  // Look for standard Oniverse code pattern (e.g., PPA2-0105, PPB1-0101, PPA1, etc.)
+  // Look for standard plant code pattern (e.g., PPA2-0105, PPB1-0101, PPA1, etc.)
   const codeMatch = combined.match(/\b(PP[A-Z]\d)(?:[-_ ]([0-9A-Z]+))?\b/i);
   let plantCode = codeMatch ? codeMatch[1].toUpperCase() : "";
   let storageLocation = codeMatch && codeMatch[2] ? codeMatch[2].toUpperCase() : "";

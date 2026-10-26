@@ -2326,13 +2326,10 @@ function WebPackingWizard({
           ) : (
             <>
               {/* Step 3 Pre-dispatch Review */}
-              <div className="border-b border-gray-100 pb-3">
+              <div className="border-b border-gray-100 pb-2">
                 <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wide">
                   Dispatch Verification & Summary
                 </h2>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  Review consignment metrics, verify Packing Slip number and delivery date before EDI transmission.
-                </p>
               </div>
 
               {/* Required Dispatch Parameters: Packing Slip & Delivery Date */}
@@ -2343,9 +2340,6 @@ function WebPackingWizard({
                     <label htmlFor="wizard-ps-number" className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
                       Packing Slip / Delivery Note No <span className="text-red-500 font-bold">*</span>
                     </label>
-                    <p className="text-[11px] text-gray-500 mt-0.5">
-                      Supplier Dispatch Note / Delivery Note number. Embedded into EDI XML as &lt;PackingSlipNumber&gt; and used as Shipment No.
-                    </p>
                   </div>
                   <div>
                     <input
@@ -2378,9 +2372,6 @@ function WebPackingWizard({
                         </span>
                       )}
                     </div>
-                    <p className="text-[11px] text-gray-500 mt-0.5">
-                      Expected delivery date at factory. Defaulted from inbound XML &lt;DeliveryDate&gt;, editable by supplier.
-                    </p>
                   </div>
                   <div>
                     <input
@@ -2432,14 +2423,6 @@ function WebPackingWizard({
                     Code: {matchPlant(packedItems[0]?.destination)}
                   </span>
                 </div>
-              </div>
-
-              {/* Validation Checkbox Card */}
-              <div className="p-3 bg-emerald-50/60 border border-emerald-200 rounded-xl text-xs flex items-center gap-2 text-emerald-900">
-                <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>
-                  <strong>EDI Compliance:</strong> DTD rules verified (GW &gt; NW &gt; 0, contiguous 20-digit SSCC sequence). Ready for transmission.
-                </span>
               </div>
             </>
           )}
@@ -3217,9 +3200,6 @@ function ExcelPackingWorkflow({
                               <Calendar className="w-4 h-4 text-blue-600" />
                               Individual Delivery Dates ({packingSlipGroups.length} Packing Slips Detected)
                             </h4>
-                            <p className="text-[11px] text-slate-500 mt-0.5">
-                              Each packing slip will generate a separate Calzedonia ASN XML with its own delivery date.
-                            </p>
                           </div>
 
                           {/* Quick Apply to All */}
@@ -3562,7 +3542,7 @@ function ExcelPackingWorkflow({
                 {createdResponse.shipments.length} Packing Slips Processed!
               </h3>
               <p className="text-sm text-gray-500 mt-2 mb-4">
-                Created {createdResponse.shipments.length} independent shipments & Calzedonia ASN XMLs with segregated Handling Units.
+                Created {createdResponse.shipments.length} independent shipments & ASN XMLs with segregated Handling Units.
               </p>
               <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1 custom-scrollbar text-left">
                 {createdResponse.shipments.map((s, idx) => (
@@ -4110,19 +4090,19 @@ function LabelPrintModal({
   isLoading?: boolean;
 }) {
   const [selectedSize, setSelectedSize] = useState<string>(() => {
-    return localStorage.getItem("calzedonia_preferred_label_size") || "6x4";
+    return localStorage.getItem("asn_preferred_label_size") || "6x4";
   });
 
   const handleSelectSize = (size: string) => {
     setSelectedSize(size);
-    localStorage.setItem("calzedonia_preferred_label_size", size);
+    localStorage.setItem("asn_preferred_label_size", size);
   };
 
   const SIZES = [
     {
       id: "6x4",
       title: '6" × 4" Landscape',
-      subtitle: "Calzedonia Standard (152 × 102 mm)",
+      subtitle: "ASN Standard (152 × 102 mm)",
       desc: "Standard wide industrial shipping label. Best for thermal sticker rolls.",
       badge: "Standard",
       badgeColor: "bg-blue-50 text-blue-700 border-blue-200",
