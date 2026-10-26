@@ -2,8 +2,6 @@ import { useState, useRef } from "react";
 import {
   Building2,
   ShieldCheck,
-  Globe,
-  Tag,
   Boxes,
   Lock,
   AlertCircle,
@@ -13,7 +11,6 @@ import {
   Trash2,
   Loader2,
   HardDrive,
-  FileEdit,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { SupplierItem } from "@/pages/Suppliers";
@@ -24,6 +21,7 @@ import {
   getDraftStorageEstimate,
   clearAllSupplierDrafts,
 } from "@/utils/draftStorage";
+import { cn } from "@/utils/cn";
 
 export default function Profile() {
   const user = useAuthStore((s) => s.user);
@@ -234,30 +232,26 @@ export default function Profile() {
   };
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto animate-in fade-in duration-200">
-      {/* Top Profile Header Card: Clean Slate & White Theme with Integrated Logo Branding */}
-      <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-2xs space-y-4">
-        {/* Status Alerts */}
+    <div className="p-6 space-y-5 max-w-7xl mx-auto animate-in fade-in duration-150">
+      {/* ─── 1. TOP PROFILE HEADER & IDENTITY HERO ─── */}
+      <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-2xs space-y-3">
+        {/* Alerts */}
         {avatarSuccess && (
-          <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-lg flex items-start gap-2.5 text-xs text-emerald-800 animate-in fade-in">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-semibold">{avatarSuccess}</p>
-            </div>
+          <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center gap-2.5 text-xs text-emerald-800 animate-in fade-in">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span className="font-semibold">{avatarSuccess}</span>
           </div>
         )}
 
         {avatarError && (
-          <div className="p-3.5 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2.5 text-xs text-red-800 animate-in fade-in">
-            <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-semibold">{avatarError}</p>
-            </div>
+          <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2.5 text-xs text-red-800 animate-in fade-in">
+            <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+            <span className="font-semibold">{avatarError}</span>
           </div>
         )}
 
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
-          <div className="flex items-center gap-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4 min-w-0">
             {/* Clickable Profile Avatar / Logo */}
             <div className="relative group shrink-0">
               <div
@@ -293,30 +287,38 @@ export default function Profile() {
               </button>
             </div>
 
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-lg font-bold tracking-tight text-slate-900">{matchedSupplier.name}</h1>
-                <span className="font-mono text-xs font-semibold px-2 py-0.5 bg-slate-100 text-slate-700 rounded border border-slate-200">
-                  #{matchedSupplier.supplier_code}
+                <h1 className="text-lg font-bold text-slate-900 truncate">{matchedSupplier.name}</h1>
+                <span className="font-mono text-xs font-bold px-2 py-0.5 bg-slate-100 text-slate-800 rounded border border-slate-200">
+                  {matchedSupplier.supplier_code}
                 </span>
                 {matchedSupplier.is_active ? (
-                  <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    Active Supplier
+                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    Active Partner
                   </span>
                 ) : (
-                  <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-red-50 text-red-600 border border-red-200">
+                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-200">
                     Inactive
                   </span>
                 )}
               </div>
-              <p className="text-xs text-slate-500 mt-1">
-                {matchedSupplier.email || "Registered Partner Portal Profile"}
-              </p>
+              <div className="flex items-center gap-2.5 text-xs text-slate-500 mt-1 flex-wrap font-medium">
+                <span>{matchedSupplier.email || "partner@plant.local"}</span>
+                <span className="text-slate-300">•</span>
+                <span>{matchedSupplier.country || "Sri Lanka"}</span>
+                {matchedSupplier.category && (
+                  <>
+                    <span className="text-slate-300">•</span>
+                    <span>{matchedSupplier.category}</span>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
           {/* Action Buttons for Avatar */}
-          <div className="flex items-center gap-2 self-stretch sm:self-auto justify-end">
+          <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
             <input
               type="file"
               ref={fileInputRef}
@@ -328,7 +330,7 @@ export default function Profile() {
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploadingAvatar}
-              className="px-3.5 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-2xs transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              className="px-3.5 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-2xs transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
             >
               {isUploadingAvatar ? (
                 <>
@@ -348,7 +350,7 @@ export default function Profile() {
                 type="button"
                 onClick={handleRemoveAvatar}
                 disabled={isUploadingAvatar}
-                className="px-3 py-2 text-xs font-medium text-red-600 hover:text-red-700 bg-white hover:bg-red-50 border border-slate-200 hover:border-red-200 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                className="px-3 py-1.5 text-xs font-medium text-red-600 hover:text-red-700 bg-white hover:bg-red-50 border border-slate-200 hover:border-red-200 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>Remove</span>
@@ -358,327 +360,214 @@ export default function Profile() {
         </div>
       </div>
 
-      {/* ─── HANDLING UNIT (HU) SEQUENCE NUMBER SECTION ─── */}
-      <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700">
-              <Boxes className="w-5 h-5" />
+      {/* ─── 2. CORE DETAILS: HANDLING UNIT (HU) & REGISTRY DETAILS (2-COL GRID) ─── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* Left: Handling Unit Sequence Card */}
+        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-2xs flex flex-col justify-between space-y-4">
+          <div>
+            <div className="flex items-center justify-between gap-3 pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 shrink-0">
+                  <Boxes className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-bold text-slate-900">Handling Unit (HU) Sequence</h2>
+                  <p className="text-[11px] text-slate-500">SSCC-20 barcode tracking for dispatch cartons</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {isHuLocked ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                    <Lock className="w-3 h-3 text-amber-600" />
+                    Locked
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                    <AlertCircle className="w-3 h-3 text-rose-600" />
+                    Setup Needed
+                  </span>
+                )}
+                {isAdmin && isHuLocked && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAdminEditOpen(!isAdminEditOpen);
+                      if (!isAdminEditOpen) setHuInput(matchedSupplier.current_hu_number || "");
+                    }}
+                    className="text-[11px] font-semibold px-2 py-0.5 rounded-md border border-slate-200 hover:bg-slate-50 text-slate-700 transition-colors cursor-pointer"
+                  >
+                    {isAdminEditOpen ? "Cancel" : "Edit"}
+                  </button>
+                )}
+              </div>
             </div>
-            <div>
-              <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
-                Handling Unit (HU) Sequence Number
-              </h2>
-              <p className="text-xs text-gray-500 mt-0.5">
-                Current running HU barcode identifier generated by your facility for packing cartons
-              </p>
+
+            {/* Status alerts */}
+            {huSuccess && (
+              <div className="mt-3 p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center gap-2 text-xs text-emerald-800">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{huSuccess}</span>
+              </div>
+            )}
+
+            {huError && (
+              <div className="mt-3 p-2.5 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-xs text-red-800">
+                <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                <span>{huError}</span>
+              </div>
+            )}
+
+            {/* Locked or input state */}
+            <div className="pt-3">
+              {isHuLocked && !isAdminEditOpen ? (
+                <div className="space-y-3">
+                  <div className="p-3.5 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-between gap-3">
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                        Last Used HU Number
+                      </span>
+                      <span className="font-mono text-base sm:text-lg font-bold text-slate-900 block mt-0.5">
+                        {matchedSupplier.current_hu_number || "Initialized"}
+                      </span>
+                    </div>
+                    <span className="text-[11px] font-medium text-slate-600 bg-white border border-slate-200 px-2.5 py-1 rounded shadow-2xs">
+                      Synchronized
+                    </span>
+                  </div>
+
+                  <p className="text-[11px] text-slate-500">
+                    Sequence is locked to preserve Calzedonia EDI integrity. Contact System Administrator for adjustments.
+                  </p>
+                </div>
+              ) : (
+                <form onSubmit={handleSaveHu} className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      {isAdminEditOpen ? "Override HU Sequence" : "Initial Last Used HU Number"}
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={huInput}
+                        onChange={(e) => setHuInput(e.target.value)}
+                        placeholder="e.g. 0 (if starting fresh) or last serial"
+                        className="flex-1 h-9 px-3 text-xs font-mono rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400 outline-none"
+                        disabled={isSavingHu}
+                        required
+                      />
+                      <button
+                        type="submit"
+                        disabled={isSavingHu || !huInput.trim()}
+                        className="h-9 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors flex items-center gap-1.5 shadow-2xs disabled:opacity-50 cursor-pointer"
+                      >
+                        {isSavingHu ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Lock className="w-3.5 h-3.5" />}
+                        <span>{isAdminEditOpen ? "Update" : "Lock Sequence"}</span>
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-slate-500">Next carton barcode will generate from this number + 1.</p>
+                </form>
+              )}
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {isHuLocked ? (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
-                <Lock className="w-3.5 h-3.5 text-amber-600" />
-                Locked & In Production
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
-                <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
-                Initial Setup Required
-              </span>
-            )}
-            {isAdmin && isHuLocked && (
-              <button
-                type="button"
-                onClick={() => {
-                  setIsAdminEditOpen(!isAdminEditOpen);
-                  if (!isAdminEditOpen) setHuInput(matchedSupplier.current_hu_number || "");
-                }}
-                className="text-xs font-semibold px-2.5 py-1 rounded-lg border border-gray-300 hover:bg-gray-50 text-gray-700 transition-colors"
-              >
-                {isAdminEditOpen ? "Cancel Admin Edit" : "Admin Edit"}
-              </button>
-            )}
           </div>
         </div>
 
-        {/* Status Alerts */}
-        {huSuccess && (
-          <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-start gap-3 text-xs text-emerald-800">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-bold">HU Sequence Successfully Configured</p>
-              <p className="mt-0.5 text-emerald-700">{huSuccess}</p>
-            </div>
-          </div>
-        )}
-
-        {huError && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3 text-xs text-red-800">
-            <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-bold">Configuration Error</p>
-              <p className="mt-0.5 text-red-700">{huError}</p>
-            </div>
-          </div>
-        )}
-
-        {isHuLocked && !isAdminEditOpen ? (
-          /* LOCKED STATE: Read-Only View for Supplier */
-          <div className="space-y-4">
-            <div className="p-5 rounded-xl border border-gray-200 bg-gray-50/70 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        {/* Right: Company Registry Details Card */}
+        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-2xs space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-700 shrink-0">
+                <Building2 className="w-4 h-4" />
+              </div>
               <div>
-                <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block mb-1">
-                  Last Used Handling Unit (HU) Number
-                </span>
-                <div className="font-mono text-xl sm:text-2xl font-bold text-gray-900 flex items-center gap-2">
-                  <span className="text-emerald-600">#</span>
-                  <span>{matchedSupplier.current_hu_number || "Initialized"}</span>
-                </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  Synchronized with the automated packing and dispatch pipeline.
-                </p>
-              </div>
-              <div className="sm:text-right">
-                <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-600 bg-white border border-gray-200 px-3 py-1.5 rounded-lg shadow-2xs">
-                  <Lock className="w-3.5 h-3.5 text-gray-500" />
-                  Read-Only Mode
-                </span>
+                <h2 className="text-sm font-bold text-slate-900">Company Registry Details</h2>
+                <p className="text-[11px] text-slate-500">Official enterprise records from plant database</p>
               </div>
             </div>
-
-            {/* Notice about contacting Admin */}
-            <div className="p-4 bg-amber-50/80 rounded-xl border border-amber-200/80 flex items-start gap-3 text-xs text-amber-900">
-              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-bold">Sequence Locked</p>
-                <p className="mt-0.5 text-amber-800 leading-relaxed">
-                  To modify or re-align your HU sequence, please contact your System Administrator.
-                </p>
-              </div>
-            </div>
-          </div>
-        ) : (
-          /* UNLOCKED OR ADMIN EDIT STATE: Input Form */
-          <form onSubmit={handleSaveHu} className="space-y-4">
-            <div className="p-4 bg-rose-50/80 rounded-xl border border-rose-200/90 flex items-start gap-3 text-xs text-rose-950 shadow-2xs">
-              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-bold text-rose-900">
-                  {isAdminEditOpen ? "Administrator Sequence Override" : "Initial One-Time HU Setup"}
-                </p>
-                <p className="mt-0.5 text-rose-800 leading-relaxed">
-                  {isAdminEditOpen
-                    ? "Next carton generation will resume from this number + 1."
-                    : "Enter last used Handling Unit number (0 if starting fresh). Next carton will generate from this number + 1."}
-                </p>
-              </div>
-            </div>
-
-            <div className="p-4 rounded-xl border border-gray-200 bg-white space-y-3">
-              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider">
-                Last Used Handling Unit (HU) Number
-              </label>
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                <div className="relative flex-1">
-                  <input
-                    type="text"
-                    value={huInput}
-                    onChange={(e) => setHuInput(e.target.value)}
-                    placeholder="e.g. 0 (if starting fresh) or last used serial (e.g. 50)"
-                    className="w-full h-11 px-3.5 text-sm font-mono rounded-xl border border-gray-200 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 bg-gray-50/50 focus:bg-white transition-colors"
-                    disabled={isSavingHu}
-                    required
-                  />
-                  <span className="text-[11px] text-slate-500 mt-1 block">
-                    Next carton will generate from this number + 1 (e.g. 0 to 1).
-                  </span>
-                </div>
-                <button
-                  type="submit"
-                  disabled={isSavingHu || !huInput.trim()}
-                  className="h-11 px-5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs transition-colors flex items-center justify-center gap-2 shadow-xs disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-                >
-                  {isSavingHu ? (
-                    <>
-                      <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Saving & Locking...
-                    </>
-                  ) : (
-                    <>
-                      <Lock className="w-3.5 h-3.5" />
-                      {isAdminEditOpen ? "Update HU Sequence" : "Confirm & Lock HU Sequence"}
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </form>
-        )}
-      </div>
-
-      {/* ─── OFFICIAL COMPANY PROFILE DETAILS ─── */}
-      <div className="space-y-6 animate-in fade-in duration-150">
-        <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-6">
-          <div className="pb-4 border-b border-gray-100">
-            <h2 className="text-base font-bold text-gray-900">Official Company Profile Details</h2>
-            <p className="text-xs text-gray-500 mt-0.5">
-              Sourced directly from the Plant Admin Supplier Registry
-            </p>
-          </div>
-
-          {/* Profile Attributes Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {/* Field 1: Registered Company Name */}
-            <div className="p-4 rounded-xl border border-gray-200/80 bg-gray-50/60 relative group">
-              <div className="mb-1.5">
-                <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                  Registered Company Name
-                </span>
-              </div>
-              <div className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                <Building2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span className="truncate">{matchedSupplier.name}</span>
-              </div>
-              <p className="text-[11px] text-gray-400 mt-1">Official registered enterprise entity</p>
-            </div>
-
-            {/* Field 2: Supplier Partner Code */}
-            <div className="p-4 rounded-xl border border-emerald-200/80 bg-emerald-50/40 relative">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">
-                  Supplier Partner Code
-                </span>
-                <span className="text-[10px] font-semibold text-emerald-700 flex items-center gap-1">
-                  <ShieldCheck className="w-3 h-3 text-emerald-600" /> Verified ID
-                </span>
-              </div>
-              <div className="text-sm font-mono font-bold text-emerald-950 flex items-center gap-2">
-                <Tag className="w-4 h-4 text-emerald-700 shrink-0" />
-                <span>#{matchedSupplier.supplier_code}</span>
-              </div>
-              <p className="text-[11px] text-emerald-700/80 mt-1">Unique supply chain routing identifier</p>
-            </div>
-
-            {/* Field 3: Country / Region */}
-            <div className="p-4 rounded-xl border border-gray-200/80 bg-gray-50/60 relative">
-              <div className="mb-1.5">
-                <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                  Country / Region
-                </span>
-              </div>
-              <div className="text-sm font-medium text-gray-900 flex items-center gap-2">
-                <Globe className="w-4 h-4 text-gray-500 shrink-0" />
-                <span>{matchedSupplier.country || "Sri Lanka"}</span>
-              </div>
-              <p className="text-[11px] text-gray-400 mt-1">Operating manufacturing jurisdiction</p>
-            </div>
-          </div>
-
-          {/* Support Notice */}
-          <div className="p-3.5 bg-emerald-50/80 rounded-xl border border-emerald-200/70 flex items-center gap-2.5 text-xs text-emerald-900">
-            <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span>
-              If you need to make any changes to your company profile, please contact the <strong>System Administrator</strong> for support.
+            <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+              <ShieldCheck className="w-3 h-3" /> Verified ID
             </span>
           </div>
+
+          <div className="grid grid-cols-2 gap-3 text-xs pt-1">
+            <div className="p-2.5 rounded-lg border border-slate-100 bg-slate-50/80">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Company Name</span>
+              <span className="font-semibold text-slate-900 truncate block mt-0.5">{matchedSupplier.name}</span>
+            </div>
+
+            <div className="p-2.5 rounded-lg border border-slate-100 bg-slate-50/80">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Partner Code</span>
+              <span className="font-mono font-bold text-slate-900 block mt-0.5">{matchedSupplier.supplier_code}</span>
+            </div>
+
+            <div className="p-2.5 rounded-lg border border-slate-100 bg-slate-50/80">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Contact Person</span>
+              <span className="font-medium text-slate-800 block mt-0.5">{matchedSupplier.contact_name || user?.name || "Representative"}</span>
+            </div>
+
+            <div className="p-2.5 rounded-lg border border-slate-100 bg-slate-50/80">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Country / Region</span>
+              <span className="font-medium text-slate-800 block mt-0.5">{matchedSupplier.country || "Sri Lanka"}</span>
+            </div>
+          </div>
+
+          <p className="text-[11px] text-slate-500 pt-1">
+            To request changes to legal enterprise name or billing details, please contact Central HQ Administration.
+          </p>
         </div>
       </div>
 
-      {/* ─── SUPPLIER OFFLINE STORAGE & CACHE MANAGEMENT (SUPPLIER ONLY) ─── */}
+      {/* ─── 3. LOCAL CACHE & OFFLINE STORAGE (COMPACT FOOTER BAR FOR SUPPLIERS) ─── */}
       {!isAdmin && (
-        <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-6 animate-in fade-in duration-150">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-gray-100">
+        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 shrink-0">
+              <HardDrive className="w-4 h-4" />
+            </div>
             <div>
               <div className="flex items-center gap-2">
-                <HardDrive className="w-5 h-5 text-emerald-600" />
-                <h2 className="text-base font-bold text-gray-900">Offline Drafts & Local Cache</h2>
+                <h3 className="text-xs font-bold text-slate-900">Local Cache & Offline Drafts</h3>
+                {draftCount > 0 && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                    {draftCount} {draftCount === 1 ? "Draft" : "Drafts"}
+                  </span>
+                )}
               </div>
-              <p className="text-xs text-gray-500 mt-1">
-                Manage temporary offline drafts, packing list configurations, and spreadsheet caches stored on this device.
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                {draftStorageInfo.draftCount} saved items • {draftStorageInfo.approxSizeKb} KB browser storage used on this device
               </p>
             </div>
-            {draftCount > 0 && (
-              <span className="self-start sm:self-auto inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                <FileEdit className="w-3.5 h-3.5" />
-                {draftCount} Active {draftCount === 1 ? "Draft" : "Drafts"}
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+            {cacheSuccessMsg && (
+              <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-md animate-in fade-in">
+                {cacheSuccessMsg}
               </span>
             )}
-          </div>
-
-          {cacheSuccessMsg && (
-            <div className="p-3.5 bg-emerald-50 rounded-xl border border-emerald-200 flex items-center gap-2.5 text-xs text-emerald-800 animate-in fade-in">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>{cacheSuccessMsg}</span>
-            </div>
-          )}
-
-          {/* Metrics summary */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="p-4 rounded-xl border border-gray-100 bg-gray-50/70">
-              <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
-                Saved Offline Drafts
-              </div>
-              <div className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                <span>{draftStorageInfo.draftCount}</span>
-                <span className="text-xs font-normal text-gray-400">items</span>
-              </div>
-              <p className="text-[11px] text-gray-500 mt-1">Wizard & Excel drop progress</p>
-            </div>
-
-            <div className="p-4 rounded-xl border border-gray-100 bg-gray-50/70">
-              <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
-                Storage Used
-              </div>
-              <div className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                <span>{draftStorageInfo.approxSizeKb}</span>
-                <span className="text-xs font-normal text-gray-400">KB</span>
-              </div>
-              <p className="text-[11px] text-gray-500 mt-1">Browser storage footprint</p>
-            </div>
-
-            <div className="p-4 rounded-xl border border-gray-100 bg-gray-50/70">
-              <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
-                Cache Scope
-              </div>
-              <div className="text-sm font-semibold text-emerald-700 flex items-center gap-1.5 mt-1">
-                <ShieldCheck className="w-4 h-4" />
-                <span>Isolated to #{cleanCode || user?.supplier_code || "Supplier"}</span>
-              </div>
-              <p className="text-[11px] text-gray-500 mt-1">Private to this supplier partner</p>
-            </div>
-          </div>
-
-          {/* Action buttons */}
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-            <div className="text-xs text-slate-500 flex items-center gap-1.5">
-              <AlertCircle className="w-4 h-4 text-slate-400 shrink-0" />
-              <span>Clearing cache removes local unsent drafts without affecting live POs.</span>
-            </div>
-
-            <div className="flex items-center gap-2.5">
-              <button
-                type="button"
-                disabled={isClearingCache || draftStorageInfo.draftCount === 0}
-                onClick={handleClearCache}
-                className={`px-4 py-2 text-xs font-semibold rounded-xl transition-all inline-flex items-center gap-2 cursor-pointer ${
-                  draftStorageInfo.draftCount === 0
-                    ? "bg-slate-50 text-slate-300 border border-slate-200 cursor-not-allowed"
-                    : "bg-white text-red-600 border border-slate-200 hover:bg-red-50 hover:border-red-200"
-                }`}
-              >
-                {isClearingCache ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    Clearing...
-                  </>
-                ) : (
-                  <>
-                    <Trash2 className="w-3.5 h-3.5 text-red-600" />
-                    Clear Cache
-                  </>
-                )}
-              </button>
-            </div>
+            <button
+              type="button"
+              disabled={isClearingCache || draftStorageInfo.draftCount === 0}
+              onClick={handleClearCache}
+              className={cn(
+                "px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors flex items-center gap-1.5 cursor-pointer",
+                draftStorageInfo.draftCount === 0
+                  ? "bg-slate-50 text-slate-300 border-slate-200 cursor-not-allowed"
+                  : "bg-white text-red-600 border-slate-200 hover:bg-red-50 hover:border-red-200"
+              )}
+            >
+              {isClearingCache ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Clearing...</span>
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                  <span>Clear Local Drafts</span>
+                </>
+              )}
+            </button>
           </div>
         </div>
       )}
