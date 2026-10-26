@@ -1701,6 +1701,14 @@ function WebPackingWizard({
             {step === 3 && (
               submitSuccessResult ? (
                 <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPreviewXmlModal(buildLiveXmlPreview())}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg shadow-2xs transition-colors cursor-pointer"
+                    title="Preview official SdDataSlice EDI XML"
+                  >
+                    <Eye className="w-3.5 h-3.5 text-blue-600" /> Preview XML
+                  </button>
                   <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 text-emerald-800 rounded-lg text-xs font-bold border border-emerald-200">
                     <Check className="w-3.5 h-3.5 stroke-[2.5]" /> Dispatched to EDI
                   </span>
@@ -1713,29 +1721,39 @@ function WebPackingWizard({
                   </button>
                 </div>
               ) : (
-                <button
-                  type="button"
-                  onClick={handleDispatchASN}
-                  disabled={isSubmitting || !packingSlipNumber.trim() || !deliveryDate.trim()}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
-                  title={
-                    !packingSlipNumber.trim()
-                      ? "Please enter Packing Slip Number before dispatching"
-                      : !deliveryDate.trim()
-                      ? "Please select Delivery Date before dispatching"
-                      : "Dispatch to EDI"
-                  }
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Transmitting XML...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="w-3.5 h-3.5" /> Dispatch to EDI
-                    </>
-                  )}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPreviewXmlModal(buildLiveXmlPreview())}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg shadow-2xs transition-colors cursor-pointer"
+                    title="Preview official SdDataSlice EDI XML before dispatch"
+                  >
+                    <Eye className="w-3.5 h-3.5 text-blue-600" /> Preview XML
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDispatchASN}
+                    disabled={isSubmitting || !packingSlipNumber.trim() || !deliveryDate.trim()}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
+                    title={
+                      !packingSlipNumber.trim()
+                        ? "Please enter Packing Slip Number before dispatching"
+                        : !deliveryDate.trim()
+                        ? "Please select Delivery Date before dispatching"
+                        : "Dispatch to EDI"
+                    }
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Transmitting XML...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-3.5 h-3.5" /> Dispatch to EDI
+                      </>
+                    )}
+                  </button>
+                </div>
               )
             )}
           </div>
@@ -2370,7 +2388,7 @@ function WebPackingWizard({
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 space-y-3">
           {/* A. Inline Dispatched Confirmation Banner (Shown when ASN is Dispatched to EDI) */}
           {submitSuccessResult && (
-            <div className="p-3.5 bg-emerald-50/80 border border-emerald-200 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-2xs">
+            <div className="p-3 bg-emerald-50/80 border border-emerald-200 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-2xs">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
                   <Check className="w-4 h-4 stroke-[2.5]" />
@@ -2385,7 +2403,7 @@ function WebPackingWizard({
                     </span>
                   </div>
                   <p className="text-[11px] text-emerald-800 mt-0.5 font-mono">
-                    ASN #{submitSuccessResult.asn?.asn_number || `ASN-${packingSlipNumber}`} • {submitSuccessResult.shipment?.total_boxes || allCartonsList.length} Cartons registered with 20-digit SSCC sequence.
+                    ASN #{submitSuccessResult.asn?.asn_number || `ASN-${packingSlipNumber}`}
                   </p>
                 </div>
               </div>
@@ -2413,107 +2431,43 @@ function WebPackingWizard({
                     Return to POs
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={onSuccess}
-                  className="px-3.5 py-1.5 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-xs font-semibold shadow-xs transition-all cursor-pointer flex items-center gap-1"
-                >
-                  Dashboard →
-                </button>
               </div>
             </div>
           )}
 
-          {/* B. Top Parameters Toolbar Strip (Clean & Compact — No Bulky Cards) */}
-          <div className="bg-slate-50/70 border border-slate-200 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3">
-            {/* Left: Input parameters */}
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-1.5">
-                <label htmlFor="wizard-ps-number" className="text-xs font-bold text-slate-700 whitespace-nowrap">
-                  Packing Slip No <span className="text-red-500">*</span>:
-                </label>
-                <input
-                  id="wizard-ps-number"
-                  type="text"
-                  required
-                  disabled={Boolean(submitSuccessResult)}
-                  placeholder="e.g. 01007907"
-                  value={packingSlipNumber}
-                  onChange={(e) => setPackingSlipNumber(e.target.value)}
-                  className="h-8 px-2.5 text-xs font-mono font-bold rounded-lg border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400 outline-none shadow-2xs w-36"
-                />
-              </div>
-
-              <div className="w-px h-5 bg-slate-300 hidden sm:block"></div>
-
-              <div className="flex items-center gap-1.5">
-                <label htmlFor="wizard-delivery-date" className="text-xs font-bold text-slate-700 whitespace-nowrap">
-                  Delivery Date <span className="text-red-500">*</span>:
-                </label>
-                <input
-                  id="wizard-delivery-date"
-                  type="date"
-                  required
-                  disabled={Boolean(submitSuccessResult)}
-                  value={deliveryDate}
-                  onChange={(e) => setDeliveryDate(e.target.value)}
-                  className="h-8 px-2 text-xs font-mono font-bold rounded-lg border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400 outline-none shadow-2xs cursor-pointer"
-                />
-              </div>
-
-              <div className="w-px h-5 bg-slate-300 hidden md:block"></div>
-
-              {/* Plant & Supplier Pills */}
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-semibold text-slate-600 bg-white border border-slate-200 px-2 py-0.5 rounded-md shadow-2xs">
-                  Plant: <strong className="text-slate-900">{formatPlantName(matchPlant(packedItems[0]?.destination))}</strong> ({matchPlant(packedItems[0]?.destination)})
-                </span>
-                <span className="text-[11px] font-semibold text-slate-600 bg-white border border-slate-200 px-2 py-0.5 rounded-md shadow-2xs hidden lg:inline">
-                  Supplier: <strong className="text-slate-900 font-mono">{user?.supplier_code || "0000018194"}</strong>
-                </span>
-              </div>
+          {/* B. Parameters Bar (Clean & Essential Inputs Only) */}
+          <div className="bg-slate-50/70 border border-slate-200 rounded-xl p-3 flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <label htmlFor="wizard-ps-number" className="text-xs font-bold text-slate-700 whitespace-nowrap">
+                Packing Slip No <span className="text-red-500">*</span>:
+              </label>
+              <input
+                id="wizard-ps-number"
+                type="text"
+                required
+                disabled={Boolean(submitSuccessResult)}
+                placeholder="e.g. 01007907"
+                value={packingSlipNumber}
+                onChange={(e) => setPackingSlipNumber(e.target.value)}
+                className="h-8 px-2.5 text-xs font-mono font-bold rounded-lg border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400 outline-none shadow-2xs w-40"
+              />
             </div>
 
-            {/* Right: XML Preview & Dispatch Button */}
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setPreviewXmlModal(buildLiveXmlPreview())}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg shadow-2xs transition-colors cursor-pointer"
-                title="Preview official SdDataSlice EDI XML before dispatch"
-              >
-                <Eye className="w-3.5 h-3.5 text-blue-600" /> Preview XML
-              </button>
+            <div className="w-px h-5 bg-slate-300 hidden sm:block"></div>
 
-              {submitSuccessResult ? (
-                <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-100 text-emerald-800 rounded-lg text-xs font-bold border border-emerald-300 shadow-2xs">
-                  <Check className="w-3.5 h-3.5 stroke-[2.5]" /> Dispatched to EDI
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleDispatchASN}
-                  disabled={isSubmitting || !packingSlipNumber.trim() || !deliveryDate.trim()}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs transition-all disabled:opacity-50 cursor-pointer"
-                  title={
-                    !packingSlipNumber.trim()
-                      ? "Please enter Packing Slip Number before dispatching"
-                      : !deliveryDate.trim()
-                      ? "Please select Delivery Date before dispatching"
-                      : "Dispatch ASN to EDI"
-                  }
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Transmitting to EDI...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="w-3.5 h-3.5" /> Dispatch to EDI
-                    </>
-                  )}
-                </button>
-              )}
+            <div className="flex items-center gap-2">
+              <label htmlFor="wizard-delivery-date" className="text-xs font-bold text-slate-700 whitespace-nowrap">
+                Delivery Date <span className="text-red-500">*</span>:
+              </label>
+              <input
+                id="wizard-delivery-date"
+                type="date"
+                required
+                disabled={Boolean(submitSuccessResult)}
+                value={deliveryDate}
+                onChange={(e) => setDeliveryDate(e.target.value)}
+                className="h-8 px-2.5 text-xs font-mono font-bold rounded-lg border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400 outline-none shadow-2xs cursor-pointer"
+              />
             </div>
           </div>
 
@@ -2523,7 +2477,7 @@ function WebPackingWizard({
               <div className="flex items-center gap-2">
                 <Layers className="w-4 h-4 text-emerald-600" />
                 <span className="text-xs font-bold text-gray-800 uppercase tracking-wider">
-                  Allocated Handling Units (SSCC-20) & Packing Breakdown
+                  Handling Units & Packing Breakdown
                 </span>
                 <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100/70 border border-emerald-200 px-2 py-0.5 rounded-full">
                   {allCartonsList.length} Cartons/Rolls
@@ -2546,12 +2500,10 @@ function WebPackingWizard({
                     <th className="px-3 py-2.5">Handling Unit (SSCC-20)</th>
                     <th className="px-3 py-2.5">PO & Line</th>
                     <th className="px-3 py-2.5">Product Code</th>
-                    <th className="px-3 py-2.5">Description</th>
                     <th className="px-3 py-2.5">Quantity</th>
                     <th className="px-3 py-2.5">Gross Wt (kg)</th>
                     <th className="px-3 py-2.5">Net Wt (kg)</th>
                     <th className="px-3 py-2.5">Lot / Batch</th>
-                    <th className="px-3 py-2.5">Ref</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 bg-white">
@@ -2583,16 +2535,12 @@ function WebPackingWizard({
                         {c.po_number} <span className="text-gray-400">/</span> {c.po_item}
                       </td>
                       <td className="px-3 py-2 font-mono font-semibold text-gray-900 whitespace-nowrap">{c.item_code}</td>
-                      <td className="px-3 py-2 text-gray-600 truncate max-w-[180px]" title={c.description}>
-                        {c.description || "—"}
-                      </td>
                       <td className="px-3 py-2 font-bold text-emerald-700 bg-emerald-50/40 whitespace-nowrap">
                         {c.qty} {c.uom}
                       </td>
                       <td className="px-3 py-2 font-mono text-gray-700">{c.gross_weight != null ? Number(c.gross_weight).toFixed(2) : "—"}</td>
                       <td className="px-3 py-2 font-mono text-gray-700">{c.net_weight != null ? Number(c.net_weight).toFixed(2) : "—"}</td>
                       <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{c.lot_number}</td>
-                      <td className="px-3 py-2 font-mono text-gray-500 text-[11px] whitespace-nowrap">{c.supplier_carton_ref}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -3507,7 +3455,6 @@ function ExcelPackingWorkflow({
                                       <th className="px-3 py-2 border-b border-gray-300">Unit #</th>
                                       <th className="px-3 py-2 border-b border-gray-300">Packing Slip No.</th>
                                       <th className="px-3 py-2 border-b border-gray-300">20-digit HU Number</th>
-                                      <th className="px-3 py-2 border-b border-gray-300">Ref</th>
                                       <th className="px-3 py-2 border-b border-gray-300">Lot No.</th>
                                       <th className="px-3 py-2 border-b border-gray-300">GW</th>
                                       <th className="px-3 py-2 border-b border-gray-300">NW</th>
@@ -3547,7 +3494,6 @@ function ExcelPackingWorkflow({
                                                <span className="text-gray-400 font-normal italic">Auto-generates on dispatch</span>
                                             )}
                                          </td>
-                                         <td className="px-3 py-1.5">{r.supplier_carton_ref || " "}</td>
                                          <td className="px-3 py-1.5 font-mono">{r.lot_number || " "}</td>
                                          <td className="px-3 py-1.5 font-mono">{r.gross_weight}</td>
                                          <td className="px-3 py-1.5 font-mono">{r.net_weight}</td>
