@@ -467,7 +467,14 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
   const colSpanBeforeQty = hasDistinctPartner ? 6 : 5;
 
   return (
-    <div className="p-6 space-y-6">
+    <div
+      className={cn(
+        "p-4 sm:p-6",
+        selectedPlant === "ALL" && viewMode === "hub"
+          ? "space-y-4 sm:space-y-5"
+          : "space-y-6"
+      )}
+    >
       {/* Page Header with Mode Indicator & View Mode Switcher */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>

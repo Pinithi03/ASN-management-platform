@@ -1,6 +1,8 @@
 import { useState, useMemo } from "react";
 import {
   ArrowRight,
+  MapPin,
+  Warehouse,
 } from "lucide-react";
 import { KNOWN_PLANTS, resolvePlantAndLocation } from "@/utils/plantResolver";
 import type { PurchaseOrder } from "@/types/email";
@@ -84,11 +86,11 @@ export default function PlantAccordionShowcase({
   const [activeHoverId, setActiveHoverId] = useState<string>(defaultPlantId);
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
+    <div className="space-y-4 sm:space-y-6 animate-in fade-in duration-300 w-full">
 
-      {/* ─── 5-Column Horizontal Accordion Showcase (4.2:1 Expansion) ─── */}
-      <div className="relative">
-        <div className="flex flex-col lg:flex-row w-full min-h-[500px] lg:h-[540px] rounded-2xl overflow-hidden bg-gray-950 border border-gray-800 shadow-2xl">
+      {/* ─── 5-Column Horizontal Accordion Showcase (Responsive Full Height) ─── */}
+      <div className="relative w-full">
+        <div className="flex flex-col lg:flex-row w-full min-h-[520px] lg:h-[calc(100vh-130px)] lg:min-h-[580px] lg:max-h-[880px] rounded-2xl overflow-hidden bg-gray-950 border border-gray-800 shadow-2xl">
           {Object.entries(KNOWN_PLANTS).map(([plantId, plant]) => {
             const isExpanded = activeHoverId === plantId;
             const stats = plantStats[plantId] || { totalOrders: 0, readyOrders: 0, locationsCount: 0, locationsList: [] };
@@ -106,8 +108,8 @@ export default function PlantAccordionShowcase({
                 className={cn(
                   "relative group cursor-pointer transition-all duration-500 ease-[cubic-bezier(0.25,1,0.5,1)] overflow-hidden select-none",
                   isExpanded
-                    ? "lg:flex-[4.2] min-h-[360px] lg:min-h-0"
-                    : "lg:flex-1 min-h-[90px] lg:min-h-0 hover:bg-black/30"
+                    ? "lg:flex-[3.5] xl:flex-[4.2] min-h-[380px] lg:min-h-0"
+                    : "lg:flex-1 min-h-[75px] sm:min-h-[85px] lg:min-h-0 hover:bg-black/30"
                 )}
               >
                 {/* Dark Vignette & Gradient Overlays */}
@@ -137,16 +139,16 @@ export default function PlantAccordionShowcase({
                   style={{ backgroundColor: plant.accentHex }}
                 />
 
-                {/* ─── COLLAPSED VIEW (Desktop Vertical Bar) ─── */}
+                {/* ─── COLLAPSED VIEW (Desktop Vertical Bar & Mobile Quick Strip) ─── */}
                 <div
                   className={cn(
-                    "absolute inset-0 p-5 flex flex-col justify-between items-center transition-all duration-300 pointer-events-none",
+                    "absolute inset-0 p-4 sm:p-5 flex flex-col justify-between items-center transition-all duration-300 pointer-events-none",
                     isExpanded ? "opacity-0 invisible" : "opacity-100 visible"
                   )}
                 >
                   <div className="w-full flex items-center justify-center">
                     <span
-                      className="px-2 py-1 rounded-md text-[11px] font-mono font-bold tracking-wider text-white shadow-xs border border-white/10"
+                      className="px-2.5 py-1 rounded-md text-[11px] font-mono font-bold tracking-wider text-white shadow-xs border border-white/10"
                       style={{ backgroundColor: `${plant.accentHex}40` }}
                     >
                       {plant.defaultCode}
@@ -166,13 +168,13 @@ export default function PlantAccordionShowcase({
                   </div>
 
                   {/* Mobile horizontal summary */}
-                  <div className="lg:hidden flex items-center justify-between w-full">
+                  <div className="lg:hidden flex items-center justify-between w-full px-2">
                     <span className="text-sm font-bold text-white">{plant.name}</span>
                     <span className="text-xs font-semibold text-gray-300">{stats.totalOrders} POs</span>
                   </div>
 
                   <div className="w-full flex items-center justify-center">
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/10 text-gray-300 border border-white/10">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/10 text-gray-300 border border-white/10 backdrop-blur-xs">
                       {stats.totalOrders} POs
                     </span>
                   </div>
@@ -181,40 +183,51 @@ export default function PlantAccordionShowcase({
                 {/* ─── EXPANDED VIEW (Full Content Card) ─── */}
                 <div
                   className={cn(
-                    "relative h-full p-6 sm:p-8 flex flex-col justify-between z-10 transition-all duration-500",
+                    "relative h-full p-6 sm:p-8 lg:p-10 flex flex-col justify-between z-10 transition-all duration-500",
                     isExpanded ? "opacity-100 visible" : "opacity-0 invisible pointer-events-none"
                   )}
                 >
                   {/* Top Metadata */}
                   <div className="space-y-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span
-                        className="px-2.5 py-1 rounded-md text-[10px] font-mono font-bold tracking-wider text-white border border-white/15 uppercase shadow-xs"
-                        style={{ backgroundColor: plant.accentHex }}
-                      >
-                        {plant.defaultCode}
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="px-3 py-1 rounded-lg text-xs font-mono font-bold tracking-wider text-white border border-white/15 uppercase shadow-sm"
+                          style={{ backgroundColor: plant.accentHex }}
+                        >
+                          {plant.defaultCode}
+                        </span>
+                        <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold text-emerald-300 bg-emerald-950/60 border border-emerald-500/30 backdrop-blur-xs">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          Direct Dispatch Hub
+                        </span>
+                      </div>
+
+                      <span className="text-[11px] font-medium text-slate-400 hidden xl:inline-block">
+                        Destination Factory
                       </span>
                     </div>
                   </div>
 
                   {/* Middle / Bottom Content */}
-                  <div className="space-y-4 mt-8 lg:mt-0">
+                  <div className="space-y-4 sm:space-y-5 mt-6 lg:mt-0 max-w-2xl">
                     <div>
-                      <h3 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white uppercase drop-shadow-sm">
+                      <h3 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight text-white uppercase drop-shadow-md">
                         {plant.name}
                       </h3>
-                      <p className="text-xs sm:text-sm font-medium text-gray-300 mt-1">
-                        {plant.location}
+                      <p className="text-xs sm:text-sm font-medium text-slate-300 mt-1 flex items-center gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                        <span>{plant.location}, Sri Lanka</span>
                       </p>
                     </div>
 
-                    {/* Live Statistics Counters */}
-                    <div className="grid grid-cols-2 gap-3 pt-2 max-w-sm">
+                    {/* Live Statistics Counters (3-column responsive) */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3 pt-1">
                       <div className="p-3 rounded-xl bg-white/5 border border-white/10 backdrop-blur-xs">
                         <div className="text-[10px] uppercase font-semibold tracking-wider text-gray-400">
                           Active Orders
                         </div>
-                        <div className="text-lg font-bold text-white mt-0.5">
+                        <div className="text-lg sm:text-xl font-bold text-white mt-0.5">
                           {stats.totalOrders}
                           <span className="text-[11px] font-normal text-gray-400 ml-1">POs</span>
                         </div>
@@ -222,17 +235,45 @@ export default function PlantAccordionShowcase({
 
                       <div className="p-3 rounded-xl bg-white/5 border border-white/10 backdrop-blur-xs">
                         <div className="text-[10px] uppercase font-semibold tracking-wider text-gray-400">
+                          Ready Orders
+                        </div>
+                        <div className="text-lg sm:text-xl font-bold text-emerald-400 mt-0.5 flex items-center gap-1">
+                          {stats.readyOrders}
+                          <span className="text-[11px] font-normal text-gray-400 ml-1">to dispatch</span>
+                        </div>
+                      </div>
+
+                      <div className="col-span-2 sm:col-span-1 p-3 rounded-xl bg-white/5 border border-white/10 backdrop-blur-xs">
+                        <div className="text-[10px] uppercase font-semibold tracking-wider text-gray-400">
                           Delivery Stores
                         </div>
-                        <div className="text-lg font-bold text-white mt-0.5">
+                        <div className="text-lg sm:text-xl font-bold text-white mt-0.5">
                           {stats.locationsCount > 0 ? stats.locationsCount : plant.storageLocationsHint.length}
                           <span className="text-[11px] font-normal text-gray-400 ml-1">locations</span>
                         </div>
                       </div>
                     </div>
 
-                    {/* Call To Action Button (Primary CTA bg-brand-600) */}
-                    <div className="flex flex-wrap items-center gap-3 pt-3">
+                    {/* Storage Locations hints */}
+                    {plant.storageLocationsHint && plant.storageLocationsHint.length > 0 && (
+                      <div className="hidden sm:flex flex-wrap items-center gap-1.5 pt-1">
+                        <span className="text-[11px] text-gray-400 font-medium mr-1 flex items-center gap-1">
+                          <Warehouse className="w-3 h-3 text-gray-400" />
+                          Stores:
+                        </span>
+                        {plant.storageLocationsHint.map((loc) => (
+                          <span
+                            key={loc}
+                            className="px-2 py-0.5 rounded-md text-[10px] font-mono font-medium bg-white/10 text-gray-200 border border-white/10 backdrop-blur-xs"
+                          >
+                            {loc}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Call To Action Button (Primary CTA) */}
+                    <div className="flex flex-wrap items-center gap-3 pt-2">
                       <button
                         type="button"
                         onClick={(e) => {
@@ -246,7 +287,7 @@ export default function PlantAccordionShowcase({
                             : "bg-brand-600 hover:bg-brand-700 shadow-blue-950/30"
                         )}
                       >
-                        <span>View Plant Orders</span>
+                        <span>View Plant Orders ({stats.totalOrders})</span>
                         <ArrowRight className="w-4 h-4" />
                       </button>
                     </div>
