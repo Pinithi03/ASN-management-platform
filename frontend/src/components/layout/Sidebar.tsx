@@ -365,11 +365,11 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
     <aside
       className={cn(
         "flex h-full flex-col border-r border-slate-200 bg-white transition-all duration-300 relative z-30",
-        collapsed ? "w-16" : "w-64"
+        collapsed ? "w-16" : "w-56"
       )}
     >
       {/* Brand Header */}
-      <div className="flex h-16 items-center gap-3 border-b border-slate-200 px-4 shrink-0">
+      <div className="flex h-16 items-center gap-2.5 border-b border-slate-200 px-3.5 shrink-0">
         <div
           className={cn(
             "flex h-8 w-8 items-center justify-center rounded-lg text-white shadow-xs shrink-0",
@@ -432,9 +432,9 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   )}
                   title={collapsed ? item.label : undefined}
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
                     <item.icon className="h-5 w-5 flex-shrink-0" />
-                    {!collapsed && <span>{item.label}</span>}
+                    {!collapsed && <span className="whitespace-nowrap">{item.label}</span>}
                   </div>
                   {!collapsed && (
                     <ChevronDown
@@ -458,7 +458,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                           key={sub.to}
                           to={sub.to}
                           className={cn(
-                            "flex items-center gap-2.5 rounded-lg pl-6 pr-3 py-1.5 text-xs font-medium transition-colors",
+                            "flex items-center gap-2 rounded-lg pl-5 pr-2.5 py-1.5 text-xs font-medium transition-colors",
                             isSubActive
                               ? isAdmin
                                 ? "bg-brand-50 text-brand-700 font-semibold"
@@ -467,7 +467,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                           )}
                         >
                           <sub.icon className="h-3.5 w-3.5 flex-shrink-0" />
-                          <span>{sub.label}</span>
+                          <span className="whitespace-nowrap">{sub.label}</span>
                         </NavLink>
                       );
                     })}
@@ -492,12 +492,12 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
               )}
               title={collapsed ? item.label : undefined}
             >
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
                 <item.icon className="h-5 w-5 flex-shrink-0" />
-                {!collapsed && <span>{item.label}</span>}
+                {!collapsed && <span className="whitespace-nowrap">{item.label}</span>}
               </div>
               {!collapsed && isDraftItem && draftCount > 0 && (
-                <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-brand-50 text-brand-700 border border-brand-200">
+                <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-brand-50 text-brand-700 border border-brand-200 shrink-0">
                   {draftCount}
                 </span>
               )}
@@ -527,8 +527,10 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
             )}
             title={collapsed ? item.label : undefined}
           >
-            <item.icon className="h-5 w-5 flex-shrink-0" />
-            {!collapsed && <span>{item.label}</span>}
+            <div className="flex items-center gap-2.5 min-w-0">
+              <item.icon className="h-5 w-5 flex-shrink-0" />
+              {!collapsed && <span className="whitespace-nowrap">{item.label}</span>}
+            </div>
           </NavLink>
         ))}
       </nav>
@@ -641,13 +643,13 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
         {/* User Card Content */}
         {!collapsed ? (
-          <div className="p-3">
-            <div className="flex items-center justify-between gap-2">
+          <div className="p-2.5">
+            <div className="flex items-center justify-between gap-1.5">
               {/* User Avatar + Code (top) + Name (bottom) */}
-              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+              <div className="flex items-center gap-2 min-w-0 flex-1">
                 <div
                   className={cn(
-                    "flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold text-white shadow-xs shrink-0",
+                    "flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold text-white shadow-xs shrink-0",
                     isAdmin ? "bg-blue-600" : "bg-emerald-600"
                   )}
                 >
@@ -659,8 +661,8 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                       <p className="text-xs font-bold text-slate-900 truncate">
                         {user?.name || "Admin"}
                       </p>
-                      <p className="text-[11px] text-slate-500 truncate">
-                        {user?.role === "SUPER_ADMIN" ? "Super Admin (HQ)" : "Central HQ"}
+                      <p className="text-[10px] text-slate-500 truncate">
+                        {user?.role === "SUPER_ADMIN" ? "Super Admin" : "Central HQ"}
                       </p>
                     </>
                   ) : (
@@ -668,7 +670,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                       <p className="text-xs font-bold font-mono text-slate-900 truncate">
                         {user?.supplier_code || "Supplier"}
                       </p>
-                      <p className="text-[11px] text-slate-500 truncate" title={user?.supplier_name || user?.name || undefined}>
+                      <p className="text-[10px] text-slate-500 truncate" title={user?.supplier_name || user?.name || undefined}>
                         {user?.supplier_name || user?.name || "Supplier Partner"}
                       </p>
                     </>
@@ -677,7 +679,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
               </div>
 
               {/* Action Icons: Notification Bell + Sign Out */}
-              <div className="flex items-center gap-1 shrink-0">
+              <div className="flex items-center gap-0.5 shrink-0">
                 <button
                   type="button"
                   onClick={() => setNotifOpen(!notifOpen)}
