@@ -214,15 +214,15 @@ export default function ASNManagement(){
                       try {
                         await api.post(`/asn/${sel.id}/send`);
                         await qc.invalidateQueries({ queryKey: ["asns"] });
-                        alert(`ASN ${sel.asn_number} dispatched successfully to Central EDI!`);
+                        alert(`ASN ${sel.asn_number} sent successfully to IUNGO!`);
                       } catch (err: any) {
-                        alert(err?.response?.data?.detail || "Failed to dispatch ASN to EDI.");
+                        alert(err?.response?.data?.detail || "Failed to send ASN to IUNGO.");
                       }
                     }}
                     className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 py-2 text-xs font-semibold text-white hover:bg-emerald-700 shadow-sm"
                   >
                     <CheckCircle2 className="h-4 w-4" />
-                    Dispatch to EDI
+                    Send to IUNGO
                   </button>
                 )}
               </div>

@@ -1139,7 +1139,7 @@ function WebPackingWizard({
 
   const handleDispatchASN = async () => {
     if (!isOnline) {
-      alert("You are currently offline. Please reconnect to the internet before dispatching the ASN to EDI.");
+      alert("You are currently offline. Please reconnect to the internet before sending the ASN to IUNGO.");
       return;
     }
     const trimmedPs = packingSlipNumber.trim();
@@ -1698,20 +1698,13 @@ function WebPackingWizard({
                     type="button"
                     onClick={() => setPreviewXmlModal(buildLiveXmlPreview())}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg shadow-2xs transition-colors cursor-pointer"
-                    title="Preview official SdDataSlice EDI XML"
+                    title="Preview official SdDataSlice XML"
                   >
                     <Eye className="w-3.5 h-3.5 text-blue-600" /> Preview XML
                   </button>
                   <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 text-emerald-800 rounded-lg text-xs font-bold border border-emerald-200">
-                    <Check className="w-3.5 h-3.5 stroke-[2.5]" /> Dispatched to EDI
+                    <Check className="w-3.5 h-3.5 stroke-[2.5]" /> Sent to IUNGO
                   </span>
-                  <button
-                    type="button"
-                    onClick={onSuccess}
-                    className="px-3.5 py-1.5 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-xs font-semibold shadow-xs transition-all cursor-pointer"
-                  >
-                    Go to Dashboard →
-                  </button>
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
@@ -1719,7 +1712,7 @@ function WebPackingWizard({
                     type="button"
                     onClick={() => setPreviewXmlModal(buildLiveXmlPreview())}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg shadow-2xs transition-colors cursor-pointer"
-                    title="Preview official SdDataSlice EDI XML before dispatch"
+                    title="Preview official SdDataSlice XML before sending"
                   >
                     <Eye className="w-3.5 h-3.5 text-blue-600" /> Preview XML
                   </button>
@@ -1730,19 +1723,19 @@ function WebPackingWizard({
                     className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
                     title={
                       !packingSlipNumber.trim()
-                        ? "Please enter Packing Slip Number before dispatching"
+                        ? "Please enter Packing Slip Number before sending"
                         : !deliveryDate.trim()
-                        ? "Please select Delivery Date before dispatching"
-                        : "Dispatch to EDI"
+                        ? "Please select Delivery Date before sending"
+                        : "Send to IUNGO"
                     }
                   >
                     {isSubmitting ? (
                       <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Transmitting XML...
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Sending to IUNGO...
                       </>
                     ) : (
                       <>
-                        <Send className="w-3.5 h-3.5" /> Dispatch to EDI
+                        <Send className="w-3.5 h-3.5" /> Send to IUNGO
                       </>
                     )}
                   </button>
@@ -2352,7 +2345,7 @@ function WebPackingWizard({
       {/* ─── STEP 3: REVIEW & EXPORT ────────────────────────────────────── */}
       {step === 3 && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 space-y-3">
-          {/* A. Inline Dispatched Confirmation Banner (Shown when ASN is Dispatched to EDI) */}
+          {/* A. Inline Confirmation Banner (Shown when ASN is Sent to IUNGO) */}
           {submitSuccessResult && (
             <div className="p-3 bg-emerald-50/80 border border-emerald-200 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-2xs">
               <div className="flex items-center gap-3">
@@ -2362,7 +2355,7 @@ function WebPackingWizard({
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-bold text-emerald-950">
-                      Shipment #{submitSuccessResult.shipment?.shipment_number || packingSlipNumber} Created & Dispatched to EDI
+                      Shipment #{submitSuccessResult.shipment?.shipment_number || packingSlipNumber} Created & Sent to IUNGO
                     </span>
                     <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded">
                       Transmitted
@@ -3102,7 +3095,7 @@ function ExcelPackingWorkflow({
 
   const handleDispatchAsn = async () => {
     if (!isOnline) {
-      alert("You are currently offline. Please reconnect to the network before dispatching the ASN to EDI.");
+      alert("You are currently offline. Please reconnect to the network before sending the ASN to IUNGO.");
       return;
     }
     if (!createdResponse) return;
@@ -3740,7 +3733,7 @@ function ExcelPackingWorkflow({
 
             {dispatchedSuccess ? (
               <span className="flex-1 min-w-[200px] flex items-center justify-center gap-2 rounded-xl bg-emerald-50 px-5 py-3.5 text-sm font-bold text-emerald-700 border border-emerald-200 shadow-2xs">
-                <Check className="h-5 w-5 stroke-[2.5]" /> Dispatched to EDI
+                <Check className="h-5 w-5 stroke-[2.5]" /> Sent to IUNGO
               </span>
             ) : (
               <button
@@ -3753,7 +3746,7 @@ function ExcelPackingWorkflow({
                 )}
               >
                 {dispatchingAsn ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
-                Dispatch to EDI
+                Send to IUNGO
               </button>
             )}
           </div>
@@ -3869,7 +3862,7 @@ function XmlPreviewModal({
           <div className="flex items-center gap-3">
             {sentSuccess ? (
               <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200">
-                <Check className="h-4 w-4" /> Dispatched to Central EDI
+                <Check className="h-4 w-4" /> Sent to IUNGO
               </span>
             ) : (
               <button
@@ -3878,7 +3871,7 @@ function XmlPreviewModal({
                 className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 cursor-pointer transition-colors"
               >
                 {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                Dispatch to EDI
+                Send to IUNGO
               </button>
             )}
           </div>
