@@ -1475,16 +1475,6 @@ function WebPackingWizard({
     });
   };
 
-  const handleMasterPackingSlipChange = (val: string) => {
-    setPackingSlipNumber(val);
-    setPackedItems((prev) =>
-      prev.map((item) => ({
-        ...item,
-        boxes: item.boxes.map((b) => ({ ...b, pack_number: val })),
-      }))
-    );
-  };
-
   const copyBatchToAllCartons = (itemId: string, batchValue: string) => {
     if (!batchValue?.trim()) return;
     setPackedItems((prev) =>
@@ -1499,9 +1489,12 @@ function WebPackingWizard({
   };
 
   const handleProceedToReview = () => {
+    // If packingSlipNumber is empty, look for the first carton pack_number entered in table
     if (!packingSlipNumber.trim()) {
-      alert("Please enter Packing Slip / Delivery Note Number before proceeding.");
-      return;
+      const foundPs = packedItems.flatMap((i) => i.boxes).find((b) => b.pack_number?.trim())?.pack_number?.trim();
+      if (foundPs) {
+        setPackingSlipNumber(foundPs);
+      }
     }
 
     for (const item of packedItems) {
@@ -1988,34 +1981,7 @@ function WebPackingWizard({
             </div>
           </div>
 
-          {/* Master Delivery Note / Packing Slip Number Card (Option 1) */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-blue-50/80 border border-blue-200 rounded-xl shadow-2xs">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center text-blue-700 font-bold shrink-0">
-                <FileText className="w-4 h-4" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-gray-900 uppercase tracking-wide">
-                    Packing Slip / Delivery Note Number
-                  </span>
-                  <span className="text-red-500 font-bold">*</span>
-                </div>
-                <p className="text-[11px] text-slate-500">
-                  Auto-applies to all cartons
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <input
-                type="text"
-                placeholder="e.g. PL-2026-001 / 01007907"
-                value={packingSlipNumber}
-                onChange={(e) => handleMasterPackingSlipChange(e.target.value)}
-                className="w-full sm:w-64 h-9 px-3 text-xs font-mono font-bold rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none bg-white shadow-2xs placeholder:text-gray-400"
-              />
-            </div>
-          </div>
+
 
           <div className="space-y-4">
             {packedItems.map((item, itemIdx) => {
