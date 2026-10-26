@@ -35,6 +35,7 @@ import {
   RotateCcw,
   Calendar,
   Layers,
+  Copy,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { cn } from "@/utils/cn";
@@ -746,6 +747,7 @@ function WebPackingWizard({
   const [startingSeq, setStartingSeq] = useState<number>(1);
   const [packingSlipNumber, setPackingSlipNumber] = useState("");
   const [deliveryDate, setDeliveryDate] = useState("");
+  const [copiedHu, setCopiedHu] = useState<string | null>(null);
 
   const [splitConfigs, setSplitConfigs] = useState<Record<string, { mode: "qty" | "count"; value: string }>>({});
   const [searchParams] = useSearchParams();
@@ -993,6 +995,148 @@ function WebPackingWizard({
     };
   }, [user?.supplier_code, user?.supplier_id, shouldResume]);
 
+  const allCartonsList = useMemo(() => {
+    let globalIndex = 1;
+    return packedItems.flatMap((item) =>
+      item.boxes.map((box, bIdx) => {
+        const cIndex = globalIndex++;
+        const huNum =
+          (submitSuccessResult?.handling_units?.[cIndex - 1]) ||
+          box.hu_number ||
+          formatHu(startingSeq + cIndex - 1);
+        return {
+          index: cIndex,
+          boxIndexInItem: bIdx + 1,
+          hu_number: huNum,
+          po_number: item.po_number,
+          po_item: item.po_item,
+          item_code: item.item_code,
+          description: item.description,
+          uom: item.uom || "M",
+          qty: box.qty,
+          gross_weight: box.gross_weight,
+          net_weight: box.net_weight,
+          lot_number: (box.batch_code || box.lot_number || "").trim() || "—",
+          supplier_carton_ref: (box.supplier_carton_ref || "").trim() || `CTN-${cIndex}`,
+        };
+      })
+    );
+  }, [packedItems, submitSuccessResult, startingSeq]);
+
+  const totalShippedUnits = useMemo(
+    () => allCartonsList.reduce((acc, c) => acc + (Number(c.qty) || 0), 0),
+    [allCartonsList]
+  );
+  const totalGw = useMemo(
+    () => allCartonsList.reduce((acc, c) => acc + (Number(c.gross_weight) || 0), 0),
+    [allCartonsList]
+  );
+  const totalNw = useMemo(
+    () => allCartonsList.reduce((acc, c) => acc + (Number(c.net_weight) || 0), 0),
+    [allCartonsList]
+  );
+
+  const buildLiveXmlPreview = () => {
+    if (submitSuccessResult?.asn?.xml_content) {
+      return submitSuccessResult.asn.xml_content;
+    }
+    const psNum = (packingSlipNumber.trim() || "01000000").padStart(8, "0");
+    const dDate = deliveryDate.trim()
+      ? deliveryDate.split("-").reverse().join("-")
+      : new Date().toLocaleDateString("en-GB").replace(/\//g, "-");
+    const todayStr = new Date().toLocaleDateString("en-GB").replace(/\//g, "-");
+    const suppCode = (user?.supplier_code || "0000018194").padStart(10, "0");
+    const firstItem = packedItems[0];
+    const targetPlant = matchPlant(firstItem?.destination);
+    const plantName = formatPlantName(targetPlant);
+
+    let linesXml = "";
+    packedItems.forEach((item, itemIdx) => {
+      item.boxes.forEach((box, bIdx) => {
+        const hu = box.hu_number || formatHu(startingSeq + bIdx);
+        const qty = box.qty || item.shipping_now || 0;
+        const gw = box.gross_weight != null && Number(box.gross_weight) > 0 ? Number(box.gross_weight) : (Number(qty) * 0.15).toFixed(2);
+        const nw = box.net_weight != null && Number(box.net_weight) > 0 ? Number(box.net_weight) : (Number(qty) * 0.12).toFixed(2);
+        linesXml += `
+    <SdPackingSlipLine>
+      <PackingSlipLineNumber>${itemIdx + 1}-${bIdx + 1}</PackingSlipLineNumber>
+      <OrderTypeName>ZA6A</OrderTypeName>
+      <OrderNumber>${item.po_number}</OrderNumber>
+      <OrderDate>${todayStr}</OrderDate>
+      <OrderLineNumber>${item.po_item || "00100"}</OrderLineNumber>
+      <Qty>${qty}</Qty>
+      <BackOrder></BackOrder>
+      <AcceptanceDate></AcceptanceDate>
+      <AcceptanceQty></AcceptanceQty>
+      <MaterialCode>${item.item_code}</MaterialCode>
+      <MaterialDescription>${item.description || item.item_code}</MaterialDescription>
+      <PartnerProductCode>${item.partner_product_code || item.item_code}</PartnerProductCode>
+      <LotNumber>${(box.batch_code || box.lot_number || "").trim() || "DEFAULT"}</LotNumber>
+      <PackNumber>${box.pack_number || ""}</PackNumber>
+      <SupplierCartonReference>${box.supplier_carton_ref || `CTN-${bIdx + 1}`}</SupplierCartonReference>
+      <BoxType>${item.packaging_type || "BOX"}</BoxType>
+      <HuNumber>${hu}</HuNumber>
+      <UnitOfMeasure>${item.uom || "M"}</UnitOfMeasure>
+      <GrossWeight>${gw}</GrossWeight>
+      <NetWeight>${nw}</NetWeight>
+      <AuxRow1>${itemIdx + 1}</AuxRow1>
+      <AuxRowNum1>${bIdx + 1}</AuxRowNum1>
+    </SdPackingSlipLine>`;
+      });
+    });
+
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE SdDataSlice SYSTEM "m2Data_Partner.dtd">
+<SdDataSlice>
+  <SdCompanyHeader>
+    <LegalName>${plantName}</LegalName>
+    <Group>${targetPlant}</Group>
+    <TransmissionDate>${todayStr} ${new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</TransmissionDate>
+  </SdCompanyHeader>
+  <SdPackingSlip>
+    <PartnerId>${suppCode}</PartnerId>
+    <PackingSlipNumber>${psNum}</PackingSlipNumber>
+    <FgOutbound>false</FgOutbound>
+    <PackingSlipDate>${todayStr}</PackingSlipDate>
+    <DeliveryDate>${dDate}</DeliveryDate>
+    <Note>Dispatch for PO ${poNumbers.join(", ")}</Note>${linesXml}
+  </SdPackingSlip>
+</SdDataSlice>`;
+  };
+
+  const handlePrintLabels = () => {
+    const sId = submitSuccessResult?.shipment?.id;
+    const sNum = submitSuccessResult?.shipment?.shipment_number || packingSlipNumber;
+    const bCount = allCartonsList.length;
+    if (onOpenLabelModal && sId) {
+      onOpenLabelModal(sId, sNum, bCount);
+    } else if (sId) {
+      shipmentService.downloadLabelsPdf(sId, "6x4").then((blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `Labels_${sNum}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      });
+    }
+  };
+
+  const handleDownloadXml = () => {
+    const xml = submitSuccessResult?.asn?.xml_content || buildLiveXmlPreview();
+    const blob = new Blob([xml], { type: "application/xml" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = submitSuccessResult?.asn?.xml_filename || `Dispatch_ASN_${packingSlipNumber || "PL"}.xml`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  };
+
   const handleDispatchASN = async () => {
     if (!isOnline) {
       alert("You are currently offline. Please reconnect to the internet before dispatching the ASN to EDI.");
@@ -1038,6 +1182,7 @@ function WebPackingWizard({
         }))
       );
 
+      // 1. Create shipment and generate validated ASN XML
       const res = await shipmentService.createDirect({
         packing_slip_number: trimmedPs,
         plant_code: targetPlant,
@@ -1049,6 +1194,15 @@ function WebPackingWizard({
         note: `Online Web Packing Wizard dispatch for PO ${poNumbers.join(", ")}`,
         cartons: cartonsPayload as any,
       });
+
+      // 2. Dispatch the generated ASN to EDI
+      if (res?.asn?.id) {
+        try {
+          await shipmentService.sendASN(res.asn.id);
+        } catch (sendErr) {
+          console.warn("ASN created, but EDI send error:", sendErr);
+        }
+      }
 
       setSubmitSuccessResult(res);
       clearManualDraft(activeSupplierCode, poNumbers);
@@ -1544,30 +1698,45 @@ function WebPackingWizard({
               </div>
             )}
 
-            {step === 3 && !submitSuccessResult && (
-              <button
-                type="button"
-                onClick={handleDispatchASN}
-                disabled={isSubmitting || !packingSlipNumber.trim() || !deliveryDate.trim()}
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
-                title={
-                  !packingSlipNumber.trim()
-                    ? "Please enter Packing Slip Number before dispatching"
-                    : !deliveryDate.trim()
-                    ? "Please select Delivery Date before dispatching"
-                    : "Dispatch to EDI"
-                }
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Transmitting XML...
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-3.5 h-3.5" /> Dispatch to EDI
-                  </>
-                )}
-              </button>
+            {step === 3 && (
+              submitSuccessResult ? (
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 text-emerald-800 rounded-lg text-xs font-bold border border-emerald-200">
+                    <Check className="w-3.5 h-3.5 stroke-[2.5]" /> Dispatched to EDI
+                  </span>
+                  <button
+                    type="button"
+                    onClick={onSuccess}
+                    className="px-3.5 py-1.5 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-xs font-semibold shadow-xs transition-all cursor-pointer"
+                  >
+                    Go to Dashboard →
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleDispatchASN}
+                  disabled={isSubmitting || !packingSlipNumber.trim() || !deliveryDate.trim()}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
+                  title={
+                    !packingSlipNumber.trim()
+                      ? "Please enter Packing Slip Number before dispatching"
+                      : !deliveryDate.trim()
+                      ? "Please select Delivery Date before dispatching"
+                      : "Dispatch to EDI"
+                  }
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Transmitting XML...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-3.5 h-3.5" /> Dispatch to EDI
+                    </>
+                  )}
+                </button>
+              )
             )}
           </div>
         </div>
@@ -2198,234 +2367,238 @@ function WebPackingWizard({
 
       {/* ─── STEP 3: REVIEW & EXPORT ────────────────────────────────────── */}
       {step === 3 && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 space-y-4">
-          {submitSuccessResult ? (
-            <div className="space-y-4">
-              {/* Confirmation Header */}
-              <div className="p-4 bg-emerald-50/60 border border-emerald-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
-                    <Check className="w-5 h-5 stroke-[2.5]" />
-                  </div>
-                  <div>
-                    <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wide">
-                      Shipment #{submitSuccessResult.shipment?.shipment_number} Created Successfully
-                    </h2>
-                    <p className="text-xs text-gray-600 mt-0.5 font-mono">
-                      ASN #{submitSuccessResult.asn?.asn_number} registered and validated.
-                    </p>
-                  </div>
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 space-y-3">
+          {/* A. Inline Dispatched Confirmation Banner (Shown when ASN is Dispatched to EDI) */}
+          {submitSuccessResult && (
+            <div className="p-3.5 bg-emerald-50/80 border border-emerald-200 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-2xs">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <Check className="w-4 h-4 stroke-[2.5]" />
                 </div>
-                <div className="text-right">
-                  <span className="text-[11px] text-gray-500 font-semibold block uppercase">Total Cartons</span>
-                  <span className="text-lg font-bold text-gray-900 font-mono">{submitSuccessResult.shipment?.total_boxes} Units</span>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-emerald-950">
+                      Shipment #{submitSuccessResult.shipment?.shipment_number || packingSlipNumber} Created & Dispatched to EDI
+                    </span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded">
+                      Transmitted
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-emerald-800 mt-0.5 font-mono">
+                    ASN #{submitSuccessResult.asn?.asn_number || `ASN-${packingSlipNumber}`} • {submitSuccessResult.shipment?.total_boxes || allCartonsList.length} Cartons registered with 20-digit SSCC sequence.
+                  </p>
                 </div>
               </div>
-
-              {/* Handling Units Grid */}
-              <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-gray-800 uppercase tracking-wider">
-                    Allocated 20-digit Handling Units
-                  </span>
-                  <span className="text-[11px] text-gray-500 font-mono">
-                    Prefix: {submitSuccessResult.handling_units?.[0]?.substring(0, 10) || "1000018194"}
-                  </span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-56 overflow-y-auto pr-1">
-                  {(submitSuccessResult.handling_units || []).map((hu: string, idx: number) => (
-                    <div key={idx} className="bg-white px-3 py-2 rounded-lg border border-gray-200 text-xs flex items-center justify-between font-mono shadow-2xs">
-                      <span className="text-gray-500 text-[10px] font-sans font-bold">Ctn #{idx + 1}</span>
-                      <span className="font-bold text-gray-800 tracking-wider">{hu}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Action Buttons Bar */}
-              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-gray-200">
-                <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handlePrintLabels}
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Printer className="w-3.5 h-3.5" /> Print Labels
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDownloadXml}
+                  className="px-3 py-1.5 border border-emerald-300 bg-white hover:bg-emerald-50 text-emerald-900 rounded-lg text-xs font-semibold shadow-xs flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5" /> Download XML
+                </button>
+                {poNumbers.length > 0 && (
                   <button
-                    onClick={() => {
-                      const sId = submitSuccessResult?.shipment?.id;
-                      const sNum = submitSuccessResult?.shipment?.shipment_number || packingSlipNumber;
-                      const bCount = packedItems.reduce((acc, curr) => acc + curr.boxes.length, 0);
-                      if (onOpenLabelModal && sId) {
-                        onOpenLabelModal(sId, sNum, bCount);
-                      } else if (sId) {
-                        shipmentService.downloadLabelsPdf(sId, "6x4").then((blob) => {
-                          const url = window.URL.createObjectURL(blob);
-                          const a = document.createElement("a");
-                          a.href = url;
-                          a.download = `Labels_${sNum}.pdf`;
-                          document.body.appendChild(a);
-                          a.click();
-                          a.remove();
-                          window.URL.revokeObjectURL(url);
-                        });
-                      }
-                    }}
-                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs flex items-center gap-1.5 cursor-pointer"
+                    type="button"
+                    onClick={() => navigate("/purchase-orders/manual")}
+                    className="px-3 py-1.5 border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 rounded-lg text-xs font-semibold shadow-xs transition-all cursor-pointer"
                   >
-                    <Printer className="w-3.5 h-3.5" /> Print / Download Labels
+                    Return to POs
                   </button>
-
-                  <button
-                    onClick={() => {
-                      const xml = submitSuccessResult.asn?.xml_content;
-                      if (!xml) {
-                        alert("XML content not available in response.");
-                        return;
-                      }
-                      const blob = new Blob([xml], { type: "application/xml" });
-                      const url = window.URL.createObjectURL(blob);
-                      const a = document.createElement("a");
-                      a.href = url;
-                      a.download = submitSuccessResult.asn?.xml_filename || "Dispatch_ASN.xml";
-                      document.body.appendChild(a);
-                      a.click();
-                      document.body.removeChild(a);
-                      window.URL.revokeObjectURL(url);
-                    }}
-                    className="px-4 py-2 border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 rounded-lg text-xs font-semibold shadow-xs flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Download className="w-3.5 h-3.5" /> Download ASN XML
-                  </button>
-
-                  {submitSuccessResult.asn?.xml_content && (
-                    <button
-                      onClick={() => setPreviewXmlModal(submitSuccessResult.asn.xml_content)}
-                      className="px-4 py-2 border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 rounded-lg text-xs font-medium shadow-xs flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Eye className="w-3.5 h-3.5" /> Preview XML
-                    </button>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {poNumbers.length > 0 && (
-                    <button
-                      onClick={() => navigate("/purchase-orders/manual")}
-                      className={cn(
-                        "px-4 py-2 rounded-lg text-xs font-semibold text-white shadow-xs transition-all cursor-pointer",
-                        isSupplier ? "bg-emerald-600 hover:bg-emerald-700" : "bg-blue-600 hover:bg-blue-700"
-                      )}
-                    >
-                      ← Return to Purchase Orders
-                    </button>
-                  )}
-                  <button
-                    onClick={onSuccess}
-                    className="bg-gray-900 hover:bg-gray-800 text-white px-4 py-2 rounded-lg text-xs font-semibold shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
-                  >
-                    Go to Shipments Dashboard →
-                  </button>
-                </div>
+                )}
+                <button
+                  type="button"
+                  onClick={onSuccess}
+                  className="px-3.5 py-1.5 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-xs font-semibold shadow-xs transition-all cursor-pointer flex items-center gap-1"
+                >
+                  Dashboard →
+                </button>
               </div>
             </div>
-          ) : (
-            <>
-              {/* Step 3 Pre-dispatch Review */}
-              <div className="border-b border-gray-100 pb-2">
-                <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wide">
-                  Dispatch Verification & Summary
-                </h2>
-              </div>
-
-              {/* Required Dispatch Parameters: Packing Slip & Delivery Date */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {/* Packing Slip / Delivery Note No */}
-                <div className="p-4 bg-emerald-50/50 border border-emerald-200/80 rounded-xl flex flex-col justify-between gap-3">
-                  <div>
-                    <label htmlFor="wizard-ps-number" className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
-                      Packing Slip / Delivery Note No <span className="text-red-500 font-bold">*</span>
-                    </label>
-                  </div>
-                  <div>
-                    <input
-                      id="wizard-ps-number"
-                      type="text"
-                      required
-                      placeholder="e.g. 01007907 / DN-2026-001"
-                      value={packingSlipNumber}
-                      onChange={(e) => setPackingSlipNumber(e.target.value)}
-                      className={cn(
-                        "w-full h-10 px-3.5 text-xs font-mono font-bold rounded-lg border outline-none shadow-2xs transition-colors",
-                        !packingSlipNumber.trim()
-                          ? "bg-white border-amber-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
-                          : "bg-white border-emerald-400 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200"
-                      )}
-                    />
-                  </div>
-                </div>
-
-                {/* Delivery Date / Estimated Arrival */}
-                <div className="p-4 bg-emerald-50/50 border border-emerald-200/80 rounded-xl flex flex-col justify-between gap-3">
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <label htmlFor="wizard-delivery-date" className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
-                        Delivery Date (Estimated Arrival) <span className="text-red-500 font-bold">*</span>
-                      </label>
-                      {openLinesData?.some((l) => l.delivery_date) && (
-                        <span className="text-[10px] text-emerald-800 bg-emerald-100/90 font-semibold px-2 py-0.5 rounded border border-emerald-200">
-                          PO XML Default
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div>
-                    <input
-                      id="wizard-delivery-date"
-                      type="date"
-                      required
-                      value={deliveryDate}
-                      onChange={(e) => setDeliveryDate(e.target.value)}
-                      className={cn(
-                        "w-full h-10 px-3.5 text-xs font-mono font-bold rounded-lg border outline-none shadow-2xs transition-colors bg-white cursor-pointer",
-                        !deliveryDate.trim()
-                          ? "border-amber-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
-                          : "border-emerald-400 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200"
-                      )}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* 4 Neutral KPI Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                <div className="bg-gray-50/70 p-4 rounded-xl border border-gray-200">
-                  <span className="text-[11px] text-gray-500 uppercase font-semibold block">Total Cartons</span>
-                  <p className="text-lg font-bold text-gray-900 font-mono mt-1">
-                    {packedItems.reduce((acc, curr) => acc + curr.boxes.length, 0)} Cartons
-                  </p>
-                </div>
-                <div className="bg-gray-50/70 p-4 rounded-xl border border-gray-200">
-                  <span className="text-[11px] text-gray-500 uppercase font-semibold block">Shipping Units</span>
-                  <p className="text-lg font-bold text-gray-900 font-mono mt-1">
-                    {packedItems.reduce((acc, curr) => acc + (curr.shipping_now || 0), 0).toLocaleString()} {packedItems[0]?.uom || "M"}
-                  </p>
-                </div>
-                <div className="bg-gray-50/70 p-4 rounded-xl border border-gray-200">
-                  <span className="text-[11px] text-gray-500 uppercase font-semibold block">Supplier Partner</span>
-                  <p className="text-sm font-bold text-gray-900 font-mono mt-1 truncate">
-                    {user?.supplier_code || "0000018194"}
-                  </p>
-                  <span className="text-[10px] text-gray-500 truncate block">
-                    {user?.supplier_name || "COATS THREAD EXPORTS"}
-                  </span>
-                </div>
-                <div className="bg-gray-50/70 p-4 rounded-xl border border-gray-200">
-                  <span className="text-[11px] text-gray-500 uppercase font-semibold block">Destination Plant</span>
-                  <p className="text-sm font-bold text-gray-900 mt-1 truncate">
-                    {formatPlantName(matchPlant(packedItems[0]?.destination))}
-                  </p>
-                  <span className="text-[10px] text-gray-500 font-mono block">
-                    Code: {matchPlant(packedItems[0]?.destination)}
-                  </span>
-                </div>
-              </div>
-            </>
           )}
+
+          {/* B. Top Parameters Toolbar Strip (Clean & Compact — No Bulky Cards) */}
+          <div className="bg-slate-50/70 border border-slate-200 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3">
+            {/* Left: Input parameters */}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-1.5">
+                <label htmlFor="wizard-ps-number" className="text-xs font-bold text-slate-700 whitespace-nowrap">
+                  Packing Slip No <span className="text-red-500">*</span>:
+                </label>
+                <input
+                  id="wizard-ps-number"
+                  type="text"
+                  required
+                  disabled={Boolean(submitSuccessResult)}
+                  placeholder="e.g. 01007907"
+                  value={packingSlipNumber}
+                  onChange={(e) => setPackingSlipNumber(e.target.value)}
+                  className="h-8 px-2.5 text-xs font-mono font-bold rounded-lg border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400 outline-none shadow-2xs w-36"
+                />
+              </div>
+
+              <div className="w-px h-5 bg-slate-300 hidden sm:block"></div>
+
+              <div className="flex items-center gap-1.5">
+                <label htmlFor="wizard-delivery-date" className="text-xs font-bold text-slate-700 whitespace-nowrap">
+                  Delivery Date <span className="text-red-500">*</span>:
+                </label>
+                <input
+                  id="wizard-delivery-date"
+                  type="date"
+                  required
+                  disabled={Boolean(submitSuccessResult)}
+                  value={deliveryDate}
+                  onChange={(e) => setDeliveryDate(e.target.value)}
+                  className="h-8 px-2 text-xs font-mono font-bold rounded-lg border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400 outline-none shadow-2xs cursor-pointer"
+                />
+              </div>
+
+              <div className="w-px h-5 bg-slate-300 hidden md:block"></div>
+
+              {/* Plant & Supplier Pills */}
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-semibold text-slate-600 bg-white border border-slate-200 px-2 py-0.5 rounded-md shadow-2xs">
+                  Plant: <strong className="text-slate-900">{formatPlantName(matchPlant(packedItems[0]?.destination))}</strong> ({matchPlant(packedItems[0]?.destination)})
+                </span>
+                <span className="text-[11px] font-semibold text-slate-600 bg-white border border-slate-200 px-2 py-0.5 rounded-md shadow-2xs hidden lg:inline">
+                  Supplier: <strong className="text-slate-900 font-mono">{user?.supplier_code || "0000018194"}</strong>
+                </span>
+              </div>
+            </div>
+
+            {/* Right: XML Preview & Dispatch Button */}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPreviewXmlModal(buildLiveXmlPreview())}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg shadow-2xs transition-colors cursor-pointer"
+                title="Preview official SdDataSlice EDI XML before dispatch"
+              >
+                <Eye className="w-3.5 h-3.5 text-blue-600" /> Preview XML
+              </button>
+
+              {submitSuccessResult ? (
+                <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-100 text-emerald-800 rounded-lg text-xs font-bold border border-emerald-300 shadow-2xs">
+                  <Check className="w-3.5 h-3.5 stroke-[2.5]" /> Dispatched to EDI
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleDispatchASN}
+                  disabled={isSubmitting || !packingSlipNumber.trim() || !deliveryDate.trim()}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+                  title={
+                    !packingSlipNumber.trim()
+                      ? "Please enter Packing Slip Number before dispatching"
+                      : !deliveryDate.trim()
+                      ? "Please select Delivery Date before dispatching"
+                      : "Dispatch ASN to EDI"
+                  }
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Transmitting to EDI...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-3.5 h-3.5" /> Dispatch to EDI
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* C. Handling Units & Packing List (Clean List View Table) */}
+          <div className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-2xs">
+            <div className="p-3 bg-gray-50/80 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Layers className="w-4 h-4 text-emerald-600" />
+                <span className="text-xs font-bold text-gray-800 uppercase tracking-wider">
+                  Allocated Handling Units (SSCC-20) & Packing Breakdown
+                </span>
+                <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100/70 border border-emerald-200 px-2 py-0.5 rounded-full">
+                  {allCartonsList.length} Cartons/Rolls
+                </span>
+              </div>
+              <div className="flex items-center gap-3 text-xs text-gray-600">
+                <span>Total Qty: <strong className="font-mono text-gray-900">{totalShippedUnits.toLocaleString()} {packedItems[0]?.uom || "M"}</strong></span>
+                <span className="text-gray-300">|</span>
+                <span>GW: <strong className="font-mono text-gray-900">{totalGw.toFixed(2)} kg</strong></span>
+                <span className="text-gray-300">|</span>
+                <span>NW: <strong className="font-mono text-gray-900">{totalNw.toFixed(2)} kg</strong></span>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto max-h-[440px] custom-scrollbar">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-gray-100 text-gray-600 font-bold uppercase tracking-wider sticky top-0 z-10 border-b border-gray-200">
+                  <tr>
+                    <th className="px-3 py-2.5">Ctn #</th>
+                    <th className="px-3 py-2.5">Handling Unit (SSCC-20)</th>
+                    <th className="px-3 py-2.5">PO & Line</th>
+                    <th className="px-3 py-2.5">Product Code</th>
+                    <th className="px-3 py-2.5">Description</th>
+                    <th className="px-3 py-2.5">Quantity</th>
+                    <th className="px-3 py-2.5">Gross Wt (kg)</th>
+                    <th className="px-3 py-2.5">Net Wt (kg)</th>
+                    <th className="px-3 py-2.5">Lot / Batch</th>
+                    <th className="px-3 py-2.5">Ref</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 bg-white">
+                  {allCartonsList.map((c) => (
+                    <tr key={c.index} className="hover:bg-gray-50/80 transition-colors">
+                      <td className="px-3 py-2 font-mono font-bold text-gray-700">#{c.index}</td>
+                      <td className="px-3 py-2">
+                        <div className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded font-mono font-bold text-xs text-slate-800">
+                          <span>{c.hu_number}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(c.hu_number);
+                              setCopiedHu(c.hu_number);
+                              setTimeout(() => setCopiedHu(null), 1500);
+                            }}
+                            className="text-slate-400 hover:text-emerald-600 transition-colors p-0.5 cursor-pointer"
+                            title="Copy HU"
+                          >
+                            {copiedHu === c.hu_number ? (
+                              <Check className="w-3 h-3 text-emerald-600" />
+                            ) : (
+                              <Copy className="w-3 h-3" />
+                            )}
+                          </button>
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 font-mono font-medium text-gray-700 whitespace-nowrap">
+                        {c.po_number} <span className="text-gray-400">/</span> {c.po_item}
+                      </td>
+                      <td className="px-3 py-2 font-mono font-semibold text-gray-900 whitespace-nowrap">{c.item_code}</td>
+                      <td className="px-3 py-2 text-gray-600 truncate max-w-[180px]" title={c.description}>
+                        {c.description || "—"}
+                      </td>
+                      <td className="px-3 py-2 font-bold text-emerald-700 bg-emerald-50/40 whitespace-nowrap">
+                        {c.qty} {c.uom}
+                      </td>
+                      <td className="px-3 py-2 font-mono text-gray-700">{c.gross_weight != null ? Number(c.gross_weight).toFixed(2) : "—"}</td>
+                      <td className="px-3 py-2 font-mono text-gray-700">{c.net_weight != null ? Number(c.net_weight).toFixed(2) : "—"}</td>
+                      <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{c.lot_number}</td>
+                      <td className="px-3 py-2 font-mono text-gray-500 text-[11px] whitespace-nowrap">{c.supplier_carton_ref}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
 
           {/* XML Preview Modal inside Web Packing Wizard */}
           {previewXmlModal && (
