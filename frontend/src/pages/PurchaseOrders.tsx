@@ -982,6 +982,7 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                             isSupplier ? "group-hover:text-emerald-600" : "group-hover:text-blue-600"
                           )}
                         >
+                          <span>{po.po_number || "—"}</span>
                           {po.version && po.version > 1 ? (
                             <span
                               className="px-1.5 py-0.5 text-[10px] font-bold bg-amber-100 text-amber-800 rounded border border-amber-200 inline-flex items-center shadow-2xs font-sans shrink-0"
@@ -990,7 +991,6 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                               V{po.version}
                             </span>
                           ) : null}
-                          <span>{po.po_number || "—"}</span>
                         </div>
                       </td>
 
