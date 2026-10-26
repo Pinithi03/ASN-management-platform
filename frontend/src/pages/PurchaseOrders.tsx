@@ -615,7 +615,7 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                 <div className="text-xs">
                   <span className="font-bold">Cannot Mix Plants in One Delivery: </span>
                   Your current selection contains orders for <span className="font-semibold underline">{crossPlantWarning.currentPlant}</span>.
-                  Orders destined for <span className="font-semibold underline">{crossPlantWarning.targetPlant}</span> (e.g. #{crossPlantWarning.attemptedPO}) must be dispatched in a separate delivery.
+                  Orders destined for <span className="font-semibold underline">{crossPlantWarning.targetPlant}</span> (e.g. {crossPlantWarning.attemptedPO}) must be dispatched in a separate delivery.
                 </div>
               </div>
               <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
@@ -630,7 +630,7 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                   }}
                   className="px-3 py-1.5 text-xs font-semibold bg-amber-600 text-white hover:bg-amber-700 rounded-lg shadow-2xs transition-colors cursor-pointer"
                 >
-                  Clear & Select #{crossPlantWarning.attemptedPO}
+                  Clear & Select {crossPlantWarning.attemptedPO}
                 </button>
                 <button
                   type="button"
@@ -1267,7 +1267,7 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                   <table className="w-full text-left text-xs">
                     <thead>
                       <tr className="bg-gray-50/90 border-b border-gray-200 text-gray-500 font-semibold uppercase tracking-wider text-[11px]">
-                        <th className="px-3 py-2.5 w-10 text-center">#</th>
+                        <th className="px-3 py-2.5 w-10 text-center">No.</th>
                         <th className="px-3 py-2.5 min-w-[140px]">Item / Material Code</th>
                         {hasDistinctPartner && (
                           <th className="px-3 py-2.5 min-w-[110px]">Partner Code</th>

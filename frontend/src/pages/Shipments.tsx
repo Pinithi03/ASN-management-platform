@@ -2355,14 +2355,14 @@ function WebPackingWizard({
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-bold text-emerald-950">
-                      Shipment #{submitSuccessResult.shipment?.shipment_number || packingSlipNumber} Created & Sent to IUNGO
+                      Shipment {submitSuccessResult.shipment?.shipment_number || packingSlipNumber} Created & Sent to IUNGO
                     </span>
                     <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded">
                       Transmitted
                     </span>
                   </div>
                   <p className="text-[11px] text-emerald-800 mt-0.5 font-mono">
-                    ASN #{submitSuccessResult.asn?.asn_number || `ASN-${packingSlipNumber}`}
+                    ASN {submitSuccessResult.asn?.asn_number || `ASN-${packingSlipNumber}`}
                   </p>
                 </div>
               </div>
@@ -2455,7 +2455,7 @@ function WebPackingWizard({
               <table className="w-full text-left text-xs">
                 <thead className="bg-gray-100 text-gray-600 font-bold uppercase tracking-wider sticky top-0 z-10 border-b border-gray-200">
                   <tr>
-                    <th className="px-3 py-2.5">Ctn #</th>
+                    <th className="px-3 py-2.5">Ctn</th>
                     <th className="px-3 py-2.5">Handling Unit (SSCC-20)</th>
                     <th className="px-3 py-2.5">PO & Line</th>
                     <th className="px-3 py-2.5">Product Code</th>
@@ -2468,7 +2468,7 @@ function WebPackingWizard({
                 <tbody className="divide-y divide-gray-100 bg-white">
                   {allCartonsList.map((c) => (
                     <tr key={c.index} className="hover:bg-gray-50/80 transition-colors">
-                      <td className="px-3 py-2 font-mono font-bold text-gray-700">#{c.index}</td>
+                      <td className="px-3 py-2 font-mono font-bold text-gray-700">{c.index}</td>
                       <td className="px-3 py-2">
                         <div className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded font-mono font-bold text-xs text-slate-800">
                           <span>{c.hu_number}</span>
@@ -3318,7 +3318,7 @@ function ExcelPackingWorkflow({
                                   <div>
                                     <div className="flex items-center gap-1.5">
                                       <span className="font-mono font-bold text-xs text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                                        #{group.slipNumber}
+                                        {group.slipNumber}
                                       </span>
                                       <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
                                         {group.cartons} Cartons
@@ -3411,7 +3411,7 @@ function ExcelPackingWorkflow({
                              <table className="w-full text-left">
                                 <thead className="sticky top-0 bg-gray-200 text-gray-700 font-bold uppercase tracking-wider">
                                    <tr>
-                                      <th className="px-3 py-2 border-b border-gray-300">Unit #</th>
+                                      <th className="px-3 py-2 border-b border-gray-300">Unit</th>
                                       <th className="px-3 py-2 border-b border-gray-300">Packing Slip No.</th>
                                       <th className="px-3 py-2 border-b border-gray-300">20-digit HU Number</th>
                                       <th className="px-3 py-2 border-b border-gray-300">Lot No.</th>
@@ -3439,12 +3439,12 @@ function ExcelPackingWorkflow({
                                               if (match) {
                                                 return (
                                                   <span className="inline-flex items-center gap-1.5">
-                                                    <span className="font-bold text-gray-800">#{match[1]}</span>
+                                                    <span className="font-bold text-gray-800">{match[1]}</span>
                                                     <span className="text-[11px] text-gray-500 font-medium">{match[2]}</span>
                                                   </span>
                                                 );
                                               }
-                                              return cnStr.startsWith("#") ? cnStr : `#${cnStr || i + 1}`;
+                                               return cnStr.replace(/^#+/, "") || String(i + 1);
                                             })()}
                                          </td>
                                          <td className="px-3 py-1.5 font-mono font-bold text-gray-800">{r.pack_number || "—"}</td>
@@ -3939,7 +3939,7 @@ function ShipmentDetailModal({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-bold text-gray-900">
-                  Shipment #{data?.shipment_number || "..."}
+                  Shipment {data?.shipment_number || "..."}
                 </h2>
                 {data?.status && (
                   <span
@@ -4054,7 +4054,7 @@ function ShipmentDetailModal({
                   <table className="w-full text-left text-xs">
                     <thead className="bg-gray-100 text-gray-600 font-bold uppercase tracking-wider border-b border-gray-200">
                       <tr>
-                        <th className="px-3.5 py-2.5">Box #</th>
+                        <th className="px-3.5 py-2.5">Box</th>
                         <th className="px-3.5 py-2.5">Handling Unit (20-digit HU)</th>
                         <th className="px-3.5 py-2.5">PO / Line Item</th>
                         <th className="px-3.5 py-2.5">Product Code</th>
@@ -4069,7 +4069,7 @@ function ShipmentDetailModal({
                         const meta = c.details || {};
                         return (
                           <tr key={idx} className="hover:bg-gray-50/80 transition-colors">
-                            <td className="px-3.5 py-2.5 font-bold text-gray-700">#{c.box_number || idx + 1}</td>
+                            <td className="px-3.5 py-2.5 font-bold text-gray-700">{c.box_number || idx + 1}</td>
                             <td className="px-3.5 py-2.5 font-bold text-gray-900">
                               <button
                                 type="button"

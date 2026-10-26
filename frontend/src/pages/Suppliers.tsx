@@ -239,7 +239,7 @@ export default function Suppliers() {
         name,
       });
 
-      showToast(`Partner ${name} (#${code}) archived. You can restore them anytime from the Archived tab.`);
+      showToast(`Partner ${name} (${code}) archived. You can restore them anytime from the Archived tab.`);
       setDeletingSupplier(null);
       setAdminPasswordInput("");
       setAdminAuthError(null);
@@ -264,7 +264,7 @@ export default function Suppliers() {
       await queryClient.invalidateQueries({ queryKey: ["suppliers"] });
       refetch();
 
-      showToast(`Restored partner ${supplier.name} (#${supplier.supplier_code}) and all records successfully!`);
+      showToast(`Restored partner ${supplier.name} (${supplier.supplier_code}) and all records successfully!`);
     } catch (err: any) {
       console.error("Restore failed:", err);
       showToast(err?.response?.data?.detail || "Failed to restore partner.");
@@ -300,7 +300,7 @@ export default function Suppliers() {
     setSuppliers((prev) =>
       prev.map((s) => (s.id === supplier.id ? { ...s, recently_updated_by_supplier: false } : s))
     );
-    showToast(`Acknowledged profile updates for ${supplier.name} (#${supplier.supplier_code})`);
+    showToast(`Acknowledged profile updates for ${supplier.name} (${supplier.supplier_code})`);
   };
 
   const showToast = (msg: string) => {
@@ -334,7 +334,7 @@ export default function Suppliers() {
       });
       await queryClient.invalidateQueries({ queryKey: ["suppliers"] });
       refetch();
-      showToast(`Supplier onboarded: ${created.name} (#${created.supplier_code})`);
+      showToast(`Supplier onboarded: ${created.name} (${created.supplier_code})`);
       setIsAddModalOpen(false);
       resetForm();
     } catch (err: any) {
@@ -369,7 +369,7 @@ export default function Suppliers() {
           country: res.country || prev.country,
         }));
         setXmlFoundBadge(`Auto-filled from ${res.source_filename || "Inbound XML"}`);
-        showToast(`Loaded details from XML: ${res.name} (#${res.supplier_code})`);
+        showToast(`Loaded details from XML: ${res.name} (${res.supplier_code})`);
       } else {
         setXmlFoundBadge(null);
         showToast(`No inbound XML found for code ${code} yet.`);
@@ -431,7 +431,7 @@ export default function Suppliers() {
         changedFields.length > 0
           ? ` (${changedFields.map((c) => c.field_label).join(", ")})`
           : "";
-      showToast(`Updated details for ${updated.name} (#${updated.supplier_code})${changeMsg}`);
+      showToast(`Updated details for ${updated.name} (${updated.supplier_code})${changeMsg}`);
       setEditingSupplier(null);
       resetForm();
     } catch (err: any) {
@@ -791,7 +791,7 @@ export default function Suppliers() {
                                 </button>
                               )}
                             </div>
-                            <span className="font-mono text-[10px] text-slate-400 block">#{s.supplier_code}</span>
+                            <span className="font-mono text-[10px] text-slate-400 block">{s.supplier_code}</span>
                           </div>
                         </div>
                       </td>
@@ -1279,7 +1279,7 @@ export default function Suppliers() {
             <div className="text-center">
               <h3 className="text-lg font-bold text-gray-900">Admin Security Verification Required</h3>
               <p className="text-xs text-gray-500 mt-1">
-                You are archiving <strong className="text-gray-900">{deletingSupplier.name}</strong> (<span className="font-mono font-bold text-brand-700">#{deletingSupplier.supplier_code}</span>).
+                You are archiving <strong className="text-gray-900">{deletingSupplier.name}</strong> (<span className="font-mono font-bold text-brand-700">{deletingSupplier.supplier_code}</span>).
               </p>
 
               <div className="text-[11px] text-amber-900 bg-amber-50 p-3 rounded-xl border border-amber-200 mt-2.5 text-left space-y-1">

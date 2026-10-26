@@ -193,24 +193,24 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         "bg-amber-600 text-white border border-amber-700 shadow-xs";
 
       let notifTitle = `${chg.field_label} Updated`;
-      let notifDesc = `${chg.field_label} set to "${chg.new_value}" for ${chg.supplier_name} (#${chg.supplier_code})`;
+      let notifDesc = `${chg.field_label} set to "${chg.new_value}" for ${chg.supplier_name} (${chg.supplier_code})`;
 
       if (chg.field_key === "delete") {
         notifTitle = "Supplier Profile Deleted";
-        notifDesc = `${chg.supplier_name} (#${chg.supplier_code}) was deleted from the platform`;
+        notifDesc = `${chg.supplier_name} (${chg.supplier_code}) was deleted from the platform`;
       } else if (chg.field_key === "create") {
         notifTitle = chg.field_label || "Supplier Onboarded & Credentials Sent";
-        notifDesc = `${chg.supplier_name} (#${chg.supplier_code}) onboarded. ${
+        notifDesc = `${chg.supplier_name} (${chg.supplier_code}) onboarded. ${
           chg.new_value.includes("credentials emailed to")
             ? "Login credentials sent to " + chg.new_value.split("credentials emailed to ")[1]?.replace(")", "")
             : "Added to active partner directory"
         }`;
       } else if (chg.field_key === "is_active") {
         notifTitle = "Account Status Changed";
-        notifDesc = `${chg.supplier_name} (#${chg.supplier_code}) is now ${chg.new_value}`;
+        notifDesc = `${chg.supplier_name} (${chg.supplier_code}) is now ${chg.new_value}`;
       } else if (chg.new_value === "Removed / Cleared") {
         notifTitle = `${chg.field_label} Cleared`;
-        notifDesc = `${chg.field_label} was removed for ${chg.supplier_name} (#${chg.supplier_code})`;
+        notifDesc = `${chg.field_label} was removed for ${chg.supplier_name} (${chg.supplier_code})`;
       }
 
       notifs.push({
@@ -240,7 +240,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         notifs.push({
           id: notifId,
           title: "New Supplier Auto-Detected",
-          desc: `${s.name} (#${s.supplier_code}) auto-discovered from inbound PO email`,
+          desc: `${s.name} (${s.supplier_code}) auto-discovered from inbound PO email`,
           time: timeFormatted,
           unread: !readNotifIds.includes(notifId),
           to: "/suppliers",
@@ -643,7 +643,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         {!collapsed ? (
           <div className="p-3">
             <div className="flex items-center justify-between gap-2">
-              {/* User Avatar + Name + Role */}
+              {/* User Avatar + Code (top) + Name (bottom) */}
               <div className="flex items-center gap-2.5 min-w-0 flex-1">
                 <div
                   className={cn(
@@ -651,29 +651,28 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                     isAdmin ? "bg-blue-600" : "bg-emerald-600"
                   )}
                 >
-                  {(user?.supplier_name || user?.name || (isAdmin ? "Admin" : "Supplier")).charAt(0).toUpperCase()}
+                  {(user?.supplier_code || user?.supplier_name || user?.name || (isAdmin ? "A" : "S")).charAt(0).toUpperCase()}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-bold text-slate-900 truncate">
-                    {isAdmin ? (user?.name || "Admin") : (user?.supplier_name || user?.name || "Supplier Partner")}
-                  </p>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <span
-                      className={cn(
-                        "inline-block rounded px-1.5 py-0.2 text-[9px] font-bold uppercase leading-none border",
-                        isAdmin
-                          ? "bg-blue-50 text-blue-700 border-blue-200"
-                          : "bg-emerald-50 text-emerald-700 border-emerald-200"
-                      )}
-                    >
-                      {isAdmin
-                        ? (user?.role === "SUPER_ADMIN" ? "Super Admin" : "Admin")
-                        : "Supplier"}
-                    </span>
-                    <span className="text-[10px] font-mono text-slate-400 truncate">
-                      {isAdmin ? "HQ" : (user?.supplier_code ? `#${user.supplier_code}` : "")}
-                    </span>
-                  </div>
+                  {isAdmin ? (
+                    <>
+                      <p className="text-xs font-bold text-slate-900 truncate">
+                        {user?.name || "Admin"}
+                      </p>
+                      <p className="text-[11px] text-slate-500 truncate">
+                        {user?.role === "SUPER_ADMIN" ? "Super Admin (HQ)" : "Central HQ"}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-xs font-bold font-mono text-slate-900 truncate">
+                        {user?.supplier_code || "Supplier"}
+                      </p>
+                      <p className="text-[11px] text-slate-500 truncate" title={user?.supplier_name || user?.name || undefined}>
+                        {user?.supplier_name || user?.name || "Supplier Partner"}
+                      </p>
+                    </>
+                  )}
                 </div>
               </div>
 
