@@ -17,13 +17,13 @@ Adheres to the 12-column factory packing sheet format:
   Col L: UOM (Unit of Measure)
 """
 
-from __future__ import annotations
-
+from datetime import date, datetime
 import hashlib
 import hmac
 import io
 import logging
 import re
+import uuid
 from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
@@ -34,9 +34,11 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.models.hu_sequence import HUSequence
 from app.models.purchase_order import PurchaseOrder
 from app.models.shipment import Shipment
 from app.models.shipment_line import ShipmentLine
+from app.models.supplier import Supplier
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +78,7 @@ class ParsedCartonRow:
     net_weight: float
     quantity: float
     uom: str
+    delivery_date: Optional[str] = None
     hu_number: Optional[str] = None
     errors: List[str] = field(default_factory=list)
 
@@ -147,6 +150,7 @@ class ExcelValidationResult:
                     "net_weight": r.net_weight,
                     "quantity": r.quantity,
                     "uom": r.uom,
+                    "delivery_date": r.delivery_date,
                     "hu_number": r.hu_number,
                     "errors": r.errors,
                 }
@@ -182,7 +186,28 @@ def _parse_int(val: Any) -> int:
 
 def _normalize_item_num(val: Any) -> str:
     return _clean_str(val).zfill(5)
-    return raw
+
+
+def _parse_date(val: Any) -> Optional[str]:
+    """Parse various date representations from Excel into standard YYYY-MM-DD string."""
+    if val is None:
+        return None
+    if isinstance(val, (datetime, date)):
+        return val.strftime("%Y-%m-%d")
+    s = str(val).strip()
+    if not s or s.lower() in ("none", "null", "nan", "—", "-"):
+        return None
+    if "t" in s.lower() or " " in s:
+        s = s.replace("T", " ").split(" ")[0].strip()
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%d-%m-%Y", "%Y/%m/%d", "%d.%m.%Y"):
+        try:
+            dt = datetime.strptime(s, fmt)
+            return dt.strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+    if re.match(r"^\d{4}-\d{2}-\d{2}$", s):
+        return s
+    return None
 
 
 async def parse_and_validate_packing_excel(
@@ -269,6 +294,8 @@ async def parse_and_validate_packing_excel(
                     col_map["po_number"] = c_idx
                 elif "pack" in val or "slip" in val:
                     col_map["pack_number"] = c_idx
+                elif "delivery" in val or "deliv" in val or "arrival" in val or ("date" in val and "order" not in val):
+                    col_map["delivery_date"] = c_idx
                 elif "ref" in val or "roll" in val or "barcode" in val:
                     col_map["supplier_carton_ref"] = c_idx
                 elif "cart" in val or "box" in val:
@@ -292,13 +319,13 @@ async def parse_and_validate_packing_excel(
             break
 
     if header_row_idx is None:
-        # Fallback to positional default (columns A to L)
+        # Fallback to positional default (columns A to N)
         header_row_idx = 1
         col_map = {
             "po_number": 0, "po_item": 1, "pack_number": 2, "carton_number": 3,
             "supplier_carton_ref": 4, "product_code": 5, "lot_number": 6,
             "width": 7, "gross_weight": 8, "net_weight": 9, "quantity": 10, "uom": 11,
-            "hu_number": 12,
+            "delivery_date": 12, "hu_number": 13,
         }
 
     parsed_rows: List[ParsedCartonRow] = []
@@ -342,6 +369,7 @@ async def parse_and_validate_packing_excel(
         qty = _parse_float(get_val("quantity"))
         uom_raw = _clean_str(get_val("uom")) or "M"
         uom = "M" if uom_raw.upper() in ("MTR", "METERS", "METER", "METRE", "METRES") else uom_raw.upper()
+        date_val = _parse_date(get_val("delivery_date"))
 
         hu_raw = _clean_str(get_val("hu_number"))
         hu_val = None
@@ -422,6 +450,7 @@ async def parse_and_validate_packing_excel(
             net_weight=nw,
             quantity=qty,
             uom=uom,
+            delivery_date=date_val,
             hu_number=hu_val,
             errors=row_errors,
         )
@@ -619,6 +648,31 @@ async def parse_and_validate_packing_excel(
     total_net = sum(r.net_weight for r in parsed_rows)
     total_qty = sum(r.quantity for r in parsed_rows)
 
+    # Ensure every row has an HU number assigned (either from Excel or sequential preview from DB)
+    missing_hu_rows = [r for r in parsed_rows if not r.hu_number]
+    if missing_hu_rows:
+        supp_code_clean = (supplier_code or meta_supp_code or "0000018194").lstrip("0").zfill(10)
+        prefix = "1" + supp_code_clean.lstrip("0").zfill(9)
+        start_seq = 0
+        if db is not None:
+            try:
+                supp_uuid = uuid.UUID(supplier_id) if supplier_id else None
+                supp_obj = None
+                if supp_uuid:
+                    supp_obj = (await db.execute(select(Supplier).where(Supplier.id == supp_uuid))).scalar_one_or_none()
+                if not supp_obj and supp_code_clean:
+                    supp_obj = (await db.execute(select(Supplier).where(
+                        (Supplier.supplier_code == supp_code_clean) | (Supplier.supplier_code == supp_code_clean.lstrip("0"))
+                    ))).scalar_one_or_none()
+                target_supp_id = supp_obj.id if supp_obj else (supp_uuid or uuid.UUID("074830fc-dc21-42bb-9877-e6b6a45790a5"))
+                seq_res = await db.execute(select(HUSequence).where(HUSequence.supplier_id == target_supp_id))
+                seq_obj = seq_res.scalar_one_or_none()
+                start_seq = seq_obj.last_number if seq_obj else 0
+            except Exception as e:
+                logger.warning("Could not query HU sequence for preview: %s", e)
+        for idx, r in enumerate(missing_hu_rows):
+            r.hu_number = f"{prefix}{str(start_seq + 1 + idx).zfill(10)}"
+
     if general_errors:
         overall_valid = False
 
@@ -652,6 +706,7 @@ def generate_open_lines_template(
     headers = [
         "P/O # *", "PO item *", "Packing Slip No. *", "Cart No *", "Supplier_Carton_ref",
         "ProductCode *", "Lot No.", "Width", "GW *", "NW *", "Quantity *", "UOM *",
+        "Delivery Date (YYYY-MM-DD)",
         "HU Number (Leave blank to auto-generate)"
     ]
     ws.append(headers)
@@ -669,7 +724,7 @@ def generate_open_lines_template(
     # Worksheet is fully unlocked without password protection so suppliers can freely copy/paste/edit
     ws.protection.sheet = False
 
-    for col_idx in range(1, 14):
+    for col_idx in range(1, 15):
         cell = ws.cell(row=1, column=col_idx)
         cell.fill = header_fill
         cell.font = header_font
@@ -709,13 +764,14 @@ def generate_open_lines_template(
             item.get("nw", ""),
             item.get("quantity", ""),
             item.get("uom", "M"),
+            item.get("delivery_date", ""),
             item.get("hu_number", ""),
         ]
         ws.append(row_data)
 
-        text_cols = {1, 2, 3, 4, 5, 6, 7, 12, 13}
+        text_cols = {1, 2, 3, 4, 5, 6, 7, 12, 13, 14}
 
-        for col_idx in range(1, 14):
+        for col_idx in range(1, 15):
             cell = ws.cell(row=row_idx, column=col_idx)
             cell.font = Font(name="Arial", size=10)
             cell.border = thin_border
@@ -724,7 +780,7 @@ def generate_open_lines_template(
             if col_idx in text_cols:
                 cell.number_format = "@"
 
-            if col_idx in (1, 2, 3, 4, 6, 12):
+            if col_idx in (1, 2, 3, 4, 6, 12, 13):
                 cell.alignment = Alignment(horizontal="center", vertical="center")
             elif col_idx in (8, 9, 10, 11):
                 cell.alignment = Alignment(horizontal="right", vertical="center")
@@ -735,7 +791,7 @@ def generate_open_lines_template(
 
     # Extra rows unlocked and formatted so users can easily type or add more cartons locally
     for row_idx in range(max_data_row + 1, max(max_data_row + 300, 500)):
-        for col_idx in range(1, 14):
+        for col_idx in range(1, 15):
             cell = ws.cell(row=row_idx, column=col_idx)
             cell.protection = Protection(locked=False)
             cell.border = thin_border
@@ -743,7 +799,7 @@ def generate_open_lines_template(
                 cell.number_format = "@"
 
     # Column widths and column-level text formatting
-    col_widths = [15, 12, 16, 10, 24, 24, 14, 10, 10, 10, 12, 8, 38]
+    col_widths = [15, 12, 16, 10, 24, 24, 14, 10, 10, 10, 12, 8, 26, 38]
     for idx, width in enumerate(col_widths, start=1):
         col_letter = openpyxl.utils.get_column_letter(idx)
         ws.column_dimensions[col_letter].width = width

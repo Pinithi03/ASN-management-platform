@@ -5,11 +5,10 @@
 import { useState } from "react";
 import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
-import Header from "./Header";
 import { useAuthStore } from "@/store/authStore";
 import { useQuery } from "@tanstack/react-query";
 import { supplierApi } from "@/services/supplierApi";
-import { ShieldAlert, Lock, Building2 } from "lucide-react";
+import { ShieldAlert, Lock, Building2, Menu } from "lucide-react";
 
 export default function MainLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -53,8 +52,19 @@ export default function MainLayout() {
         collapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <Header onMenuToggle={() => setSidebarCollapsed(!sidebarCollapsed)} />
+      <div className="flex flex-1 flex-col overflow-hidden min-w-0">
+        {/* Mobile Header (Only visible on small devices < lg; Desktop has 100% full height for system content) */}
+        <div className="flex h-12 items-center justify-between border-b border-slate-200 bg-white px-4 shrink-0 lg:hidden">
+          <button
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 cursor-pointer"
+            title="Toggle Menu"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+          <span className="text-xs font-bold text-slate-900">ASN Platform</span>
+          <div className="w-8" />
+        </div>
         <main className="flex-1 overflow-y-auto">
           {isLockoutActive ? (
             <div className="flex flex-col items-center justify-center min-h-[75vh] p-6 text-center animate-in fade-in">
@@ -69,43 +79,36 @@ export default function MainLayout() {
 
                 <div className="space-y-2">
                   <span
-                    className={`inline-block px-3 py-1 text-xs font-bold font-mono rounded-full ${
+                    className={`inline-block px-3 py-1 text-xs font-semibold font-mono rounded-full ${
                       supplierAccountState === "DELETED"
-                        ? "bg-red-100 text-red-700 border border-red-200"
-                        : "bg-amber-100 text-amber-800 border border-amber-200"
+                        ? "bg-red-50 text-red-700 border border-red-200"
+                        : "bg-amber-50 text-amber-800 border border-amber-200"
                     }`}
                   >
-                    STATUS: {supplierAccountState === "DELETED" ? "DELETED / REVOKED" : "INACTIVE / SUSPENDED"}
+                    {supplierAccountState === "DELETED" ? "Account Revoked" : "Account Suspended"}
                   </span>
 
-                  <h2 className="text-2xl font-extrabold text-gray-900">
+                  <h2 className="text-xl font-bold text-slate-900">
                     {supplierAccountState === "DELETED"
-                      ? "Supplier Account Access Revoked"
-                      : "Supplier Partner Account Suspended"}
+                      ? "Account Access Revoked"
+                      : "Account Temporarily Suspended"}
                   </h2>
 
-                  <p className="text-sm text-gray-600 leading-relaxed">
-                    {supplierAccountState === "DELETED" ? (
-                      <>
-                        This supplier partner account (<strong className="font-mono text-gray-900">#{user?.supplier_code}</strong>) has been <strong className="text-red-600">deleted</strong> from the platform by Sirio Central Admin. Access to emails, purchase orders, shipments, and ASNs has been permanently disabled.
-                      </>
-                    ) : (
-                      <>
-                        Your supplier partner account (<strong className="font-mono text-gray-900">#{user?.supplier_code} — {user?.supplier_name}</strong>) has been marked <strong className="text-amber-700">INACTIVE / SUSPENDED</strong> by Sirio Central Admin. Access to business data, inbound emails, purchase orders, and ASN dispatching is currently blocked.
-                      </>
-                    )}
+                  <p className="text-xs text-slate-500 leading-relaxed max-w-sm mx-auto">
+                    {supplierAccountState === "DELETED"
+                      ? "This supplier account has been removed. Platform access has been disabled."
+                      : "Your supplier partner account is currently suspended by central administration."}
                   </p>
                 </div>
 
-                <div className="p-3.5 bg-gray-50 rounded-xl border border-gray-200 text-xs text-gray-500 space-y-1">
-                  <p className="font-semibold text-gray-700">Need Access Reactivation?</p>
-                  <p>Please contact Sirio Admin HQ (<a href="mailto:sirio.asn.dev@gmail.com" className="text-blue-600 font-medium hover:underline">sirio.asn.dev@gmail.com</a>) to resolve account status.</p>
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600">
+                  <p>Contact Administration at <a href="mailto:sirio.asn.dev@gmail.com" className="text-brand-600 font-medium hover:underline">sirio.asn.dev@gmail.com</a> to resolve your account status.</p>
                 </div>
 
-                <div className="pt-3 border-t border-gray-100 flex items-center justify-center gap-3">
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-center">
                   <button
                     onClick={() => logout()}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-brand-600 hover:bg-brand-700 active:bg-brand-800 rounded-xl shadow-sm transition-all"
+                    className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-brand-600 hover:bg-brand-700 active:bg-brand-800 rounded-lg shadow-2xs transition-all"
                   >
                     <Building2 className="w-4 h-4" />
                     Sign Out

@@ -43,18 +43,18 @@ export const FIELD_ICONS: Record<string, typeof Sparkles> = {
 };
 
 export const FIELD_COLORS: Record<string, string> = {
-  name: "bg-blue-700 text-white border border-blue-800 shadow-xs",
-  supplier_code: "bg-blue-700 text-white border border-blue-800 shadow-xs",
-  email: "bg-indigo-700 text-white border border-indigo-800 shadow-xs",
-  contact_name: "bg-emerald-700 text-white border border-emerald-800 shadow-xs",
-  phone: "bg-amber-600 text-white border border-amber-700 shadow-xs",
-  category: "bg-purple-700 text-white border border-purple-800 shadow-xs",
-  country: "bg-teal-700 text-white border border-teal-800 shadow-xs",
-  tax_id: "bg-sky-700 text-white border border-sky-800 shadow-xs",
-  address: "bg-rose-700 text-white border border-rose-800 shadow-xs",
-  is_active: "bg-emerald-700 text-white border border-emerald-800 shadow-xs",
-  create: "bg-blue-700 text-white border border-blue-800 shadow-xs",
-  delete: "bg-rose-700 text-white border border-rose-800 shadow-xs",
+  name: "bg-blue-50 text-blue-700 border border-blue-200",
+  supplier_code: "bg-blue-50 text-blue-700 border border-blue-200",
+  email: "bg-blue-50 text-blue-700 border border-blue-200",
+  contact_name: "bg-slate-100 text-slate-700 border border-slate-200",
+  phone: "bg-slate-100 text-slate-700 border border-slate-200",
+  category: "bg-slate-100 text-slate-700 border border-slate-200",
+  country: "bg-slate-100 text-slate-700 border border-slate-200",
+  tax_id: "bg-slate-100 text-slate-700 border border-slate-200",
+  address: "bg-slate-100 text-slate-700 border border-slate-200",
+  is_active: "bg-emerald-50 text-emerald-700 border border-emerald-200",
+  create: "bg-emerald-50 text-emerald-700 border border-emerald-200",
+  delete: "bg-red-50 text-red-700 border border-red-200",
 };
 
 /**

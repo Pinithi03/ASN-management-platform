@@ -62,7 +62,7 @@ export const mockSupplierUser: User = {
   supplier_name: "COATS THREAD EXPORTS (PRIVATE) LIMITED",
 };
 
-// ── Suppliers (Real Calzedonia EDI Partners from XMLs) ─────────────────────────
+// ── Suppliers (Real EDI Partners from XMLs) ─────────────────────────
 
 export const mockSuppliers: Supplier[] = [
   {

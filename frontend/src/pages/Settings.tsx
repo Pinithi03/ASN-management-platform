@@ -103,7 +103,7 @@ export default function Settings() {
       </div>
 
       {/* Tabs Navigation Bar */}
-      <div className="flex items-center gap-2 border-b border-gray-200 overflow-x-auto pb-1 scrollbar-none">
+      <div className="flex items-center gap-2 border-b border-slate-200 overflow-x-auto pb-1 scrollbar-none">
         {[
           { id: "company", label: "Company Profile", icon: Building2 },
           { id: "email", label: "Email Engine", icon: Mail },
@@ -120,8 +120,8 @@ export default function Settings() {
               className={cn(
                 "flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg transition-colors whitespace-nowrap border-b-2 -mb-1",
                 isActive
-                  ? "border-brand-600 text-brand-700 bg-brand-50/50"
-                  : "border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-50"
+                  ? "border-brand-600 text-brand-700 bg-brand-50"
+                  : "border-transparent text-slate-500 hover:text-slate-900 hover:bg-slate-50"
               )}
             >
               <Icon className="w-4 h-4" />
@@ -134,8 +134,8 @@ export default function Settings() {
       {/* Tab Content 1: Company Profile */}
       {activeTab === "company" && (
         <div className="space-y-6 animate-in fade-in duration-200">
-          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm space-y-4">
-            <div className="flex items-center gap-2 pb-3 border-b border-gray-100">
+          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-2xs space-y-4">
+            <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
               <Building2 className="w-5 h-5 text-brand-600" />
               <h2 className="text-base font-semibold text-gray-900">Company Profile</h2>
             </div>
@@ -147,7 +147,7 @@ export default function Settings() {
                   type="text"
                   value={companyName}
                   onChange={(e) => setCompanyName(e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3.5 py-2 text-sm text-gray-900 focus:bg-white focus:border-brand-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm text-gray-900 focus:bg-white focus:border-brand-500 focus:outline-none"
                 />
               </div>
 
@@ -157,7 +157,7 @@ export default function Settings() {
                   type="text"
                   value={companyCode}
                   onChange={(e) => setCompanyCode(e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3.5 py-2 text-sm font-mono text-gray-900 focus:bg-white focus:border-brand-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm font-mono text-gray-900 focus:bg-white focus:border-brand-500 focus:outline-none"
                 />
               </div>
 
@@ -167,13 +167,13 @@ export default function Settings() {
                   type="text"
                   value={plantLocation}
                   onChange={(e) => setPlantLocation(e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3.5 py-2 text-sm text-gray-900 focus:bg-white focus:border-brand-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm text-gray-900 focus:bg-white focus:border-brand-500 focus:outline-none"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Default Platform Timezone</label>
-                <select className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3.5 py-2 text-sm text-gray-900 focus:bg-white focus:border-brand-500 focus:outline-none">
+                <select className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm text-gray-900 focus:bg-white focus:border-brand-500 focus:outline-none">
                   <option value="Asia/Colombo">Asia/Colombo (GMT +05:30)</option>
                   <option value="UTC">UTC (Coordinated Universal Time)</option>
                 </select>
@@ -186,8 +186,8 @@ export default function Settings() {
       {/* Tab Content 2: Email Engine */}
       {activeTab === "email" && (
         <div className="space-y-6 animate-in fade-in duration-200">
-          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-2xs space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <Mail className="w-5 h-5 text-blue-600" />
                 <h2 className="text-base font-semibold text-gray-900">IMAP Email Ingestion Setup</h2>
@@ -216,7 +216,7 @@ export default function Settings() {
                   type="text"
                   value={imapHost}
                   onChange={(e) => setImapHost(e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3.5 py-2 text-sm font-mono text-gray-900 focus:bg-white focus:border-blue-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm font-mono text-gray-900 focus:bg-white focus:border-blue-500 focus:outline-none"
                 />
               </div>
 
@@ -226,7 +226,7 @@ export default function Settings() {
                   type="text"
                   value={imapPort}
                   onChange={(e) => setImapPort(e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3.5 py-2 text-sm font-mono text-gray-900 focus:bg-white focus:border-blue-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm font-mono text-gray-900 focus:bg-white focus:border-blue-500 focus:outline-none"
                 />
               </div>
 
@@ -236,7 +236,7 @@ export default function Settings() {
                   type="email"
                   value={imapUser}
                   onChange={(e) => setImapUser(e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3.5 py-2 text-sm text-gray-900 focus:bg-white focus:border-blue-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm text-gray-900 focus:bg-white focus:border-blue-500 focus:outline-none"
                 />
               </div>
 
@@ -245,7 +245,7 @@ export default function Settings() {
                 <select
                   value={pollingInterval}
                   onChange={(e) => setPollingInterval(e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3.5 py-2 text-sm text-gray-900 focus:bg-white focus:border-blue-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm text-gray-900 focus:bg-white focus:border-blue-500 focus:outline-none"
                 >
                   <option value="1">Every 1 Minute (High Frequency)</option>
                   <option value="5">Every 5 Minutes (Recommended)</option>
@@ -258,8 +258,8 @@ export default function Settings() {
           </div>
 
           {/* Parser Engine Selection */}
-          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm space-y-4">
-            <div className="flex items-center gap-2 pb-3 border-b border-gray-100">
+          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-2xs space-y-4">
+            <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
               <Sliders className="w-5 h-5 text-indigo-600" />
               <h2 className="text-base font-semibold text-gray-900">Email Parser Engine & Classification</h2>
             </div>
@@ -272,7 +272,7 @@ export default function Settings() {
                   desc: "Parses HTML order tables, line items, delivery dates, & supplier metadata.",
                 },
                 {
-                  id: "calzedonia_xml",
+                  id: "standard_xml",
                   name: "Standard XML Parser",
                   desc: "Parses structured XML attachments and purchase order revisions.",
                 },
@@ -311,8 +311,8 @@ export default function Settings() {
       {/* Tab Content 3: ASN Engine & Storage */}
       {activeTab === "asn" && (
         <div className="space-y-6 animate-in fade-in duration-200">
-          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm space-y-4">
-            <div className="flex items-center gap-2 pb-3 border-b border-gray-100">
+          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-2xs space-y-4">
+            <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
               <Package className="w-5 h-5 text-amber-600" />
               <h2 className="text-base font-semibold text-gray-900">Handling Unit (HU) Sequence & Barcode Format</h2>
             </div>
@@ -334,7 +334,7 @@ export default function Settings() {
                   type="text"
                   value={huPrefix}
                   onChange={(e) => setHuPrefix(e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3.5 py-2 text-sm font-mono text-gray-900 focus:bg-white focus:border-amber-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm font-mono text-gray-900 focus:bg-white focus:border-amber-500 focus:outline-none"
                 />
               </div>
 
@@ -343,7 +343,7 @@ export default function Settings() {
                 <select
                   value={xmlSchemaVersion}
                   onChange={(e) => setXmlSchemaVersion(e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3.5 py-2 text-sm text-gray-900 focus:bg-white focus:border-amber-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm text-gray-900 focus:bg-white focus:border-amber-500 focus:outline-none"
                 >
                   <option value="2.1">Version 2.1 (Standard 2026)</option>
                   <option value="2.0">Version 2.0 (Legacy)</option>
@@ -353,8 +353,8 @@ export default function Settings() {
           </div>
 
           {/* MinIO Object Storage Setup */}
-          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm space-y-4">
-            <div className="flex items-center gap-2 pb-3 border-b border-gray-100">
+          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-2xs space-y-4">
+            <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
               <Database className="w-5 h-5 text-purple-600" />
               <h2 className="text-base font-semibold text-gray-900">MinIO S3 Object Storage Configuration</h2>
             </div>
@@ -366,7 +366,7 @@ export default function Settings() {
                   type="text"
                   value={minioBucket}
                   onChange={(e) => setMinioBucket(e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3.5 py-2 text-sm font-mono text-gray-900 focus:bg-white focus:border-purple-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm font-mono text-gray-900 focus:bg-white focus:border-purple-500 focus:outline-none"
                 />
               </div>
 
@@ -375,7 +375,7 @@ export default function Settings() {
                 <select
                   value={retentionDays}
                   onChange={(e) => setRetentionDays(e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3.5 py-2 text-sm text-gray-900 focus:bg-white focus:border-purple-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm text-gray-900 focus:bg-white focus:border-purple-500 focus:outline-none"
                 >
                   <option value="30">Retain Raw Files for 30 Days</option>
                   <option value="90">Retain Raw Files for 90 Days (Recommended)</option>
@@ -391,8 +391,8 @@ export default function Settings() {
       {/* Tab Content 4: Security & RBAC */}
       {activeTab === "security" && (
         <div className="space-y-6 animate-in fade-in duration-200">
-          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm space-y-4">
-            <div className="flex items-center gap-2 pb-3 border-b border-gray-100">
+          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-2xs space-y-4">
+            <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
               <Shield className="w-5 h-5 text-emerald-600" />
               <h2 className="text-base font-semibold text-gray-900">Admin Security & Deletion Verification</h2>
             </div>
@@ -407,7 +407,7 @@ export default function Settings() {
                     type="password"
                     value={adminVerificationPassword}
                     onChange={(e) => setAdminVerificationPassword(e.target.value)}
-                    className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3.5 py-2 text-sm font-mono text-gray-900 focus:bg-white focus:border-emerald-500 focus:outline-none pr-10"
+                    className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm font-mono text-gray-900 focus:bg-white focus:border-emerald-500 focus:outline-none pr-10"
                   />
                   <Lock className="w-4 h-4 text-gray-400 absolute right-3 top-2.5" />
                 </div>
@@ -416,7 +416,7 @@ export default function Settings() {
                 </p>
               </div>
 
-              <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
                 <div>
                   <p className="text-sm font-semibold text-gray-900">Enforce Inactive Supplier Lockout</p>
                   <p className="text-xs text-gray-500">
@@ -431,7 +431,7 @@ export default function Settings() {
                 />
               </div>
 
-              <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
                 <div>
                   <p className="text-sm font-semibold text-gray-900">Require Two-Factor Authentication (2FA)</p>
                   <p className="text-xs text-gray-500">Enforce TOTP 2FA authentication for COMPANY_ADMIN accounts.</p>
@@ -460,7 +460,7 @@ export default function Settings() {
             ].map((service) => {
               const Icon = service.icon;
               return (
-                <div key={service.title} className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+                <div key={service.title} className="bg-white rounded-xl border border-slate-200 p-5 shadow-2xs">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-bold text-gray-900">{service.title}</p>
                     <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center">

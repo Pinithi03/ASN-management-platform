@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     )
 
     # App
-    APP_NAME: str = "ASN Management Platform"
+    APP_NAME: str = "ASN Platform"
     APP_VERSION: str = "0.1.0"
     DEBUG: bool = False
     ENVIRONMENT: str = "development"
@@ -90,7 +90,7 @@ class Settings(BaseSettings):
     SMTP_PORT: int = 1025
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
-    SMTP_FROM_EMAIL: str = "Oniverse ASN Portal <no-reply@oniverse.lk>"
+    SMTP_FROM_EMAIL: str = "ASN Platform <no-reply@asnplatform.local>"
     SMTP_USE_TLS: bool = False
 
     # CORS

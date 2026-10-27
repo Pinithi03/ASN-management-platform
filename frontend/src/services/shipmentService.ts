@@ -33,6 +33,7 @@ export interface ParsedCartonRow {
   net_weight: number;
   quantity: number;
   uom: string;
+  delivery_date?: string;
   hu_number?: string;
   errors: string[];
 }
@@ -57,6 +58,8 @@ export interface CreatedShipmentItem {
   total_boxes: number;
   total_pieces: number;
   ship_date?: string;
+  estimated_arrival?: string;
+  delivery_date?: string;
   carrier?: string;
   handling_units?: string[];
   asn_record_id?: string;
@@ -208,6 +211,7 @@ export const shipmentService = {
     carrier?: string;
     tracking_number?: string;
     estimated_arrival?: string;
+    packing_slip_dates?: Record<string, string>;
     note?: string;
   }): Promise<CreateShipmentResponse> {
     const formData = new FormData();
@@ -220,6 +224,9 @@ export const shipmentService = {
     if (params.carrier) formData.append("carrier", params.carrier);
     if (params.tracking_number) formData.append("tracking_number", params.tracking_number);
     if (params.estimated_arrival) formData.append("estimated_arrival", params.estimated_arrival);
+    if (params.packing_slip_dates && Object.keys(params.packing_slip_dates).length > 0) {
+      formData.append("packing_slip_dates", JSON.stringify(params.packing_slip_dates));
+    }
     if (params.note) formData.append("note", params.note);
 
     const res = await api.post<CreateShipmentResponse>("/shipments/create-from-excel", formData, {
@@ -260,7 +267,7 @@ export const shipmentService = {
   },
 
   /**
-   * Preview Calzedonia SdDataSlice XML.
+   * Preview SdDataSlice XML.
    */
   async getASNXmlPreview(asnId: string) {
     const res = await api.get<{ asn_number: string; xml_content: string; xml_validated: boolean }>(
@@ -270,7 +277,7 @@ export const shipmentService = {
   },
 
   /**
-   * Download Calzedonia XML file.
+   * Download ASN XML file.
    */
   async downloadASNXml(asnId: string): Promise<Blob> {
     const res = await api.get(`/asn/${asnId}/download-xml`, { responseType: "blob" });
@@ -286,7 +293,7 @@ export const shipmentService = {
   },
 
   /**
-   * Dispatch ASN XML to Calzedonia.
+   * Dispatch ASN XML.
    */
   async sendASN(asnId: string, recipientEmail?: string) {
     const url = recipientEmail ? `/asn/${asnId}/send?recipient_email=${encodeURIComponent(recipientEmail)}` : `/asn/${asnId}/send`;

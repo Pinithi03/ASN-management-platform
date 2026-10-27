@@ -280,7 +280,7 @@ async def send_asn_xml(
 
     filename = get_asn_xml_filename(shipment_num, supp_code)
     email_subject = get_asn_email_subject(shipment_num, r.created_at or datetime.now(), supp_code)
-    to_email = recipient_email or "iungo@calzedonia.com"
+    to_email = recipient_email or "edi@orders.buyer.org"
 
     now_utc = datetime.utcnow()
     r.status = ASNStatus.XML_SENT.value

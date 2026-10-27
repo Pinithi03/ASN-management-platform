@@ -428,11 +428,11 @@ async def upload_email(
         parsed_pos = parse_xml_all(raw_bytes, file.filename or "upload.xml")
         po_nums = [p.po_number for p in parsed_pos if p.po_number]
         decoded = DecodedEmail(
-            message_id=f"<xml-upload-{uuid.uuid4().hex[:12]}@oniverse.portal>",
-            from_address="edi@calzedonia.com",
+            message_id=f"<xml-upload-{uuid.uuid4().hex[:12]}@asn.portal>",
+            from_address="edi@orders.buyer.org",
             to_address="orders@sirio.lk",
-            subject=f"Calzedonia XML Import - {file.filename} (PO: {', '.join(po_nums) if po_nums else 'Unknown'})",
-            body_text=f"Direct Calzedonia XML upload of {file.filename} containing {len(parsed_pos)} purchase order(s).",
+            subject=f"XML Import - {file.filename} (PO: {', '.join(po_nums) if po_nums else 'Unknown'})",
+            body_text=f"Direct XML upload of {file.filename} containing {len(parsed_pos)} purchase order(s).",
             raw=raw_bytes,
             attachments=[
                 Attachment(
@@ -446,7 +446,7 @@ async def upload_email(
             format=EmailFormat.XML_ATTACHMENT,
             xml_attachment_indices=[0],
             confidence="high",
-            reason="Direct Calzedonia XML upload",
+            reason="Direct XML upload",
         )
     else:
         decoded = decode(raw_bytes)

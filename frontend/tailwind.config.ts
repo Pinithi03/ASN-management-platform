@@ -34,7 +34,7 @@ const config: Config = {
           foreground: "hsl(var(--destructive-foreground))",
         },
         border: "hsl(var(--border))",
-        // Custom brand colors — update with Oniverse brand guide
+        // Custom brand colors — update with ASN Platform brand guide
         brand: {
           50: "#eff6ff",
           100: "#dbeafe",
@@ -53,6 +53,14 @@ const config: Config = {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+        xs: "2px",
+      },
+      boxShadow: {
+        "2xs": "0 1px 2px 0 rgb(0 0 0 / 0.03)",
+        "xs": "0 1px 2px 0 rgb(0 0 0 / 0.05)",
+      },
+      backdropBlur: {
+        xs: "2px",
       },
       fontFamily: {
         sans: ["Inter", "system-ui", "sans-serif"],

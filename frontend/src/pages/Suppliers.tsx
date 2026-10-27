@@ -8,15 +8,12 @@ import {
   Search,
   Plus,
   CheckCircle2,
-  Building2,
   MapPin,
-  UserCheck,
   X,
   Sparkles,
   Edit2,
   Trash2,
   AlertTriangle,
-  Power,
   BellRing,
   ChevronLeft,
   ChevronRight,
@@ -26,8 +23,6 @@ import {
   ShieldCheck,
   Eye,
   EyeOff,
-  LayoutGrid,
-  List,
   Camera,
   Upload,
   Loader2,
@@ -93,8 +88,7 @@ export default function Suppliers() {
   const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "INACTIVE" | "ARCHIVED">("ALL");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // View Mode & Sorting State (Grid Cards matching reference image by default)
-  const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
+  // Sorting State
   const [sortBy, setSortBy] = useState<"name" | "code" | "recent" | "pos">("name");
 
   // Avatar Upload Refs & State for Grid Cards & Modals
@@ -245,7 +239,7 @@ export default function Suppliers() {
         name,
       });
 
-      showToast(`Partner ${name} (#${code}) archived. You can restore them anytime from the Archived tab.`);
+      showToast(`Partner ${name} (${code}) archived. You can restore them anytime from the Archived tab.`);
       setDeletingSupplier(null);
       setAdminPasswordInput("");
       setAdminAuthError(null);
@@ -270,7 +264,7 @@ export default function Suppliers() {
       await queryClient.invalidateQueries({ queryKey: ["suppliers"] });
       refetch();
 
-      showToast(`Restored partner ${supplier.name} (#${supplier.supplier_code}) and all records successfully!`);
+      showToast(`Restored partner ${supplier.name} (${supplier.supplier_code}) and all records successfully!`);
     } catch (err: any) {
       console.error("Restore failed:", err);
       showToast(err?.response?.data?.detail || "Failed to restore partner.");
@@ -306,7 +300,7 @@ export default function Suppliers() {
     setSuppliers((prev) =>
       prev.map((s) => (s.id === supplier.id ? { ...s, recently_updated_by_supplier: false } : s))
     );
-    showToast(`Acknowledged profile updates for ${supplier.name} (#${supplier.supplier_code})`);
+    showToast(`Acknowledged profile updates for ${supplier.name} (${supplier.supplier_code})`);
   };
 
   const showToast = (msg: string) => {
@@ -340,7 +334,7 @@ export default function Suppliers() {
       });
       await queryClient.invalidateQueries({ queryKey: ["suppliers"] });
       refetch();
-      showToast(`Supplier onboarded: ${created.name} (#${created.supplier_code})`);
+      showToast(`Supplier onboarded: ${created.name} (${created.supplier_code})`);
       setIsAddModalOpen(false);
       resetForm();
     } catch (err: any) {
@@ -375,7 +369,7 @@ export default function Suppliers() {
           country: res.country || prev.country,
         }));
         setXmlFoundBadge(`Auto-filled from ${res.source_filename || "Inbound XML"}`);
-        showToast(`Loaded details from XML: ${res.name} (#${res.supplier_code})`);
+        showToast(`Loaded details from XML: ${res.name} (${res.supplier_code})`);
       } else {
         setXmlFoundBadge(null);
         showToast(`No inbound XML found for code ${code} yet.`);
@@ -437,7 +431,7 @@ export default function Suppliers() {
         changedFields.length > 0
           ? ` (${changedFields.map((c) => c.field_label).join(", ")})`
           : "";
-      showToast(`Updated details for ${updated.name} (#${updated.supplier_code})${changeMsg}`);
+      showToast(`Updated details for ${updated.name} (${updated.supplier_code})${changeMsg}`);
       setEditingSupplier(null);
       resetForm();
     } catch (err: any) {
@@ -550,20 +544,19 @@ export default function Suppliers() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Supplier Onboarding & Management</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Onboard, update, and manage partner suppliers with unique identification codes for automated email tracking.
-          </p>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-950">
+            Supplier Onboarding & Management
+          </h1>
         </div>
         <button
           onClick={() => {
             resetForm();
             setIsAddModalOpen(true);
           }}
-          className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 active:bg-brand-800 transition-all"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white px-3.5 py-2 text-xs font-semibold shadow-xs transition-colors cursor-pointer"
         >
-          <Plus className="h-4.5 w-4.5" />
-          Onboard New Supplier
+          <Plus className="h-3.5 w-3.5" />
+          <span>Onboard New Supplier</span>
         </button>
       </div>
 
@@ -599,45 +592,6 @@ export default function Suppliers() {
           </div>
         </div>
       )}
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Total Onboarded</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{suppliers.length}</p>
-            </div>
-            <div className="w-10 h-10 bg-brand-50 rounded-lg flex items-center justify-center">
-              <Building2 className="w-5 h-5 text-brand-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Active Partners</p>
-              <p className="text-2xl font-bold text-emerald-600 mt-1">{activeCount}</p>
-            </div>
-            <div className="w-10 h-10 bg-emerald-50 rounded-lg flex items-center justify-center">
-              <UserCheck className="w-5 h-5 text-emerald-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Inactive / Suspended</p>
-              <p className="text-2xl font-bold text-red-500 mt-1">{inactiveCount}</p>
-            </div>
-            <div className="w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center">
-              <Power className="w-5 h-5 text-red-500" />
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* Hidden file inputs for avatar uploads */}
       <input
@@ -761,233 +715,43 @@ export default function Suppliers() {
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
-
-            {/* View Mode Switcher Toggle */}
-            <div className="flex items-center bg-gray-100 p-0.5 rounded-xl border border-gray-200 shrink-0">
-              <button
-                onClick={() => setViewMode("grid")}
-                className={`p-1.5 rounded-lg transition-all ${
-                  viewMode === "grid"
-                    ? "bg-white text-brand-600 shadow-2xs"
-                    : "text-gray-400 hover:text-gray-700"
-                }`}
-                title="Grid Directory View"
-              >
-                <LayoutGrid className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setViewMode("table")}
-                className={`p-1.5 rounded-lg transition-all ${
-                  viewMode === "table"
-                    ? "bg-white text-brand-600 shadow-2xs"
-                    : "text-gray-400 hover:text-gray-700"
-                }`}
-                title="Table View"
-              >
-                <List className="w-4 h-4" />
-              </button>
-            </div>
           </div>
         </div>
       </div>
-
-      {viewMode === "grid" ? (
-        /* ─── DIRECTORY GRID VIEW (MATCHING REFERENCE UI) ─── */
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {paginatedSuppliers.map((s) => {
-            const isArchived = Boolean(s.is_deleted);
-
-            return (
-              <div
-                key={s.id}
-                className={`rounded-2xl border bg-white shadow-2xs hover:shadow-md transition-all flex flex-col justify-between relative group p-4 ${
-                  isArchived
-                    ? "border-amber-200/90 bg-amber-50/15"
-                    : s.recently_updated_by_supplier
-                    ? "border-amber-300 ring-2 ring-amber-400/20"
-                    : "border-slate-200 hover:border-slate-300"
-                }`}
-              >
-                {/* Top Header inside Card */}
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-mono text-[10px] font-semibold px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded border border-slate-200">
-                    #{s.supplier_code}
-                  </span>
-
-                  <div className="flex items-center gap-1">
-                    {s.recently_updated_by_supplier && (
-                      <button
-                        onClick={() => handleAcknowledgeSupplierUpdate(s)}
-                        className="px-1.5 py-0.5 text-[10px] font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-md transition-colors"
-                        title="Profile updated by supplier! Click to acknowledge."
-                      >
-                        Updated
-                      </button>
-                    )}
-                    <button
-                      onClick={() => handleOpenEdit(s)}
-                      className="p-1 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
-                      title="Edit partner details"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Center Section: Avatar with Camera Hover Overlay */}
-                <div className="flex flex-col items-center text-center">
-                  <div
-                    onClick={() => handleTriggerCardAvatarUpload(s)}
-                    title="Click to upload or change profile photo"
-                    className="relative w-20 h-20 rounded-full overflow-hidden border-2 border-white shadow-sm cursor-pointer group/avatar ring-2 ring-gray-100 hover:ring-brand-400 transition-all flex items-center justify-center shrink-0"
-                  >
-                    {s.profile_picture_url ? (
-                      <img
-                        src={s.profile_picture_url}
-                        alt={s.name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div
-                        className={`w-full h-full flex items-center justify-center font-bold text-2xl uppercase ${getAvatarFallbackBg(
-                          s.name
-                        )}`}
-                      >
-                        {s.name.charAt(0)}
-                      </div>
-                    )}
-
-                    {/* Camera Hover Overlay */}
-                    <div className="absolute inset-0 bg-black/45 opacity-0 group-hover/avatar:opacity-100 flex flex-col items-center justify-center transition-opacity text-white text-[10px] font-semibold">
-                      {isUploadingCardAvatar && avatarUploadTarget?.id === s.id ? (
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                      ) : (
-                        <>
-                          <Camera className="w-4.5 h-4.5 mb-0.5" />
-                          <span>Photo</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Supplier Name styled in blue bold link font */}
-                  <h3
-                    onClick={() => handleOpenEdit(s)}
-                    className="mt-3 text-sm font-bold text-blue-700 hover:text-blue-900 cursor-pointer transition-colors truncate max-w-full"
-                    title={s.name}
-                  >
-                    {s.name}
-                  </h3>
-
-                  {/* Status badge pill & Code */}
-                  <div className="mt-2 flex items-center gap-1.5 flex-wrap justify-center">
-                    <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 bg-gray-100 text-gray-700 rounded border border-gray-200">
-                      #{s.supplier_code}
-                    </span>
-                    {isArchived ? (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
-                        Archived
-                      </span>
-                    ) : s.is_active ? (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        Active
-                      </span>
-                    ) : (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-200">
-                        Inactive
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Details (HU, Country) */}
-                  <div className="mt-3 w-full text-left space-y-1 text-[11px] text-gray-600 border-t border-gray-100 pt-2.5">
-                    {s.current_hu_number && (
-                      <div className="flex items-center justify-between text-[11px]">
-                        <span className="text-gray-400 font-medium">HU Sequence:</span>
-                        <span className="font-mono font-bold text-gray-800 truncate" title={s.current_hu_number}>
-                          #{s.current_hu_number}
-                        </span>
-                      </div>
-                    )}
-                    {s.country && (
-                      <div className="flex items-center gap-1.5 truncate text-[11px]">
-                        <MapPin className="w-3 h-3 text-gray-400 shrink-0" />
-                        <span className="truncate text-gray-500">{s.country}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Footer Actions */}
-                <div className="mt-3 pt-2.5 border-t border-gray-100 flex items-center justify-between text-xs">
-                  {isArchived ? (
-                    <button
-                      onClick={() => handleRestoreSupplier(s)}
-                      disabled={restoringId === s.id}
-                      className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-800 bg-emerald-100 hover:bg-emerald-200 rounded-xl transition-all shadow-2xs"
-                    >
-                      <RotateCcw className={`w-3 h-3 ${restoringId === s.id ? "animate-spin" : ""}`} />
-                      <span>{restoringId === s.id ? "Restoring..." : "Restore Partner"}</span>
-                    </button>
-                  ) : (
-                    <>
-                      <button
-                        onClick={() => handleToggleActive(s)}
-                        className={`inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-bold rounded-lg border transition-all ${
-                          s.is_active
-                            ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
-                            : "bg-red-50 text-red-600 border-red-200 hover:bg-red-100"
-                        }`}
-                        title={s.is_active ? "Click to deactivate" : "Click to activate"}
-                      >
-                        <Power className="w-2.5 h-2.5" />
-                        <span>{s.is_active ? "Active" : "Inactive"}</span>
-                      </button>
-
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => handleOpenDeleteModal(s)}
-                          className="p-1 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
-                          title="Archive Supplier"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        /* ─── TABLE VIEW ─── */
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-2xs overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-gray-600">
-              <thead className="bg-slate-50/80 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+      {/* ─── SUPPLIERS TABLE (LIST VIEW) ─── */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs text-slate-600">
+            <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+              <tr>
+                <th className="py-3 px-4">Partner</th>
+                <th className="py-3 px-4">HU Sequence</th>
+                <th className="py-3 px-4">Country</th>
+                <th className="py-3 px-4">Status</th>
+                <th className="py-3 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {paginatedSuppliers.length === 0 ? (
                 <tr>
-                  <th className="py-3 px-4">Partner</th>
-                  <th className="py-3 px-4">HU Sequence</th>
-                  <th className="py-3 px-4">Country</th>
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
+                  <td colSpan={5} className="py-12 text-center text-slate-400">
+                    No suppliers found matching the criteria.
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {paginatedSuppliers.map((s) => {
+              ) : (
+                paginatedSuppliers.map((s) => {
                   const isArchived = Boolean(s.is_deleted);
 
                   return (
                     <tr
                       key={s.id}
-                      className="hover:bg-slate-50 transition-colors"
+                      className="hover:bg-slate-50/80 transition-colors"
                     >
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
                           <div
                             onClick={() => handleTriggerCardAvatarUpload(s)}
-                            className="relative w-9 h-9 rounded-full overflow-hidden border border-gray-200 shrink-0 cursor-pointer group/tblAvatar"
+                            className="relative w-9 h-9 rounded-full overflow-hidden border border-slate-200 shrink-0 cursor-pointer group/tblAvatar"
                             title="Click to change photo"
                           >
                             {s.profile_picture_url ? (
@@ -1002,24 +766,48 @@ export default function Suppliers() {
                               </div>
                             )}
                             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/tblAvatar:opacity-100 flex items-center justify-center text-white transition-opacity">
-                              <Camera className="w-3 h-3" />
+                              {isUploadingCardAvatar && avatarUploadTarget?.id === s.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Camera className="w-3 h-3" />
+                              )}
                             </div>
                           </div>
                           <div className="min-w-0">
-                            <span
-                              onClick={() => handleOpenEdit(s)}
-                              className="font-bold text-blue-700 hover:text-blue-900 cursor-pointer block truncate"
-                            >
-                              {s.name}
-                            </span>
-                            <span className="font-mono text-[10px] text-gray-400 block">#{s.supplier_code}</span>
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                onClick={() => handleOpenEdit(s)}
+                                className="font-bold text-slate-900 hover:text-blue-600 cursor-pointer block truncate"
+                              >
+                                {s.name}
+                              </span>
+                              {s.recently_updated_by_supplier && (
+                                <button
+                                  onClick={() => handleAcknowledgeSupplierUpdate(s)}
+                                  className="px-1.5 py-0.5 text-[9px] font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded transition-colors"
+                                  title="Profile updated by supplier! Click to acknowledge."
+                                >
+                                  Updated
+                                </button>
+                              )}
+                            </div>
+                            <span className="font-mono text-[10px] text-slate-400 block">{s.supplier_code}</span>
                           </div>
                         </div>
                       </td>
-                      <td className="py-3 px-4 font-mono font-bold text-gray-800">
-                        {s.current_hu_number ? `#${s.current_hu_number}` : <span className="text-gray-400 font-normal">Not Set</span>}
+                      <td className="py-3 px-4 font-mono font-bold text-slate-800">
+                        {s.current_hu_number ? `#${s.current_hu_number}` : <span className="text-slate-400 font-normal">Not Set</span>}
                       </td>
-                      <td className="py-3 px-4 text-gray-600">{s.country || "—"}</td>
+                      <td className="py-3 px-4 text-slate-600">
+                        {s.country ? (
+                          <span className="inline-flex items-center gap-1">
+                            <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            {s.country}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
                       <td className="py-3 px-4">
                         {isArchived ? (
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
@@ -1040,37 +828,44 @@ export default function Suppliers() {
                       </td>
                       <td className="py-3 px-4 text-right">
                         <div className="inline-flex items-center gap-1">
-                          <button
-                            onClick={() => handleOpenEdit(s)}
-                            className="p-1 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-100"
-                            title="Edit"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleTriggerCardAvatarUpload(s)}
-                            className="p-1 text-gray-400 hover:text-brand-600 rounded-lg hover:bg-gray-100"
-                            title="Upload Photo"
-                          >
-                            <Camera className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleOpenDeleteModal(s)}
-                            className="p-1 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50"
-                            title="Archive"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          {isArchived ? (
+                            <button
+                              onClick={() => handleRestoreSupplier(s)}
+                              disabled={restoringId === s.id}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 disabled:opacity-50 transition-colors"
+                              title="Restore Partner"
+                            >
+                              <RotateCcw className={`w-3.5 h-3.5 ${restoringId === s.id ? "animate-spin" : ""}`} />
+                              <span>Restore</span>
+                            </button>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => handleOpenEdit(s)}
+                                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors"
+                                title="Edit"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleOpenDeleteModal(s)}
+                                className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
+                                title="Archive"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
                   );
-                })}
-              </tbody>
-            </table>
-          </div>
+                })
+              )}
+            </tbody>
+          </table>
         </div>
-      )}
+      </div>
 
       {/* Bottom Pagination Footer */}
       <div className="flex items-center justify-between px-4 py-3 bg-white rounded-2xl border border-gray-200 shadow-2xs select-none">
@@ -1484,7 +1279,7 @@ export default function Suppliers() {
             <div className="text-center">
               <h3 className="text-lg font-bold text-gray-900">Admin Security Verification Required</h3>
               <p className="text-xs text-gray-500 mt-1">
-                You are archiving <strong className="text-gray-900">{deletingSupplier.name}</strong> (<span className="font-mono font-bold text-brand-700">#{deletingSupplier.supplier_code}</span>).
+                You are archiving <strong className="text-gray-900">{deletingSupplier.name}</strong> (<span className="font-mono font-bold text-brand-700">{deletingSupplier.supplier_code}</span>).
               </p>
 
               <div className="text-[11px] text-amber-900 bg-amber-50 p-3 rounded-xl border border-amber-200 mt-2.5 text-left space-y-1">
