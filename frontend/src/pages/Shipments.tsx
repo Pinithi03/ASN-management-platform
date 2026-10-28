@@ -4388,55 +4388,22 @@ function LabelPrintModal({
   };
 
   const SIZES = [
-    {
-      id: "6x4",
-      title: '6" × 4" Landscape',
-      subtitle: "ASN Standard (152 × 102 mm)",
-      desc: "Standard wide industrial shipping label. Best for thermal sticker rolls.",
-      badge: "Standard",
-      badgeColor: "bg-blue-50 text-blue-700 border-blue-200",
-    },
-    {
-      id: "4x6",
-      title: '4" × 6" Portrait',
-      subtitle: "Logistics Standard Thermal (102 × 152 mm)",
-      desc: "Standard vertical shipping label for Zebra & TSC thermal printers.",
-      badge: "Thermal Roll",
-      badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    },
-    {
-      id: "4x3",
-      title: '4" × 3" Compact',
-      subtitle: "Compact Box / Carton (102 × 76 mm)",
-      desc: "Optimized for small packages, yarn boxes, and thread cartons.",
-      badge: "Compact",
-      badgeColor: "bg-amber-50 text-amber-700 border-amber-200",
-    },
-    {
-      id: "a4",
-      title: "A4 Sheet (4 Labels / Page)",
-      subtitle: "Office Laser / Inkjet (210 × 297 mm)",
-      desc: "2×2 grid layout with cut guides. Perfect for standard A4 paper or 4-up sticker sheets.",
-      badge: "Office Printer",
-      badgeColor: "bg-slate-100 text-slate-700 border-slate-200",
-    },
+    { id: "6x4", title: '6" × 4" Landscape' },
+    { id: "4x6", title: '4" × 6" Portrait' },
+    { id: "4x3", title: '4" × 3" Compact' },
+    { id: "a4", title: 'A4 Sheet (4 Labels / Page)' },
   ];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4 backdrop-blur-sm animate-in fade-in duration-150">
-      <div className="relative w-full max-w-lg rounded-2xl bg-white shadow-2xl border border-gray-200 overflow-hidden">
+      <div className="relative w-full max-w-md rounded-2xl bg-white shadow-xl border border-gray-200 overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 bg-gray-50/80">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-700">
-              <Printer className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-gray-900">Print & Download Barcode Labels</h2>
-              <p className="text-xs text-gray-500 font-mono">
-                {data.shipmentNumber} • {data.totalBoxes ?? 1} {data.totalBoxes === 1 ? "Carton" : "Cartons"}
-              </p>
-            </div>
+        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">Print & Download Barcode Labels</h2>
+            <p className="text-xs text-gray-500 font-mono mt-0.5">
+              {data.shipmentNumber} • {data.totalBoxes ?? 1} {data.totalBoxes === 1 ? "Carton" : "Cartons"}
+            </p>
           </div>
           <button
             onClick={onClose}
@@ -4447,60 +4414,44 @@ function LabelPrintModal({
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-4">
-          <div>
-            <label className="text-xs font-bold text-gray-700 uppercase tracking-wider block mb-2">
-              Select Label Print Size:
-            </label>
-            <div className="space-y-2.5">
-              {SIZES.map((s) => {
-                const isSelected = selectedSize === s.id;
-                return (
-                  <div
-                    key={s.id}
-                    onClick={() => handleSelectSize(s.id)}
-                    className={cn(
-                      "p-3 rounded-xl border-2 transition-all cursor-pointer flex items-start justify-between gap-3",
-                      isSelected
-                        ? "border-blue-600 bg-blue-50/40 shadow-xs"
-                        : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50/50"
-                    )}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="mt-0.5">
-                        <input
-                          type="radio"
-                          name="labelSize"
-                          checked={isSelected}
-                          onChange={() => handleSelectSize(s.id)}
-                          className="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer"
-                        />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-bold text-gray-900">{s.title}</span>
-                          <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded border", s.badgeColor)}>
-                            {s.badge}
-                          </span>
-                        </div>
-                        <p className="text-xs font-medium text-gray-600 mt-0.5">{s.subtitle}</p>
-                        <p className="text-[11px] text-gray-500 mt-0.5">{s.desc}</p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+        <div className="p-6 space-y-3">
+          <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider block">
+            Select Label Size
+          </label>
+          <div className="space-y-2">
+            {SIZES.map((s) => {
+              const isSelected = selectedSize === s.id;
+              return (
+                <label
+                  key={s.id}
+                  onClick={() => handleSelectSize(s.id)}
+                  className={cn(
+                    "flex items-center gap-3 px-4 py-3 rounded-xl border text-sm transition-all cursor-pointer select-none",
+                    isSelected
+                      ? "border-blue-600 bg-blue-50/50 text-blue-950 font-medium shadow-2xs"
+                      : "border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50/60"
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="labelSize"
+                    checked={isSelected}
+                    onChange={() => handleSelectSize(s.id)}
+                    className="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer"
+                  />
+                  <span>{s.title}</span>
+                </label>
+              );
+            })}
           </div>
-
         </div>
 
         {/* Footer Actions */}
-        <div className="flex items-center justify-between border-t border-slate-200 px-6 py-4 bg-slate-50/70">
+        <div className="flex items-center justify-between border-t border-gray-100 px-6 py-4 bg-gray-50/60">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 transition-colors cursor-pointer"
+            className="px-4 py-2 border border-gray-200 rounded-lg text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors cursor-pointer"
           >
             Cancel
           </button>
@@ -4510,10 +4461,10 @@ function LabelPrintModal({
               type="button"
               disabled={isLoading}
               onClick={() => onDownload(selectedSize, true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 rounded-lg text-xs font-medium transition-colors cursor-pointer disabled:opacity-50"
               title="Open print preview directly in browser"
             >
-              {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Printer className="w-3.5 h-3.5 text-slate-500" />}
+              {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               Print Directly
             </button>
 
@@ -4523,7 +4474,7 @@ function LabelPrintModal({
               onClick={() => onDownload(selectedSize, false)}
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
             >
-              {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+              {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               Download PDF
             </button>
           </div>
