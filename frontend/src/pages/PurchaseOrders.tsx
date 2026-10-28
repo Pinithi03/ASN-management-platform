@@ -221,8 +221,8 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
         po_numbers: poChips.length > 0 ? poChips.join(",") : undefined,
         status: statusFilter || undefined,
         supplier_id: supplierId,
-        plant: selectedPlant !== "ALL" && poChips.length === 0 ? selectedPlant : undefined,
-        storage_location: selectedLocation !== "ALL" && poChips.length === 0 ? selectedLocation : undefined,
+        plant: selectedPlant !== "ALL" ? selectedPlant : undefined,
+        storage_location: selectedPlant !== "ALL" && selectedLocation !== "ALL" ? selectedLocation : undefined,
       }),
     placeholderData: (previousData) => previousData,
     refetchInterval: 5000,
@@ -281,32 +281,29 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
     }
   }, [selectedPlant, availableLocations, selectedLocation]);
 
-  // Filter orders for display
+  // Filter orders for display (strictly plant & storage location scoped when inside a plant view)
   const displayedOrders = useMemo(() => {
     return orders.filter((po) => {
-      // If user specifically searched for PO chips, display all found POs across plants
-      if (poChips.length > 0) {
-        return true;
-      }
+      if (selectedPlant !== "ALL") {
+        const dest = po.delivery_address || po.destination || po.client_code;
+        const res = resolvePlantAndLocation(dest, po.client_code);
 
-      const dest = po.delivery_address || po.destination || po.client_code;
-      const res = resolvePlantAndLocation(dest, po.client_code);
-
-      if (selectedPlant !== "ALL" && res.plantGroup !== selectedPlant && res.plantCode !== selectedPlant) {
-        return false;
-      }
-
-      if (selectedPlant !== "ALL" && selectedLocation !== "ALL") {
-        const poLoc = (res.storageLocation || "").toUpperCase();
-        const targetLoc = selectedLocation.toUpperCase();
-        if (poLoc !== targetLoc && !res.fullDeliveryAddress.toUpperCase().includes(targetLoc)) {
+        if (res.plantGroup !== selectedPlant && res.plantCode !== selectedPlant) {
           return false;
+        }
+
+        if (selectedLocation !== "ALL") {
+          const poLoc = (res.storageLocation || "").toUpperCase();
+          const targetLoc = selectedLocation.toUpperCase();
+          if (poLoc !== targetLoc && !res.fullDeliveryAddress.toUpperCase().includes(targetLoc)) {
+            return false;
+          }
         }
       }
 
       return true;
     });
-  }, [orders, selectedPlant, selectedLocation, poChips]);
+  }, [orders, selectedPlant, selectedLocation]);
 
   const startItem = totalOrders === 0 ? 0 : (page - 1) * 50 + 1;
   const endItem = Math.min(page * 50, totalOrders);
@@ -420,10 +417,17 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
     return () => clearTimeout(timer);
   }, [search]);
 
-  // Query remote POs matching search if typed
+  // Query remote POs matching search if typed (scoped to plant/storage location when not ALL)
   const { data: remoteSuggestionsData } = useQuery({
-    queryKey: ["poSearchSuggestions", debouncedSearch, supplierId],
-    queryFn: () => poApi.list({ search: debouncedSearch, per_page: 8, supplier_id: supplierId }),
+    queryKey: ["poSearchSuggestions", debouncedSearch, supplierId, selectedPlant, selectedLocation],
+    queryFn: () =>
+      poApi.list({
+        search: debouncedSearch,
+        per_page: 8,
+        supplier_id: supplierId,
+        plant: selectedPlant !== "ALL" ? selectedPlant : undefined,
+        storage_location: selectedPlant !== "ALL" && selectedLocation !== "ALL" ? selectedLocation : undefined,
+      }),
     enabled: Boolean(debouncedSearch && debouncedSearch.length >= 2),
     staleTime: 30000,
   });
@@ -460,6 +464,25 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
 
     for (const po of pool) {
       if (!po || !po.po_number) continue;
+
+      // When inside a plant tab, strictly scope suggestions to this plant & storage location
+      if (selectedPlant !== "ALL") {
+        const dest = po.delivery_address || po.destination || po.client_code;
+        const res = resolvePlantAndLocation(dest, po.client_code);
+
+        if (res.plantGroup !== selectedPlant && res.plantCode !== selectedPlant) {
+          continue;
+        }
+
+        if (selectedLocation !== "ALL") {
+          const poLoc = (res.storageLocation || "").toUpperCase();
+          const targetLoc = selectedLocation.toUpperCase();
+          if (poLoc !== targetLoc && !res.fullDeliveryAddress.toUpperCase().includes(targetLoc)) {
+            continue;
+          }
+        }
+      }
+
       const norm = normalizePO(po.po_number).toLowerCase();
       if (seen.has(norm)) continue;
       seen.add(norm);
@@ -493,7 +516,7 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
     });
 
     return matches.slice(0, 8);
-  }, [search, allOrdersList, orders, remoteSuggestions, poChips]);
+  }, [search, allOrdersList, orders, remoteSuggestions, poChips, selectedPlant, selectedLocation]);
 
   const handleSelectPO = (poNumber: string | null | undefined) => {
     const clean = normalizePO(poNumber || "");
@@ -1081,6 +1104,8 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                   placeholder={
                     poChips.length > 0
                       ? "Add another PO number..."
+                      : selectedPlant !== "ALL"
+                      ? `Search PO in ${KNOWN_PLANTS[selectedPlant]?.name.replace(" Ltd", "")}${selectedLocation !== "ALL" ? ` (${selectedLocation})` : ""}...`
                       : "Search PO number or paste comma-separated POs..."
                   }
                   value={search}
