@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
@@ -221,8 +221,8 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
         po_numbers: poChips.length > 0 ? poChips.join(",") : undefined,
         status: statusFilter || undefined,
         supplier_id: supplierId,
-        plant: selectedPlant !== "ALL" ? selectedPlant : undefined,
-        storage_location: selectedLocation !== "ALL" ? selectedLocation : undefined,
+        plant: selectedPlant !== "ALL" && poChips.length === 0 ? selectedPlant : undefined,
+        storage_location: selectedLocation !== "ALL" && poChips.length === 0 ? selectedLocation : undefined,
       }),
     placeholderData: (previousData) => previousData,
     refetchInterval: 5000,
@@ -284,6 +284,11 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
   // Filter orders for display
   const displayedOrders = useMemo(() => {
     return orders.filter((po) => {
+      // If user specifically searched for PO chips, display all found POs across plants
+      if (poChips.length > 0) {
+        return true;
+      }
+
       const dest = po.delivery_address || po.destination || po.client_code;
       const res = resolvePlantAndLocation(dest, po.client_code);
 
@@ -301,7 +306,7 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
 
       return true;
     });
-  }, [orders, selectedPlant, selectedLocation]);
+  }, [orders, selectedPlant, selectedLocation, poChips]);
 
   const startItem = totalOrders === 0 ? 0 : (page - 1) * 50 + 1;
   const endItem = Math.min(page * 50, totalOrders);
@@ -386,13 +391,246 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
     setCrossPlantWarning(null);
   };
 
-  // ─── Multi-PO search chips ──────────────────────────────────
-  const normalizePO = (value: string) => value.trim().replace(/^[A-Z0-9]{2,6}\s*[-–—_]\s*(?=\d{6,}$)/i, "");
-  const isPOToken = (value: string) => /^(?:[A-Z0-9]{2,6}\s*[-–—_]\s*)?\d{4,15}$/i.test(value.trim());
+  // ─── Multi-PO search chips & Autocomplete ──────────────────────────────────
+  const normalizePO = (value: string) =>
+    value
+      .trim()
+      .replace(/^(?:PO|P\.O\.)\s*[-#:\s]*/i, "")
+      .replace(/^[A-Z0-9]{2,6}\s*[-–—_]\s*(?=[A-Z0-9]{4,}$)/i, "");
+
+  const isPOToken = (value: string) => {
+    const v = value.trim();
+    if (!v || v.length < 3) return false;
+    return /^(?:[A-Z0-9]{2,6}\s*[-–—_]\s*)?[A-Z0-9_-]{3,25}$/i.test(v);
+  };
+
+  // Autocomplete & search navigation state
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const originalInputRef = useRef<string>("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Debounced search for remote queries
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search.trim());
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Query remote POs matching search if typed
+  const { data: remoteSuggestionsData } = useQuery({
+    queryKey: ["poSearchSuggestions", debouncedSearch, supplierId],
+    queryFn: () => poApi.list({ search: debouncedSearch, per_page: 8, supplier_id: supplierId }),
+    enabled: Boolean(debouncedSearch && debouncedSearch.length >= 2),
+    staleTime: 30000,
+  });
+  const remoteSuggestions: PurchaseOrder[] = remoteSuggestionsData?.items || [];
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node) &&
+        inputRef.current &&
+        !inputRef.current.contains(e.target as Node)
+      ) {
+        setIsDropdownOpen(false);
+        setActiveIndex(-1);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Compute autocomplete suggestions combining local overview, current page, and remote
+  const suggestions = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q || q.length < 1) return [];
+
+    const cleanQ = normalizePO(q).toLowerCase();
+    const existingChipsSet = new Set(poChips.map((c) => normalizePO(c).toLowerCase()));
+
+    const pool = [...allOrdersList, ...orders, ...remoteSuggestions];
+    const seen = new Set<string>();
+    const uniquePool: PurchaseOrder[] = [];
+
+    for (const po of pool) {
+      if (!po || !po.po_number) continue;
+      const norm = normalizePO(po.po_number).toLowerCase();
+      if (seen.has(norm)) continue;
+      seen.add(norm);
+      if (existingChipsSet.has(norm)) continue;
+      uniquePool.push(po);
+    }
+
+    const matches = uniquePool.filter((po) => {
+      const poNum = (po.po_number || "").toLowerCase();
+      const normNum = normalizePO(po.po_number || "").toLowerCase();
+      const style = (po.style_number || "").toLowerCase();
+      const client = (po.client_code || "").toLowerCase();
+      const desc = (po.description || "").toLowerCase();
+      const plant = ((po.plant_name || po.plant_code) || "").toLowerCase();
+
+      return (
+        normNum.includes(cleanQ) ||
+        poNum.includes(q) ||
+        style.includes(q) ||
+        client.includes(q) ||
+        desc.includes(q) ||
+        plant.includes(q)
+      );
+    });
+
+    matches.sort((a, b) => {
+      const aNorm = normalizePO(a.po_number || "").toLowerCase();
+      const bNorm = normalizePO(b.po_number || "").toLowerCase();
+
+      const aStarts = aNorm.startsWith(cleanQ);
+      const bStarts = bNorm.startsWith(cleanQ);
+      if (aStarts && !bStarts) return -1;
+      if (!aStarts && bStarts) return 1;
+
+      const aIncludes = aNorm.includes(cleanQ);
+      const bIncludes = bNorm.includes(cleanQ);
+      if (aIncludes && !bIncludes) return -1;
+      if (!aIncludes && bIncludes) return 1;
+
+      return (a.po_number || "").localeCompare(b.po_number || "");
+    });
+
+    return matches.slice(0, 8);
+  }, [search, allOrdersList, orders, remoteSuggestions, poChips]);
+
+  const handleSelectPO = (poNumber: string | null | undefined) => {
+    const clean = normalizePO(poNumber || "");
+    if (clean) {
+      setPoChips((prev) => Array.from(new Set([...prev, clean])));
+      setPage(1);
+    }
+    setSearch("");
+    originalInputRef.current = "";
+    setActiveIndex(-1);
+    setIsDropdownOpen(false);
+    setTimeout(() => inputRef.current?.focus(), 10);
+  };
+
+  const handleSearchChange = (value: string) => {
+    // If user typed a comma, e.g. "4500123456,"
+    if (value.includes(",")) {
+      const parts = value.split(",").map((s) => s.trim()).filter(Boolean);
+      if (parts.length > 0) {
+        setPoChips((prev) => Array.from(new Set([...prev, ...parts.map(normalizePO)])));
+        setPage(1);
+      }
+      setSearch("");
+      originalInputRef.current = "";
+      setActiveIndex(-1);
+      setIsDropdownOpen(false);
+      return;
+    }
+
+    setSearch(value);
+    originalInputRef.current = value;
+    setActiveIndex(-1);
+    setIsDropdownOpen(value.trim().length > 0);
+    setPage(1);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // Dropdown is open and has suggestions
+    if (isDropdownOpen && suggestions.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        const nextIndex = activeIndex < suggestions.length - 1 ? activeIndex + 1 : 0;
+        setActiveIndex(nextIndex);
+        setSearch(suggestions[nextIndex].po_number || "");
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        if (activeIndex > 0) {
+          const prevIndex = activeIndex - 1;
+          setActiveIndex(prevIndex);
+          setSearch(suggestions[prevIndex].po_number || "");
+        } else if (activeIndex === 0) {
+          setActiveIndex(-1);
+          setSearch(originalInputRef.current);
+        } else {
+          const lastIndex = suggestions.length - 1;
+          setActiveIndex(lastIndex);
+          setSearch(suggestions[lastIndex].po_number || "");
+        }
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setIsDropdownOpen(false);
+        setActiveIndex(-1);
+        setSearch(originalInputRef.current);
+        return;
+      }
+      if (e.key === "Tab") {
+        if (activeIndex >= 0 && suggestions[activeIndex]) {
+          e.preventDefault();
+          handleSelectPO(suggestions[activeIndex].po_number);
+          return;
+        }
+      }
+    }
+
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (isDropdownOpen && activeIndex >= 0 && suggestions[activeIndex]) {
+        handleSelectPO(suggestions[activeIndex].po_number);
+        return;
+      }
+      const trimmed = search.trim();
+      if (trimmed) {
+        if (
+          suggestions.length > 0 &&
+          normalizePO(suggestions[0].po_number || "").toLowerCase() === normalizePO(trimmed).toLowerCase()
+        ) {
+          handleSelectPO(suggestions[0].po_number);
+        } else {
+          handleSelectPO(trimmed);
+        }
+      }
+      return;
+    }
+
+    if (e.key === "," || e.key === ";") {
+      e.preventDefault();
+      const trimmed = search.trim();
+      if (trimmed) {
+        handleSelectPO(trimmed);
+      }
+      return;
+    }
+
+    if (e.key === "Backspace" && search === "" && poChips.length > 0) {
+      removePOChip(poChips[poChips.length - 1]);
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const pasted = e.clipboardData.getData("text");
+    if (!pasted) return;
+
+    e.preventDefault();
+    const leftover = addPOChips(pasted);
+    setSearch(leftover);
+    originalInputRef.current = leftover;
+    setActiveIndex(-1);
+    setIsDropdownOpen(false);
+  };
 
   // Turns PO-like tokens into chips; returns the leftover non-PO text.
   const addPOChips = (text: string): string => {
-    const tokens = text.split(/[\s,;]+/).filter(Boolean);
+    const tokens = text.split(/[\s,;\r\n\t]+/).map((t) => t.trim()).filter(Boolean);
     const poTokens = tokens.filter(isPOToken).map(normalizePO);
     if (poTokens.length > 0) {
       setPoChips((prev) => Array.from(new Set([...prev, ...poTokens])));
@@ -409,11 +647,26 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
   const clearSearch = () => {
     setPoChips([]);
     setSearch("");
+    originalInputRef.current = "";
+    setActiveIndex(-1);
+    setIsDropdownOpen(false);
     setPage(1);
   };
 
-  const foundPOs = new Set(orders.map((p) => normalizePO(p.po_number || "")));
-  const missingChips = poChips.filter((c) => !foundPOs.has(c));
+  const foundPOs = useMemo(() => {
+    const s = new Set<string>();
+    orders.forEach((p) => {
+      if (p.po_number) {
+        s.add(p.po_number.trim());
+        s.add(normalizePO(p.po_number));
+      }
+    });
+    return s;
+  }, [orders]);
+
+  const missingChips = useMemo(() => {
+    return poChips.filter((c) => !foundPOs.has(c) && !foundPOs.has(normalizePO(c)));
+  }, [poChips, foundPOs]);
 
   const handleCreateShipment = (mode: "web" | "excel" = "web", poNumber?: string) => {
     const poList = poNumber || Array.from(selectedPOMap.keys()).join(",");
@@ -800,14 +1053,17 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
 
           {/* Search & Filter Bar */}
           <div className="flex flex-col sm:flex-row sm:items-start gap-3">
-            <div className="flex-1">
-              <div className="relative flex flex-wrap items-center gap-1.5 min-h-[42px] pl-10 pr-9 py-1.5 text-sm border border-gray-200 rounded-xl focus-within:ring-2 focus-within:ring-blue-500 bg-white shadow-2xs">
-                <Search className="absolute left-3.5 top-[13px] w-4 h-4 text-gray-400" />
+            <div className="flex-1 relative" ref={dropdownRef}>
+              <div
+                onClick={() => inputRef.current?.focus()}
+                className="relative flex flex-wrap items-center gap-1.5 min-h-[42px] pl-10 pr-9 py-1.5 text-sm border border-gray-200 rounded-xl focus-within:ring-2 focus-within:ring-blue-500 bg-white shadow-2xs cursor-text"
+              >
+                <Search className="absolute left-3.5 top-[13px] w-4 h-4 text-gray-400 pointer-events-none" />
                 {poChips.map((chip) => (
                   <span
                     key={chip}
                     className={cn(
-                      "inline-flex items-center gap-1 pl-2 pr-1 py-0.5 text-xs font-mono font-semibold rounded-md border",
+                      "inline-flex items-center gap-1 pl-2 pr-1 py-0.5 text-xs font-mono font-semibold rounded-md border transition-all",
                       missingChips.includes(chip)
                         ? "bg-gray-50 text-gray-400 border-gray-200 line-through"
                         : isSupplier
@@ -818,7 +1074,10 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                     {chip}
                     <button
                       type="button"
-                      onClick={() => removePOChip(chip)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removePOChip(chip);
+                      }}
                       className="p-0.5 rounded hover:bg-black/5 cursor-pointer"
                       title={`Remove ${chip}`}
                     >
@@ -827,40 +1086,33 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                   </span>
                 ))}
                 <input
+                  ref={inputRef}
                   type="text"
                   placeholder={
                     poChips.length > 0
-                      ? "Add PO number..."
+                      ? "Add another PO number..."
                       : selectedPlant !== "ALL"
-                      ? `Search PO, style, notation in ${KNOWN_PLANTS[selectedPlant]?.name.replace(" Ltd", "")}...`
-                      : "Search PO, client, style, or paste PO numbers..."
+                      ? `Search PO in ${KNOWN_PLANTS[selectedPlant]?.name.replace(" Ltd", "")} or paste comma-separated POs...`
+                      : "Search PO number, style, or paste comma-separated POs..."
                   }
                   value={search}
-                  onChange={(e) => {
-                    setSearch(e.target.value);
-                    setPage(1);
-                  }}
-                  onKeyDown={(e) => {
-                    if ((e.key === "Enter" || e.key === ",") && isPOToken(search)) {
-                      e.preventDefault();
-                      setSearch(addPOChips(search));
-                    } else if (e.key === "Backspace" && search === "" && poChips.length > 0) {
-                      removePOChip(poChips[poChips.length - 1]);
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  onFocus={() => {
+                    if (search.trim().length > 0 && suggestions.length > 0) {
+                      setIsDropdownOpen(true);
                     }
                   }}
-                  onPaste={(e) => {
-                    const pasted = e.clipboardData.getData("text");
-                    if (pasted.split(/[\s,;]+/).some(isPOToken)) {
-                      e.preventDefault();
-                      setSearch(addPOChips(`${search} ${pasted}`));
-                    }
-                  }}
-                  className="flex-1 min-w-[160px] py-0.5 bg-transparent focus:outline-none text-sm text-gray-900"
+                  onKeyDown={handleKeyDown}
+                  onPaste={handlePaste}
+                  className="flex-1 min-w-[170px] py-0.5 bg-transparent focus:outline-none text-sm text-gray-900"
                 />
                 {(poChips.length > 0 || search) && (
                   <button
                     type="button"
-                    onClick={clearSearch}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      clearSearch();
+                    }}
                     className="absolute right-2.5 top-[11px] p-0.5 text-gray-400 hover:text-gray-600 rounded cursor-pointer"
                     title="Clear search"
                   >
@@ -868,6 +1120,96 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                   </button>
                 )}
               </div>
+
+              {/* Autocomplete Suggestions Dropdown (Google Search style with arrow navigation) */}
+              {isDropdownOpen && suggestions.length > 0 && (
+                <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden divide-y divide-gray-100 animate-in fade-in slide-in-from-top-1 duration-150">
+                  <div className="px-3.5 py-1.5 bg-gray-50/90 text-[11px] font-semibold text-gray-500 uppercase tracking-wider flex items-center justify-between">
+                    <span>Suggested Purchase Orders</span>
+                    <span className="text-[10px] text-gray-400 font-normal">Use ↑ ↓ & Enter</span>
+                  </div>
+                  <div className="max-h-[300px] overflow-y-auto py-1">
+                    {suggestions.map((po, idx) => {
+                      const isSelected = activeIndex === idx;
+                      const plantLabel = po.plant_code || po.plant_name;
+                      return (
+                        <div
+                          key={po.id || `${po.po_number || idx}-${idx}`}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            handleSelectPO(po.po_number);
+                          }}
+                          onMouseEnter={() => setActiveIndex(idx)}
+                          className={cn(
+                            "px-3.5 py-2.5 flex items-center justify-between gap-3 cursor-pointer transition-colors text-left",
+                            isSelected
+                              ? "bg-blue-50/90 text-blue-900"
+                              : "hover:bg-gray-50/80 text-gray-800"
+                          )}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <FileText
+                              className={cn(
+                                "w-4 h-4 shrink-0 transition-colors",
+                                isSelected ? "text-blue-600" : "text-gray-400"
+                              )}
+                            />
+                            <div className="truncate">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono font-bold text-sm text-gray-900 tracking-tight">
+                                  {po.po_number}
+                                </span>
+                                {plantLabel && (
+                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 border border-gray-200">
+                                    {plantLabel}
+                                  </span>
+                                )}
+                                {po.status && (
+                                  <span
+                                    className={cn(
+                                      "text-[10px] font-bold px-1.5 py-0.5 rounded",
+                                      po.status === "ACTIVE"
+                                        ? "bg-blue-50 text-blue-700 border border-blue-200"
+                                        : po.status === "PARTIAL"
+                                        ? "bg-amber-50 text-amber-700 border border-amber-200"
+                                        : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                    )}
+                                  >
+                                    {po.status}
+                                  </span>
+                                )}
+                              </div>
+                              {(po.style_number || po.client_code || po.description) && (
+                                <p className="text-xs text-gray-500 truncate mt-0.5">
+                                  {[
+                                    po.client_code,
+                                    po.style_number ? `Style: ${po.style_number}` : "",
+                                    po.description,
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" • ")}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          {typeof po.quantity === "number" ? (
+                            <div className="text-right shrink-0">
+                              <span className="text-xs font-semibold text-gray-700">
+                                {po.quantity.toLocaleString()} pcs
+                              </span>
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="px-3.5 py-1.5 bg-gray-50/70 text-[11px] text-gray-400 flex items-center justify-between">
+                    <span>Paste comma-separated POs to search multiple at once</span>
+                    <span className="font-mono text-[10px]">Esc to dismiss</span>
+                  </div>
+                </div>
+              )}
+
               {poChips.length > 0 && !isLoading && (
                 <p className="text-xs text-gray-500 mt-1.5">
                   Found {poChips.length - missingChips.length} of {poChips.length}
