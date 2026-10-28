@@ -467,22 +467,12 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
       uniquePool.push(po);
     }
 
+    // Only match against PO number as requested
     const matches = uniquePool.filter((po) => {
       const poNum = (po.po_number || "").toLowerCase();
       const normNum = normalizePO(po.po_number || "").toLowerCase();
-      const style = (po.style_number || "").toLowerCase();
-      const client = (po.client_code || "").toLowerCase();
-      const desc = (po.description || "").toLowerCase();
-      const plant = ((po.plant_name || po.plant_code) || "").toLowerCase();
 
-      return (
-        normNum.includes(cleanQ) ||
-        poNum.includes(q) ||
-        style.includes(q) ||
-        client.includes(q) ||
-        desc.includes(q) ||
-        plant.includes(q)
-      );
+      return normNum.includes(cleanQ) || poNum.includes(q);
     });
 
     matches.sort((a, b) => {
@@ -1091,9 +1081,7 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                   placeholder={
                     poChips.length > 0
                       ? "Add another PO number..."
-                      : selectedPlant !== "ALL"
-                      ? `Search PO in ${KNOWN_PLANTS[selectedPlant]?.name.replace(" Ltd", "")} or paste comma-separated POs...`
-                      : "Search PO number, style, or paste comma-separated POs..."
+                      : "Search PO number or paste comma-separated POs..."
                   }
                   value={search}
                   onChange={(e) => handleSearchChange(e.target.value)}
@@ -1121,17 +1109,16 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                 )}
               </div>
 
-              {/* Autocomplete Suggestions Dropdown (Google Search style with arrow navigation) */}
+              {/* Autocomplete Suggestions Dropdown (Clean PO list only) */}
               {isDropdownOpen && suggestions.length > 0 && (
                 <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden divide-y divide-gray-100 animate-in fade-in slide-in-from-top-1 duration-150">
                   <div className="px-3.5 py-1.5 bg-gray-50/90 text-[11px] font-semibold text-gray-500 uppercase tracking-wider flex items-center justify-between">
-                    <span>Suggested Purchase Orders</span>
+                    <span>Suggested PO Numbers</span>
                     <span className="text-[10px] text-gray-400 font-normal">Use ↑ ↓ & Enter</span>
                   </div>
-                  <div className="max-h-[300px] overflow-y-auto py-1">
+                  <div className="max-h-[260px] overflow-y-auto py-1">
                     {suggestions.map((po, idx) => {
                       const isSelected = activeIndex === idx;
-                      const plantLabel = po.plant_code || po.plant_name;
                       return (
                         <div
                           key={po.id || `${po.po_number || idx}-${idx}`}
@@ -1141,71 +1128,33 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                           }}
                           onMouseEnter={() => setActiveIndex(idx)}
                           className={cn(
-                            "px-3.5 py-2.5 flex items-center justify-between gap-3 cursor-pointer transition-colors text-left",
+                            "px-3.5 py-2 flex items-center justify-between gap-3 cursor-pointer transition-colors text-left",
                             isSelected
-                              ? "bg-blue-50/90 text-blue-900"
-                              : "hover:bg-gray-50/80 text-gray-800"
+                              ? "bg-blue-50/90 text-blue-900 font-semibold"
+                              : "hover:bg-gray-50 text-gray-800"
                           )}
                         >
                           <div className="flex items-center gap-2.5 min-w-0">
-                            <FileText
+                            <Search
                               className={cn(
-                                "w-4 h-4 shrink-0 transition-colors",
+                                "w-3.5 h-3.5 shrink-0 transition-colors",
                                 isSelected ? "text-blue-600" : "text-gray-400"
                               )}
                             />
-                            <div className="truncate">
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono font-bold text-sm text-gray-900 tracking-tight">
-                                  {po.po_number}
-                                </span>
-                                {plantLabel && (
-                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 border border-gray-200">
-                                    {plantLabel}
-                                  </span>
-                                )}
-                                {po.status && (
-                                  <span
-                                    className={cn(
-                                      "text-[10px] font-bold px-1.5 py-0.5 rounded",
-                                      po.status === "ACTIVE"
-                                        ? "bg-blue-50 text-blue-700 border border-blue-200"
-                                        : po.status === "PARTIAL"
-                                        ? "bg-amber-50 text-amber-700 border border-amber-200"
-                                        : "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                    )}
-                                  >
-                                    {po.status}
-                                  </span>
-                                )}
-                              </div>
-                              {(po.style_number || po.client_code || po.description) && (
-                                <p className="text-xs text-gray-500 truncate mt-0.5">
-                                  {[
-                                    po.client_code,
-                                    po.style_number ? `Style: ${po.style_number}` : "",
-                                    po.description,
-                                  ]
-                                    .filter(Boolean)
-                                    .join(" • ")}
-                                </p>
-                              )}
-                            </div>
+                            <span className="font-mono text-sm tracking-tight">
+                              {po.po_number}
+                            </span>
                           </div>
-                          {typeof po.quantity === "number" ? (
-                            <div className="text-right shrink-0">
-                              <span className="text-xs font-semibold text-gray-700">
-                                {po.quantity.toLocaleString()} pcs
-                              </span>
-                            </div>
-                          ) : null}
+                          {isSelected && (
+                            <span className="text-[10px] text-blue-600 font-sans font-medium">Select ↵</span>
+                          )}
                         </div>
                       );
                     })}
                   </div>
                   <div className="px-3.5 py-1.5 bg-gray-50/70 text-[11px] text-gray-400 flex items-center justify-between">
-                    <span>Paste comma-separated POs to search multiple at once</span>
-                    <span className="font-mono text-[10px]">Esc to dismiss</span>
+                    <span>Paste comma-separated POs to search multiple</span>
+                    <span className="font-mono text-[10px]">Esc to close</span>
                   </div>
                 </div>
               )}
