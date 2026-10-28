@@ -45,7 +45,7 @@ from app.services.asn_xml_generator_service import (
     validate_asn_xml,
 )
 from app.services.barcode_label_service import generate_batch_labels
-from app.services.hu_service import format_hu_number, generate_batch_hu
+from app.services.hu_service import format_hu_number, generate_batch_hu, sync_hu_sequence_max
 from app.services.packing_excel_service import (
     ParsedCartonRow,
     generate_packing_template,
@@ -163,13 +163,7 @@ async def get_next_hu_sequence(
         if serials:
             max_used = max(serials)
             if max_used > last_num:
-                last_num = max_used
-                if seq:
-                    seq.last_number = max_used
-                else:
-                    seq = HUSequence(supplier_id=resolved_id, last_number=max_used)
-                    db.add(seq)
-                await db.flush()
+                last_num = await sync_hu_sequence_max(db, resolved_id, max_used)
     except Exception as e:
         logger.warning("Could not auto-calibrate HU sequence from existing cartons: %s", e)
 
@@ -545,35 +539,17 @@ async def create_shipment_from_excel(
             prefix = "1" + actual_supp_code.lstrip("0").zfill(9)
             serials = [int(h[10:]) for h in hu_numbers if h.startswith(prefix) and h[10:].isdigit()]
             if serials:
-                max_serial = max(serials)
-                seq_stmt = select(HUSequence).where(HUSequence.supplier_id == supplier_id).with_for_update()
-                seq_res = await db.execute(seq_stmt)
-                seq_obj = seq_res.scalar_one_or_none()
-                if seq_obj:
-                    if max_serial > seq_obj.last_number:
-                        seq_obj.last_number = max_serial
-                else:
-                    seq_obj = HUSequence(supplier_id=supplier_id, last_number=max_serial)
-                    db.add(seq_obj)
-                await db.flush()
+                await sync_hu_sequence_max(db, supplier_id, max(serials))
         except Exception as e:
             logger.warning("Could not sync HU sequence with provided Excel HUs: %s", e)
     else:
-        try:
-            hu_numbers = await generate_batch_hu(
-                session=db,
-                supplier_code=actual_supp_code,
-                count=total_cartons,
-                company_id=company_id,
-                supplier_id=supplier_id,
-            )
-        except Exception as e:
-            logger.error("HU generation error: %s", e)
-            await db.rollback()
-            # Safe fallback sequence if DB lock failed
-            prefix = "1" + actual_supp_code.lstrip("0").zfill(9)
-            base_num = int(datetime.utcnow().timestamp()) % 1000000000
-            hu_numbers = [f"{prefix}{str(base_num + i).zfill(10)}" for i in range(total_cartons)]
+        hu_numbers = await generate_batch_hu(
+            session=db,
+            supplier_code=actual_supp_code,
+            count=total_cartons,
+            company_id=company_id,
+            supplier_id=supplier_id,
+        )
 
     # Attach allocated hu_numbers back to validation_res.rows so row.hu_number is available
     for idx, r in enumerate(validation_res.rows):
@@ -1045,33 +1021,17 @@ async def create_direct_shipment(
             prefix = "1" + actual_supp_code.lstrip("0").zfill(9)
             serials = [int(h[10:]) for h in hu_numbers if h.startswith(prefix) and h[10:].isdigit()]
             if serials:
-                max_serial = max(serials)
-                seq_stmt = select(HUSequence).where(HUSequence.supplier_id == supplier_id).with_for_update()
-                seq_res = await db.execute(seq_stmt)
-                seq_obj = seq_res.scalar_one_or_none()
-                if seq_obj:
-                    if max_serial > seq_obj.last_number:
-                        seq_obj.last_number = max_serial
-                else:
-                    seq_obj = HUSequence(supplier_id=supplier_id, last_number=max_serial)
-                    db.add(seq_obj)
-                await db.flush()
+                await sync_hu_sequence_max(db, supplier_id, max(serials))
         except Exception as e:
             logger.warning("Could not sync HU sequence with provided HUs: %s", e)
     else:
-        try:
-            hu_numbers = await generate_batch_hu(
-                session=db,
-                supplier_code=actual_supp_code,
-                count=total_cartons,
-                company_id=company_id,
-                supplier_id=supplier_id,
-            )
-        except Exception as e:
-            logger.warning("HU batch generator failed, using calibrated sequence: %s", e)
-            prefix = "1" + actual_supp_code.lstrip("0").zfill(9)
-            base_num = int(datetime.utcnow().timestamp()) % 1000000000
-            hu_numbers = [f"{prefix}{str(base_num + i).zfill(10)}" for i in range(total_cartons)]
+        hu_numbers = await generate_batch_hu(
+            session=db,
+            supplier_code=actual_supp_code,
+            count=total_cartons,
+            company_id=company_id,
+            supplier_id=supplier_id,
+        )
 
     if supp and hu_numbers:
         supp.current_hu_number = hu_numbers[-1]

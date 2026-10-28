@@ -17,6 +17,7 @@ import {
   Printer,
   FileCode,
   Send,
+  Mail,
   X,
   Loader2,
   Check,
@@ -305,23 +306,6 @@ export default function Shipments() {
     }
   };
 
-  // Delete / Revert Shipment and restore PO balances
-  const handleDeleteShipment = async (s: any) => {
-    const confirmMsg = `Are you sure you want to revert Shipment #${s.shipment_number}?\n\nThis will delete this delivery record and restore all carton line quantities back to the Purchase Order(s).`;
-    if (!window.confirm(confirmMsg)) return;
-
-    setActionLoadingId(`delete-${s.id}`);
-    try {
-      const res = await shipmentService.deleteShipment(s.id);
-      alert(res.message || `Shipment #${s.shipment_number} reverted successfully!`);
-      await loadShipments();
-    } catch (err: any) {
-      alert(err?.response?.data?.detail || "Failed to revert shipment. Please try again.");
-    } finally {
-      setActionLoadingId(null);
-    }
-  };
-
   // Preview ASN XML
   const handlePreviewXml = async (shipment: any) => {
     setActionLoadingId(`xml-${shipment.id}`);
@@ -467,14 +451,14 @@ export default function Shipments() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-200 bg-gray-50/80 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                    <th className="px-5 py-3.5">Packing Slip No</th>
-                    <th className="px-5 py-3.5">PO Number</th>
-                    <th className="px-5 py-3.5">Destination Plant</th>
-                    <th className="px-5 py-3.5">Cartons / Rolls</th>
-                    <th className="px-5 py-3.5">Total Quantity</th>
-                    <th className="px-5 py-3.5">Status</th>
-                    <th className="px-5 py-3.5">Ship Date</th>
-                    <th className="px-5 py-3.5 text-right">Actions</th>
+                    <th className="px-4 py-2">Packing Slip No</th>
+                    <th className="px-4 py-2">PO Number</th>
+                    <th className="px-4 py-2">Destination Plant</th>
+                    <th className="px-4 py-2">Cartons / Rolls</th>
+                    <th className="px-4 py-2">Total Quantity</th>
+                    <th className="px-4 py-2">Status</th>
+                    <th className="px-4 py-2">Ship Date</th>
+                    <th className="px-4 py-2 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -487,12 +471,12 @@ export default function Shipments() {
                         onClick={() => setInspectShipmentId(s.id)}
                         className="hover:bg-blue-50/40 transition-colors cursor-pointer group"
                       >
-                        <td className="whitespace-nowrap px-5 py-3.5">
+                        <td className="whitespace-nowrap px-4 py-2">
                           <div className="font-mono text-xs font-bold text-gray-900 group-hover:text-blue-600 transition-colors flex items-center gap-1.5">
                             {s.shipment_number}
                           </div>
                         </td>
-                        <td className="whitespace-nowrap px-5 py-3.5">
+                        <td className="whitespace-nowrap px-4 py-2">
                           {s.po_numbers && s.po_numbers.length > 0 ? (
                             <div className="flex flex-wrap gap-1 max-w-[160px]">
                               {s.po_numbers.slice(0, 2).map((po) => (
@@ -513,36 +497,36 @@ export default function Shipments() {
                             <span className="text-gray-400 text-xs"> </span>
                           )}
                         </td>
-                        <td className="px-5 py-3.5">
-                          <span className="inline-flex items-center rounded-md bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-800">
+                        <td className="px-4 py-2">
+                          <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-800">
                             {plantLabel}
                           </span>
                         </td>
-                        <td className="px-5 py-3.5">
+                        <td className="px-4 py-2">
                           <span className="font-semibold text-gray-800 font-mono text-xs">
                             {s.total_boxes} {s.total_boxes === 1 ? "Carton" : "Cartons"}
                           </span>
                         </td>
-                        <td className="px-5 py-3.5 whitespace-nowrap">
+                        <td className="px-4 py-2 whitespace-nowrap">
                           <span className="text-gray-900 font-bold font-mono text-xs">
                             {s.total_pieces?.toLocaleString()}
                           </span>{" "}
                           <span className="text-gray-500 text-xs font-medium">{uomLabel}</span>
                         </td>
-                        <td className="px-5 py-3.5 whitespace-nowrap">
+                        <td className="px-4 py-2 whitespace-nowrap">
                           <span
                             className={cn(
-                              "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border",
+                              "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium border",
                               statusColor[s.status] || "bg-gray-50 text-gray-700 border-gray-200"
                             )}
                           >
                             {s.status.replace(/_/g, " ")}
                           </span>
                         </td>
-                        <td className="whitespace-nowrap px-5 py-3.5 text-gray-500 text-xs">
+                        <td className="whitespace-nowrap px-4 py-2 text-gray-500 text-xs">
                           {s.ship_date ? new Date(s.ship_date).toLocaleDateString("en-GB") : " "}
                         </td>
-                        <td className="whitespace-nowrap px-5 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                        <td className="whitespace-nowrap px-4 py-2 text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1.5">
 
                             <button
@@ -556,7 +540,7 @@ export default function Shipments() {
                               }
                               disabled={actionLoadingId === `labels-${s.id}`}
                               title="Print or Download Barcode Labels"
-                              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50 cursor-pointer"
+                              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50 cursor-pointer"
                             >
                               {actionLoadingId === `labels-${s.id}` ? (
                                 <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-500" />
@@ -570,7 +554,7 @@ export default function Shipments() {
                               onClick={() => handlePreviewXml(s)}
                               disabled={actionLoadingId === `xml-${s.id}`}
                               title="View SdDataSlice EDI XML"
-                              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50 cursor-pointer"
+                              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50 cursor-pointer"
                             >
                               {actionLoadingId === `xml-${s.id}` ? (
                                 <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-500" />
@@ -578,20 +562,6 @@ export default function Shipments() {
                                 <FileCode className="h-3.5 w-3.5 text-slate-500" />
                               )}
                               ASN XML
-                            </button>
-
-                            <button
-                              onClick={() => handleDeleteShipment(s)}
-                              disabled={actionLoadingId === `delete-${s.id}`}
-                              title="Revert shipment"
-                              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 hover:border-red-200 transition-colors disabled:opacity-50 cursor-pointer"
-                            >
-                              {actionLoadingId === `delete-${s.id}` ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin text-red-600" />
-                              ) : (
-                                <RotateCcw className="h-3.5 w-3.5 text-red-600" />
-                              )}
-                              Revert
                             </button>
                           </div>
                         </td>
@@ -751,6 +721,21 @@ function WebPackingWizard({
   const [draftSavedToast, setDraftSavedToast] = useState(false);
   const [unresumedDraft, setUnresumedDraft] = useState<any>(null);
   const isOnline = useNetworkStatus();
+
+  const [showConfirmDispatch, setShowConfirmDispatch] = useState(false);
+  const [dispatchEmail, setDispatchEmail] = useState(() => localStorage.getItem("asn_iungo_dispatch_recipient") || "edi@orders.buyer.org");
+
+  useEffect(() => {
+    shipmentService
+      .getDispatchSettings()
+      .then((res) => {
+        if (res?.recipient_email) {
+          setDispatchEmail(res.recipient_email);
+          localStorage.setItem("asn_iungo_dispatch_recipient", res.recipient_email);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Fetch open PO lines from live PostgreSQL database
   const { data: openLinesData, isLoading } = useQuery({
@@ -1714,7 +1699,23 @@ function WebPackingWizard({
                   </button>
                   <button
                     type="button"
-                    onClick={handleDispatchASN}
+                    onClick={() => {
+                      if (!isOnline) {
+                        alert("You are currently offline. Please reconnect to the internet before sending the ASN to IUNGO.");
+                        return;
+                      }
+                      const trimmedPs = packingSlipNumber.trim();
+                      if (!trimmedPs) {
+                        alert("Please enter Packing Slip / Delivery Note Number before dispatching.");
+                        return;
+                      }
+                      const trimmedDate = deliveryDate.trim();
+                      if (!trimmedDate) {
+                        alert("Please enter or select Delivery Date before dispatching.");
+                        return;
+                      }
+                      setShowConfirmDispatch(true);
+                    }}
                     disabled={isSubmitting || !packingSlipNumber.trim() || !deliveryDate.trim()}
                     className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
                     title={
@@ -2544,6 +2545,61 @@ function WebPackingWizard({
           )}
         </div>
       )}
+
+      {/* Confirmation Modal for IUNGO Dispatch */}
+      {showConfirmDispatch && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in">
+          <div className="relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl border border-gray-100">
+            <button
+              onClick={() => setShowConfirmDispatch(false)}
+              disabled={isSubmitting}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 rounded-lg p-1 transition-colors cursor-pointer"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <div>
+              <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mb-3">
+                <Send className="w-5 h-5" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900">
+                Send ASN to IUNGO?
+              </h3>
+              <p className="mt-2 text-sm text-gray-500 leading-relaxed">
+                Are you sure you want to dispatch this Advance Shipping Notice (ASN) to IUNGO? Once sent, this transmission cannot be undone.
+              </p>
+
+              <div className="mt-3 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 flex items-center gap-2">
+                <Mail className="w-4 h-4 text-slate-400 shrink-0" />
+                <span className="truncate">Recipient: <strong className="text-slate-800 font-mono">{dispatchEmail}</strong></span>
+              </div>
+
+              <div className="mt-6 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() => setShowConfirmDispatch(false)}
+                  className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={async () => {
+                    setShowConfirmDispatch(false);
+                    await handleDispatchASN();
+                  }}
+                  className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 active:bg-emerald-800 transition-colors cursor-pointer flex items-center gap-1.5"
+                >
+                  {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  {isSubmitting ? "Sending..." : "Yes, Send ASN"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2668,6 +2724,14 @@ function ExcelPackingWorkflow({
   // Submission state
   const [submitting, setSubmitting] = useState(false);
   const [createdResponse, setCreatedResponse] = useState<CreateShipmentResponse | null>(null);
+  const [showConfirmExcelDispatch, setShowConfirmExcelDispatch] = useState(false);
+  const [excelDispatchEmail, setExcelDispatchEmail] = useState<string>("edi@orders.buyer.org");
+
+  useEffect(() => {
+    shipmentService.getDispatchSettings().then((s) => {
+      if (s?.recipient_email) setExcelDispatchEmail(s.recipient_email);
+    }).catch(() => {});
+  }, []);
 
   // Success actions
   const [downloadingLabels, setDownloadingLabels] = useState(false);
@@ -3280,7 +3344,35 @@ function ExcelPackingWorkflow({
               <button
                 type="button"
                 disabled={submitting || !validationResult.is_valid || !isDatesComplete}
-                onClick={handleCreateShipment}
+                onClick={() => {
+                  if (!isOnline) {
+                    alert("You are currently offline. Please reconnect to the network before sending the ASN to IUNGO.");
+                    return;
+                  }
+                  if (!selectedFile) {
+                    alert("Please upload or select the validated Excel file before creating the shipment.");
+                    return;
+                  }
+                  const isMultiSlip = detectedPackingSlips.length > 1;
+                  if (isMultiSlip) {
+                    const missing = detectedPackingSlips.filter((ps) => !packingSlipDates[ps]?.trim());
+                    if (missing.length > 0) {
+                      alert(`Please select a Delivery Date for Packing Slip(s): ${missing.join(", ")}`);
+                      return;
+                    }
+                  } else {
+                    const singleDate = estimatedArrival?.trim() || (detectedPackingSlips[0] ? packingSlipDates[detectedPackingSlips[0]]?.trim() : "");
+                    if (!singleDate) {
+                      alert("Please select a Delivery Date before creating the shipment.");
+                      return;
+                    }
+                    if (!packingSlipNumber.trim() && detectedPackingSlips.length === 0) {
+                      alert("Please enter a Packing Slip Number before creating the shipment.");
+                      return;
+                    }
+                  }
+                  setShowConfirmExcelDispatch(true);
+                }}
                 className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
                 title={
                   !validationResult.is_valid
@@ -3763,6 +3855,61 @@ function ExcelPackingWorkflow({
           </div>
         )}
       </div>
+
+      {/* Send to IUNGO Confirmation Modal (Sign-out style popup) */}
+      {showConfirmExcelDispatch && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in">
+          <div className="relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl border border-gray-100">
+            <button
+              onClick={() => setShowConfirmExcelDispatch(false)}
+              disabled={submitting}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 rounded-lg p-1 transition-colors cursor-pointer"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <div>
+              <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mb-3">
+                <Send className="w-5 h-5" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900">
+                Send ASN to IUNGO?
+              </h3>
+              <p className="mt-2 text-sm text-gray-500 leading-relaxed">
+                Are you sure you want to dispatch this Advance Shipping Notice (ASN) to IUNGO? Once sent, this transmission cannot be undone.
+              </p>
+
+              <div className="mt-3 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 flex items-center gap-2">
+                <Mail className="w-4 h-4 text-slate-400 shrink-0" />
+                <span className="truncate">Recipient: <strong className="text-slate-800 font-mono">{excelDispatchEmail}</strong></span>
+              </div>
+
+              <div className="mt-6 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => setShowConfirmExcelDispatch(false)}
+                  className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={async () => {
+                    setShowConfirmExcelDispatch(false);
+                    await handleCreateShipment();
+                  }}
+                  className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 active:bg-emerald-800 transition-colors cursor-pointer flex items-center gap-1.5"
+                >
+                  {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  {submitting ? "Sending..." : "Yes, Send ASN"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -3785,6 +3932,14 @@ function XmlPreviewModal({
   const [copied, setCopied] = useState(false);
   const [sending, setSending] = useState(false);
   const [sentSuccess, setSentSuccess] = useState(false);
+  const [showConfirmXmlSend, setShowConfirmXmlSend] = useState(false);
+  const [xmlDispatchEmail, setXmlDispatchEmail] = useState<string>("edi@orders.buyer.org");
+
+  useEffect(() => {
+    shipmentService.getDispatchSettings().then((s) => {
+      if (s?.recipient_email) setXmlDispatchEmail(s.recipient_email);
+    }).catch(() => {});
+  }, []);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(data.xmlContent);
@@ -3867,7 +4022,7 @@ function XmlPreviewModal({
               </span>
             ) : (
               <button
-                onClick={handleSend}
+                onClick={() => setShowConfirmXmlSend(true)}
                 disabled={sending}
                 className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 cursor-pointer transition-colors"
               >
@@ -3878,6 +4033,61 @@ function XmlPreviewModal({
           </div>
         </div>
       </div>
+
+      {/* Send Confirmation Modal (Sign-out style popup) */}
+      {showConfirmXmlSend && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in">
+          <div className="relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl border border-gray-100">
+            <button
+              onClick={() => setShowConfirmXmlSend(false)}
+              disabled={sending}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 rounded-lg p-1 transition-colors cursor-pointer"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <div>
+              <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mb-3">
+                <Send className="w-5 h-5" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900">
+                Send ASN to IUNGO?
+              </h3>
+              <p className="mt-2 text-sm text-gray-500 leading-relaxed">
+                Are you sure you want to dispatch this Advance Shipping Notice (ASN) to IUNGO? Once sent, this transmission cannot be undone.
+              </p>
+
+              <div className="mt-3 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 flex items-center gap-2">
+                <Mail className="w-4 h-4 text-slate-400 shrink-0" />
+                <span className="truncate">Recipient: <strong className="text-slate-800 font-mono">{xmlDispatchEmail}</strong></span>
+              </div>
+
+              <div className="mt-6 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  disabled={sending}
+                  onClick={() => setShowConfirmXmlSend(false)}
+                  className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={sending}
+                  onClick={async () => {
+                    setShowConfirmXmlSend(false);
+                    await handleSend();
+                  }}
+                  className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 active:bg-blue-800 transition-colors cursor-pointer flex items-center gap-1.5"
+                >
+                  {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  {sending ? "Sending..." : "Yes, Send ASN"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

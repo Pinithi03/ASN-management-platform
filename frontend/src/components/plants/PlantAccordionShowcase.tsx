@@ -17,7 +17,7 @@ export interface PlantStats {
 
 interface PlantAccordionShowcaseProps {
   orders: PurchaseOrder[];
-  onSelectPlant: (plantId: string) => void;
+  onSelectPlant: (plantId: string, location?: string) => void;
   onOpenWithPO?: (plantId: string, poNumber: string) => void;
   onSwitchToGlobalView?: () => void;
   isSupplier?: boolean;
@@ -90,7 +90,12 @@ export default function PlantAccordionShowcase({
 
       {/* ─── 5-Column Horizontal Accordion Showcase (Responsive Full Height) ─── */}
       <div className="relative w-full">
-        <div className="flex flex-col lg:flex-row w-full min-h-[520px] lg:h-[calc(100vh-130px)] lg:min-h-[580px] lg:max-h-[880px] rounded-2xl overflow-hidden bg-gray-950 border border-gray-800 shadow-2xl">
+        <div
+          className="relative flex flex-col lg:flex-row w-full min-h-[520px] lg:h-[calc(100vh-130px)] lg:min-h-[580px] lg:max-h-[880px] rounded-2xl overflow-hidden border border-gray-800 shadow-2xl bg-gray-950 bg-cover bg-center"
+          style={{
+            backgroundImage: "url('/images/factory-panorama.jpg')",
+          }}
+        >
           {Object.entries(KNOWN_PLANTS).map(([plantId, plant]) => {
             const isExpanded = activeHoverId === plantId;
             const stats = plantStats[plantId] || { totalOrders: 0, readyOrders: 0, locationsCount: 0, locationsList: [] };
@@ -100,31 +105,26 @@ export default function PlantAccordionShowcase({
                 key={plantId}
                 onMouseEnter={() => setActiveHoverId(plantId)}
                 onClick={() => onSelectPlant(plantId)}
-                style={{
-                  backgroundImage: `url(${plant.imageUrl})`,
-                  backgroundSize: "cover",
-                  backgroundPosition: "center",
-                }}
                 className={cn(
                   "relative group cursor-pointer transition-all duration-500 ease-[cubic-bezier(0.25,1,0.5,1)] overflow-hidden select-none",
                   isExpanded
                     ? "lg:flex-[3.5] xl:flex-[4.2] min-h-[380px] lg:min-h-0"
-                    : "lg:flex-1 min-h-[75px] sm:min-h-[85px] lg:min-h-0 hover:bg-black/30"
+                    : "lg:flex-1 min-h-[75px] sm:min-h-[85px] lg:min-h-0 hover:bg-black/20"
                 )}
               >
                 {/* Dark Vignette & Gradient Overlays */}
                 <div
                   className={cn(
-                    "absolute inset-0 transition-opacity duration-500",
+                    "absolute inset-0 transition-all duration-500",
                     isExpanded
-                      ? "bg-gradient-to-t from-gray-950 via-gray-950/80 to-gray-950/40 opacity-95"
-                      : "bg-gradient-to-t from-gray-950 via-gray-950/85 to-gray-950/70 opacity-90 group-hover:opacity-75"
+                      ? "bg-gradient-to-t from-gray-950 via-gray-950/80 to-gray-950/30 opacity-90"
+                      : "bg-gray-950/75 hover:bg-gray-950/60 opacity-100"
                   )}
                 />
 
                 {/* Ambient Plant Accent Glow */}
                 <div
-                  className="absolute inset-0 opacity-20 pointer-events-none transition-opacity duration-500"
+                  className="absolute inset-0 opacity-25 pointer-events-none transition-opacity duration-500"
                   style={{
                     background: `radial-gradient(circle at bottom left, ${plant.accentHex} 0%, transparent 70%)`,
                   }}
@@ -264,12 +264,18 @@ export default function PlantAccordionShowcase({
                         {plant.storageLocationsHint.map((loc) => {
                           const cleanLoc = loc.match(/\b\d{4}\b/)?.[0] || loc.trim();
                           return (
-                            <span
+                            <button
                               key={loc}
-                              className="px-2 py-0.5 rounded-md text-[10px] font-mono font-medium bg-white/10 text-gray-200 border border-white/10 backdrop-blur-xs"
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onSelectPlant(plantId, cleanLoc);
+                              }}
+                              className="px-2 py-0.5 rounded-md text-[10px] font-mono font-medium bg-white/10 hover:bg-white/20 text-gray-200 border border-white/10 backdrop-blur-xs transition-colors cursor-pointer"
+                              title={`View orders for ${plant.name} - Store ${cleanLoc}`}
                             >
                               {cleanLoc}
-                            </span>
+                            </button>
                           );
                         })}
                       </div>

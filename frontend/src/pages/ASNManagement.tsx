@@ -2,12 +2,13 @@
  * ASNManagement — shared page. Admin reviews ASNs; Supplier creates/tracks them.
  */
 
-import { useState } from "react";
-import { Search, CheckCircle2, XCircle, FileCode } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Search, CheckCircle2, XCircle, FileCode, Send, Mail, X, Loader2 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/services/api";
 import { supplierApi } from "@/services/supplierApi";
+import { shipmentService } from "@/services/shipmentService";
 import { cn } from "@/utils/cn";
 import type { ASNRecord } from "@/types";
 
@@ -33,6 +34,15 @@ export default function ASNManagement(){
   const [search, setSearch] = useState("");
   const [sf, setSf] = useState<string>("ALL");
   const [sel, setSel] = useState<ASNRecord | null>(null);
+  const [showConfirmSend, setShowConfirmSend] = useState(false);
+  const [sendingAsn, setSendingAsn] = useState(false);
+  const [dispatchEmail, setDispatchEmail] = useState<string>("edi@orders.buyer.org");
+
+  useEffect(() => {
+    shipmentService.getDispatchSettings().then((s) => {
+      if (s?.recipient_email) setDispatchEmail(s.recipient_email);
+    }).catch(() => {});
+  }, []);
 
   // Live queries from backend
   const { data: serverAsns = [] } = useQuery<ASNRecord[]>({
@@ -103,13 +113,13 @@ export default function ASNManagement(){
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-100 text-left text-xs font-medium uppercase tracking-wider text-gray-400">
-                  <th className="px-4 py-3">ASN #</th>
-                  <th className="px-4 py-3">Shipment</th>
-                  {isAdmin && <th className="px-4 py-3">Supplier</th>}
-                  <th className="px-4 py-3">XML Valid</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Created</th>
+                <tr className="border-b border-gray-100 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  <th className="px-3.5 py-2">ASN #</th>
+                  <th className="px-3.5 py-2">Shipment</th>
+                  {isAdmin && <th className="px-3.5 py-2">Supplier</th>}
+                  <th className="px-3.5 py-2">XML Valid</th>
+                  <th className="px-3.5 py-2">Status</th>
+                  <th className="px-3.5 py-2">Created</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -118,14 +128,14 @@ export default function ASNManagement(){
                     <tr
                       key={a.id}
                       onClick={() => setSel(a)}
-                      className={cn("cursor-pointer hover:bg-gray-50", sel?.id === a.id && "bg-brand-50/50")}
+                      className={cn("cursor-pointer hover:bg-gray-50 transition-colors", sel?.id === a.id && "bg-brand-50/50")}
                     >
-                      <td className="whitespace-nowrap px-4 py-3 font-mono text-xs font-medium text-gray-900">
+                      <td className="whitespace-nowrap px-3.5 py-1.5 font-mono text-xs font-medium text-gray-900">
                         {a.asn_number}
                       </td>
-                      <td className="px-4 py-3 text-gray-700">{shipmentNum(a.shipment_id)}</td>
-                      {isAdmin && <td className="px-4 py-3 text-gray-700">{supplierName(a.supplier_id)}</td>}
-                      <td className="px-4 py-3">
+                      <td className="px-3.5 py-1.5 text-gray-700 text-xs">{shipmentNum(a.shipment_id)}</td>
+                      {isAdmin && <td className="px-3.5 py-1.5 text-gray-700 text-xs">{supplierName(a.supplier_id)}</td>}
+                      <td className="px-3.5 py-1.5">
                         {a.xml_validated ? (
                           <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600">
                             <CheckCircle2 className="h-4 w-4 text-emerald-500" /> DTD Valid
@@ -136,12 +146,12 @@ export default function ASNManagement(){
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3.5 py-1.5">
                         <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", statusColor[a.status])}>
                           {a.status.replace(/_/g, " ")}
                         </span>
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-gray-500">
+                      <td className="whitespace-nowrap px-3.5 py-1.5 text-gray-500 text-xs">
                         {new Date(a.created_at).toLocaleDateString("en-GB")}
                       </td>
                     </tr>
@@ -210,18 +220,10 @@ export default function ASNManagement(){
 
                 {!isAdmin && sel.status !== "XML_SENT" && (
                   <button
-                    onClick={async () => {
-                      try {
-                        await api.post(`/asn/${sel.id}/send`);
-                        await qc.invalidateQueries({ queryKey: ["asns"] });
-                        alert(`ASN ${sel.asn_number} sent successfully to IUNGO!`);
-                      } catch (err: any) {
-                        alert(err?.response?.data?.detail || "Failed to send ASN to IUNGO.");
-                      }
-                    }}
-                    className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 py-2 text-xs font-semibold text-white hover:bg-emerald-700 shadow-sm"
+                    onClick={() => setShowConfirmSend(true)}
+                    className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 py-2 text-xs font-semibold text-white hover:bg-emerald-700 shadow-sm cursor-pointer transition-colors"
                   >
-                    <CheckCircle2 className="h-4 w-4" />
+                    <Send className="h-4 w-4" />
                     Send to IUNGO
                   </button>
                 )}
@@ -229,6 +231,70 @@ export default function ASNManagement(){
             </div>
           </div>
         )}
+
+      {/* Send to IUNGO Confirmation Modal (Sign-out style popup) */}
+      {showConfirmSend && sel && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in">
+          <div className="relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl border border-gray-100">
+            <button
+              onClick={() => setShowConfirmSend(false)}
+              disabled={sendingAsn}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 rounded-lg p-1 transition-colors cursor-pointer"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <div>
+              <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mb-3">
+                <Send className="w-5 h-5" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900">
+                Send ASN to IUNGO?
+              </h3>
+              <p className="mt-2 text-sm text-gray-500 leading-relaxed">
+                Are you sure you want to dispatch ASN <strong className="font-mono text-gray-800">{sel.asn_number}</strong> to IUNGO? Once sent, this transmission cannot be undone.
+              </p>
+
+              <div className="mt-3 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 flex items-center gap-2">
+                <Mail className="w-4 h-4 text-slate-400 shrink-0" />
+                <span className="truncate">Recipient: <strong className="text-slate-800 font-mono">{dispatchEmail}</strong></span>
+              </div>
+
+              <div className="mt-6 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  disabled={sendingAsn}
+                  onClick={() => setShowConfirmSend(false)}
+                  className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={sendingAsn}
+                  onClick={async () => {
+                    setSendingAsn(true);
+                    try {
+                      await api.post(`/asn/${sel.id}/send`);
+                      await qc.invalidateQueries({ queryKey: ["asns"] });
+                      setShowConfirmSend(false);
+                      alert(`ASN ${sel.asn_number} sent successfully to IUNGO!`);
+                    } catch (err: any) {
+                      alert(err?.response?.data?.detail || "Failed to send ASN to IUNGO.");
+                    } finally {
+                      setSendingAsn(false);
+                    }
+                  }}
+                  className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 active:bg-emerald-800 transition-colors cursor-pointer flex items-center gap-1.5"
+                >
+                  {sendingAsn ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  {sendingAsn ? "Sending..." : "Yes, Send ASN"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     </div>
   );

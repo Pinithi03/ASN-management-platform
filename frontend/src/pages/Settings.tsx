@@ -1,7 +1,7 @@
 // ─── Admin Settings Hub ─────────────────────────────────────────────
 // frontend/src/pages/Settings.tsx
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Building2,
   Mail,
@@ -18,8 +18,10 @@ import {
   Save,
   Sliders,
   BellRing,
+  Send,
 } from "lucide-react";
 import { cn } from "@/utils/cn";
+import { shipmentService } from "@/services/shipmentService";
 
 type TabType = "company" | "email" | "asn" | "security" | "health";
 
@@ -41,6 +43,7 @@ export default function Settings() {
   const [imapUser, setImapUser] = useState("purchasing.sirio@plant.local");
   const [pollingInterval, setPollingInterval] = useState("5");
   const [defaultParser, setDefaultParser] = useState("iungo_html");
+  const [iungoDispatchEmail, setIungoDispatchEmail] = useState("edi@orders.buyer.org");
 
   // ASN & Storage state
   const [huPrefix, setHuPrefix] = useState("0000001122");
@@ -53,14 +56,35 @@ export default function Settings() {
   const [lockoutInactiveSuppliers, setLockoutInactiveSuppliers] = useState(true);
   const [requireTwoFactor, setRequireTwoFactor] = useState(false);
 
-  const handleSave = () => {
+  useEffect(() => {
+    const cached = localStorage.getItem("asn_iungo_dispatch_recipient");
+    if (cached) setIungoDispatchEmail(cached);
+
+    shipmentService
+      .getDispatchSettings()
+      .then((res) => {
+        if (res?.recipient_email) {
+          setIungoDispatchEmail(res.recipient_email);
+          localStorage.setItem("asn_iungo_dispatch_recipient", res.recipient_email);
+        }
+      })
+      .catch((err) => {
+        console.warn("Failed to load dispatch settings:", err);
+      });
+  }, []);
+
+  const handleSave = async () => {
     setSaving(true);
     setSavedSuccess(false);
-    setTimeout(() => {
-      setSaving(false);
-      setSavedSuccess(true);
-      setTimeout(() => setSavedSuccess(false), 3000);
-    }, 800);
+    try {
+      localStorage.setItem("asn_iungo_dispatch_recipient", iungoDispatchEmail.trim());
+      await shipmentService.updateDispatchSettings(iungoDispatchEmail.trim());
+    } catch (e) {
+      console.warn("Failed to persist to backend, stored in local storage:", e);
+    }
+    setSaving(false);
+    setSavedSuccess(true);
+    setTimeout(() => setSavedSuccess(false), 3000);
   };
 
   const handleTestImap = () => {
@@ -253,6 +277,52 @@ export default function Settings() {
                   <option value="30">Every 30 Minutes</option>
                   <option value="60">Hourly</option>
                 </select>
+              </div>
+            </div>
+          </div>
+
+          {/* IUNGO / EDI Outbound Dispatch Email */}
+          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-2xs space-y-4">
+            <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
+              <Send className="w-5 h-5 text-emerald-600" />
+              <div>
+                <h2 className="text-base font-semibold text-gray-900">IUNGO / EDI Outbound Dispatch Target Mailbox</h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Single live production mailbox for receiving Advance Shipping Notices (ASNs) from all suppliers.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-4 bg-emerald-50/60 border border-emerald-200 rounded-xl text-xs text-emerald-950 space-y-1">
+              <p className="font-bold flex items-center gap-1.5 text-emerald-900">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Live Production Automated Routing
+              </p>
+              <p className="text-emerald-800 leading-relaxed">
+                When suppliers complete packing and click <strong>"Send to IUNGO"</strong>, the generated official <code>SdDataSlice.xml</code> is automatically dispatched directly to this mailbox. Suppliers do not need to manually select or enter email addresses.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  EDI / IUNGO Recipient Email Address <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+                    <Mail className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="email"
+                    required
+                    value={iungoDispatchEmail}
+                    onChange={(e) => setIungoDispatchEmail(e.target.value)}
+                    placeholder="edi@orders.buyer.org"
+                    className="w-full pl-10 rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm font-mono font-medium text-gray-900 focus:bg-white focus:border-emerald-500 focus:outline-none"
+                  />
+                </div>
+                <p className="text-[11px] text-gray-400 mt-1">
+                  Default EDI Inbox: <code className="bg-gray-100 px-1 py-0.5 rounded text-gray-600">edi@orders.buyer.org</code> (or live Calzedonia/Oniverse ingestion mailbox)
+                </p>
               </div>
             </div>
           </div>
