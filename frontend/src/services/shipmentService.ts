@@ -302,6 +302,22 @@ export const shipmentService = {
   },
 
   /**
+   * Get configured IUNGO / EDI dispatch recipient email.
+   */
+  async getDispatchSettings(): Promise<{ recipient_email: string; default_email: string }> {
+    const res = await api.get("/asn/dispatch-settings");
+    return res.data;
+  },
+
+  /**
+   * Update configured IUNGO / EDI dispatch recipient email.
+   */
+  async updateDispatchSettings(recipient_email: string): Promise<{ success: boolean; message: string; recipient_email: string }> {
+    const res = await api.post("/asn/dispatch-settings", { recipient_email });
+    return res.data;
+  },
+
+  /**
    * Fetch next available HU sequence number for supplier.
    */
   async getNextHuSequence(supplierCode?: string, supplierId?: string): Promise<{

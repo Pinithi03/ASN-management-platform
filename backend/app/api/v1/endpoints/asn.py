@@ -25,6 +25,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.models.asn import ASNRecord
+from app.models.company import Company
+from app.models.email_message import EmailRecord
 from app.models.enums import ASNStatus, ShipmentStatus
 from app.models.shipment import Shipment
 from app.models.supplier import Supplier
@@ -33,6 +35,7 @@ from app.services.asn_xml_generator_service import (
     get_asn_xml_filename,
     validate_asn_xml,
 )
+from app.services.email_sender import send_asn_dispatch_email
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +84,48 @@ async def list_asns(
     except Exception as e:
         logger.warning("DB query for ASNs failed: %s", e)
         return []
+
+
+@router.get("/dispatch-settings")
+async def get_dispatch_settings(
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Get the configured IUNGO / EDI dispatch recipient email."""
+    stmt = select(Company).limit(1)
+    res = await db.execute(stmt)
+    comp = res.scalar_one_or_none()
+    recipient = comp.settings.get("iungo_dispatch_email") if comp and comp.settings else None
+    return {
+        "recipient_email": recipient or "edi@orders.buyer.org",
+        "default_email": "edi@orders.buyer.org",
+    }
+
+
+@router.post("/dispatch-settings")
+async def update_dispatch_settings(
+    payload: dict[str, Any],
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Update the configured IUNGO / EDI dispatch recipient email (Admin setting)."""
+    recipient = (payload.get("recipient_email") or "").strip()
+    if not recipient:
+        raise HTTPException(status_code=400, detail="Recipient email cannot be empty")
+
+    stmt = select(Company)
+    res = await db.execute(stmt)
+    companies = res.scalars().all()
+    for comp in companies:
+        current_settings = dict(comp.settings or {})
+        current_settings["iungo_dispatch_email"] = recipient
+        comp.settings = current_settings
+
+    await db.commit()
+    logger.info("Updated IUNGO EDI dispatch email to: %s", recipient)
+    return {
+        "success": True,
+        "message": f"IUNGO dispatch email configured to {recipient}",
+        "recipient_email": recipient,
+    }
 
 
 @router.get("/{id}")
@@ -254,6 +299,7 @@ async def send_asn_xml(
     """
     Dispatch ASN XML to Calzedonia EDI / IUNGO.
     Updates ASN status to XML_SENT and marks shipment as XML_SENT.
+    Sends real outbound email via SMTP with XML attachment and logs to EmailRecord.
     """
     stmt = select(ASNRecord).where(ASNRecord.id == id)
     res = await db.execute(stmt)
@@ -262,12 +308,14 @@ async def send_asn_xml(
         raise HTTPException(status_code=404, detail="ASN record not found")
 
     supp_code = "0000018194"
+    supp_name = "COATS THREAD EXPORTS (PVT) LTD"
     if r.supplier_id:
         supp_stmt = select(Supplier).where(Supplier.id == r.supplier_id)
         supp_res = await db.execute(supp_stmt)
         supp = supp_res.scalar_one_or_none()
         if supp:
             supp_code = supp.supplier_code
+            supp_name = supp.name or supp_name
 
     shipment_num = "01000000"
     if r.shipment_id:
@@ -278,13 +326,62 @@ async def send_asn_xml(
             shipment_num = shp.shipment_number
             shp.status = ShipmentStatus.XML_SENT.value
 
+    # Look up configured recipient email from Company settings if not passed
+    to_email = recipient_email
+    comp_stmt = select(Company).where(Company.id == r.company_id)
+    comp_res = await db.execute(comp_stmt)
+    comp = comp_res.scalar_one_or_none()
+    if not comp:
+        comp_res = await db.execute(select(Company).limit(1))
+        comp = comp_res.scalar_one_or_none()
+
+    if not to_email:
+        if comp and comp.settings and comp.settings.get("iungo_dispatch_email"):
+            to_email = comp.settings.get("iungo_dispatch_email")
+        else:
+            to_email = "edi@orders.buyer.org"
+
     filename = get_asn_xml_filename(shipment_num, supp_code)
     email_subject = get_asn_email_subject(shipment_num, r.created_at or datetime.now(), supp_code)
-    to_email = recipient_email or "edi@orders.buyer.org"
 
     now_utc = datetime.utcnow()
     r.status = ASNStatus.XML_SENT.value
     r.sent_at = now_utc
+
+    # 1. Send the actual email via SMTP with XML attachment
+    email_dispatched = False
+    try:
+        email_dispatched = send_asn_dispatch_email(
+            to_email=to_email,
+            asn_number=r.asn_number,
+            shipment_number=shipment_num,
+            supplier_code=supp_code,
+            supplier_name=supp_name,
+            xml_content=r.xml_content or "",
+            xml_filename=filename,
+            email_subject=email_subject,
+        )
+    except Exception as em_err:
+        logger.error("Failed to send ASN email via SMTP: %s", em_err)
+
+    # 2. Record outbound EmailRecord in PostgreSQL database
+    try:
+        outbound_rec = EmailRecord(
+            company_id=r.company_id or (comp.id if comp else None),
+            supplier_id=r.supplier_id,
+            message_id=f"asn-{r.asn_number}-{uuid.uuid4().hex[:8]}@asn-platform.local",
+            from_address="ASN Portal <no-reply@asnplatform.local>",
+            to_address=to_email,
+            subject=email_subject,
+            body_text=f"ASN {r.asn_number} for Shipment #{shipment_num} dispatched to IUNGO EDI recipient {to_email}.",
+            direction="OUTBOUND",
+            status="SENT" if email_dispatched else "FAILED",
+            email_type="ASN_DISPATCH",
+            processed_at=now_utc,
+        )
+        db.add(outbound_rec)
+    except Exception as rec_err:
+        logger.warning("Failed to save outbound EmailRecord: %s", rec_err)
 
     try:
         await db.commit()
@@ -302,4 +399,5 @@ async def send_asn_xml(
         "email_subject": email_subject,
         "attachment_filename": filename,
         "recipient": to_email,
+        "email_sent": email_dispatched,
     }

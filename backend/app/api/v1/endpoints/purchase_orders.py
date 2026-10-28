@@ -223,7 +223,10 @@ async def list_purchase_orders(
         wanted = set(raw_values) | {normalize_po_number(v) for v in raw_values}
         wanted.discard("")
         if wanted:
-            query = query.where(PurchaseOrder.po_number.in_(wanted))
+            clauses = [PurchaseOrder.po_number.in_(wanted)]
+            for w in wanted:
+                clauses.append(PurchaseOrder.po_number.ilike(f"%{w}%"))
+            query = query.where(or_(*clauses))
 
     query = query.order_by(desc(PurchaseOrder.created_at))
 

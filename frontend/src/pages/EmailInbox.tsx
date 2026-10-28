@@ -212,10 +212,10 @@ export default function EmailInbox() {
             <div className="overflow-x-auto">
               <table className="w-full text-xs text-left">
                 <thead>
-                  <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider">
-                    <th className="px-4 py-3 w-1/4 sm:w-1/5">Sender</th>
-                    <th className="px-4 py-3">Subject</th>
-                    <th className="px-4 py-3 text-right w-36 whitespace-nowrap">Received</th>
+                  <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider text-[11px]">
+                    <th className="px-3.5 py-2 w-1/4 sm:w-1/5">Sender</th>
+                    <th className="px-3.5 py-2">Subject</th>
+                    <th className="px-3.5 py-2 text-right w-36 whitespace-nowrap">Received</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -234,7 +234,7 @@ export default function EmailInbox() {
                             : "text-slate-700"
                         }`}
                       >
-                        <td className="px-4 py-3 max-w-[180px] sm:max-w-[220px] truncate font-medium text-slate-900" title={email.from_address || ""}>
+                        <td className="px-3.5 py-1.5 max-w-[180px] sm:max-w-[220px] truncate font-medium text-slate-900" title={email.from_address || ""}>
                           <span
                             className={`w-2 h-2 rounded-full inline-block mr-2 shrink-0 ${
                               isUnread
@@ -246,10 +246,10 @@ export default function EmailInbox() {
                           />
                           {email.from_address || " "}
                         </td>
-                        <td className="px-4 py-3 max-w-xs sm:max-w-md lg:max-w-xl xl:max-w-3xl truncate text-slate-800" title={email.subject || ""}>
+                        <td className="px-3.5 py-1.5 max-w-xs sm:max-w-md lg:max-w-xl xl:max-w-3xl truncate text-slate-800" title={email.subject || ""}>
                           {email.subject || " "}
                         </td>
-                        <td className="px-4 py-3 text-right text-slate-500 whitespace-nowrap">
+                        <td className="px-3.5 py-1.5 text-right text-slate-500 whitespace-nowrap">
                           {email.received_at
                             ? format(new Date(email.received_at), "MMM d, HH:mm")
                             : " "}

@@ -159,3 +159,116 @@ Supply Chain & Procurement Team
     except Exception as ex:
         logger.error("Failed to send welcome email to %s: %s", recipient, ex)
         return False
+
+
+def send_asn_dispatch_email(
+    to_email: str,
+    asn_number: str,
+    shipment_number: str,
+    supplier_code: str,
+    supplier_name: str,
+    xml_content: str,
+    xml_filename: str,
+    email_subject: str,
+) -> bool:
+    """
+    Dispatch an ASN SdDataSlice XML email to the configured EDI / IUNGO inbox.
+    Includes the official XML attachment and formatted delivery summary.
+    """
+    settings = get_settings()
+    recipient = (to_email or "").strip()
+    if not recipient:
+        logger.warning("Skipping ASN dispatch email: no recipient provided for ASN %s", asn_number)
+        return False
+
+    sender = settings.SMTP_FROM_EMAIL or "ASN Dispatch <no-reply@asn-platform.local>"
+    from email.mime.application import MIMEApplication
+    from datetime import datetime
+
+    msg = MIMEMultipart("mixed")
+    msg["Subject"] = email_subject
+    msg["From"] = sender
+    msg["To"] = recipient
+
+    now_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    text_content = f"""Advance Shipping Notice (ASN) Transmission
+==================================================
+ASN Number:      {asn_number}
+Shipment Number: {shipment_number}
+Supplier:        {supplier_name} (#{supplier_code})
+Dispatched:      {now_str}
+==================================================
+
+Please find attached the official Calzedonia / Oniverse SdDataSlice EDI XML file.
+Document conforming to: m2Data_Partner.dtd
+Attachment: {xml_filename}
+
+This is an automated transmission dispatched via the ASN Management Platform.
+"""
+
+    html_content = f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; padding: 24px; }}
+    .card {{ max-width: 580px; margin: 0 auto; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; }}
+    .header {{ background: #0f172a; padding: 24px 28px; color: #ffffff; }}
+    .content {{ padding: 28px; }}
+    .badge {{ background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; font-family: monospace; font-size: 11px; padding: 2px 8px; border-radius: 6px; }}
+    .meta-box {{ background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin: 20px 0; }}
+    .row {{ display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; border-bottom: 1px solid #f1f5f9; }}
+    .row:last-child {{ border-bottom: none; }}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <h2 style="margin: 0; font-size: 18px;">Advance Shipping Notice (ASN)</h2>
+      <p style="margin: 4px 0 0 0; font-size: 12px; color: #94a3b8;">EDI / IUNGO Dispatch Transmission</p>
+    </div>
+    <div class="content">
+      <p style="font-size: 14px; margin-top: 0;">An Advance Shipping Notice has been generated and dispatched with the attached official EDI XML slice.</p>
+      <div class="meta-box">
+        <div class="row"><span style="color:#64748b;">ASN Number:</span><span style="font-weight:700; font-family:monospace;">{asn_number}</span></div>
+        <div class="row"><span style="color:#64748b;">Shipment Number:</span><span style="font-weight:700; font-family:monospace;">{shipment_number}</span></div>
+        <div class="row"><span style="color:#64748b;">Supplier Partner:</span><span>{supplier_name} (#{supplier_code})</span></div>
+        <div class="row"><span style="color:#64748b;">XML Attachment:</span><span class="badge">{xml_filename}</span></div>
+        <div class="row"><span style="color:#64748b;">Dispatched At:</span><span>{now_str}</span></div>
+      </div>
+      <p style="font-size: 12px; color: #64748b;">DOCTYPE: SdDataSlice SYSTEM "m2Data_Partner.dtd"</p>
+    </div>
+  </div>
+</body>
+</html>
+"""
+
+    alt_part = MIMEMultipart("alternative")
+    alt_part.attach(MIMEText(text_content, "plain", "utf-8"))
+    alt_part.attach(MIMEText(html_content, "html", "utf-8"))
+    msg.attach(alt_part)
+
+    if xml_content:
+        attachment = MIMEApplication(xml_content.encode("utf-8"), Name=xml_filename)
+        attachment["Content-Disposition"] = f'attachment; filename="{xml_filename}"'
+        msg.attach(attachment)
+
+    try:
+        host = settings.SMTP_HOST or "mailpit"
+        port = settings.SMTP_PORT or 1025
+        logger.info("Connecting to SMTP %s:%s to dispatch ASN %s to %s", host, port, asn_number, recipient)
+
+        with smtplib.SMTP(host=host, port=port, timeout=10.0) as server:
+            if settings.SMTP_USE_TLS:
+                server.starttls()
+            if settings.SMTP_USER and settings.SMTP_PASSWORD:
+                server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+            server.send_message(msg)
+
+        logger.info("ASN XML email successfully dispatched to %s for ASN %s", recipient, asn_number)
+        return True
+    except Exception as ex:
+        logger.error("Failed to dispatch ASN email to %s: %s", recipient, ex)
+        return False
+

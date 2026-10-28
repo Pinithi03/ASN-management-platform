@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
@@ -118,10 +118,17 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
   const [search, setSearch] = useState("");
   const [poChips, setPoChips] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState("");
+  const locFromUrl = searchParams.get("loc");
   const [selectedPlant, setSelectedPlant] = useState<string>(
     plantFromUrl && KNOWN_PLANTS[plantFromUrl.toUpperCase()] ? plantFromUrl.toUpperCase() : "ALL"
   );
-  const [selectedLocation, setSelectedLocation] = useState<string>("ALL");
+  const [selectedLocation, setSelectedLocation] = useState<string>(() => {
+    if (locFromUrl) return locFromUrl;
+    if (plantFromUrl && KNOWN_PLANTS[plantFromUrl.toUpperCase()]) {
+      return KNOWN_PLANTS[plantFromUrl.toUpperCase()].storageLocationsHint?.[0] || "0101";
+    }
+    return "0101";
+  });
   const [viewMode, setViewMode] = useState<"hub" | "global" | "plant">(
     plantFromUrl && KNOWN_PLANTS[plantFromUrl.toUpperCase()]
       ? "plant"
@@ -146,20 +153,27 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
     setCrossPlantWarning(null);
   };
 
-  const selectPlant = (plantId: string) => {
+  const selectPlant = (plantId: string, targetLoc?: string) => {
     setSelectedPlant(plantId);
-    setSelectedLocation("ALL");
     setPage(1);
     clearSelection();
 
     const newParams = new URLSearchParams(searchParams);
     if (plantId === "ALL") {
+      setSelectedLocation("ALL");
       setViewMode("hub");
       newParams.delete("plant");
       newParams.delete("view");
+      newParams.delete("loc");
     } else {
+      let defaultLoc = targetLoc;
+      if (!defaultLoc) {
+        defaultLoc = KNOWN_PLANTS[plantId]?.storageLocationsHint?.[0] || "0101";
+      }
+      setSelectedLocation(defaultLoc);
       setViewMode("plant");
       newParams.set("plant", plantId);
+      newParams.set("loc", defaultLoc);
       newParams.delete("view");
     }
     setSearchParams(newParams, { replace: true });
@@ -167,7 +181,8 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
 
   const handleOpenWithPO = (plantId: string, poNumber: string) => {
     setSelectedPlant(plantId);
-    setSelectedLocation("ALL");
+    const defaultLoc = KNOWN_PLANTS[plantId]?.storageLocationsHint?.[0] || "0101";
+    setSelectedLocation(defaultLoc);
     setPoChips([poNumber.trim()]);
     setSearch("");
     setPage(1);
@@ -176,6 +191,7 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
 
     const newParams = new URLSearchParams(searchParams);
     newParams.set("plant", plantId);
+    newParams.set("loc", defaultLoc);
     newParams.delete("view");
     setSearchParams(newParams, { replace: true });
   };
@@ -206,7 +222,7 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
         status: statusFilter || undefined,
         supplier_id: supplierId,
         plant: selectedPlant !== "ALL" ? selectedPlant : undefined,
-        storage_location: selectedLocation !== "ALL" ? selectedLocation : undefined,
+        storage_location: selectedPlant !== "ALL" && selectedLocation !== "ALL" ? selectedLocation : undefined,
       }),
     placeholderData: (previousData) => previousData,
     refetchInterval: 5000,
@@ -229,35 +245,60 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
   // Compute available storage locations for the currently selected plant
   const availableLocations = useMemo(() => {
     const locMap = new Map<string, number>();
-    const sourceOrders = selectedPlant === "ALL" ? orders : (allOrdersList.length > 0 ? allOrdersList : orders);
+    const sourceOrders = allOrdersList.length > 0 ? allOrdersList : orders;
     sourceOrders.forEach((po) => {
       const dest = po.delivery_address || po.destination || po.client_code;
       const res = resolvePlantAndLocation(dest, po.client_code);
       if (selectedPlant === "ALL" || res.plantGroup === selectedPlant || res.plantCode === selectedPlant) {
-        const key = res.fullDeliveryAddress || res.storageLocation;
+        const key = res.storageLocation || "0101";
         if (key) {
           locMap.set(key, (locMap.get(key) || 0) + 1);
         }
       }
     });
 
+    if (selectedPlant !== "ALL" && KNOWN_PLANTS[selectedPlant]) {
+      KNOWN_PLANTS[selectedPlant].storageLocationsHint?.forEach((hint) => {
+        const clean = hint.match(/\b\d{4}\b/)?.[0] || hint.trim();
+        if (!locMap.has(clean)) {
+          locMap.set(clean, 0);
+        }
+      });
+    }
+
     return Array.from(locMap.entries())
       .map(([code, count]) => ({ code, count }))
       .sort((a, b) => b.count - a.count);
   }, [orders, allOrdersList, selectedPlant]);
 
-  // Filter orders for display
+  // Keep selectedLocation synchronized to an active valid location in plant view
+  useEffect(() => {
+    if (selectedPlant !== "ALL" && availableLocations.length > 0) {
+      const hasMatch = availableLocations.some((l) => l.code === selectedLocation);
+      if (!hasMatch) {
+        setSelectedLocation(availableLocations[0].code);
+      }
+    }
+  }, [selectedPlant, availableLocations, selectedLocation]);
+
+  // Filter orders for display (strictly plant & storage location scoped when inside a plant view)
   const displayedOrders = useMemo(() => {
     return orders.filter((po) => {
-      const dest = po.delivery_address || po.destination || po.client_code;
-      const res = resolvePlantAndLocation(dest, po.client_code);
+      if (selectedPlant !== "ALL") {
+        const dest = po.delivery_address || po.destination || po.client_code;
+        const res = resolvePlantAndLocation(dest, po.client_code);
 
-      if (selectedPlant !== "ALL" && res.plantGroup !== selectedPlant && res.plantCode !== selectedPlant) {
-        return false;
-      }
+        if (res.plantGroup !== selectedPlant && res.plantCode !== selectedPlant) {
+          return false;
+        }
 
-      if (selectedLocation !== "ALL" && res.fullDeliveryAddress !== selectedLocation && res.storageLocation !== selectedLocation) {
-        return false;
+        if (selectedLocation !== "ALL") {
+          const poLoc = (res.storageLocation || "").toUpperCase();
+          const targetLoc = selectedLocation.toUpperCase();
+          if (poLoc !== targetLoc && !res.fullDeliveryAddress.toUpperCase().includes(targetLoc)) {
+            return false;
+          }
+        }
       }
 
       return true;
@@ -299,7 +340,7 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
       return;
     }
 
-    // Check cross-plant conflict (safety net; plant cards already scope the list)
+    // Check cross-plant and cross-location conflict
     if (selectedPOMap.size > 0 && currentSelectedPlantInfo) {
       const thisDest = poObj.delivery_address || poObj.destination || poObj.client_code;
       const thisPlant = resolvePlantAndLocation(thisDest, poObj.client_code);
@@ -310,6 +351,16 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
           attemptedPO: poNumber,
           targetPlant: thisPlant.plantName,
           currentPlant: currentSelectedPlantInfo.plantName,
+        });
+        return;
+      }
+
+      if (thisPlant.storageLocation !== currentSelectedPlantInfo.storageLocation) {
+        // BLOCK SELECTION across different storage locations!
+        setCrossPlantWarning({
+          attemptedPO: poNumber,
+          targetPlant: `Location ${thisPlant.storageLocation}`,
+          currentPlant: `Location ${currentSelectedPlantInfo.storageLocation}`,
         });
         return;
       }
@@ -337,13 +388,262 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
     setCrossPlantWarning(null);
   };
 
-  // ─── Multi-PO search chips ──────────────────────────────────
-  const normalizePO = (value: string) => value.trim().replace(/^[A-Z0-9]{2,6}\s*[-–—_]\s*(?=\d{6,}$)/i, "");
-  const isPOToken = (value: string) => /^(?:[A-Z0-9]{2,6}\s*[-–—_]\s*)?\d{4,15}$/i.test(value.trim());
+  // ─── Multi-PO search chips & Autocomplete ──────────────────────────────────
+  const normalizePO = (value: string) =>
+    value
+      .trim()
+      .replace(/^(?:PO|P\.O\.)\s*[-#:\s]*/i, "")
+      .replace(/^[A-Z0-9]{2,6}\s*[-–—_]\s*(?=[A-Z0-9]{4,}$)/i, "");
+
+  const isPOToken = (value: string) => {
+    const v = value.trim();
+    if (!v || v.length < 3) return false;
+    return /^(?:[A-Z0-9]{2,6}\s*[-–—_]\s*)?[A-Z0-9_-]{3,25}$/i.test(v);
+  };
+
+  // Autocomplete & search navigation state
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const originalInputRef = useRef<string>("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Debounced search for remote queries
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search.trim());
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Query remote POs matching search if typed (scoped to plant/storage location when not ALL)
+  const { data: remoteSuggestionsData } = useQuery({
+    queryKey: ["poSearchSuggestions", debouncedSearch, supplierId, selectedPlant, selectedLocation],
+    queryFn: () =>
+      poApi.list({
+        search: debouncedSearch,
+        per_page: 8,
+        supplier_id: supplierId,
+        plant: selectedPlant !== "ALL" ? selectedPlant : undefined,
+        storage_location: selectedPlant !== "ALL" && selectedLocation !== "ALL" ? selectedLocation : undefined,
+      }),
+    enabled: Boolean(debouncedSearch && debouncedSearch.length >= 2),
+    staleTime: 30000,
+  });
+  const remoteSuggestions: PurchaseOrder[] = remoteSuggestionsData?.items || [];
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node) &&
+        inputRef.current &&
+        !inputRef.current.contains(e.target as Node)
+      ) {
+        setIsDropdownOpen(false);
+        setActiveIndex(-1);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Compute autocomplete suggestions combining local overview, current page, and remote
+  const suggestions = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q || q.length < 1) return [];
+
+    const cleanQ = normalizePO(q).toLowerCase();
+    const existingChipsSet = new Set(poChips.map((c) => normalizePO(c).toLowerCase()));
+
+    const pool = [...allOrdersList, ...orders, ...remoteSuggestions];
+    const seen = new Set<string>();
+    const uniquePool: PurchaseOrder[] = [];
+
+    for (const po of pool) {
+      if (!po || !po.po_number) continue;
+
+      // When inside a plant tab, strictly scope suggestions to this plant & storage location
+      if (selectedPlant !== "ALL") {
+        const dest = po.delivery_address || po.destination || po.client_code;
+        const res = resolvePlantAndLocation(dest, po.client_code);
+
+        if (res.plantGroup !== selectedPlant && res.plantCode !== selectedPlant) {
+          continue;
+        }
+
+        if (selectedLocation !== "ALL") {
+          const poLoc = (res.storageLocation || "").toUpperCase();
+          const targetLoc = selectedLocation.toUpperCase();
+          if (poLoc !== targetLoc && !res.fullDeliveryAddress.toUpperCase().includes(targetLoc)) {
+            continue;
+          }
+        }
+      }
+
+      const norm = normalizePO(po.po_number).toLowerCase();
+      if (seen.has(norm)) continue;
+      seen.add(norm);
+      if (existingChipsSet.has(norm)) continue;
+      uniquePool.push(po);
+    }
+
+    // Only match against PO number as requested
+    const matches = uniquePool.filter((po) => {
+      const poNum = (po.po_number || "").toLowerCase();
+      const normNum = normalizePO(po.po_number || "").toLowerCase();
+
+      return normNum.includes(cleanQ) || poNum.includes(q);
+    });
+
+    matches.sort((a, b) => {
+      const aNorm = normalizePO(a.po_number || "").toLowerCase();
+      const bNorm = normalizePO(b.po_number || "").toLowerCase();
+
+      const aStarts = aNorm.startsWith(cleanQ);
+      const bStarts = bNorm.startsWith(cleanQ);
+      if (aStarts && !bStarts) return -1;
+      if (!aStarts && bStarts) return 1;
+
+      const aIncludes = aNorm.includes(cleanQ);
+      const bIncludes = bNorm.includes(cleanQ);
+      if (aIncludes && !bIncludes) return -1;
+      if (!aIncludes && bIncludes) return 1;
+
+      return (a.po_number || "").localeCompare(b.po_number || "");
+    });
+
+    return matches.slice(0, 8);
+  }, [search, allOrdersList, orders, remoteSuggestions, poChips, selectedPlant, selectedLocation]);
+
+  const handleSelectPO = (poNumber: string | null | undefined) => {
+    const clean = normalizePO(poNumber || "");
+    if (clean) {
+      setPoChips((prev) => Array.from(new Set([...prev, clean])));
+      setPage(1);
+    }
+    setSearch("");
+    originalInputRef.current = "";
+    setActiveIndex(-1);
+    setIsDropdownOpen(false);
+    setTimeout(() => inputRef.current?.focus(), 10);
+  };
+
+  const handleSearchChange = (value: string) => {
+    // If user typed a comma, e.g. "4500123456,"
+    if (value.includes(",")) {
+      const parts = value.split(",").map((s) => s.trim()).filter(Boolean);
+      if (parts.length > 0) {
+        setPoChips((prev) => Array.from(new Set([...prev, ...parts.map(normalizePO)])));
+        setPage(1);
+      }
+      setSearch("");
+      originalInputRef.current = "";
+      setActiveIndex(-1);
+      setIsDropdownOpen(false);
+      return;
+    }
+
+    setSearch(value);
+    originalInputRef.current = value;
+    setActiveIndex(-1);
+    setIsDropdownOpen(value.trim().length > 0);
+    setPage(1);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // Dropdown is open and has suggestions
+    if (isDropdownOpen && suggestions.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        const nextIndex = activeIndex < suggestions.length - 1 ? activeIndex + 1 : 0;
+        setActiveIndex(nextIndex);
+        setSearch(suggestions[nextIndex].po_number || "");
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        if (activeIndex > 0) {
+          const prevIndex = activeIndex - 1;
+          setActiveIndex(prevIndex);
+          setSearch(suggestions[prevIndex].po_number || "");
+        } else if (activeIndex === 0) {
+          setActiveIndex(-1);
+          setSearch(originalInputRef.current);
+        } else {
+          const lastIndex = suggestions.length - 1;
+          setActiveIndex(lastIndex);
+          setSearch(suggestions[lastIndex].po_number || "");
+        }
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setIsDropdownOpen(false);
+        setActiveIndex(-1);
+        setSearch(originalInputRef.current);
+        return;
+      }
+      if (e.key === "Tab") {
+        if (activeIndex >= 0 && suggestions[activeIndex]) {
+          e.preventDefault();
+          handleSelectPO(suggestions[activeIndex].po_number);
+          return;
+        }
+      }
+    }
+
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (isDropdownOpen && activeIndex >= 0 && suggestions[activeIndex]) {
+        handleSelectPO(suggestions[activeIndex].po_number);
+        return;
+      }
+      const trimmed = search.trim();
+      if (trimmed) {
+        if (
+          suggestions.length > 0 &&
+          normalizePO(suggestions[0].po_number || "").toLowerCase() === normalizePO(trimmed).toLowerCase()
+        ) {
+          handleSelectPO(suggestions[0].po_number);
+        } else {
+          handleSelectPO(trimmed);
+        }
+      }
+      return;
+    }
+
+    if (e.key === "," || e.key === ";") {
+      e.preventDefault();
+      const trimmed = search.trim();
+      if (trimmed) {
+        handleSelectPO(trimmed);
+      }
+      return;
+    }
+
+    if (e.key === "Backspace" && search === "" && poChips.length > 0) {
+      removePOChip(poChips[poChips.length - 1]);
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const pasted = e.clipboardData.getData("text");
+    if (!pasted) return;
+
+    e.preventDefault();
+    const leftover = addPOChips(pasted);
+    setSearch(leftover);
+    originalInputRef.current = leftover;
+    setActiveIndex(-1);
+    setIsDropdownOpen(false);
+  };
 
   // Turns PO-like tokens into chips; returns the leftover non-PO text.
   const addPOChips = (text: string): string => {
-    const tokens = text.split(/[\s,;]+/).filter(Boolean);
+    const tokens = text.split(/[\s,;\r\n\t]+/).map((t) => t.trim()).filter(Boolean);
     const poTokens = tokens.filter(isPOToken).map(normalizePO);
     if (poTokens.length > 0) {
       setPoChips((prev) => Array.from(new Set([...prev, ...poTokens])));
@@ -360,11 +660,26 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
   const clearSearch = () => {
     setPoChips([]);
     setSearch("");
+    originalInputRef.current = "";
+    setActiveIndex(-1);
+    setIsDropdownOpen(false);
     setPage(1);
   };
 
-  const foundPOs = new Set(orders.map((p) => normalizePO(p.po_number || "")));
-  const missingChips = poChips.filter((c) => !foundPOs.has(c));
+  const foundPOs = useMemo(() => {
+    const s = new Set<string>();
+    orders.forEach((p) => {
+      if (p.po_number) {
+        s.add(p.po_number.trim());
+        s.add(normalizePO(p.po_number));
+      }
+    });
+    return s;
+  }, [orders]);
+
+  const missingChips = useMemo(() => {
+    return poChips.filter((c) => !foundPOs.has(c) && !foundPOs.has(normalizePO(c)));
+  }, [poChips, foundPOs]);
 
   const handleCreateShipment = (mode: "web" | "excel" = "web", poNumber?: string) => {
     const poList = poNumber || Array.from(selectedPOMap.keys()).join(",");
@@ -529,22 +844,28 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
         <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
 
 
-          {/* Delivery Storage Location Dropdown (Shown when a plant is selected) */}
-          {selectedPlant !== "ALL" && (
+          {/* Delivery Storage Location Dropdown (Strictly Scoped, No 'ALL' option) */}
+          {selectedPlant !== "ALL" && availableLocations.length > 0 && (
             <div className="relative">
               <select
                 value={selectedLocation}
                 onChange={(e) => {
-                  setSelectedLocation(e.target.value);
-                  setPage(1);
+                  const newLoc = e.target.value;
+                  if (selectedLocation !== newLoc) {
+                    setSelectedLocation(newLoc);
+                    setPage(1);
+                    clearSelection();
+                    const p = new URLSearchParams(searchParams);
+                    p.set("loc", newLoc);
+                    setSearchParams(p, { replace: true });
+                  }
                 }}
-                className="h-9 pl-8 pr-8 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-700 shadow-2xs hover:border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer appearance-none"
-                title="Filter by Delivery Storage Location"
+                className="h-9 pl-8 pr-8 rounded-xl text-xs font-semibold bg-white border border-slate-200 text-slate-800 shadow-2xs hover:border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer appearance-none min-w-[145px]"
+                title="Select Storage Location"
               >
-                <option value="ALL">All Locations ({totalOrders})</option>
                 {availableLocations.map((loc) => (
                   <option key={loc.code} value={loc.code}>
-                    {loc.code} ({loc.count})
+                    Store {loc.code} ({loc.count})
                   </option>
                 ))}
               </select>
@@ -620,9 +941,9 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
               <div className="flex items-start sm:items-center gap-3">
                 <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
                 <div className="text-xs">
-                  <span className="font-bold">Cannot Mix Plants in One Delivery: </span>
-                  Your current selection contains orders for <span className="font-semibold underline">{crossPlantWarning.currentPlant}</span>.
-                  Orders destined for <span className="font-semibold underline">{crossPlantWarning.targetPlant}</span> (e.g. {crossPlantWarning.attemptedPO}) must be dispatched in a separate delivery.
+                  <span className="font-bold">Cannot Mix Plants or Storage Locations: </span>
+                  Your current selection is for <span className="font-semibold underline">{crossPlantWarning.currentPlant}</span>.
+                  Orders for <span className="font-semibold underline">{crossPlantWarning.targetPlant}</span> (e.g. {crossPlantWarning.attemptedPO}) must be dispatched in a separate delivery.
                 </div>
               </div>
               <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
@@ -680,7 +1001,10 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                     {selectedPOs.size} Purchase Order{selectedPOs.size > 1 ? "s" : ""} Selected
                     {currentSelectedPlantInfo ? (
                       <span className="font-normal text-xs text-gray-600 ml-1.5">
-                        for <span className="font-semibold text-gray-900">{currentSelectedPlantInfo.plantName}</span> ({currentSelectedPlantInfo.plantCode})
+                        for <span className="font-semibold text-gray-900">{currentSelectedPlantInfo.plantName}</span>
+                        <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-white text-slate-800 border border-slate-300 shadow-2xs">
+                          Store {currentSelectedPlantInfo.storageLocation}
+                        </span>
                       </span>
                     ) : null}
                   </p>
@@ -742,14 +1066,17 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
 
           {/* Search & Filter Bar */}
           <div className="flex flex-col sm:flex-row sm:items-start gap-3">
-            <div className="flex-1">
-              <div className="relative flex flex-wrap items-center gap-1.5 min-h-[42px] pl-10 pr-9 py-1.5 text-sm border border-gray-200 rounded-xl focus-within:ring-2 focus-within:ring-blue-500 bg-white shadow-2xs">
-                <Search className="absolute left-3.5 top-[13px] w-4 h-4 text-gray-400" />
+            <div className="flex-1 relative" ref={dropdownRef}>
+              <div
+                onClick={() => inputRef.current?.focus()}
+                className="relative flex flex-wrap items-center gap-1.5 min-h-[42px] pl-10 pr-9 py-1.5 text-sm border border-gray-200 rounded-xl focus-within:ring-2 focus-within:ring-blue-500 bg-white shadow-2xs cursor-text"
+              >
+                <Search className="absolute left-3.5 top-[13px] w-4 h-4 text-gray-400 pointer-events-none" />
                 {poChips.map((chip) => (
                   <span
                     key={chip}
                     className={cn(
-                      "inline-flex items-center gap-1 pl-2 pr-1 py-0.5 text-xs font-mono font-semibold rounded-md border",
+                      "inline-flex items-center gap-1 pl-2 pr-1 py-0.5 text-xs font-mono font-semibold rounded-md border transition-all",
                       missingChips.includes(chip)
                         ? "bg-gray-50 text-gray-400 border-gray-200 line-through"
                         : isSupplier
@@ -760,7 +1087,10 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                     {chip}
                     <button
                       type="button"
-                      onClick={() => removePOChip(chip)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removePOChip(chip);
+                      }}
                       className="p-0.5 rounded hover:bg-black/5 cursor-pointer"
                       title={`Remove ${chip}`}
                     >
@@ -769,40 +1099,33 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                   </span>
                 ))}
                 <input
+                  ref={inputRef}
                   type="text"
                   placeholder={
                     poChips.length > 0
-                      ? "Add PO number..."
+                      ? "Add another PO number..."
                       : selectedPlant !== "ALL"
-                      ? `Search PO, style, notation in ${KNOWN_PLANTS[selectedPlant]?.name.replace(" Ltd", "")}...`
-                      : "Search PO, client, style, or paste PO numbers..."
+                      ? `Search PO in ${KNOWN_PLANTS[selectedPlant]?.name.replace(" Ltd", "")}${selectedLocation !== "ALL" ? ` (${selectedLocation})` : ""}...`
+                      : "Search PO number or paste comma-separated POs..."
                   }
                   value={search}
-                  onChange={(e) => {
-                    setSearch(e.target.value);
-                    setPage(1);
-                  }}
-                  onKeyDown={(e) => {
-                    if ((e.key === "Enter" || e.key === ",") && isPOToken(search)) {
-                      e.preventDefault();
-                      setSearch(addPOChips(search));
-                    } else if (e.key === "Backspace" && search === "" && poChips.length > 0) {
-                      removePOChip(poChips[poChips.length - 1]);
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  onFocus={() => {
+                    if (search.trim().length > 0 && suggestions.length > 0) {
+                      setIsDropdownOpen(true);
                     }
                   }}
-                  onPaste={(e) => {
-                    const pasted = e.clipboardData.getData("text");
-                    if (pasted.split(/[\s,;]+/).some(isPOToken)) {
-                      e.preventDefault();
-                      setSearch(addPOChips(`${search} ${pasted}`));
-                    }
-                  }}
-                  className="flex-1 min-w-[160px] py-0.5 bg-transparent focus:outline-none text-sm text-gray-900"
+                  onKeyDown={handleKeyDown}
+                  onPaste={handlePaste}
+                  className="flex-1 min-w-[170px] py-0.5 bg-transparent focus:outline-none text-sm text-gray-900"
                 />
                 {(poChips.length > 0 || search) && (
                   <button
                     type="button"
-                    onClick={clearSearch}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      clearSearch();
+                    }}
                     className="absolute right-2.5 top-[11px] p-0.5 text-gray-400 hover:text-gray-600 rounded cursor-pointer"
                     title="Clear search"
                   >
@@ -810,6 +1133,57 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                   </button>
                 )}
               </div>
+
+              {/* Autocomplete Suggestions Dropdown (Clean PO list only) */}
+              {isDropdownOpen && suggestions.length > 0 && (
+                <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden divide-y divide-gray-100 animate-in fade-in slide-in-from-top-1 duration-150">
+                  <div className="px-3.5 py-1.5 bg-gray-50/90 text-[11px] font-semibold text-gray-500 uppercase tracking-wider flex items-center justify-between">
+                    <span>Suggested PO Numbers</span>
+                    <span className="text-[10px] text-gray-400 font-normal">Use ↑ ↓ & Enter</span>
+                  </div>
+                  <div className="max-h-[260px] overflow-y-auto py-1">
+                    {suggestions.map((po, idx) => {
+                      const isSelected = activeIndex === idx;
+                      return (
+                        <div
+                          key={po.id || `${po.po_number || idx}-${idx}`}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            handleSelectPO(po.po_number);
+                          }}
+                          onMouseEnter={() => setActiveIndex(idx)}
+                          className={cn(
+                            "px-3.5 py-2 flex items-center justify-between gap-3 cursor-pointer transition-colors text-left",
+                            isSelected
+                              ? "bg-blue-50/90 text-blue-900 font-semibold"
+                              : "hover:bg-gray-50 text-gray-800"
+                          )}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <Search
+                              className={cn(
+                                "w-3.5 h-3.5 shrink-0 transition-colors",
+                                isSelected ? "text-blue-600" : "text-gray-400"
+                              )}
+                            />
+                            <span className="font-mono text-sm tracking-tight">
+                              {po.po_number}
+                            </span>
+                          </div>
+                          {isSelected && (
+                            <span className="text-[10px] text-blue-600 font-sans font-medium">Select ↵</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="px-3.5 py-1.5 bg-gray-50/70 text-[11px] text-gray-400 flex items-center justify-between">
+                    <span>Paste comma-separated POs to search multiple</span>
+                    <span className="font-mono text-[10px]">Esc to close</span>
+                  </div>
+                </div>
+              )}
+
               {poChips.length > 0 && !isLoading && (
                 <p className="text-xs text-gray-500 mt-1.5">
                   Found {poChips.length - missingChips.length} of {poChips.length}
@@ -870,7 +1244,7 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
               <thead>
                 <tr className="bg-gray-50/80 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                   {canSelect && (
-                    <th className="px-4 py-3.5 w-12 text-center">
+                    <th className="px-3.5 py-2 w-10 text-center">
                       <button
                         type="button"
                         onClick={toggleAllSelection}
@@ -890,14 +1264,16 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                       </button>
                     </th>
                   )}
-                  <th className="px-4 py-3.5 whitespace-nowrap">PO Number</th>
-                  <th className="px-4 py-3.5 whitespace-nowrap">Plant & Storage</th>
-                  <th className="px-4 py-3.5 whitespace-nowrap">Order Date</th>
-                  <th className="px-4 py-3.5 whitespace-nowrap">Delivery Date</th>
-                  <th className="px-4 py-3.5 min-w-[320px]">Contact</th>
-                  <th className="px-4 py-3.5 whitespace-nowrap">Notation</th>
-                  <th className="px-4 py-3.5 text-right whitespace-nowrap">Quantity</th>
-                  <th className="px-4 py-3.5 whitespace-nowrap">Status</th>
+                  <th className="px-3.5 py-2 whitespace-nowrap">PO Number</th>
+                  {viewMode === "global" && (
+                    <th className="px-3.5 py-2 whitespace-nowrap">Plant & Storage</th>
+                  )}
+                  <th className="px-3.5 py-2 whitespace-nowrap">Order Date</th>
+                  <th className="px-3.5 py-2 whitespace-nowrap">Delivery Date</th>
+                  <th className="px-3.5 py-2 min-w-[260px]">Contact</th>
+                  <th className="px-3.5 py-2 whitespace-nowrap">Notation</th>
+                  <th className="px-3.5 py-2 text-right whitespace-nowrap">Quantity</th>
+                  <th className="px-3.5 py-2 whitespace-nowrap">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -909,11 +1285,12 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                   );
                   const isClosed = po.status === "COMPLETED" || po.status === "CANCELLED";
                   const rowSelectable = canSelect && !isClosed;
-                  const isCrossPlant =
+                  const isCrossConflict =
                     selectedPOs.size > 0 &&
                     currentSelectedPlantInfo &&
                     !isSelected &&
-                    poPlant.plantGroup !== currentSelectedPlantInfo.plantGroup;
+                    (poPlant.plantGroup !== currentSelectedPlantInfo.plantGroup ||
+                     poPlant.storageLocation !== currentSelectedPlantInfo.storageLocation);
 
                   return (
                     <tr
@@ -925,7 +1302,7 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                           ? isSupplier
                             ? "bg-emerald-50/70 border-l-4 border-emerald-600"
                             : "bg-blue-50/70 border-l-4 border-blue-600"
-                          : isCrossPlant
+                          : isCrossConflict
                           ? "opacity-60 hover:bg-amber-50/20"
                           : isSupplier
                             ? "hover:bg-emerald-50/30"
@@ -936,7 +1313,7 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                       {canSelect && (
                         <td
                           className={cn(
-                            "px-4 py-3 text-center",
+                            "px-3.5 py-1.5 text-center",
                             rowSelectable ? "cursor-pointer" : "cursor-not-allowed opacity-40"
                           )}
                           onClick={(e) => {
@@ -952,15 +1329,15 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                                 ? "This PO is fully fulfilled (Completed)"
                                 : po.status === "CANCELLED"
                                 ? "This PO is cancelled"
-                                : isCrossPlant
-                                ? `Cannot mix plants: Belongs to ${poPlant.plantName}. Current selection is for ${currentSelectedPlantInfo?.plantName}.`
+                                : isCrossConflict
+                                ? `Cannot mix: Belongs to ${poPlant.plantName} (Store ${poPlant.storageLocation}). Current batch is for Store ${currentSelectedPlantInfo?.storageLocation}.`
                                 : "Select PO"
                             }
                             className={cn(
-                              "text-gray-300 transition-colors",
+                              "text-gray-300 transition-colors inline-flex items-center justify-center",
                               !rowSelectable
                                 ? "cursor-not-allowed"
-                                : isCrossPlant
+                                : isCrossConflict
                                 ? "text-gray-200 hover:text-amber-500"
                                 : isSupplier ? "hover:text-emerald-600" : "hover:text-blue-600"
                             )}
@@ -975,17 +1352,17 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                       )}
 
                       {/* PO Number */}
-                      <td className="px-4 py-3 whitespace-nowrap">
+                      <td className="px-3.5 py-1.5 whitespace-nowrap">
                         <div
                           className={cn(
-                            "flex items-center gap-1.5 font-mono font-semibold text-gray-900 transition-colors",
+                            "flex items-center gap-1.5 font-mono font-semibold text-gray-900 transition-colors text-xs",
                             isSupplier ? "group-hover:text-emerald-600" : "group-hover:text-blue-600"
                           )}
                         >
                           <span>{po.po_number || "—"}</span>
                           {po.version && po.version > 1 ? (
                             <span
-                              className="px-1.5 py-0.5 text-[10px] font-bold bg-amber-100 text-amber-800 rounded border border-amber-200 inline-flex items-center shadow-2xs font-sans shrink-0"
+                              className="px-1.5 py-0.2 text-[10px] font-bold bg-amber-100 text-amber-800 rounded border border-amber-200 inline-flex items-center shadow-2xs font-sans shrink-0 leading-tight"
                               title={`Order revised/amended by customer (Version ${po.version})`}
                             >
                               V{po.version}
@@ -994,50 +1371,50 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                         </div>
                       </td>
 
-                      {/* Plant & Storage Location */}
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <div className="space-y-1">
-                          <div className="font-medium text-gray-900 text-xs">
-                            {poPlant.plantName}
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="px-2 py-0.5 text-[11px] font-mono font-semibold bg-gray-100 text-gray-700 border border-gray-200 rounded-md">
+                      {/* Plant & Storage Location (Only shown in Global All-Orders view) */}
+                      {viewMode === "global" && (
+                        <td className="px-3.5 py-1.5 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-gray-900 text-xs">
+                              {poPlant.plantName}
+                            </span>
+                            <span className="px-1.5 py-0.5 text-[10px] font-mono font-semibold bg-gray-100 text-gray-700 border border-gray-200 rounded">
                               {poPlant.fullDeliveryAddress}
                             </span>
                           </div>
-                        </div>
-                      </td>
+                        </td>
+                      )}
 
                       {/* Order Date */}
-                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                      <td className="px-3.5 py-1.5 text-gray-600 whitespace-nowrap text-xs">
                         <div className="flex items-center gap-1.5">
-                          <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                          <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                           <span>{formatDateDisplay(po.order_date || (po.extra_data as any)?.order_date)}</span>
                         </div>
                       </td>
 
                       {/* Delivery Date */}
-                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                      <td className="px-3.5 py-1.5 text-gray-600 whitespace-nowrap text-xs">
                         <div className="flex items-center gap-1.5">
-                          <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                          <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                           <span>{formatDateDisplay(po.delivery_date)}</span>
                         </div>
                       </td>
 
                       {/* Contact (<ContactPerson> on top, <AuxHead1> email underneath) */}
-                      <td className="px-4 py-3 text-gray-700 min-w-[320px]">
+                      <td className="px-3.5 py-1.5 text-gray-700 min-w-[260px] max-w-[340px]">
                         {po.contact_person || (po.extra_data as any)?.contact_person ? (
-                          <div className="space-y-0.5">
-                            <div className="font-semibold text-gray-900 leading-tight">
+                          <div className="leading-tight">
+                            <div className="font-semibold text-gray-900 text-xs truncate">
                               {po.contact_person || (po.extra_data as any)?.contact_person}
                             </div>
                             {(po.contact_email || (po.extra_data as any)?.contact_email) && (
-                              <div className="flex items-center gap-1.5 mt-0.5">
-                                <Mail className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                              <div className="flex items-center gap-1 text-[11px] mt-0.5">
+                                <Mail className="w-3 h-3 text-blue-500 shrink-0" />
                                 <a
                                   href={`mailto:${po.contact_email || (po.extra_data as any)?.contact_email}`}
                                   onClick={(e) => e.stopPropagation()}
-                                  className="text-xs text-blue-600 hover:underline hover:text-blue-700 font-mono tracking-tight select-all"
+                                  className="text-blue-600 hover:underline hover:text-blue-700 font-mono tracking-tight truncate select-all"
                                   title={po.contact_email || (po.extra_data as any)?.contact_email}
                                 >
                                   {po.contact_email || (po.extra_data as any)?.contact_email}
@@ -1046,44 +1423,44 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                             )}
                           </div>
                         ) : (po.contact_email || (po.extra_data as any)?.contact_email) ? (
-                          <div className="flex items-center gap-1.5">
-                            <Mail className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                          <div className="flex items-center gap-1 text-xs">
+                            <Mail className="w-3 h-3 text-blue-500 shrink-0" />
                             <a
                               href={`mailto:${po.contact_email || (po.extra_data as any)?.contact_email}`}
                               onClick={(e) => e.stopPropagation()}
-                              className="text-xs text-blue-600 hover:underline hover:text-blue-700 font-mono tracking-tight select-all"
+                              className="text-[11px] text-blue-600 hover:underline hover:text-blue-700 font-mono tracking-tight truncate select-all"
                               title={po.contact_email || (po.extra_data as any)?.contact_email}
                             >
                               {po.contact_email || (po.extra_data as any)?.contact_email}
                             </a>
                           </div>
                         ) : (
-                          <span className="text-gray-400">—</span>
+                          <span className="text-gray-400 text-xs">—</span>
                         )}
                       </td>
 
                       {/* Notation */}
-                      <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
+                      <td className="px-3.5 py-1.5 text-gray-700 whitespace-nowrap text-xs">
                         {po.notations || (po.extra_data as any)?.notations || (po.extra_data as any)?.aux_head8 || (
                           <span className="text-gray-400">—</span>
                         )}
                       </td>
 
                       {/* Quantity */}
-                      <td className="px-4 py-3 text-right font-mono">
+                      <td className="px-3.5 py-1.5 text-right font-mono text-xs">
                         {po.status === "PARTIAL" && po.remaining_quantity !== undefined && po.remaining_quantity !== null ? (
-                          <div>
+                          <div className="leading-tight">
                             <div className="font-bold text-orange-600">
                               {po.remaining_quantity.toLocaleString()}
                             </div>
-                            <div className="text-[11px] text-gray-400">
+                            <div className="text-[10px] text-gray-400">
                               bal of {po.quantity?.toLocaleString()}
                             </div>
                           </div>
                         ) : po.status === "COMPLETED" ? (
-                          <div>
+                          <div className="leading-tight">
                             <div className="font-bold text-emerald-600">0</div>
-                            <div className="text-[11px] text-gray-400">
+                            <div className="text-[10px] text-gray-400">
                               fulfilled ({po.quantity?.toLocaleString()})
                             </div>
                           </div>
@@ -1095,9 +1472,9 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                       </td>
 
                       {/* Status */}
-                      <td className="px-4 py-3 whitespace-nowrap">
+                      <td className="px-3.5 py-1.5 whitespace-nowrap">
                         <span
-                          className={`px-2.5 py-1 text-xs font-semibold rounded-full inline-flex items-center ${STATUS_BADGES[po.status] || "bg-gray-100 text-gray-700 border border-gray-200"
+                          className={`px-2 py-0.5 text-[11px] font-semibold rounded-full inline-flex items-center ${STATUS_BADGES[po.status] || "bg-gray-100 text-gray-700 border border-gray-200"
                             }`}
                         >
                           {po.status}
@@ -1266,23 +1643,23 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                   <table className="w-full text-left text-xs">
                     <thead>
                       <tr className="bg-gray-50/90 border-b border-gray-200 text-gray-500 font-semibold uppercase tracking-wider text-[11px]">
-                        <th className="px-3 py-2.5 w-10 text-center">No.</th>
-                        <th className="px-3 py-2.5 min-w-[140px]">Item / Material Code</th>
+                        <th className="px-3 py-1.5 w-10 text-center">No.</th>
+                        <th className="px-3 py-1.5 min-w-[140px]">Item / Material Code</th>
                         {hasDistinctPartner && (
-                          <th className="px-3 py-2.5 min-w-[110px]">Partner Code</th>
+                          <th className="px-3 py-1.5 min-w-[110px]">Partner Code</th>
                         )}
-                        <th className="px-3 py-2.5 min-w-[160px]">Description</th>
-                        <th className="px-2.5 py-2.5 min-w-[70px]">Color</th>
-                        <th className="px-2.5 py-2.5 text-center w-16">UOM</th>
-                        <th className="px-3 py-2.5 text-right font-semibold min-w-[85px]">Ordered</th>
-                        <th className="px-3 py-2.5 text-right font-semibold min-w-[85px]">Shipped</th>
-                        <th className="px-3 py-2.5 text-right font-semibold min-w-[95px]">Open Balance</th>
-                        <th className="px-3 py-2.5 text-center min-w-[90px]">Status</th>
+                        <th className="px-3 py-1.5 min-w-[160px]">Description</th>
+                        <th className="px-2 py-1.5 min-w-[70px]">Color</th>
+                        <th className="px-2 py-1.5 text-center w-16">UOM</th>
+                        <th className="px-3 py-1.5 text-right font-semibold min-w-[85px]">Ordered</th>
+                        <th className="px-3 py-1.5 text-right font-semibold min-w-[85px]">Shipped</th>
+                        <th className="px-3 py-1.5 text-right font-semibold min-w-[95px]">Open Balance</th>
+                        <th className="px-3 py-1.5 text-center min-w-[90px]">Status</th>
                         {hasPricing && (
-                          <th className="px-3 py-2.5 text-right min-w-[90px]">Unit Price</th>
+                          <th className="px-3 py-1.5 text-right min-w-[90px]">Unit Price</th>
                         )}
                         {hasPricing && (
-                          <th className="px-3 py-2.5 text-right font-semibold min-w-[100px]">Subtotal</th>
+                          <th className="px-3 py-1.5 text-right font-semibold min-w-[100px]">Subtotal</th>
                         )}
                       </tr>
                     </thead>
@@ -1293,10 +1670,10 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                         const lineShip = item.shipped_quantity || 0;
                         return (
                           <tr key={idx} className="hover:bg-blue-50/20 transition-colors">
-                            <td className="px-3 py-2.5 text-center font-mono text-gray-400">
+                            <td className="px-3 py-1.5 text-center font-mono text-gray-400">
                               {item.line_number}
                             </td>
-                            <td className="px-3 py-2.5 font-mono">
+                            <td className="px-3 py-1.5 font-mono">
                               <div className="font-bold text-gray-900">{item.item_code}</div>
                               {/* If no distinct partner column, show partner code under item code if present */}
                               {!hasDistinctPartner && item.partner_item_code && item.partner_item_code !== item.item_code && (
@@ -1309,14 +1686,14 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                               )}
                             </td>
                             {hasDistinctPartner && (
-                              <td className="px-3 py-2.5 font-mono text-gray-700 font-medium">
+                              <td className="px-3 py-1.5 font-mono text-gray-700 font-medium">
                                 {item.partner_item_code || " "}
                               </td>
                             )}
-                            <td className="px-3 py-2.5 text-gray-700 font-medium break-words max-w-xs">
+                            <td className="px-3 py-1.5 text-gray-700 font-medium break-words max-w-xs">
                               {item.description}
                             </td>
-                            <td className="px-2.5 py-2.5 text-gray-700 whitespace-nowrap">
+                            <td className="px-2 py-1.5 text-gray-700 whitespace-nowrap">
                               {item.color ? (
                                 <span className="px-2 py-0.5 bg-gray-100 text-gray-800 rounded font-medium text-[11px] border border-gray-200">
                                   {item.color}
@@ -1325,21 +1702,21 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                                 <span className="text-gray-300"> </span>
                               )}
                             </td>
-                            <td className="px-2.5 py-2.5 text-center font-mono text-gray-700 whitespace-nowrap">
+                            <td className="px-2 py-1.5 text-center font-mono text-gray-700 whitespace-nowrap">
                               <span className="px-2 py-0.5 bg-gray-100 rounded text-[11px] font-semibold border border-gray-200">
                                 {item.size || "M"}
                               </span>
                             </td>
-                            <td className="px-3 py-2.5 text-right font-mono text-gray-700 whitespace-nowrap">
+                            <td className="px-3 py-1.5 text-right font-mono text-gray-700 whitespace-nowrap">
                               {item.quantity.toLocaleString()}
                             </td>
-                            <td className="px-3 py-2.5 text-right font-mono text-emerald-700 font-semibold whitespace-nowrap">
+                            <td className="px-3 py-1.5 text-right font-mono text-emerald-700 font-semibold whitespace-nowrap">
                               {lineShip.toLocaleString()}
                             </td>
-                            <td className="px-3 py-2.5 text-right font-mono font-bold text-gray-900 whitespace-nowrap">
+                            <td className="px-3 py-1.5 text-right font-mono font-bold text-gray-900 whitespace-nowrap">
                               {lineRem.toLocaleString()}
                             </td>
-                            <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                            <td className="px-3 py-1.5 text-center whitespace-nowrap">
                               {lineRem <= 0 ? (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                                   <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Fulfilled
@@ -1355,14 +1732,14 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                               )}
                             </td>
                             {hasPricing && (
-                              <td className="px-3 py-2.5 text-right font-mono text-gray-600 whitespace-nowrap">
+                              <td className="px-3 py-1.5 text-right font-mono text-gray-600 whitespace-nowrap">
                                 {item.unit_price !== undefined
                                   ? `${activePO.currency || "USD"} ${item.unit_price.toFixed(2)}`
                                   : " "}
                               </td>
                             )}
                             {hasPricing && (
-                              <td className="px-3 py-2.5 text-right font-mono font-bold text-gray-900 whitespace-nowrap">
+                              <td className="px-3 py-1.5 text-right font-mono font-bold text-gray-900 whitespace-nowrap">
                                 {lineSubtotal !== undefined
                                   ? `${activePO.currency || "USD"} ${lineSubtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                                   : " "}
