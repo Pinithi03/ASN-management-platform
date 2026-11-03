@@ -76,6 +76,14 @@ export interface EmailDetail extends EmailRecord {
   xml_transmission_date: string | null;
 }
 
+export interface POHistoryRecord {
+  id: string;
+  version: number;
+  change_source?: string | null;
+  changed_fields?: Record<string, unknown>;
+  created_at?: string | null;
+}
+
 export interface PurchaseOrder {
   id: string;
   company_id: string;
@@ -106,8 +114,39 @@ export interface PurchaseOrder {
   extra_data: Record<string, unknown> | null;
   source_email_id: string | null;
   source_email_subject: string | null;
+  history?: POHistoryRecord[] | null;
   created_at: string | null;
   updated_at: string | null;
+}
+
+export interface POLineItemRecord {
+  line_uid: string;
+  po_id: string;
+  po_number: string;
+  po_item: string;
+  po_line_label: string;
+  material_code: string | null;
+  partner_code: string | null;
+  material_description: string | null;
+  color?: string | null;
+  size?: string | null;
+  ordered_qty: number;
+  shipped_qty: number;
+  remaining_qty: number;
+  unit_price?: number | null;
+  currency?: string | null;
+  uom: string | null;
+  destination: string | null;
+  delivery_address: string | null;
+  plant_code: string | null;
+  plant_name: string | null;
+  plant_group: string | null;
+  storage_location: string | null;
+  delivery_date: string | null;
+  order_date: string | null;
+  po_status: POStatus | string | null;
+  po_version?: number | null;
+  supplier_id?: string | null;
 }
 
 export interface PaginatedResponse<T> {

@@ -270,7 +270,7 @@ export const shipmentService = {
    * Preview SdDataSlice XML.
    */
   async getASNXmlPreview(asnId: string) {
-    const res = await api.get<{ asn_number: string; xml_content: string; xml_validated: boolean }>(
+    const res = await api.get<{ asn_number: string; xml_content: string; xml_validated: boolean; xml_filename?: string }>(
       `/asn/${asnId}/preview-xml`
     );
     return res.data;

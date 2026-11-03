@@ -18,9 +18,16 @@ import {
   FIELD_COLORS,
 } from "@/utils/supplierFieldUpdates";
 import {
+  clearSharedPlantState,
+  getSavedSharedPlant,
+  normalizePlantKey,
+} from "@/utils/plantResolver";
+import {
   LayoutDashboard,
   Mail,
   FileText,
+  ListOrdered,
+  History,
   Truck,
   Settings,
   Users,
@@ -51,12 +58,14 @@ interface SidebarProps {
 
 interface NavSubItem {
   to: string;
+  mode: "manual" | "excel";
   icon: React.ComponentType<{ className?: string }>;
   label: string;
 }
 
 interface NavItem {
   to: string;
+  basePath?: string;
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   children?: NavSubItem[];
@@ -75,19 +84,31 @@ export interface NotificationItem {
 
 // Admin portal navigation
 const adminMainNav: NavItem[] = [
-  { to: "/", icon: LayoutDashboard, label: "Dashboard" },
-  { to: "/emails", icon: Mail, label: "Email Inbox" },
+  { to: "/overview", icon: LayoutDashboard, label: "Overview" },
   {
     icon: FileText,
     label: "Purchase Orders",
+    basePath: "/purchase-orders",
     to: "/purchase-orders/manual",
     children: [
-      { to: "/purchase-orders/manual", icon: Layers, label: "Manual Process" },
-      { to: "/purchase-orders/excel", icon: FileSpreadsheet, label: "Excel Drop" },
+      { to: "/purchase-orders/manual", mode: "manual", icon: Layers, label: "Manual Process" },
+      { to: "/purchase-orders/excel", mode: "excel", icon: FileSpreadsheet, label: "Excel Drop" },
+    ],
+  },
+  {
+    icon: ListOrdered,
+    label: "Purchase Order Lines",
+    basePath: "/purchase-order-lines",
+    to: "/purchase-order-lines/manual",
+    children: [
+      { to: "/purchase-order-lines/manual", mode: "manual", icon: Layers, label: "Manual Process" },
+      { to: "/purchase-order-lines/excel", mode: "excel", icon: FileSpreadsheet, label: "Excel Drop" },
     ],
   },
   { to: "/drafts", icon: FileEdit, label: "Drafts" },
   { to: "/shipments", icon: PackagePlus, label: "Shipments" },
+  { to: "/order-history", icon: History, label: "Order History" },
+  { to: "/emails", icon: Mail, label: "Email Inbox" },
   { to: "/suppliers", icon: Truck, label: "Suppliers" },
 ];
 
@@ -96,26 +117,42 @@ const adminSettingsNav: NavItem[] = [
   { to: "/settings/users", icon: Users, label: "Users" },
 ];
 
-// Supplier portal navigation
+// Supplier / standard user portal navigation (exact top-to-bottom sequence 1..8)
 const supplierMainNav: NavItem[] = [
-  { to: "/", icon: LayoutDashboard, label: "Dashboard" },
-  { to: "/emails", icon: Mail, label: "My Emails" },
   {
     icon: FileText,
     label: "Purchase Orders",
+    basePath: "/purchase-orders",
     to: "/purchase-orders/manual",
     children: [
-      { to: "/purchase-orders/manual", icon: Layers, label: "Manual Process" },
-      { to: "/purchase-orders/excel", icon: FileSpreadsheet, label: "Excel Drop" },
+      { to: "/purchase-orders/manual", mode: "manual", icon: Layers, label: "Manual Process" },
+      { to: "/purchase-orders/excel", mode: "excel", icon: FileSpreadsheet, label: "Excel Drop" },
+    ],
+  },
+  {
+    icon: ListOrdered,
+    label: "Purchase Order Lines",
+    basePath: "/purchase-order-lines",
+    to: "/purchase-order-lines/manual",
+    children: [
+      { to: "/purchase-order-lines/manual", mode: "manual", icon: Layers, label: "Manual Process" },
+      { to: "/purchase-order-lines/excel", mode: "excel", icon: FileSpreadsheet, label: "Excel Drop" },
     ],
   },
   { to: "/drafts", icon: FileEdit, label: "Drafts" },
   { to: "/shipments", icon: PackagePlus, label: "Shipments" },
+  { to: "/order-history", icon: History, label: "Order History" },
+  { to: "/overview", icon: LayoutDashboard, label: "Overview" },
+  { to: "/emails", icon: Mail, label: "My Emails" },
 ];
 
 const supplierSettingsNav: NavItem[] = [
   { to: "/profile", icon: UserCircle, label: "Profile" },
 ];
+
+function matchesBasePath(pathname: string, basePath: string): boolean {
+  return pathname === basePath || pathname.startsWith(`${basePath}/`);
+}
 
 export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const navigate = useNavigate();
@@ -157,6 +194,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
     queryFn: () =>
       poApi.list({
         supplier_id: user?.supplier_id || user?.supplier_code || undefined,
+        exclude_completed: true,
         per_page: 5,
       }),
     enabled: !isAdmin && Boolean(user?.supplier_code || user?.supplier_id),
@@ -327,6 +365,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
   const handleConfirmLogout = () => {
     setShowLogoutConfirm(false);
+    clearSharedPlantState();
     logout();
     navigate("/login");
   };
@@ -334,28 +373,59 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const searchParams = new URLSearchParams(location.search);
   const poParam = searchParams.get("pos") || searchParams.get("po");
   const isCreatingDelivery = location.pathname === "/shipments" && Boolean(poParam);
-  const deliveryCreationMode = searchParams.get("mode") === "excel" ? "excel" : "manual";
+  const deliveryFromLines =
+    isCreatingDelivery &&
+    (searchParams.get("source") === "lines" || Boolean(searchParams.get("lines")));
+  const deliveryCreationMode: "manual" | "excel" =
+    searchParams.get("mode") === "excel" ? "excel" : "manual";
 
-  const isPoSectionActive = location.pathname.startsWith("/purchase-orders") || isCreatingDelivery;
+  // Build shared ?plant=...&loc=... query string when navigating between PO and PO Lines tabs
+  const buildPlantAwareUrl = (targetPath: string) => {
+    const currentPlant =
+      normalizePlantKey(searchParams.get("plant")) || getSavedSharedPlant().plant;
+    const currentLoc = searchParams.get("loc") || getSavedSharedPlant().loc;
+    if (!currentPlant) return targetPath;
+    const params = new URLSearchParams();
+    params.set("plant", currentPlant);
+    if (currentLoc) params.set("loc", currentLoc);
+    return `${targetPath}?${params.toString()}`;
+  };
+
+  const isSectionActive = (basePath?: string) => {
+    if (!basePath) return false;
+    if (basePath === "/purchase-orders") {
+      return matchesBasePath(location.pathname, "/purchase-orders") || (isCreatingDelivery && !deliveryFromLines);
+    }
+    if (basePath === "/purchase-order-lines") {
+      return matchesBasePath(location.pathname, "/purchase-order-lines") || (isCreatingDelivery && deliveryFromLines);
+    }
+    return matchesBasePath(location.pathname, basePath);
+  };
 
   const isActive = (path: string) => {
-    if (path === "/") return location.pathname === "/";
+    if (path === "/overview") {
+      return location.pathname === "/overview" || location.pathname === "/dashboard";
+    }
     if (path === "/shipments") {
       if (isCreatingDelivery) return false;
-      return location.pathname.startsWith("/shipments");
+      return matchesBasePath(location.pathname, "/shipments");
     }
-    return location.pathname.startsWith(path);
+    return matchesBasePath(location.pathname, path);
   };
 
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>(() => ({
-    "Purchase Orders": isPoSectionActive,
+    "Purchase Orders": isSectionActive("/purchase-orders"),
+    "Purchase Order Lines": isSectionActive("/purchase-order-lines"),
   }));
 
   useEffect(() => {
-    if (isPoSectionActive) {
+    if (isSectionActive("/purchase-orders")) {
       setOpenMenus((prev) => ({ ...prev, "Purchase Orders": true }));
     }
-  }, [isPoSectionActive]);
+    if (isSectionActive("/purchase-order-lines")) {
+      setOpenMenus((prev) => ({ ...prev, "Purchase Order Lines": true }));
+    }
+  }, [location.pathname, isCreatingDelivery, deliveryFromLines]);
 
   const toggleMenu = (label: string) => {
     setOpenMenus((prev) => ({ ...prev, [label]: !prev[label] }));
@@ -402,20 +472,22 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         {mainNav.map((item) => {
           if (item.children && item.children.length > 0) {
             const isMenuOpen = Boolean(openMenus[item.label]);
-            const isParentActive = isPoSectionActive;
+            const isParentActive = isSectionActive(item.basePath);
+            const inThisBase = item.basePath ? matchesBasePath(location.pathname, item.basePath) : false;
 
             return (
               <div key={item.label} className="space-y-0.5">
                 <button
                   type="button"
                   onClick={() => {
+                    const targetUrl = buildPlantAwareUrl(item.to);
                     if (collapsed) {
                       onToggle();
                       setOpenMenus((prev) => ({ ...prev, [item.label]: true }));
-                      navigate(item.to);
+                      navigate(targetUrl);
                     } else {
-                      if (!location.pathname.startsWith("/purchase-orders")) {
-                        navigate(item.to);
+                      if (!inThisBase) {
+                        navigate(targetUrl);
                         setOpenMenus((prev) => ({ ...prev, [item.label]: true }));
                       } else {
                         toggleMenu(item.label);
@@ -432,14 +504,14 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   )}
                   title={collapsed ? item.label : undefined}
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
                     <item.icon className="h-5 w-5 flex-shrink-0" />
-                    {!collapsed && <span>{item.label}</span>}
+                    {!collapsed && <span className="truncate">{item.label}</span>}
                   </div>
                   {!collapsed && (
                     <ChevronDown
                       className={cn(
-                        "h-4 w-4 text-slate-400 transition-transform duration-200",
+                        "h-4 w-4 text-slate-400 transition-transform duration-200 shrink-0",
                         isMenuOpen && "rotate-180 text-slate-600"
                       )}
                     />
@@ -450,13 +522,12 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   <div className="space-y-0.5 pl-3 pt-0.5">
                     {item.children.map((sub) => {
                       const isSubActive = isCreatingDelivery
-                        ? (deliveryCreationMode === "manual" && sub.to === "/purchase-orders/manual") ||
-                          (deliveryCreationMode === "excel" && sub.to === "/purchase-orders/excel")
+                        ? isParentActive && deliveryCreationMode === sub.mode
                         : location.pathname === sub.to;
                       return (
                         <NavLink
                           key={sub.to}
-                          to={sub.to}
+                          to={buildPlantAwareUrl(sub.to)}
                           className={cn(
                             "flex items-center gap-2.5 rounded-lg pl-6 pr-3 py-1.5 text-xs font-medium transition-colors",
                             isSubActive
@@ -533,9 +604,9 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         ))}
       </nav>
 
-      {/* User Profile & Actions Footer (Replaces Company/Tenant and Top Header Bar) */}
+      {/* User Profile & Actions Footer */}
       <div className="border-t border-slate-200 bg-slate-50/70 relative shrink-0" ref={notifRef}>
-        {/* Floating Notification Popover (Upward or Sideways) */}
+        {/* Floating Notification Popover */}
         {notifOpen && (
           <div
             className={cn(
@@ -643,7 +714,6 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         {!collapsed ? (
           <div className="p-3">
             <div className="flex items-center justify-between gap-2">
-              {/* User Avatar + Code (top) + Name (bottom) */}
               <div className="flex items-center gap-2.5 min-w-0 flex-1">
                 <div
                   className={cn(

@@ -44,6 +44,7 @@ from app.services.asn_xml_generator_service import (
     get_asn_xml_filename,
     validate_asn_xml,
 )
+from app.core.plant_resolver import resolve_plant_and_location
 from app.services.barcode_label_service import generate_batch_labels
 from app.services.hu_service import format_hu_number, generate_batch_hu, sync_hu_sequence_max
 from app.services.packing_excel_service import (
@@ -432,6 +433,7 @@ async def create_shipment_from_excel(
         file_bytes=file_bytes,
         db=db,
         supplier_id=supplier_uuid,
+        supplier_code=supplier_code,
     )
     if not validation_res.is_valid:
         raise HTTPException(
@@ -447,13 +449,18 @@ async def create_shipment_from_excel(
         raise HTTPException(status_code=400, detail="No carton data rows found in Excel sheet")
 
     # Fetch PO from DB first to get actual company_id, supplier_id, and destination
+    distinct_pos = list({r.po_number for r in validation_res.rows if r.po_number})
+    po_cache: dict[str, PurchaseOrder] = {}
     po_obj = None
-    try:
-        po_stmt = select(PurchaseOrder).where(PurchaseOrder.po_number == validation_res.rows[0].po_number)
-        po_res = await db.execute(po_stmt)
-        po_obj = po_res.scalar_one_or_none()
-    except Exception as e:
-        logger.warning("Could not query PO for shipment: %s", e)
+    if distinct_pos:
+        try:
+            pos_stmt = select(PurchaseOrder).where(PurchaseOrder.po_number.in_(distinct_pos))
+            pos_res = await db.execute(pos_stmt)
+            for p in pos_res.scalars().all():
+                po_cache[p.po_number] = p
+            po_obj = po_cache.get(validation_res.rows[0].po_number)
+        except Exception as e:
+            logger.warning("Could not pre-fetch POs for Excel shipment: %s", e)
 
     company_id = po_obj.company_id if (po_obj and po_obj.company_id) else None
     if not company_id:
@@ -679,9 +686,11 @@ async def create_shipment_from_excel(
             packing_slips.append(ps)
 
             clean_row_item = str(row.po_item).split("-")[0].zfill(5)
+            row_po = po_cache.get(row.po_number) or po_obj
+            row_po_items = (row_po.extra_data or {}).get("items", []) if row_po else po_items_list
             po_item_info = next(
                 (
-                    it for it in po_items_list
+                    it for it in row_po_items
                     if str(it.get("order_line_number") or it.get("line_number", "")).split("-")[0].zfill(5) == clean_row_item
                 ),
                 None
@@ -692,6 +701,20 @@ async def create_shipment_from_excel(
                 if po_item_info else ""
             ) or ""
 
+            # Extract order_date directly from the PO record
+            row_order_date = None
+            if row_po:
+                if row_po.extra_data and isinstance(row_po.extra_data, dict):
+                    row_order_date = row_po.extra_data.get("order_date")
+                    if not row_order_date and po_item_info:
+                        row_order_date = po_item_info.get("order_date")
+                if not row_order_date and getattr(row_po, "order_date", None):
+                    row_order_date = getattr(row_po, "order_date")
+                if not row_order_date and getattr(row_po, "created_at", None):
+                    row_order_date = row_po.created_at
+            if not row_order_date:
+                row_order_date = shipment_date
+
             official_line = (
                 str(po_item_info.get("order_line_number") or po_item_info.get("line_number", "")).strip()
                 if po_item_info
@@ -701,7 +724,7 @@ async def create_shipment_from_excel(
             boxes_for_xml.append({
                 "po_number": row.po_number,
                 "po_line": official_line,
-                "order_date": po_order_date,
+                "order_date": row_order_date,
                 "order_type": "ZA6A",
                 "hu_number": hu_num,
                 "material_code": row.product_code,
@@ -858,6 +881,7 @@ class DirectCartonItem(BaseModel):
     hu_number: Optional[str] = None
     pack_number: Optional[str] = None
     width: Optional[float] = None
+    order_date: Optional[str] = None
 
 
 class CreateDirectShipmentRequest(BaseModel):
@@ -1082,7 +1106,16 @@ async def create_direct_shipment(
             po_cache[c.po_number] = p_res.scalar_one_or_none()
         c_po = po_cache.get(c.po_number)
         c_po_items = (c_po.extra_data or {}).get("items", []) if c_po else []
-        c_order_date = getattr(c_po, "order_date", None) or shipment_date
+        c_order_date = getattr(c, "order_date", None)
+        if not c_order_date and c_po:
+            if c_po.extra_data and isinstance(c_po.extra_data, dict):
+                c_order_date = c_po.extra_data.get("order_date")
+            if not c_order_date and getattr(c_po, "order_date", None):
+                c_order_date = getattr(c_po, "order_date")
+            if not c_order_date and getattr(c_po, "created_at", None):
+                c_order_date = c_po.created_at
+        if not c_order_date:
+            c_order_date = shipment_date
 
         clean_c_line = str(c.po_line).split("-")[0].zfill(5)
         po_item_info = next(
@@ -1521,6 +1554,44 @@ async def download_shipment_labels(
                 supp_name = supp.name
                 supp_code = supp.supplier_code
 
+        # Resolve destination plant title for HU label header banner (e.g. SIRIO LTD, BENJI LTD, OMEGA LINE LTD)
+        dest_plant_name = "SIRIO LTD"
+        raw_plant_target = ""
+
+        # 1. Try ASN record LegalName if available
+        asn_stmt = select(ASNRecord).where(ASNRecord.shipment_id == id)
+        asn_res = await db.execute(asn_stmt)
+        asn_rec = asn_res.scalars().first()
+        if asn_rec and asn_rec.xml_content:
+            m = re.search(r"<LegalName>(.*?)</LegalName>", asn_rec.xml_content)
+            if m and m.group(1).strip():
+                raw_plant_target = m.group(1).strip()
+
+        # 2. Try shipment.plant_code
+        if not raw_plant_target and shipment.plant_code:
+            raw_plant_target = shipment.plant_code
+
+        # 3. Try checking carton POs
+        buyer_val = None
+        if cartons:
+            first_po = (cartons[0].dimensions or {}).get("po_number")
+            if first_po and first_po != "N/A":
+                po_stmt = select(PurchaseOrder).where(PurchaseOrder.po_number == str(first_po))
+                po_res = await db.execute(po_stmt)
+                po_obj = po_res.scalar_one_or_none()
+                if po_obj:
+                    buyer_val = (
+                        getattr(po_obj, "client_code", None)
+                        or (po_obj.extra_data.get("buyer_name") if getattr(po_obj, "extra_data", None) else None)
+                        or getattr(po_obj, "buyer_name", None)
+                    )
+                    if not raw_plant_target:
+                        raw_plant_target = po_obj.destination or getattr(po_obj, "plant_code", "") or ""
+
+        if raw_plant_target or buyer_val:
+            resolved = resolve_plant_and_location(raw_plant_target, buyer_name=buyer_val)
+            dest_plant_name = resolved.get("plant_name", "").strip().upper() or "SIRIO LTD"
+
         labels_data: list[dict[str, Any]] = []
         total_boxes = len(cartons)
 
@@ -1530,6 +1601,7 @@ async def download_shipment_labels(
                 "hu_number": c.hu_number or c.barcode_data or "",
                 "supplier_name": supp_name,
                 "supplier_code": supp_code,
+                "destination_plant": dest_plant_name,
                 "po_number": meta.get("po_number", "N/A"),
                 "po_line_number": str(meta.get("po_line", "100")),
                 "material_code": meta.get("product_code", "MATERIAL"),

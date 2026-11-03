@@ -656,7 +656,11 @@ async def parse_and_validate_packing_excel(
         start_seq = 0
         if db is not None:
             try:
-                supp_uuid = uuid.UUID(supplier_id) if supplier_id else None
+                supp_uuid = (
+                    supplier_id
+                    if isinstance(supplier_id, uuid.UUID)
+                    else (uuid.UUID(str(supplier_id)) if supplier_id else None)
+                )
                 supp_obj = None
                 if supp_uuid:
                     supp_obj = (await db.execute(select(Supplier).where(Supplier.id == supp_uuid))).scalar_one_or_none()
@@ -668,6 +672,23 @@ async def parse_and_validate_packing_excel(
                 seq_res = await db.execute(select(HUSequence).where(HUSequence.supplier_id == target_supp_id))
                 seq_obj = seq_res.scalar_one_or_none()
                 start_seq = seq_obj.last_number if seq_obj else 0
+
+                from app.models.packing_slip import PackingSlip
+                max_hu_stmt = (
+                    select(PackingSlip.hu_number)
+                    .join(Shipment, PackingSlip.shipment_id == Shipment.id)
+                    .where(
+                        Shipment.supplier_id == target_supp_id,
+                        PackingSlip.hu_number.like(f"{prefix}%"),
+                    )
+                )
+                existing_res = await db.execute(max_hu_stmt)
+                existing_hus = existing_res.scalars().all()
+                serials = [int(h[10:]) for h in existing_hus if len(h) == 20 and h[10:].isdigit()]
+                if serials:
+                    max_used = max(serials)
+                    if max_used > start_seq:
+                        start_seq = max_used
             except Exception as e:
                 logger.warning("Could not query HU sequence for preview: %s", e)
         for idx, r in enumerate(missing_hu_rows):

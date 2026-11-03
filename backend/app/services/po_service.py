@@ -1,17 +1,20 @@
 """
 Purchase Order Service.
 
-Handles PO lifecycle logic including automatic status updates based on shipment execution.
+Handles PO lifecycle logic including automatic status updates based on shipment execution
+and recording completion milestones into POHistory.
 """
 
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from typing import Optional, Sequence
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.po_history import POHistory
 from app.models.purchase_order import PurchaseOrder
 from app.models.shipment import Shipment
 from app.models.shipment_line import ShipmentLine
@@ -28,6 +31,9 @@ async def update_po_statuses(
     - If total_shipped > 0 and remaining <= 0 (all items fulfilled): COMPLETED
     - If total_shipped > 0 and remaining > 0 (partially fulfilled): PARTIAL
     - If total_shipped == 0: ACTIVE (unless already UPDATED or CANCELLED)
+
+    Appends a POHistory changelog entry when a PO transitions (e.g. into COMPLETED
+    for the Order History archive).
 
     Returns a dictionary mapping po_number to its updated status.
     """
@@ -98,16 +104,36 @@ async def update_po_statuses(
             new_status = current_status
 
         if po.status != new_status:
+            previous_status = po.status
             logger.info(
                 "PO %s status changing: %s -> %s (ordered: %s, shipped: %s, remaining: %s)",
                 po_num,
-                po.status,
+                previous_status,
                 new_status,
                 total_ordered,
                 total_shipped,
                 total_remaining,
             )
             po.status = new_status
+            po.updated_at = datetime.now(timezone.utc)
             updated_statuses[po_num] = new_status
+
+            # Record lifecycle transition (including COMPLETED milestone) in POHistory
+            if po.company_id:
+                db.add(
+                    POHistory(
+                        po_id=po.id,
+                        company_id=po.company_id,
+                        source_email_id=po.source_email_id,
+                        version=po.version or 1,
+                        change_source="SHIPMENT_FULFILLMENT",
+                        changed_fields={
+                            "status": {"old": previous_status, "new": new_status},
+                            "ordered_quantity": total_ordered,
+                            "shipped_quantity": total_shipped,
+                            "remaining_quantity": total_remaining,
+                        },
+                    )
+                )
 
     return updated_statuses

@@ -217,9 +217,9 @@ export default function UserManagement() {
             <p className="text-xs text-gray-400 mt-1">Try clearing your search term or filter selection</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-auto max-h-[calc(100vh-280px)]">
             <table className="w-full text-sm text-left">
-              <thead>
+              <thead className="sticky top-0 z-10 bg-gray-50 shadow-xs">
                 <tr className="bg-gray-50/80 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-500">
                   <th className="px-6 py-3.5">Administrator Name & Email</th>
                   <th className="px-6 py-3.5">System Role</th>

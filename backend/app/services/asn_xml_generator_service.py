@@ -113,18 +113,14 @@ def generate_asn_xml(
             # Strip time part if present
             if "T" in s:
                 s = s.split("T")[0]
-            if " " in s and "-" in s:
+            if " " in s and ("-" in s or "/" in s):
                 s = s.split(" ")[0]
-            try:
-                parsed = datetime.strptime(s, "%Y-%m-%d")
-                return parsed.strftime("%d-%m-%Y")
-            except Exception:
-                pass
-            try:
-                parsed = datetime.strptime(s, "%d/%m/%Y")
-                return parsed.strftime("%d-%m-%Y")
-            except Exception:
-                pass
+            for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%Y/%m/%d", "%d.%m.%Y", "%m/%d/%Y", "%d-%m-%Y"):
+                try:
+                    parsed = datetime.strptime(s, fmt)
+                    return parsed.strftime("%d-%m-%Y")
+                except Exception:
+                    pass
         return now.strftime("%d-%m-%Y")
 
     ps_date_str = format_date(packing_slip_date)
@@ -397,18 +393,24 @@ def validate_asn_xml(xml_content: str | bytes, supplier_code: str) -> Validation
 
 
 def get_asn_xml_filename(packing_slip_number: str, supplier_code: str) -> str:
-    """Generate standard filename: PL_{PackingSlipNumber}_{SupplierCode10}.xml"""
-    ps_clean = str(packing_slip_number).zfill(8)
-    supp_clean = str(supplier_code).lstrip("0").zfill(10)
-    return f"PL_{ps_clean}_{supp_clean}.xml"
+    """Generate standard filename: PL_{PackingSlipNumber}_[{SupplierCode10}].xml"""
+    ps_clean = str(packing_slip_number).strip().zfill(8)
+    supp_clean = str(supplier_code).strip().lstrip("0").zfill(10)
+    return f"PL_{ps_clean}_[{supp_clean}].xml"
 
 
-def get_asn_email_subject(packing_slip_number: str, packing_slip_date: datetime | str, supplier_code: str) -> str:
+def get_asn_email_subject(packing_slip_number: str, packing_slip_date: date | datetime | str, supplier_code: str) -> str:
     """Generate email subject: Packing List {Number} of {DD-MM-YYYY} - {SupplierCode10}"""
-    if isinstance(packing_slip_date, datetime):
+    if isinstance(packing_slip_date, (datetime, date)):
         date_str = packing_slip_date.strftime("%d-%m-%Y")
     else:
-        date_str = str(packing_slip_date)
-    ps_clean = str(packing_slip_number).zfill(8)
-    supp_clean = str(supplier_code).lstrip("0").zfill(10)
+        date_str = str(packing_slip_date).strip()
+        if re.match(r"^\d{4}-\d{2}-\d{2}", date_str):
+            parts = date_str[:10].split("-")
+            date_str = f"{parts[2]}-{parts[1]}-{parts[0]}"
+        elif re.match(r"^\d{4}/\d{2}/\d{2}", date_str):
+            parts = date_str[:10].split("/")
+            date_str = f"{parts[2]}-{parts[1]}-{parts[0]}"
+    ps_clean = str(packing_slip_number).strip().zfill(8)
+    supp_clean = str(supplier_code).strip().lstrip("0").zfill(10)
     return f"Packing List {ps_clean} of {date_str} - {supp_clean}"
