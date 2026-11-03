@@ -1,13 +1,14 @@
 // ─── Email Full View Page ───────────────────────────────────────
 // frontend/src/pages/EmailDetail.tsx
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
   ArrowLeft,
   Download,
+  ExternalLink,
   Eye,
   EyeOff,
   FileCode,
@@ -41,6 +42,7 @@ const PO_FIELDS: { key: string; label: string; fallbackKey?: string }[] = [
   { key: "total_quantity", label: "Total Qty" },
   { key: "total_value", label: "Total Value" },
   { key: "source_filename", label: "Source File" },
+  { key: "order_url", label: "IUNGO Order Link" },
 ];
 
 const LINE_ITEM_COLUMNS: { key: string; label: string; numeric?: boolean; fallbackKey?: string }[] = [
@@ -154,12 +156,113 @@ const attachmentQuery = (emailId: string, attachmentId: string) => ({
 
 // ─── Components ─────────────────────────────────────────────────
 
-/** Email HTML is untrusted: rendered with scripts disabled and no access to the app. */
+/**
+ * Sanitizes and prepares email HTML content for safe iframe rendering:
+ * 1. Injects <base target="_blank" /> into <head> (creating <head> if absent).
+ * 2. Enforces target="_blank" and rel="noopener noreferrer" on every <a> tag so that
+ *    external links (such as IUNGO "Apri / Open" buttons, archive.iungomail.com, and *.iungoapps.com)
+ *    open seamlessly in a new tab without inheriting iframe sandbox restrictions.
+ * 3. Preserves all original href URLs and query parameters (such as AWS CloudFront Expires,
+ *    Signature, Key-Pair-Id, IUNGO md5r, and atk) exactly as sent without escaping or truncating.
+ */
+function prepareEmailHtml(rawHtml: string): string {
+  if (!rawHtml) return "";
+
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(rawHtml, "text/html");
+
+    // Ensure <head> exists
+    let head = doc.head;
+    if (!head) {
+      head = doc.createElement("head");
+      doc.documentElement.insertBefore(head, doc.documentElement.firstChild);
+    }
+
+    // 1. Ensure <base target="_blank" /> exists in <head>
+    let base = head.querySelector("base");
+    if (!base) {
+      base = doc.createElement("base");
+      base.setAttribute("target", "_blank");
+      head.insertBefore(base, head.firstChild);
+    } else {
+      base.setAttribute("target", "_blank");
+    }
+
+    // Ensure utf-8 charset meta tag is present
+    if (!head.querySelector("meta[charset]")) {
+      const meta = doc.createElement("meta");
+      meta.setAttribute("charset", "utf-8");
+      head.insertBefore(meta, base);
+    }
+
+    // 2. Enforce target="_blank" and rel="noopener noreferrer" on all <a> tags
+    const anchors = doc.querySelectorAll("a");
+    anchors.forEach((a) => {
+      a.setAttribute("target", "_blank");
+
+      const existingRel = a.getAttribute("rel") || "";
+      const relSet = new Set(existingRel.split(/\s+/).filter(Boolean));
+      relSet.add("noopener");
+      relSet.add("noreferrer");
+      a.setAttribute("rel", Array.from(relSet).join(" "));
+
+      // Preserve raw href attribute completely untouched
+      const href = a.getAttribute("href");
+      if (href && !href.startsWith("javascript:")) {
+        a.setAttribute("href", href);
+      }
+    });
+
+    return doc.documentElement.outerHTML;
+  } catch {
+    // Regex fallback
+    let html = rawHtml;
+
+    // Inject <base target="_blank" /> into <head>
+    if (/<head[^>]*>/i.test(html)) {
+      html = html.replace(/(<head[^>]*>)/i, '$1<base target="_blank" />');
+    } else if (/<html[^>]*>/i.test(html)) {
+      html = html.replace(/(<html[^>]*>)/i, '$1<head><base target="_blank" /></head>');
+    } else {
+      html = `<head><base target="_blank" /></head>${html}`;
+    }
+
+    // Enforce target="_blank" and rel="noopener noreferrer" on <a> tags
+    html = html.replace(/<a\b([^>]*)>/gi, (_match, attrs) => {
+      let updated = attrs;
+      if (/\btarget\s*=\s*['"][^'"]*['"]/i.test(updated)) {
+        updated = updated.replace(/\btarget\s*=\s*['"][^'"]*['"]/i, 'target="_blank"');
+      } else {
+        updated += ' target="_blank"';
+      }
+
+      if (/\brel\s*=\s*['"][^'"]*['"]/i.test(updated)) {
+        updated = updated.replace(/\brel\s*=\s*['"]([^'"]*)['"]/i, (_: string, relVal: string) => {
+          const parts = new Set(relVal.split(/\s+/).filter(Boolean));
+          parts.add("noopener");
+          parts.add("noreferrer");
+          return `rel="${Array.from(parts).join(" ")}"`;
+        });
+      } else {
+        updated += ' rel="noopener noreferrer"';
+      }
+
+      return `<a${updated}>`;
+    });
+
+    return html;
+  }
+}
+
+/** Email HTML is untrusted: rendered with scripts disabled and safe sandbox permissions. */
 function SafeHtmlFrame({ html, title }: { html: string; title: string }) {
+  const preparedHtml = useMemo(() => prepareEmailHtml(html), [html]);
+
   return (
     <iframe
       title={title}
-      srcDoc={`<base target="_blank">${html}`}
+      srcDoc={preparedHtml}
       sandbox="allow-popups allow-popups-to-escape-sandbox"
       className="w-full h-[70vh] bg-white border border-gray-200 rounded-lg"
     />
@@ -272,12 +375,30 @@ function ParsedDataSection({ data }: { data: ParsedData }) {
         <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-3 text-sm">
           {fields.map(({ key, label, value }) => {
             const isMoney = key === "total_value";
+            const isLink =
+              (key === "order_url" || String(label).toLowerCase().includes("link")) &&
+              typeof value === "string" &&
+              value.startsWith("http");
             const currency = String(raw.currency || "USD");
             return (
               <div key={key} className="min-w-0">
                 <dt className="text-gray-500">{label}</dt>
                 <dd className={`break-words ${isMoney ? "text-gray-950 font-bold" : "text-gray-900"}`}>
-                  {isMoney ? formatMoney(value, currency) : displayValue(value)}
+                  {isMoney ? (
+                    formatMoney(value, currency)
+                  ) : isLink ? (
+                    <a
+                      href={value as string}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-800 hover:underline font-medium inline-flex items-center gap-1 text-xs"
+                    >
+                      <span>Open in IUNGO</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  ) : (
+                    displayValue(value)
+                  )}
                 </dd>
               </div>
             );
