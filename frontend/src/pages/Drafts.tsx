@@ -33,7 +33,7 @@ export default function Drafts() {
   const isSupplier = user?.role === "SUPPLIER";
   const supplierCode = isSupplier ? (user.supplier_code || undefined) : undefined;
 
-  const [filterTab, setFilterTab] = useState<"all" | "manual" | "excel">("all");
+  const [filterTab, setFilterTab] = useState<"manual" | "excel">("manual");
   const [manualDrafts, setManualDrafts] = useState<ManualPackingDraft[]>([]);
   const [excelDrafts, setExcelDrafts] = useState<ExcelPackingDraft[]>([]);
 
@@ -55,6 +55,7 @@ export default function Drafts() {
   }, [supplierCode]);
 
   const totalCount = manualDrafts.length + excelDrafts.length;
+  const currentCount = filterTab === "manual" ? manualDrafts.length : excelDrafts.length;
 
   const handleResumeManual = (draft: ManualPackingDraft) => {
     const poStr = draft.poNumbers.join(",");
@@ -119,32 +120,6 @@ export default function Drafts() {
       <div className="flex items-center gap-1 border-b border-slate-200">
         <button
           type="button"
-          onClick={() => setFilterTab("all")}
-          className={cn(
-            "flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-all cursor-pointer -mb-px",
-            filterTab === "all"
-              ? isSupplier
-                ? "border-emerald-600 text-emerald-700"
-                : "border-brand-600 text-brand-700"
-              : "border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300"
-          )}
-        >
-          All Drafts
-          <span
-            className={cn(
-              "px-2 py-0.5 text-[11px] rounded-full font-bold",
-              filterTab === "all"
-                ? isSupplier
-                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                  : "bg-brand-50 text-brand-700 border border-brand-200"
-                : "bg-slate-100 text-slate-600"
-            )}
-          >
-            {totalCount}
-          </span>
-        </button>
-        <button
-          type="button"
           onClick={() => setFilterTab("manual")}
           className={cn(
             "flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-all cursor-pointer -mb-px",
@@ -200,13 +175,16 @@ export default function Drafts() {
       </div>
 
       {/* ─── DRAFTS LIST (Compact Zebra-Striped Table) ─────────── */}
-      {totalCount === 0 ? (
+      {currentCount === 0 ? (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-16 text-center">
           <FolderArchive className="w-12 h-12 mx-auto text-gray-300 mb-3" />
-          <p className="font-semibold text-gray-700 text-base">No saved drafts</p>
+          <p className="font-semibold text-gray-700 text-base">
+            No saved {filterTab === "manual" ? "manual packing" : "Excel drop"} drafts
+          </p>
           <p className="text-xs text-gray-400 mt-1 max-w-md mx-auto">
-            When you enter carton quantities in the Manual Process or upload a packing list in Excel Drop,
-            your progress is saved safely here to resume at any time.
+            {filterTab === "manual"
+              ? "When you enter carton quantities in the Manual Process, your progress is saved safely here to resume at any time."
+              : "When you upload a packing list in Excel Drop, your progress is saved safely here to resume at any time."}
           </p>
         </div>
       ) : (
@@ -215,7 +193,6 @@ export default function Drafts() {
             <table className="w-full text-xs text-left border-collapse">
               <thead className="sticky top-0 z-10 bg-zinc-700 shadow-xs">
                 <tr className="bg-zinc-700 text-white text-xs font-semibold uppercase tracking-wider border-b border-zinc-800">
-                  <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Workflow</th>
                   <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Step / Status</th>
                   <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">PO Number</th>
                   <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Supplier / File & Delivery Note</th>
@@ -228,7 +205,7 @@ export default function Drafts() {
               </thead>
               <tbody>
                 {/* MANUAL PACKING DRAFTS */}
-                {(filterTab === "all" || filterTab === "manual") &&
+                {filterTab === "manual" &&
                   manualDrafts.map((draft, idx) => {
                     const totalCartons =
                       draft.packedItems?.reduce((acc, curr) => acc + (curr.boxes?.length || 0), 0) || 0;
@@ -243,11 +220,6 @@ export default function Drafts() {
                         key={`manual-${draft.supplierCode}-${draft.poNumbers.join("_")}-${idx}`}
                         className="bg-white even:bg-gray-100 hover:bg-blue-50/70 border-b border-gray-300 text-xs transition-colors"
                       >
-                        <td className="py-1 px-2 whitespace-nowrap border-r border-gray-200">
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                            <Layers className="w-3 h-3" /> Manual Process
-                          </span>
-                        </td>
                         <td className="py-1 px-2 whitespace-nowrap border-r border-gray-200">
                           <span className="inline-flex items-center px-1.5 py-0 rounded text-[10px] font-medium bg-gray-100 text-gray-700 border border-gray-200">
                             Step {draft.step}: {draft.step === 1 ? "Item Quantities" : draft.step === 2 ? "Cartons & HUs" : "Review & Transmit"}
@@ -302,7 +274,7 @@ export default function Drafts() {
                   })}
 
                 {/* EXCEL DROP DRAFTS */}
-                {(filterTab === "all" || filterTab === "excel") &&
+                {filterTab === "excel" &&
                   excelDrafts.map((draft, idx) => {
                     const res = draft.validationResult;
                     const isValid = Boolean(res?.is_valid);
@@ -314,11 +286,6 @@ export default function Drafts() {
                         key={`excel-${draft.supplierCode}-${draft.poNumbers.join("_")}-${idx}`}
                         className="bg-white even:bg-gray-100 hover:bg-blue-50/70 border-b border-gray-300 text-xs transition-colors"
                       >
-                        <td className="py-1 px-2 whitespace-nowrap border-r border-gray-200">
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0 rounded text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                            <FileSpreadsheet className="w-3 h-3" /> Excel Drop
-                          </span>
-                        </td>
                         <td className="py-1 px-2 whitespace-nowrap border-r border-gray-200">
                           {isValid ? (
                             <span className="inline-flex items-center gap-1 px-1.5 py-0 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
