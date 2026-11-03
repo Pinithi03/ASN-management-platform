@@ -241,29 +241,44 @@ def parse_html_document(
         po.total_quantity = sum(item.quantity for item in po.line_items)
         po.total_value = round(sum(item.quantity * item.unit_price for item in po.line_items), 2)
 
+    # Record primary order / action URL in sources if discovered (e.g. IUNGO Apri / Open)
+    action_urls = details.get("action_urls", {})
+    if action_urls and po.sources:
+        po.sources[0]["order_url"] = next(iter(action_urls.values()), "")
+
     logger.info(
-        "HTML parsed (%s): PO=%s, %d fields, %d tables, %d line items",
+        "HTML parsed (%s): PO=%s, %d fields, %d tables, %d line items, %d links",
         source_name or "html",
         po.po_number or " ",
         len(details["fields"]),
         len(details["tables"]),
         len(po.line_items),
+        len(details.get("links", [])),
     )
     return po
 
 
 def extract_html_details(soup: BeautifulSoup) -> dict:
     """
-    Capture every label/value pair and data table on the page.
+    Capture every label/value pair, data table, and hyperlink on the page.
+
+    Preserves full href URLs and all query parameters (e.g. AWS CloudFront Expires,
+    Signature, Key-Pair-Id, IUNGO md5r, atk, etc.) without truncating, escaping, or stripping them.
 
     Returns
     -------
     dict
-        {"fields": {label: value}, "tables": [{"headers": [...], "rows": [[...]]}]}.
-        A label repeated with a different value is kept as "Label (2)", "Label (3)"…
+        {
+            "fields": {label: value},
+            "tables": [{"headers": [...], "rows": [[...]]}],
+            "links": [{"text": str, "url": str}],
+            "action_urls": {label: url},
+        }
     """
     fields: dict[str, str] = {}
     tables: list[dict] = []
+    links: list[dict[str, str]] = []
+    action_urls: dict[str, str] = {}
 
     def add_field(label: str, value: str) -> None:
         label = _clean(label).rstrip(":").strip()
@@ -280,6 +295,28 @@ def extract_html_details(soup: BeautifulSoup) -> dict:
 
     for br in soup.find_all("br"):
         br.replace_with("\n")
+
+    # ── Hyperlinks & Action URLs ──
+    # Preserve full href URLs with all query parameters intact
+    for a in soup.find_all("a", href=True):
+        href = str(a.get("href", "")).strip()
+        if not href or href.startswith("javascript:"):
+            continue
+        link_text = _clean(a.get_text(" ", strip=True)) or "Link"
+        links.append({"text": link_text, "url": href})
+
+        href_lower = href.lower()
+        text_lower = link_text.lower()
+        # Capture IUNGO order portal URLs and Apri / Open action buttons
+        if (
+            "iungomail.com" in href_lower
+            or "iungoapps.com" in href_lower
+            or "iungo.com" in href_lower
+            or any(kw in text_lower for kw in ["apri", "open", "visualizza", "view", "order", "ordine"])
+        ):
+            action_label = link_text if link_text and link_text != "Link" else "Apri / Open"
+            if action_label not in action_urls:
+                action_urls[action_label] = href
 
     # ── Tables: label/value layouts become fields, the rest stay tables ──
     for table in soup.find_all("table"):
@@ -322,7 +359,12 @@ def extract_html_details(soup: BeautifulSoup) -> dict:
             if match and not match.group(2).startswith("//"):
                 add_field(match.group(1), match.group(2))
 
-    return {"fields": fields, "tables": tables}
+    return {
+        "fields": fields,
+        "tables": tables,
+        "links": links,
+        "action_urls": action_urls,
+    }
 
 
 # ── Field mapping ────────────────────────────────────────────────
