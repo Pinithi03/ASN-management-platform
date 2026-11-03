@@ -109,6 +109,33 @@ class PurchaseOrder(Base, TimestampMixin, CompanyScopedMixin):
         JSONB, server_default="{}"
     )
 
+    @property
+    def buyer_name(self) -> Optional[str]:
+        """Resolve buyer legal/client name."""
+        if self.client_code:
+            return self.client_code
+        if self.extra_data and isinstance(self.extra_data, dict):
+            val = self.extra_data.get("buyer_name")
+            if val:
+                return str(val)
+        return None
+
+    @property
+    def order_date(self) -> Optional[str]:
+        """Resolve order date extracted from buyer EDI/email into extra_data."""
+        if self.extra_data and isinstance(self.extra_data, dict):
+            val = self.extra_data.get("order_date")
+            if val:
+                return str(val)
+            items = self.extra_data.get("items")
+            if isinstance(items, list) and items:
+                for it in items:
+                    if isinstance(it, dict) and it.get("order_date"):
+                        return str(it["order_date"])
+        if hasattr(self, "created_at") and self.created_at:
+            return self.created_at.strftime("%d-%m-%Y")
+        return None
+
     # ------------------------------------------------------------------
     # Relationships
     # ------------------------------------------------------------------

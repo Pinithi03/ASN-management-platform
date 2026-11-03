@@ -198,12 +198,12 @@ export default function ASNManagement(){
                 <button
                   onClick={async () => {
                     try {
-                      const res = await api.get(`/asn/${sel.id}/xml`, { responseType: "blob" });
-                      const blob = new Blob([res.data], { type: "application/xml" });
+                      const preview = await shipmentService.getASNXmlPreview(sel.id);
+                      const blob = await shipmentService.downloadASNXml(sel.id);
                       const url = window.URL.createObjectURL(blob);
                       const a = document.createElement("a");
                       a.href = url;
-                      a.download = `ASN_${sel.asn_number}.xml`;
+                      a.download = preview.xml_filename || `PL_${sel.asn_number}_[0000018194].xml`;
                       document.body.appendChild(a);
                       a.click();
                       a.remove();
@@ -234,7 +234,7 @@ export default function ASNManagement(){
 
       {/* Send to IUNGO Confirmation Modal (Sign-out style popup) */}
       {showConfirmSend && sel && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
           <div className="relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl border border-gray-100">
             <button
               onClick={() => setShowConfirmSend(false)}
@@ -255,9 +255,20 @@ export default function ASNManagement(){
                 Are you sure you want to dispatch ASN <strong className="font-mono text-gray-800">{sel.asn_number}</strong> to IUNGO? Once sent, this transmission cannot be undone.
               </p>
 
-              <div className="mt-3 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 flex items-center gap-2">
-                <Mail className="w-4 h-4 text-slate-400 shrink-0" />
-                <span className="truncate">Recipient: <strong className="text-slate-800 font-mono">{dispatchEmail}</strong></span>
+              <div className="mt-3">
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                  Recipient Email
+                </label>
+                <div className="px-3 py-2 bg-slate-50 border border-slate-200 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 focus-within:bg-white rounded-xl text-xs text-slate-700 flex items-center gap-2 transition-all">
+                  <Mail className="w-4 h-4 text-slate-400 shrink-0" />
+                  <input
+                    type="email"
+                    value={dispatchEmail}
+                    onChange={(e) => setDispatchEmail(e.target.value)}
+                    placeholder="edi@orders.buyer.org"
+                    className="w-full bg-transparent text-slate-800 font-mono font-semibold text-xs focus:outline-none"
+                  />
+                </div>
               </div>
 
               <div className="mt-6 flex items-center justify-end gap-3">
@@ -275,7 +286,7 @@ export default function ASNManagement(){
                   onClick={async () => {
                     setSendingAsn(true);
                     try {
-                      await api.post(`/asn/${sel.id}/send`);
+                      await shipmentService.sendASN(sel.id, dispatchEmail.trim() || undefined);
                       await qc.invalidateQueries({ queryKey: ["asns"] });
                       setShowConfirmSend(false);
                       alert(`ASN ${sel.asn_number} sent successfully to IUNGO!`);

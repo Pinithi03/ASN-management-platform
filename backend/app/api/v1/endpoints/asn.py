@@ -207,10 +207,27 @@ async def preview_asn_xml(
     if not r:
         raise HTTPException(status_code=404, detail="ASN record not found")
 
+    supp_code = "0000018194"
+    if r.supplier_id:
+        supp_stmt = select(Supplier).where(Supplier.id == r.supplier_id)
+        supp_res = await db.execute(supp_stmt)
+        supp = supp_res.scalar_one_or_none()
+        if supp:
+            supp_code = supp.supplier_code
+
+    shipment_num = "01000000"
+    if r.shipment_id:
+        shp_stmt = select(Shipment).where(Shipment.id == r.shipment_id)
+        shp_res = await db.execute(shp_stmt)
+        shp = shp_res.scalar_one_or_none()
+        if shp:
+            shipment_num = shp.shipment_number
+
     return {
         "asn_number": r.asn_number,
         "xml_content": r.xml_content or "",
         "xml_validated": r.xml_validated,
+        "xml_filename": get_asn_xml_filename(shipment_num, supp_code),
     }
 
 
@@ -249,7 +266,7 @@ async def download_asn_xml(
         content=xml_data,
         media_type="application/xml",
         headers={
-            "Content-Disposition": f"attachment; filename={filename}",
+            "Content-Disposition": f'attachment; filename="{filename}"',
             "Access-Control-Expose-Headers": "Content-Disposition",
         },
     )

@@ -28,6 +28,38 @@ KNOWN_PLANTS = {
     "PPE": {"name": "Vavuniya Apparels Ltd", "group": "VAVUNIYA", "default_code": "PPE1"},
 }
 
+PLANT_GROUP_ALIASES: dict[str, str] = {
+    "OMEGA": "OMEGA",
+    "PPA1": "OMEGA",
+    "1001": "OMEGA",
+    "ALPHA": "ALPHA",
+    "PPB1": "ALPHA",
+    "PPB": "ALPHA",
+    "BENJI": "BENJI",
+    "PPC1": "BENJI",
+    "PPC": "BENJI",
+    "SIRIO": "SIRIO",
+    "PPD1": "SIRIO",
+    "PPD": "SIRIO",
+    "VAVUNIYA": "VAVUNIYA",
+    "PPA2": "VAVUNIYA",
+    "PPE1": "VAVUNIYA",
+    "PPE": "VAVUNIYA",
+}
+
+
+def normalize_plant_group(plant_or_code: Optional[str]) -> Optional[str]:
+    """Normalize a plant group ID (e.g. 'OMEGA') or factory code (e.g. 'PPA1', 'PPA2') to canonical group."""
+    if not plant_or_code:
+        return None
+    cleaned = plant_or_code.strip().upper()
+    if not cleaned or cleaned == "ALL":
+        return None
+    if cleaned in PLANT_GROUP_ALIASES:
+        return PLANT_GROUP_ALIASES[cleaned]
+    resolved = resolve_plant_and_location(cleaned)
+    return resolved["plant_group"]
+
 
 def resolve_plant_and_location(
     destination: Optional[str] = None,
@@ -56,7 +88,7 @@ def resolve_plant_and_location(
     # Match standard PP[A-Z] pattern: e.g. PPA2-0105, PPB1-0101, PPA1, etc.
     # Pattern matches PP<letter><number> optionally followed by -<storage_location>
     code_match = re.search(r"\b(PP[A-Z]\d)(?:[-_ ]([0-9A-Z]+))?\b", combined, re.IGNORECASE)
-    
+
     plant_code = ""
     storage_loc = ""
 
@@ -74,7 +106,11 @@ def resolve_plant_and_location(
     plant_prefix = plant_code[:3].upper() if len(plant_code) >= 3 else ""
     s_lower = combined.lower()
 
-    if plant_prefix in KNOWN_PLANTS:
+    if plant_code == "PPA2" or "ppa2" in s_lower or "vavuniya" in s_lower or "ppe" in s_lower or "ppa4" in s_lower:
+        plant_code = plant_code or "PPA2"
+        plant_name = "Vavuniya Apparels Ltd"
+        plant_group = "VAVUNIYA"
+    elif plant_prefix in KNOWN_PLANTS:
         plant_info = KNOWN_PLANTS[plant_prefix]
         plant_name = plant_info["name"]
         plant_group = plant_info["group"]
@@ -90,15 +126,6 @@ def resolve_plant_and_location(
         plant_code = plant_code or "PPD1"
         plant_name = "Sirio Ltd"
         plant_group = "SIRIO"
-        if not storage_loc:
-            if "katunayake" in s_lower:
-                storage_loc = "Katunayake"
-            elif "badalgama" in s_lower:
-                storage_loc = "Badalgama"
-    elif "vavuniya" in s_lower or "ppe" in s_lower or "ppa4" in s_lower:
-        plant_code = plant_code or "PPE1"
-        plant_name = "Vavuniya Apparels Ltd"
-        plant_group = "VAVUNIYA"
     elif "omega" in s_lower or "ppa" in s_lower or "sandalankawa" in s_lower or plant_code == "1001":
         plant_code = plant_code or "PPA1"
         plant_name = "Omega Line Ltd"

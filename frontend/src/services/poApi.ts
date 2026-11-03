@@ -4,6 +4,7 @@
 import { api } from "./api";
 import type {
   PurchaseOrder,
+  POLineItemRecord,
   POStats,
   PaginatedResponse,
 } from "@/types/email";
@@ -12,6 +13,7 @@ export interface POListParams {
   page?: number;
   per_page?: number;
   status?: string;
+  exclude_completed?: boolean;
   search?: string;
   company_id?: string;
   supplier_id?: string;
@@ -19,6 +21,22 @@ export interface POListParams {
   storage_location?: string;
   /** Comma-separated exact PO numbers */
   po_numbers?: string;
+  /** Filter by delivery date (YYYY-MM-DD or DD-MM-YYYY) */
+  delivery_date?: string;
+}
+
+export interface POLinesListParams {
+  page?: number;
+  per_page?: number;
+  search?: string;
+  company_id?: string;
+  supplier_id?: string;
+  plant?: string;
+  storage_location?: string;
+  /** Comma-separated exact PO numbers */
+  po_numbers?: string;
+  /** Filter by delivery date (YYYY-MM-DD or DD-MM-YYYY) */
+  delivery_date?: string;
 }
 
 export interface POUpdateBody {
@@ -38,6 +56,12 @@ export const poApi = {
   /** List POs with filters & pagination */
   list: async (params: POListParams = {}): Promise<PaginatedResponse<PurchaseOrder>> => {
     const { data } = await api.get("/purchase-orders", { params });
+    return data;
+  },
+
+  /** List flat active PO lines with filters & pagination */
+  listLines: async (params: POLinesListParams = {}): Promise<PaginatedResponse<POLineItemRecord>> => {
+    const { data } = await api.get("/purchase-orders/lines", { params });
     return data;
   },
 
@@ -61,7 +85,13 @@ export const poApi = {
   },
 
   /** Get open PO lines for shipment creation */
-  getOpenLines: async (params?: { supplier_id?: string; company_id?: string }): Promise<any[]> => {
+  getOpenLines: async (params?: {
+    supplier_id?: string;
+    company_id?: string;
+    plant?: string;
+    storage_location?: string;
+    po_numbers?: string;
+  }): Promise<any[]> => {
     const { data } = await api.get("/purchase-orders/open-lines", { params });
     return data;
   },

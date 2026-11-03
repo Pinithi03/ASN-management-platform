@@ -158,7 +158,7 @@ def run_pipeline_test():
     email_subj = get_asn_email_subject("01007770", "21-04-2025", supplier_code)
     print(f" Calzedonia XML Filename: {xml_fname}")
     print(f" Calzedonia Email Subject: {email_subj}")
-    assert xml_fname == "PL_01007770_0000058376.xml"
+    assert xml_fname == "PL_01007770_[0000058376].xml"
     assert email_subj == "Packing List 01007770 of 21-04-2025 - 0000058376"
 
     print("\n ALL 5 PIPELINE MODULES PASSED WITH 100% ACCURACY!")

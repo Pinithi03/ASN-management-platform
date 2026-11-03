@@ -720,9 +720,9 @@ export default function Suppliers() {
       </div>
       {/* ─── SUPPLIERS TABLE (LIST VIEW) ─── */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[calc(100vh-280px)]">
           <table className="w-full text-left text-xs text-slate-600">
-            <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+            <thead className="sticky top-0 z-10 bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 shadow-xs">
               <tr>
                 <th className="py-3 px-4">Partner</th>
                 <th className="py-3 px-4">HU Sequence</th>

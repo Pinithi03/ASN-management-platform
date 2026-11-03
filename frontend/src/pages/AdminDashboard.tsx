@@ -455,6 +455,22 @@ export default function AdminDashboard() {
 
   return (
     <div className="p-6 space-y-6 bg-slate-50 min-h-screen text-slate-900 font-sans">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight">Overview</h1>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Platform-wide dispatch analytics, inbound PO pipeline, and destination plant performance
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => navigate("/order-history")}
+          className="self-start sm:self-auto inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-2xs transition-colors cursor-pointer"
+        >
+          <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />
+          <span>Order History ({poStats?.completed ?? 0})</span>
+        </button>
+      </div>
       {isLoading ? (
         <div className="flex flex-col items-center justify-center py-24 gap-4">
           <div className="w-10 h-10 rounded-full border-3 border-blue-600/30 border-t-blue-600 animate-spin" />

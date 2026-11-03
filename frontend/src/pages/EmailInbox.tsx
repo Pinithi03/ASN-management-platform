@@ -209,9 +209,9 @@ export default function EmailInbox() {
           </div>
         ) : (
           <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
-            <div className="overflow-x-auto">
+            <div className="overflow-auto max-h-[calc(100vh-260px)]">
               <table className="w-full text-xs text-left">
-                <thead>
+                <thead className="sticky top-0 z-10 bg-slate-50 shadow-xs">
                   <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider text-[11px]">
                     <th className="px-3.5 py-2 w-1/4 sm:w-1/5">Sender</th>
                     <th className="px-3.5 py-2">Subject</th>

@@ -1,4 +1,4 @@
-// ─── Dashboard Router Component ─────────────────────────────────────
+// ─── Overview Router Component ─────────────────────────────────────
 // frontend/src/pages/Dashboard.tsx
 
 import { useAuthStore } from "@/store/authStore";

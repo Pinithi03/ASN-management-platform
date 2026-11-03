@@ -44,7 +44,7 @@ export const KNOWN_PLANTS: Record<string, PlantDefinition> = {
     badge: "PPA1",
     accentHex: "#2563eb",
     imageUrl: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?q=80&w=1200&auto=format&fit=crop",
-    storageLocationsHint: ["0101", "0105", "0102"],
+    storageLocationsHint: [],
   },
   ALPHA: {
     id: "ALPHA",
@@ -61,7 +61,7 @@ export const KNOWN_PLANTS: Record<string, PlantDefinition> = {
     badge: "PPB1",
     accentHex: "#7c3aed",
     imageUrl: "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?q=80&w=1200&auto=format&fit=crop",
-    storageLocationsHint: ["0101", "0102"],
+    storageLocationsHint: [],
   },
   BENJI: {
     id: "BENJI",
@@ -78,7 +78,7 @@ export const KNOWN_PLANTS: Record<string, PlantDefinition> = {
     badge: "PPC1",
     accentHex: "#d97706",
     imageUrl: "https://images.unsplash.com/photo-1504917599217-d4dc5ebe6122?q=80&w=1200&auto=format&fit=crop",
-    storageLocationsHint: ["0101", "0103"],
+    storageLocationsHint: [],
   },
   SIRIO: {
     id: "SIRIO",
@@ -95,7 +95,7 @@ export const KNOWN_PLANTS: Record<string, PlantDefinition> = {
     badge: "PPD1",
     accentHex: "#059669",
     imageUrl: "https://images.unsplash.com/photo-1553413077-190dd305871c?q=80&w=1200&auto=format&fit=crop",
-    storageLocationsHint: ["0101", "0102"],
+    storageLocationsHint: [],
   },
   VAVUNIYA: {
     id: "VAVUNIYA",
@@ -112,19 +112,64 @@ export const KNOWN_PLANTS: Record<string, PlantDefinition> = {
     badge: "PPA2",
     accentHex: "#e11d48",
     imageUrl: "https://images.unsplash.com/photo-1587293852726-70cdb56c2866?q=80&w=1200&auto=format&fit=crop",
-    storageLocationsHint: ["0101", "0104"],
+    storageLocationsHint: [],
   },
 };
+
+export const SHARED_PLANT_STORAGE_KEY = "asn_active_plant";
+export const SHARED_LOC_STORAGE_KEY = "asn_active_loc";
+
+/**
+ * Normalize a plant group key ("OMEGA", "SIRIO") or factory code ("PPA1", "PPD1", "PPA2")
+ * into a canonical KNOWN_PLANTS key, or null if invalid / unset.
+ */
+export function normalizePlantKey(input?: string | null): string | null {
+  if (!input) return null;
+  const clean = input.trim().toUpperCase();
+  if (!clean || clean === "ALL" || clean === "NONE") return null;
+
+  if (KNOWN_PLANTS[clean]) return clean;
+
+  // Match by defaultCode (PPA1 -> OMEGA, PPA2 -> VAVUNIYA, PPB1 -> ALPHA, etc.)
+  const byCode = Object.values(KNOWN_PLANTS).find(
+    (p) => p.defaultCode.toUpperCase() === clean || p.badge.toUpperCase() === clean
+  );
+  if (byCode) return byCode.id;
+
+  if (clean === "PPE1" || clean.startsWith("PPE")) return "VAVUNIYA";
+  if (clean.startsWith("PPB")) return "ALPHA";
+  if (clean.startsWith("PPC")) return "BENJI";
+  if (clean.startsWith("PPD")) return "SIRIO";
+  if (clean.startsWith("PPA")) return "OMEGA";
+
+  return null;
+}
+
+export function getSavedSharedPlant(): { plant: string | null; loc: string | null } {
+  try {
+    if (typeof sessionStorage === "undefined") return { plant: null, loc: null };
+    const plant = normalizePlantKey(sessionStorage.getItem(SHARED_PLANT_STORAGE_KEY));
+    const loc = sessionStorage.getItem(SHARED_LOC_STORAGE_KEY);
+    return { plant, loc: plant ? loc : null };
+  } catch {
+    return { plant: null, loc: null };
+  }
+}
+
+export function clearSharedPlantState(): void {
+  try {
+    if (typeof sessionStorage !== "undefined") {
+      sessionStorage.removeItem(SHARED_PLANT_STORAGE_KEY);
+      sessionStorage.removeItem(SHARED_LOC_STORAGE_KEY);
+    }
+  } catch {
+    // ignore storage errors
+  }
+}
 
 /**
  * Resolves plant code, plant name, and storage location from any raw
  * destination string, buyer name, or client code.
- *
- * Examples:
- *   "PPA1-0105"                   -> Plant: Omega Line Ltd (PPA1), Storage: 0105
- *   "PPA2-0198"                   -> Plant: Vavuniya Apparels Ltd (PPA2), Storage: 0198
- *   "PPB1-0101 (Alpha Apparels)"  -> Plant: Alpha Apparels Ltd (PPB1), Storage: 0101
- *   "SIRIO Plant - Badalgama"     -> Plant: Sirio Ltd (PPD1), Storage: Badalgama
  */
 export function resolvePlantAndLocation(
   destinationOrAddress?: string | null,
@@ -210,9 +255,6 @@ export function resolvePlantAndLocation(
     plantCode = plantCode || "PPD1";
     plantGroup = "SIRIO";
     plantName = "Sirio Ltd";
-    if (!storageLocation) {
-      if (sLower.includes("badalgama")) storageLocation = "Badalgama";
-    }
   } else {
     // Dynamic fallback for any new/custom plant in incoming XML
     if (plantCode) {
@@ -255,6 +297,7 @@ export function resolvePlantId(
 }
 
 export function getPlantDefinition(plantId?: string | null): PlantDefinition | undefined {
-  if (!plantId) return undefined;
-  return KNOWN_PLANTS[plantId.toUpperCase()];
+  const norm = normalizePlantKey(plantId);
+  if (!norm) return undefined;
+  return KNOWN_PLANTS[norm];
 }

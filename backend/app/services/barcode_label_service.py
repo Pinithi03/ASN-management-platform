@@ -79,6 +79,8 @@ def _draw_label_6x4(
     box_index: int = 1,
     total_boxes: int = 1,
     label_date: str = "",
+    destination_plant: str = "",
+    **kwargs: Any,
 ) -> None:
     """Draw a 6x4 inch landscape shipping label with proper text boundaries and barcode clearance."""
     c.saveState()
@@ -95,8 +97,10 @@ def _draw_label_6x4(
     y = height - margin
 
     # 1. Header Banner
-    c.setFont("Helvetica-Bold", 13)
-    c.drawString(x, y, "ASN DISPATCH & SHIPPING LABEL")
+    header_title = (destination_plant or "SIRIO LTD").strip().upper()
+    fitted_title, title_size = _fit_text(c, header_title, "Helvetica-Bold", 13.0, 9.5, right_x - x)
+    c.setFont("Helvetica-Bold", title_size)
+    c.drawString(x, y, fitted_title)
     y -= 4
     c.setStrokeColorRGB(0.2, 0.2, 0.2)
     c.setLineWidth(1.4)
@@ -258,6 +262,8 @@ def _draw_label_4x6(
     box_index: int = 1,
     total_boxes: int = 1,
     label_date: str = "",
+    destination_plant: str = "",
+    **kwargs: Any,
 ) -> None:
     """Draw a 4x6 inch portrait shipping label (standard thermal logistics roll)."""
     c.saveState()
@@ -274,8 +280,10 @@ def _draw_label_4x6(
     y = height - margin
 
     # 1. Header
-    c.setFont("Helvetica-Bold", 13)
-    c.drawString(x, y, "ASN DISPATCH & SHIPPING LABEL")
+    header_title = (destination_plant or "SIRIO LTD").strip().upper()
+    fitted_title, title_size = _fit_text(c, header_title, "Helvetica-Bold", 13.0, 9.5, right_x - x)
+    c.setFont("Helvetica-Bold", title_size)
+    c.drawString(x, y, fitted_title)
     y -= 5
     c.setStrokeColorRGB(0.2, 0.2, 0.2)
     c.setLineWidth(1.4)
@@ -423,6 +431,8 @@ def _draw_label_4x3(
     box_index: int = 1,
     total_boxes: int = 1,
     label_date: str = "",
+    destination_plant: str = "",
+    **kwargs: Any,
 ) -> None:
     """Draw a 4x3 inch compact shipping label."""
     c.saveState()
@@ -439,11 +449,15 @@ def _draw_label_4x3(
     y = height - margin
 
     # 1. Header
-    c.setFont("Helvetica-Bold", 10.5)
-    c.drawString(x, y, "ASN DISPATCH & SHIPPING LABEL")
+    header_title = (destination_plant or "SIRIO LTD").strip().upper()
     date_str = f"{label_date}"
+    date_w = c.stringWidth(date_str, "Helvetica", 7.5)
+    max_title_w = (right_x - date_w - 8) - x
+    fitted_title, title_size = _fit_text(c, header_title, "Helvetica-Bold", 10.5, 8.0, max_title_w)
+    c.setFont("Helvetica-Bold", title_size)
+    c.drawString(x, y, fitted_title)
     c.setFont("Helvetica", 7.5)
-    c.drawString(right_x - c.stringWidth(date_str, "Helvetica", 7.5), y, date_str)
+    c.drawString(right_x - date_w, y, date_str)
     y -= 3
     c.setStrokeColorRGB(0.2, 0.2, 0.2)
     c.setLineWidth(1.2)
@@ -549,6 +563,7 @@ def generate_single_label(
     box_index: int = 1,
     total_boxes: int = 1,
     label_date: Optional[str] = None,
+    destination_plant: str = "",
     size: str = "6x4",
 ) -> bytes:
     """Generate a single label PDF with customizable size."""
@@ -571,6 +586,7 @@ def generate_single_label(
                 "box_index": box_index,
                 "total_boxes": total_boxes,
                 "label_date": label_date,
+                "destination_plant": destination_plant,
             }
         ],
         size=size,

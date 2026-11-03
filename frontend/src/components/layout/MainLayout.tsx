@@ -65,7 +65,7 @@ export default function MainLayout() {
           <span className="text-xs font-bold text-slate-900">ASN Platform</span>
           <div className="w-8" />
         </div>
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 min-h-0 overflow-y-auto flex flex-col">
           {isLockoutActive ? (
             <div className="flex flex-col items-center justify-center min-h-[75vh] p-6 text-center animate-in fade-in">
               <div className="bg-white rounded-3xl border border-red-200 p-8 shadow-xl max-w-lg w-full space-y-5 text-center">

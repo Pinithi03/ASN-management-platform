@@ -6,9 +6,7 @@ import {
   FileText,
   Search,
   RefreshCw,
-  ChevronLeft,
   ChevronRight,
-  ChevronDown,
   PackagePlus,
   CheckSquare,
   Square,
@@ -34,14 +32,13 @@ import type { PurchaseOrder } from "@/types/email";
 import { cn } from "@/utils/cn";
 import { resolvePlantAndLocation, KNOWN_PLANTS } from "@/utils/plantResolver";
 import PlantAccordionShowcase from "@/components/plants/PlantAccordionShowcase";
+import { usePlantSelection } from "@/hooks/usePlantSelection";
 
 const STATUS_OPTIONS = [
-  { label: "All Statuses", value: "" },
+  { label: "All Active Statuses", value: "" },
   { label: "Active", value: "ACTIVE" },
   { label: "Partial", value: "PARTIAL" },
   { label: "Updated", value: "UPDATED" },
-  { label: "Completed", value: "COMPLETED" },
-  { label: "Cancelled", value: "CANCELLED" },
 ];
 
 const STATUS_BADGES: Record<string, string> = {
@@ -101,7 +98,7 @@ export interface PurchaseOrdersProps {
 export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
   const navigate = useNavigate();
   const location = useLocation();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const user = useAuthStore((s) => s.user);
   const isSupplier = user?.role === "SUPPLIER";
   const supplierId = isSupplier ? (user?.supplier_id || user?.supplier_code || undefined) : undefined;
@@ -111,31 +108,24 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
       ? "excel"
       : "manual";
 
-  const plantFromUrl = searchParams.get("plant");
-  const viewFromUrl = searchParams.get("view");
+  const {
+    selectedPlant: gatewayPlant,
+    selectedLocation,
+    selectPlant: gatewaySelectPlant,
+    selectLocation: gatewaySelectLocation,
+    clearPlant,
+  } = usePlantSelection();
+
+  const selectedPlant = gatewayPlant || "ALL";
 
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [poChips, setPoChips] = useState<string[]>([]);
-  const [statusFilter, setStatusFilter] = useState("");
-  const locFromUrl = searchParams.get("loc");
-  const [selectedPlant, setSelectedPlant] = useState<string>(
-    plantFromUrl && KNOWN_PLANTS[plantFromUrl.toUpperCase()] ? plantFromUrl.toUpperCase() : "ALL"
-  );
-  const [selectedLocation, setSelectedLocation] = useState<string>(() => {
-    if (locFromUrl) return locFromUrl;
-    if (plantFromUrl && KNOWN_PLANTS[plantFromUrl.toUpperCase()]) {
-      return KNOWN_PLANTS[plantFromUrl.toUpperCase()].storageLocationsHint?.[0] || "0101";
-    }
-    return "0101";
+  const [deliveryDateFilter, setDeliveryDateFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState(() => {
+    const st = (searchParams.get("status") || "").toUpperCase();
+    return ["ACTIVE", "PARTIAL", "UPDATED"].includes(st) ? st : "";
   });
-  const [viewMode, setViewMode] = useState<"hub" | "global" | "plant">(
-    plantFromUrl && KNOWN_PLANTS[plantFromUrl.toUpperCase()]
-      ? "plant"
-      : viewFromUrl === "global"
-      ? "global"
-      : "hub"
-  );
   const [crossPlantWarning, setCrossPlantWarning] = useState<{
     attemptedPO: string;
     targetPlant: string;
@@ -146,7 +136,7 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
   // searches that no longer include the selected rows.
   const [selectedPOMap, setSelectedPOMap] = useState<Map<string, PurchaseOrder>>(new Map());
   const selectedPOs = useMemo(() => new Set(selectedPOMap.keys()), [selectedPOMap]);
-  const canSelect = selectedPlant !== "ALL" || viewMode === "global";
+  const canSelect = selectedPlant !== "ALL";
 
   const clearSelection = () => {
     setSelectedPOMap(new Map());
@@ -154,56 +144,31 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
   };
 
   const selectPlant = (plantId: string, targetLoc?: string) => {
-    setSelectedPlant(plantId);
     setPage(1);
     clearSelection();
-
-    const newParams = new URLSearchParams(searchParams);
-    if (plantId === "ALL") {
-      setSelectedLocation("ALL");
-      setViewMode("hub");
-      newParams.delete("plant");
-      newParams.delete("view");
-      newParams.delete("loc");
+    if (!plantId || plantId === "ALL") {
+      clearPlant();
     } else {
-      let defaultLoc = targetLoc;
-      if (!defaultLoc) {
-        defaultLoc = KNOWN_PLANTS[plantId]?.storageLocationsHint?.[0] || "0101";
-      }
-      setSelectedLocation(defaultLoc);
-      setViewMode("plant");
-      newParams.set("plant", plantId);
-      newParams.set("loc", defaultLoc);
-      newParams.delete("view");
+      gatewaySelectPlant(plantId, targetLoc);
     }
-    setSearchParams(newParams, { replace: true });
   };
 
   const handleOpenWithPO = (plantId: string, poNumber: string) => {
-    setSelectedPlant(plantId);
-    const defaultLoc = KNOWN_PLANTS[plantId]?.storageLocationsHint?.[0] || "0101";
-    setSelectedLocation(defaultLoc);
     setPoChips([poNumber.trim()]);
     setSearch("");
     setPage(1);
     clearSelection();
-    setViewMode("plant");
-
-    const newParams = new URLSearchParams(searchParams);
-    newParams.set("plant", plantId);
-    newParams.set("loc", defaultLoc);
-    newParams.delete("view");
-    setSearchParams(newParams, { replace: true });
+    gatewaySelectPlant(plantId);
   };
 
   // State for previewing a specific PO
   const [selectedPOForPreview, setSelectedPOForPreview] = useState<PurchaseOrder | null>(null);
   const [copiedPO, setCopiedPO] = useState(false);
 
-  // Query to fetch overview of all orders (used for live 5-plant accordion metrics & quick auto-detect PO search)
+  // Query to fetch overview of all orders (used for live 5-plant accordion unlock state, active metrics & permanent storage locations)
   const { data: allOverviewData } = useQuery({
     queryKey: ["purchaseOrdersOverviewAll", supplierId],
-    queryFn: () => poApi.list({ per_page: 200, supplier_id: supplierId }),
+    queryFn: () => poApi.list({ per_page: 500, supplier_id: supplierId, exclude_completed: false }),
     staleTime: 15000,
     refetchInterval: 10000,
   });
@@ -212,14 +177,16 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
 
 
   const { data, isLoading } = useQuery({
-    queryKey: ["purchaseOrders", page, search, poChips, statusFilter, supplierId, selectedPlant, selectedLocation],
+    queryKey: ["purchaseOrders", page, search, poChips, statusFilter, deliveryDateFilter, supplierId, selectedPlant, selectedLocation],
     queryFn: () =>
       poApi.list({
         page,
-        per_page: 50,
+        per_page: 500,
         search: poChips.length === 0 && search ? search : undefined,
         po_numbers: poChips.length > 0 ? poChips.join(",") : undefined,
         status: statusFilter || undefined,
+        delivery_date: deliveryDateFilter || undefined,
+        exclude_completed: true,
         supplier_id: supplierId,
         plant: selectedPlant !== "ALL" ? selectedPlant : undefined,
         storage_location: selectedPlant !== "ALL" && selectedLocation !== "ALL" ? selectedLocation : undefined,
@@ -239,51 +206,68 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
   const activePO: PurchaseOrder | null = fullPODetail || selectedPOForPreview;
 
   const orders: PurchaseOrder[] = data?.items || [];
-  const totalOrders = data?.total || 0;
-  const totalPages = data?.pages || 1;
 
-  // Compute available storage locations for the currently selected plant
+  // Compute available storage locations for the currently selected plant (only stores that have received at least 1 PO)
   const availableLocations = useMemo(() => {
     const locMap = new Map<string, number>();
     const sourceOrders = allOrdersList.length > 0 ? allOrdersList : orders;
     sourceOrders.forEach((po) => {
+      if (po.status === "CANCELLED") return;
       const dest = po.delivery_address || po.destination || po.client_code;
       const res = resolvePlantAndLocation(dest, po.client_code);
       if (selectedPlant === "ALL" || res.plantGroup === selectedPlant || res.plantCode === selectedPlant) {
         const key = res.storageLocation || "0101";
         if (key) {
-          locMap.set(key, (locMap.get(key) || 0) + 1);
+          // Permanently register any store location that has received at least 1 PO (even if now COMPLETED)
+          if (!locMap.has(key)) {
+            locMap.set(key, 0);
+          }
+          // Count only active (non-completed) POs for the notification badge
+          if (po.status !== "COMPLETED") {
+            locMap.set(key, (locMap.get(key) || 0) + 1);
+          }
         }
       }
     });
 
-    if (selectedPlant !== "ALL" && KNOWN_PLANTS[selectedPlant]) {
-      KNOWN_PLANTS[selectedPlant].storageLocationsHint?.forEach((hint) => {
-        const clean = hint.match(/\b\d{4}\b/)?.[0] || hint.trim();
-        if (!locMap.has(clean)) {
-          locMap.set(clean, 0);
-        }
-      });
-    }
-
     return Array.from(locMap.entries())
       .map(([code, count]) => ({ code, count }))
-      .sort((a, b) => b.count - a.count);
+      .sort((a, b) => b.count - a.count || a.code.localeCompare(b.code));
   }, [orders, allOrdersList, selectedPlant]);
 
   // Keep selectedLocation synchronized to an active valid location in plant view
   useEffect(() => {
-    if (selectedPlant !== "ALL" && availableLocations.length > 0) {
-      const hasMatch = availableLocations.some((l) => l.code === selectedLocation);
-      if (!hasMatch) {
-        setSelectedLocation(availableLocations[0].code);
+    if (selectedPlant !== "ALL") {
+      if (availableLocations.length > 0) {
+        const hasMatch = availableLocations.some((l) => l.code === selectedLocation);
+        if (!hasMatch) {
+          gatewaySelectLocation(availableLocations[0].code);
+        }
+      } else if (allOverviewData && allOrdersList.length > 0) {
+        clearPlant();
       }
     }
-  }, [selectedPlant, availableLocations, selectedLocation]);
+  }, [selectedPlant, availableLocations, selectedLocation, gatewaySelectLocation, allOverviewData, allOrdersList.length, clearPlant]);
 
-  // Filter orders for display (strictly plant & storage location scoped when inside a plant view)
+  // Helper to parse delivery date into a comparable timestamp (nearest first, nulls last)
+  const parseComparableTime = (rawDate?: string | null): number => {
+    if (!rawDate) return Number.MAX_SAFE_INTEGER;
+    const s = rawDate.trim();
+    if (/^\d{2}-\d{2}-\d{4}$/.test(s)) {
+      const [d, m, y] = s.split("-");
+      const dt = new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10));
+      return isNaN(dt.getTime()) ? Number.MAX_SAFE_INTEGER : dt.getTime();
+    }
+    const dt = new Date(s);
+    return isNaN(dt.getTime()) ? Number.MAX_SAFE_INTEGER : dt.getTime();
+  };
+
+  // Filter orders for display (strictly active orders & plant/storage location scoped, sorted by delivery_date ASC)
   const displayedOrders = useMemo(() => {
-    return orders.filter((po) => {
+    const filtered = orders.filter((po) => {
+      if (po.status === "COMPLETED" || po.status === "CANCELLED") {
+        return false;
+      }
       if (selectedPlant !== "ALL") {
         const dest = po.delivery_address || po.destination || po.client_code;
         const res = resolvePlantAndLocation(dest, po.client_code);
@@ -301,16 +285,30 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
         }
       }
 
+      if (deliveryDateFilter) {
+        const targetTime = parseComparableTime(deliveryDateFilter);
+        if (targetTime !== Number.MAX_SAFE_INTEGER) {
+          const poTime = parseComparableTime(po.delivery_date || (po.extra_data as any)?.delivery_date);
+          const rawItems = (po.extra_data as any)?.items;
+          const itemMatches =
+            Array.isArray(rawItems) &&
+            rawItems.some((it: any) => parseComparableTime(it?.delivery_date) === targetTime);
+          if (poTime !== targetTime && !itemMatches) {
+            return false;
+          }
+        }
+      }
+
       return true;
     });
-  }, [orders, selectedPlant, selectedLocation]);
 
-  const startItem = totalOrders === 0 ? 0 : (page - 1) * 50 + 1;
-  const endItem = Math.min(page * 50, totalOrders);
-  const paginationText =
-    totalOrders === 0
-      ? "0 of 0"
-      : `${startItem.toLocaleString()}–${endItem.toLocaleString()} of ${totalOrders.toLocaleString()}`;
+    return [...filtered].sort((a, b) => {
+      const tA = parseComparableTime(a.delivery_date || (a.extra_data as any)?.delivery_date);
+      const tB = parseComparableTime(b.delivery_date || (b.extra_data as any)?.delivery_date);
+      if (tA !== tB) return tA - tB;
+      return (a.po_number || "").localeCompare(b.po_number || "");
+    });
+  }, [orders, selectedPlant, selectedLocation, deliveryDateFilter]);
 
   const selectableOrders = displayedOrders.filter(
     (p) => p.status !== "COMPLETED" && p.status !== "CANCELLED" && Boolean(p.po_number)
@@ -424,6 +422,7 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
       poApi.list({
         search: debouncedSearch,
         per_page: 8,
+        exclude_completed: true,
         supplier_id: supplierId,
         plant: selectedPlant !== "ALL" ? selectedPlant : undefined,
         storage_location: selectedPlant !== "ALL" && selectedLocation !== "ALL" ? selectedLocation : undefined,
@@ -463,7 +462,7 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
     const uniquePool: PurchaseOrder[] = [];
 
     for (const po of pool) {
-      if (!po || !po.po_number) continue;
+      if (!po || !po.po_number || po.status === "COMPLETED" || po.status === "CANCELLED") continue;
 
       // When inside a plant tab, strictly scope suggestions to this plant & storage location
       if (selectedPlant !== "ALL") {
@@ -784,16 +783,33 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
   return (
     <div
       className={cn(
-        "p-4 sm:p-6",
-        selectedPlant === "ALL" && viewMode === "hub"
-          ? "space-y-4 sm:space-y-5"
-          : "space-y-6"
+        selectedPlant === "ALL"
+          ? "p-4 sm:p-6 space-y-4 sm:space-y-5"
+          : "h-full flex flex-col overflow-hidden px-4 pt-4 pb-0 sm:px-6 sm:pt-5 sm:pb-0 gap-3"
       )}
     >
-      {/* Page Header with Mode Indicator & View Mode Switcher */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3">
+      {/* Page Header with Plant Breadcrumb, Mode Indicator & Location Pills */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 shrink-0">
+        <div className="space-y-1">
+          {selectedPlant !== "ALL" && KNOWN_PLANTS[selectedPlant] && (
+            <div className="flex items-center gap-1.5 text-xs text-slate-500">
+              <button
+                type="button"
+                onClick={() => selectPlant("ALL")}
+                className="inline-flex items-center gap-1 font-medium text-slate-500 hover:text-blue-600 transition-colors cursor-pointer"
+                title="Switch factory plant"
+              >
+                <Factory className="w-3.5 h-3.5" />
+                <span>Factory Plants</span>
+              </button>
+              <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
+              <span className="font-semibold text-slate-700">
+                {KNOWN_PLANTS[selectedPlant].name} ({KNOWN_PLANTS[selectedPlant].defaultCode})
+              </span>
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-bold tracking-tight text-gray-950">Purchase Orders</h1>
             {activeMode === "manual" ? (
               <span
@@ -820,120 +836,73 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                 Excel Drop
               </span>
             )}
+          </div>
+        </div>
 
-            {selectedPlant !== "ALL" && KNOWN_PLANTS[selectedPlant] && (
-              <div className="inline-flex items-center gap-2 pl-2 border-l border-slate-200">
-                <span
-                  className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase text-white shadow-xs"
-                  style={{ backgroundColor: KNOWN_PLANTS[selectedPlant].accentHex }}
+        {/* Location Pills with Notification Badges (replaces the dropdown & Change Plant button) */}
+        {selectedPlant !== "ALL" && availableLocations.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100/90 border border-slate-200 rounded-2xl shadow-2xs self-start lg:self-center">
+            {/* Individual Store Location Pills */}
+            {availableLocations.map((loc) => {
+              const isSelected = selectedLocation === loc.code;
+              const hasCount = loc.count > 0;
+              return (
+                <button
+                  key={loc.code}
+                  type="button"
+                  onClick={() => {
+                    if (selectedLocation !== loc.code) {
+                      setPage(1);
+                      clearSelection();
+                      gatewaySelectLocation(loc.code);
+                    }
+                  }}
+                  className={cn(
+                    "group relative inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer select-none border",
+                    isSelected
+                      ? isSupplier
+                        ? "bg-emerald-600 text-white shadow-xs font-bold"
+                        : "bg-blue-600 text-white shadow-xs font-bold"
+                      : "bg-white text-slate-700 hover:text-slate-950 hover:bg-slate-50 border border-slate-200/80 hover:border-slate-300 shadow-2xs"
+                  )}
+                  title={`Store ${loc.code} (${loc.count} available POs)`}
                 >
-                  {KNOWN_PLANTS[selectedPlant].defaultCode}
-                </span>
-                <span className="text-sm font-bold text-slate-800">
-                  {KNOWN_PLANTS[selectedPlant].name}
-                </span>
-                <span className="text-xs text-slate-400 font-normal">
-                  ({KNOWN_PLANTS[selectedPlant].location})
-                </span>
-              </div>
-            )}
+                  <Warehouse className={cn("w-3.5 h-3.5 transition-colors", isSelected ? "text-white" : "text-slate-400 group-hover:text-slate-600")} />
+                  <span>Store {loc.code}</span>
+                  {/* Notification badge */}
+                  <span
+                    className={cn(
+                      "inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full text-[10px] font-extrabold shadow-2xs transition-all",
+                      hasCount
+                        ? isSelected
+                          ? "bg-white text-slate-900 border border-white font-black"
+                          : "bg-rose-500 text-white font-black animate-in fade-in"
+                        : isSelected
+                        ? "bg-white/20 text-white font-medium"
+                        : "bg-slate-100 text-slate-400 font-medium"
+                    )}
+                  >
+                    {loc.count}
+                  </span>
+                </button>
+              );
+            })}
           </div>
-        </div>
-
-        {/* View Switcher & Filter Dropdowns (Top Right) */}
-        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
-
-
-          {/* Delivery Storage Location Dropdown (Strictly Scoped, No 'ALL' option) */}
-          {selectedPlant !== "ALL" && availableLocations.length > 0 && (
-            <div className="relative">
-              <select
-                value={selectedLocation}
-                onChange={(e) => {
-                  const newLoc = e.target.value;
-                  if (selectedLocation !== newLoc) {
-                    setSelectedLocation(newLoc);
-                    setPage(1);
-                    clearSelection();
-                    const p = new URLSearchParams(searchParams);
-                    p.set("loc", newLoc);
-                    setSearchParams(p, { replace: true });
-                  }
-                }}
-                className="h-9 pl-8 pr-8 rounded-xl text-xs font-semibold bg-white border border-slate-200 text-slate-800 shadow-2xs hover:border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer appearance-none min-w-[145px]"
-                title="Select Storage Location"
-              >
-                {availableLocations.map((loc) => (
-                  <option key={loc.code} value={loc.code}>
-                    Store {loc.code} ({loc.count})
-                  </option>
-                ))}
-              </select>
-              <Warehouse className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-            </div>
-          )}
-
-          {/* View Mode Toggle: Factory Plants (5) vs All Orders */}
-          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 shadow-2xs">
-            <button
-              type="button"
-              onClick={() => selectPlant("ALL")}
-              className={cn(
-                "px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer",
-                selectedPlant === "ALL" && viewMode === "hub"
-                  ? "bg-white text-slate-900 shadow-xs"
-                  : "text-slate-600 hover:text-slate-900"
-              )}
-              title="Show Factory Plants Overview"
-            >
-              <Factory className="w-3.5 h-3.5 text-blue-600" />
-              <span>Factory Plants (5)</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedPlant("ALL");
-                setViewMode("global");
-                const p = new URLSearchParams(searchParams);
-                p.set("view", "global");
-                p.delete("plant");
-                setSearchParams(p, { replace: true });
-              }}
-              className={cn(
-                "px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer",
-                viewMode === "global"
-                  ? "bg-white text-slate-900 shadow-xs"
-                  : "text-slate-600 hover:text-slate-900"
-              )}
-              title="View All Orders Table across all plants"
-            >
-              <Layers className="w-3.5 h-3.5 text-slate-500" />
-              <span>All Orders</span>
-            </button>
-          </div>
-        </div>
+        )}
       </div>
 
-      {/* ─── SHOWCASE MODE: 5-Plant Horizontal Accordion Showcase ─── */}
-      {selectedPlant === "ALL" && viewMode === "hub" ? (
+      {/* ─── PLANT GATEWAY MODE: 5-Plant Horizontal Accordion Showcase ─── */}
+      {selectedPlant === "ALL" ? (
         <PlantAccordionShowcase
           orders={allOrdersList.length > 0 ? allOrdersList : orders}
           onSelectPlant={selectPlant}
           onOpenWithPO={handleOpenWithPO}
-          onSwitchToGlobalView={() => {
-            setViewMode("global");
-            const p = new URLSearchParams(searchParams);
-            p.set("view", "global");
-            p.delete("plant");
-            setSearchParams(p, { replace: true });
-          }}
           isSupplier={isSupplier}
+          ctaLabel="View Plant Orders"
         />
       ) : (
         /* ─── PLANT WORKSPACE / GLOBAL LIST MODE ─── */
-        <div className="space-y-4">
+        <div className="flex-1 min-h-0 flex flex-col gap-3">
 
           {/* Cross-Plant Selection Mismatch Warning */}
           {crossPlantWarning && (
@@ -976,56 +945,36 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
           {selectedPOs.size > 0 && (
             <div
               className={cn(
-                "w-full flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border shadow-xs transition-all animate-in fade-in slide-in-from-top-1 duration-200",
+                "w-full flex items-center justify-between gap-3 px-3.5 py-1.5 rounded-xl border shadow-2xs transition-all animate-in fade-in slide-in-from-top-1 duration-150",
                 isSupplier
-                  ? "bg-emerald-50/80 border-emerald-200"
-                  : "bg-blue-50/80 border-blue-200"
+                  ? "bg-emerald-50/90 border-emerald-200"
+                  : "bg-blue-50/90 border-blue-200"
               )}
             >
-              <div className="flex items-center gap-3.5">
-                <div
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span
                   className={cn(
-                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg font-bold text-xs text-white shadow-xs",
+                    "flex h-6 min-w-6 px-1.5 shrink-0 items-center justify-center rounded-md font-bold text-xs text-white shadow-2xs",
                     isSupplier ? "bg-emerald-600" : "bg-blue-600"
                   )}
                 >
                   {selectedPOs.size}
-                </div>
-                <div>
-                  <p
-                    className={cn(
-                      "text-sm font-semibold leading-tight",
-                      isSupplier ? "text-emerald-950" : "text-blue-950"
-                    )}
-                  >
-                    {selectedPOs.size} Purchase Order{selectedPOs.size > 1 ? "s" : ""} Selected
-                    {currentSelectedPlantInfo ? (
-                      <span className="font-normal text-xs text-gray-600 ml-1.5">
-                        for <span className="font-semibold text-gray-900">{currentSelectedPlantInfo.plantName}</span>
-                        <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-white text-slate-800 border border-slate-300 shadow-2xs">
-                          Store {currentSelectedPlantInfo.storageLocation}
-                        </span>
-                      </span>
-                    ) : null}
-                  </p>
-                  <p
-                    className={cn(
-                      "text-xs mt-0.5",
-                      isSupplier ? "text-emerald-700" : "text-blue-700"
-                    )}
-                  >
-                    {activeMode === "manual"
-                      ? "Manual Packing Wizard"
-                      : "Excel Drop Manifest"}
-                  </p>
-                </div>
+                </span>
+                <span
+                  className={cn(
+                    "text-xs font-bold truncate",
+                    isSupplier ? "text-emerald-950" : "text-blue-950"
+                  )}
+                >
+                  {selectedPOs.size} Purchase Order{selectedPOs.size > 1 ? "s" : ""} Selected
+                </span>
               </div>
 
-              <div className="flex items-center gap-2.5 self-end sm:self-auto">
+              <div className="flex items-center gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={clearSelection}
-                  className="h-10 px-4 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
+                  className="h-8 px-2.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
                 >
                   <X className="w-3.5 h-3.5 text-slate-400" />
                   Clear Selection
@@ -1036,13 +985,13 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                     type="button"
                     onClick={() => handleCreateShipment("web")}
                     className={cn(
-                      "h-10 px-5 text-xs font-semibold text-white rounded-lg shadow-xs flex items-center gap-2 transition-all active:scale-[0.99] cursor-pointer",
+                      "h-8 px-3 text-xs font-semibold text-white rounded-lg shadow-2xs flex items-center gap-1.5 transition-all active:scale-[0.99] cursor-pointer",
                       isSupplier
                         ? "bg-emerald-600 hover:bg-emerald-700"
                         : "bg-blue-600 hover:bg-blue-700"
                     )}
                   >
-                    <PackagePlus className="w-4 h-4" />
+                    <PackagePlus className="w-3.5 h-3.5" />
                     <span>+ Create Delivery</span>
                   </button>
                 ) : (
@@ -1050,13 +999,13 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                     type="button"
                     onClick={() => handleCreateShipment("excel")}
                     className={cn(
-                      "h-10 px-5 text-xs font-semibold text-white rounded-lg shadow-xs flex items-center gap-2 transition-all active:scale-[0.99] cursor-pointer",
+                      "h-8 px-3 text-xs font-semibold text-white rounded-lg shadow-2xs flex items-center gap-1.5 transition-all active:scale-[0.99] cursor-pointer",
                       isSupplier
                         ? "bg-emerald-600 hover:bg-emerald-700"
                         : "bg-blue-600 hover:bg-blue-700"
                     )}
                   >
-                    <FileSpreadsheet className="w-4 h-4" />
+                    <FileSpreadsheet className="w-3.5 h-3.5" />
                     <span>Excel Drop Delivery</span>
                   </button>
                 )}
@@ -1196,6 +1145,34 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                 </p>
               )}
             </div>
+            {/* Delivery Date Filter */}
+            <div className="relative flex items-center">
+              <Calendar className="w-4 h-4 text-gray-400 absolute left-3 pointer-events-none" />
+              <input
+                type="date"
+                value={deliveryDateFilter}
+                onChange={(e) => {
+                  setDeliveryDateFilter(e.target.value);
+                  setPage(1);
+                }}
+                title="Filter by Delivery Date"
+                className="pl-9 pr-8 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-700 shadow-2xs font-medium min-h-[42px]"
+              />
+              {deliveryDateFilter && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeliveryDateFilter("");
+                    setPage(1);
+                  }}
+                  className="absolute right-2.5 p-0.5 text-gray-400 hover:text-gray-600 rounded cursor-pointer"
+                  title="Clear delivery date filter"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
             <select
               value={statusFilter}
               onChange={(e) => {
@@ -1213,7 +1190,7 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
           </div>
 
       {/* Main Table */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
+      <div className="flex-1 min-h-0 flex flex-col bg-white rounded-t-xl border-x border-t border-slate-200 shadow-2xs overflow-hidden">
         {isLoading ? (
           <div className="flex items-center justify-center py-24 text-gray-400">
             <RefreshCw className="w-6 h-6 animate-spin mr-2 text-blue-500" />
@@ -1224,59 +1201,65 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
             <Warehouse className="w-12 h-12 mb-3 text-gray-300" />
             <p className="text-lg font-medium text-gray-700">No purchase orders found</p>
             <p className="text-xs text-gray-400 mt-1">
-              {selectedPlant !== "ALL" || selectedLocation !== "ALL"
-                ? "No purchase orders match the selected factory plant or storage location."
+              {selectedPlant !== "ALL" || selectedLocation !== "ALL" || deliveryDateFilter
+                ? "No purchase orders match the selected factory plant, storage location, or delivery date."
                 : "Try adjusting your search or filters"}
             </p>
-            {(selectedPlant !== "ALL" || selectedLocation !== "ALL") && (
-              <button
-                type="button"
-                onClick={() => selectPlant("ALL")}
-                className="mt-4 px-3 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors cursor-pointer"
-              >
-                Reset Plant & Location Filters
-              </button>
+            {(selectedPlant !== "ALL" || selectedLocation !== "ALL" || deliveryDateFilter) && (
+              <div className="flex items-center gap-2 mt-4">
+                {deliveryDateFilter && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDeliveryDateFilter("");
+                      setPage(1);
+                    }}
+                    className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
+                  >
+                    Clear Delivery Date
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => selectPlant("ALL")}
+                  className="px-3 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors cursor-pointer"
+                >
+                  Reset Plant & Location Filters
+                </button>
+              </div>
             )}
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead>
-                <tr className="bg-gray-50/80 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+          <div className="flex-1 min-h-0 overflow-auto">
+            <table className="w-full text-xs text-left border-collapse">
+              <thead className="sticky top-0 z-10 bg-zinc-700 shadow-xs">
+                <tr className="bg-zinc-700 text-white text-xs font-semibold uppercase tracking-wider border-b border-zinc-800">
                   {canSelect && (
-                    <th className="px-3.5 py-2 w-10 text-center">
+                    <th className="py-1.5 px-2 w-9 text-center border-r border-zinc-600">
                       <button
                         type="button"
                         onClick={toggleAllSelection}
-                        className={cn(
-                          "transition-colors cursor-pointer",
-                          isSupplier
-                            ? "text-gray-400 hover:text-emerald-600"
-                            : "text-gray-400 hover:text-blue-600"
-                        )}
+                        className="text-zinc-200 hover:text-white transition-colors cursor-pointer inline-flex items-center justify-center"
                         title="Select all"
                       >
                         {allSelectableSelected ? (
-                          <CheckSquare className={cn("w-4 h-4", isSupplier ? "text-emerald-600" : "text-blue-600")} />
+                          <CheckSquare className="w-3.5 h-3.5 text-white" />
                         ) : (
-                          <Square className="w-4 h-4" />
+                          <Square className="w-3.5 h-3.5" />
                         )}
                       </button>
                     </th>
                   )}
-                  <th className="px-3.5 py-2 whitespace-nowrap">PO Number</th>
-                  {viewMode === "global" && (
-                    <th className="px-3.5 py-2 whitespace-nowrap">Plant & Storage</th>
-                  )}
-                  <th className="px-3.5 py-2 whitespace-nowrap">Order Date</th>
-                  <th className="px-3.5 py-2 whitespace-nowrap">Delivery Date</th>
-                  <th className="px-3.5 py-2 min-w-[260px]">Contact</th>
-                  <th className="px-3.5 py-2 whitespace-nowrap">Notation</th>
-                  <th className="px-3.5 py-2 text-right whitespace-nowrap">Quantity</th>
-                  <th className="px-3.5 py-2 whitespace-nowrap">Status</th>
+                  <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">PO Number</th>
+                  <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Order Date</th>
+                  <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Delivery Date</th>
+                  <th className="py-1.5 px-2 min-w-[240px] border-r border-zinc-600">Contact</th>
+                  <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Notation</th>
+                  <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">Quantity</th>
+                  <th className="py-1.5 px-2 whitespace-nowrap">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody>
                 {displayedOrders.map((po: PurchaseOrder) => {
                   const isSelected = po.po_number ? selectedPOs.has(po.po_number) : false;
                   const poPlant = resolvePlantAndLocation(
@@ -1297,23 +1280,21 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                       key={po.id}
                       onClick={() => setSelectedPOForPreview(po)}
                       className={cn(
-                        "cursor-pointer transition-colors group",
+                        "cursor-pointer transition-colors group border-b border-gray-300 text-xs",
                         isSelected
                           ? isSupplier
-                            ? "bg-emerald-50/70 border-l-4 border-emerald-600"
-                            : "bg-blue-50/70 border-l-4 border-blue-600"
+                            ? "bg-emerald-50/90 hover:bg-emerald-100/80 border-l-4 border-l-emerald-600"
+                            : "bg-blue-50/90 hover:bg-blue-100/80 border-l-4 border-l-blue-600"
                           : isCrossConflict
-                          ? "opacity-60 hover:bg-amber-50/20"
-                          : isSupplier
-                            ? "hover:bg-emerald-50/30"
-                            : "hover:bg-blue-50/30"
+                          ? "bg-white even:bg-gray-100 opacity-60 hover:bg-amber-50/40"
+                          : "bg-white even:bg-gray-100 hover:bg-blue-50/70"
                       )}
                     >
                       {/* Selection Checkbox (only when a plant is selected) */}
                       {canSelect && (
                         <td
                           className={cn(
-                            "px-3.5 py-1.5 text-center",
+                            "py-1 px-2 text-center whitespace-nowrap border-r border-gray-200",
                             rowSelectable ? "cursor-pointer" : "cursor-not-allowed opacity-40"
                           )}
                           onClick={(e) => {
@@ -1334,25 +1315,25 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                                 : "Select PO"
                             }
                             className={cn(
-                              "text-gray-300 transition-colors inline-flex items-center justify-center",
+                              "text-gray-400 transition-colors inline-flex items-center justify-center",
                               !rowSelectable
                                 ? "cursor-not-allowed"
                                 : isCrossConflict
-                                ? "text-gray-200 hover:text-amber-500"
+                                ? "text-gray-300 hover:text-amber-500"
                                 : isSupplier ? "hover:text-emerald-600" : "hover:text-blue-600"
                             )}
                           >
                             {isSelected ? (
-                              <CheckSquare className={cn("w-4 h-4", isSupplier ? "text-emerald-600" : "text-blue-600")} />
+                              <CheckSquare className={cn("w-3.5 h-3.5", isSupplier ? "text-emerald-600" : "text-blue-600")} />
                             ) : (
-                              <Square className="w-4 h-4" />
+                              <Square className="w-3.5 h-3.5" />
                             )}
                           </button>
                         </td>
                       )}
 
                       {/* PO Number */}
-                      <td className="px-3.5 py-1.5 whitespace-nowrap">
+                      <td className="py-1 px-2 whitespace-nowrap border-r border-gray-200">
                         <div
                           className={cn(
                             "flex items-center gap-1.5 font-mono font-semibold text-gray-900 transition-colors text-xs",
@@ -1362,7 +1343,7 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                           <span>{po.po_number || "—"}</span>
                           {po.version && po.version > 1 ? (
                             <span
-                              className="px-1.5 py-0.2 text-[10px] font-bold bg-amber-100 text-amber-800 rounded border border-amber-200 inline-flex items-center shadow-2xs font-sans shrink-0 leading-tight"
+                              className="px-1 py-0 text-[10px] font-bold bg-amber-100 text-amber-800 rounded border border-amber-200 inline-flex items-center shadow-2xs font-sans shrink-0 leading-tight"
                               title={`Order revised/amended by customer (Version ${po.version})`}
                             >
                               V{po.version}
@@ -1371,55 +1352,39 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                         </div>
                       </td>
 
-                      {/* Plant & Storage Location (Only shown in Global All-Orders view) */}
-                      {viewMode === "global" && (
-                        <td className="px-3.5 py-1.5 whitespace-nowrap">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-gray-900 text-xs">
-                              {poPlant.plantName}
-                            </span>
-                            <span className="px-1.5 py-0.5 text-[10px] font-mono font-semibold bg-gray-100 text-gray-700 border border-gray-200 rounded">
-                              {poPlant.fullDeliveryAddress}
-                            </span>
-                          </div>
-                        </td>
-                      )}
-
                       {/* Order Date */}
-                      <td className="px-3.5 py-1.5 text-gray-600 whitespace-nowrap text-xs">
-                        <div className="flex items-center gap-1.5">
-                          <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                      <td className="py-1 px-2 text-gray-600 whitespace-nowrap text-xs border-r border-gray-200">
+                        <div className="flex items-center gap-1">
+                          <Calendar className="w-3 h-3 text-gray-400 shrink-0" />
                           <span>{formatDateDisplay(po.order_date || (po.extra_data as any)?.order_date)}</span>
                         </div>
                       </td>
 
                       {/* Delivery Date */}
-                      <td className="px-3.5 py-1.5 text-gray-600 whitespace-nowrap text-xs">
-                        <div className="flex items-center gap-1.5">
-                          <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                      <td className="py-1 px-2 text-gray-700 font-medium whitespace-nowrap text-xs border-r border-gray-200">
+                        <div className="flex items-center gap-1">
+                          <Calendar className="w-3 h-3 text-gray-400 shrink-0" />
                           <span>{formatDateDisplay(po.delivery_date)}</span>
                         </div>
                       </td>
 
-                      {/* Contact (<ContactPerson> on top, <AuxHead1> email underneath) */}
-                      <td className="px-3.5 py-1.5 text-gray-700 min-w-[260px] max-w-[340px]">
+                      {/* Contact (<ContactPerson> on top / inline with <AuxHead1> email) */}
+                      <td className="py-1 px-2 text-gray-700 whitespace-nowrap border-r border-gray-200 max-w-[320px] truncate">
                         {po.contact_person || (po.extra_data as any)?.contact_person ? (
-                          <div className="leading-tight">
-                            <div className="font-semibold text-gray-900 text-xs truncate">
+                          <div className="flex items-center gap-1.5 truncate">
+                            <span className="font-semibold text-gray-900 text-xs truncate">
                               {po.contact_person || (po.extra_data as any)?.contact_person}
-                            </div>
+                            </span>
                             {(po.contact_email || (po.extra_data as any)?.contact_email) && (
-                              <div className="flex items-center gap-1 text-[11px] mt-0.5">
+                              <a
+                                href={`mailto:${po.contact_email || (po.extra_data as any)?.contact_email}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="inline-flex items-center gap-0.5 text-[11px] text-blue-600 hover:underline hover:text-blue-700 font-mono tracking-tight truncate select-all"
+                                title={po.contact_email || (po.extra_data as any)?.contact_email}
+                              >
                                 <Mail className="w-3 h-3 text-blue-500 shrink-0" />
-                                <a
-                                  href={`mailto:${po.contact_email || (po.extra_data as any)?.contact_email}`}
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="text-blue-600 hover:underline hover:text-blue-700 font-mono tracking-tight truncate select-all"
-                                  title={po.contact_email || (po.extra_data as any)?.contact_email}
-                                >
-                                  {po.contact_email || (po.extra_data as any)?.contact_email}
-                                </a>
-                              </div>
+                                {po.contact_email || (po.extra_data as any)?.contact_email}
+                              </a>
                             )}
                           </div>
                         ) : (po.contact_email || (po.extra_data as any)?.contact_email) ? (
@@ -1440,41 +1405,36 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                       </td>
 
                       {/* Notation */}
-                      <td className="px-3.5 py-1.5 text-gray-700 whitespace-nowrap text-xs">
+                      <td className="py-1 px-2 text-gray-700 whitespace-nowrap text-xs border-r border-gray-200">
                         {po.notations || (po.extra_data as any)?.notations || (po.extra_data as any)?.aux_head8 || (
                           <span className="text-gray-400">—</span>
                         )}
                       </td>
 
                       {/* Quantity */}
-                      <td className="px-3.5 py-1.5 text-right font-mono text-xs">
+                      <td className="py-1 px-2 text-right font-mono text-xs whitespace-nowrap border-r border-gray-200">
                         {po.status === "PARTIAL" && po.remaining_quantity !== undefined && po.remaining_quantity !== null ? (
-                          <div className="leading-tight">
-                            <div className="font-bold text-orange-600">
+                          <span className="inline-flex items-center gap-1">
+                            <span className="font-bold text-orange-600">
                               {po.remaining_quantity.toLocaleString()}
-                            </div>
-                            <div className="text-[10px] text-gray-400">
-                              bal of {po.quantity?.toLocaleString()}
-                            </div>
-                          </div>
+                            </span>
+                            <span className="text-[10px] text-gray-400">
+                              / {po.quantity?.toLocaleString()}
+                            </span>
+                          </span>
                         ) : po.status === "COMPLETED" ? (
-                          <div className="leading-tight">
-                            <div className="font-bold text-emerald-600">0</div>
-                            <div className="text-[10px] text-gray-400">
-                              fulfilled ({po.quantity?.toLocaleString()})
-                            </div>
-                          </div>
+                          <span className="font-bold text-emerald-600">0</span>
                         ) : (
-                          <div className="font-semibold text-gray-900">
+                          <span className="font-semibold text-gray-900">
                             {po.quantity?.toLocaleString() ?? "—"}
-                          </div>
+                          </span>
                         )}
                       </td>
 
                       {/* Status */}
-                      <td className="px-3.5 py-1.5 whitespace-nowrap">
+                      <td className="py-1 px-2 whitespace-nowrap text-xs">
                         <span
-                          className={`px-2 py-0.5 text-[11px] font-semibold rounded-full inline-flex items-center ${STATUS_BADGES[po.status] || "bg-gray-100 text-gray-700 border border-gray-200"
+                          className={`px-2 py-0 text-[10px] font-semibold rounded-full inline-flex items-center ${STATUS_BADGES[po.status] || "bg-gray-100 text-gray-700 border border-gray-200"
                             }`}
                         >
                           {po.status}
@@ -1487,38 +1447,6 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                 })}
               </tbody>
             </table>
-          </div>
-        )}
-
-        {/* Bottom Pagination Footer */}
-        {totalOrders > 0 && (
-          <div className="flex items-center justify-between px-6 py-3 border-t border-slate-200 bg-slate-50/70 select-none text-xs text-slate-500">
-            <div className="font-medium text-slate-500">
-              <span className="font-semibold text-slate-700">{totalOrders.toLocaleString()} total orders</span>
-            </div>
-            <div className="flex items-center gap-1 text-xs text-slate-600">
-              <span className="px-2 font-normal tracking-tight text-slate-600">
-                {paginationText}
-              </span>
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page <= 1}
-                className="w-8 h-8 rounded-full flex items-center justify-center text-slate-600 hover:bg-slate-200/70 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
-                title="Previous page"
-                aria-label="Previous page"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page >= totalPages}
-                className="w-8 h-8 rounded-full flex items-center justify-center text-slate-600 hover:bg-slate-200/70 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
-                title="Next page"
-                aria-label="Next page"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
           </div>
         )}
       </div>
@@ -1639,107 +1567,103 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                   )}
                 </div>
 
-                <div className="border border-gray-200 rounded-xl overflow-x-auto shadow-xs bg-white">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className="bg-gray-50/90 border-b border-gray-200 text-gray-500 font-semibold uppercase tracking-wider text-[11px]">
-                        <th className="px-3 py-1.5 w-10 text-center">No.</th>
-                        <th className="px-3 py-1.5 min-w-[140px]">Item / Material Code</th>
+                <div className="border border-gray-300 rounded-xl overflow-auto max-h-[55vh] shadow-xs bg-white">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead className="sticky top-0 z-10 bg-zinc-700 shadow-xs">
+                      <tr className="bg-zinc-700 text-white font-semibold uppercase tracking-wider text-xs border-b border-zinc-800">
+                        <th className="py-1.5 px-2 w-10 text-center border-r border-zinc-600 whitespace-nowrap">No.</th>
+                        <th className="py-1.5 px-2 min-w-[140px] border-r border-zinc-600 whitespace-nowrap">Item / Material Code</th>
                         {hasDistinctPartner && (
-                          <th className="px-3 py-1.5 min-w-[110px]">Partner Code</th>
+                          <th className="py-1.5 px-2 min-w-[110px] border-r border-zinc-600 whitespace-nowrap">Partner Code</th>
                         )}
-                        <th className="px-3 py-1.5 min-w-[160px]">Description</th>
-                        <th className="px-2 py-1.5 min-w-[70px]">Color</th>
-                        <th className="px-2 py-1.5 text-center w-16">UOM</th>
-                        <th className="px-3 py-1.5 text-right font-semibold min-w-[85px]">Ordered</th>
-                        <th className="px-3 py-1.5 text-right font-semibold min-w-[85px]">Shipped</th>
-                        <th className="px-3 py-1.5 text-right font-semibold min-w-[95px]">Open Balance</th>
-                        <th className="px-3 py-1.5 text-center min-w-[90px]">Status</th>
+                        <th className="py-1.5 px-2 min-w-[160px] border-r border-zinc-600 whitespace-nowrap">Description</th>
+                        <th className="py-1.5 px-2 min-w-[70px] border-r border-zinc-600 whitespace-nowrap">Color</th>
+                        <th className="py-1.5 px-2 text-center w-16 border-r border-zinc-600 whitespace-nowrap">UOM</th>
+                        <th className="py-1.5 px-2 text-right font-semibold min-w-[85px] border-r border-zinc-600 whitespace-nowrap">Ordered</th>
+                        <th className="py-1.5 px-2 text-right font-semibold min-w-[85px] border-r border-zinc-600 whitespace-nowrap">Shipped</th>
+                        <th className="py-1.5 px-2 text-right font-semibold min-w-[95px] border-r border-zinc-600 whitespace-nowrap">Open Balance</th>
+                        <th className="py-1.5 px-2 text-center min-w-[90px] border-r border-zinc-600 last:border-r-0 whitespace-nowrap">Status</th>
                         {hasPricing && (
-                          <th className="px-3 py-1.5 text-right min-w-[90px]">Unit Price</th>
+                          <th className="py-1.5 px-2 text-right min-w-[90px] border-r border-zinc-600 whitespace-nowrap">Unit Price</th>
                         )}
                         {hasPricing && (
-                          <th className="px-3 py-1.5 text-right font-semibold min-w-[100px]">Subtotal</th>
+                          <th className="py-1.5 px-2 text-right font-semibold min-w-[100px] whitespace-nowrap">Subtotal</th>
                         )}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100 bg-white">
+                    <tbody>
                       {lineItems.map((item, idx) => {
                         const lineSubtotal = item.unit_price ? item.quantity * item.unit_price : undefined;
                         const lineRem = item.remaining_quantity !== undefined ? item.remaining_quantity : Math.max(0, item.quantity - (item.shipped_quantity || 0));
                         const lineShip = item.shipped_quantity || 0;
                         return (
-                          <tr key={idx} className="hover:bg-blue-50/20 transition-colors">
-                            <td className="px-3 py-1.5 text-center font-mono text-gray-400">
+                          <tr key={idx} className="bg-white even:bg-gray-100 hover:bg-blue-50/70 transition-colors border-b border-gray-300 text-xs">
+                            <td className="py-1 px-2 text-center font-mono text-gray-500 whitespace-nowrap border-r border-gray-200">
                               {item.line_number}
                             </td>
-                            <td className="px-3 py-1.5 font-mono">
-                              <div className="font-bold text-gray-900">{item.item_code}</div>
-                              {/* If no distinct partner column, show partner code under item code if present */}
+                            <td className="py-1 px-2 font-mono whitespace-nowrap border-r border-gray-200">
+                              <span className="font-bold text-gray-900">{item.item_code}</span>
                               {!hasDistinctPartner && item.partner_item_code && item.partner_item_code !== item.item_code && (
-                                <div className="text-[11px] text-gray-500 flex items-center gap-1 mt-0.5">
-                                  <span className="text-gray-400">Partner:</span>
-                                  <span className="font-medium text-gray-700 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">
-                                    {item.partner_item_code}
-                                  </span>
-                                </div>
+                                <span className="ml-1.5 text-[10px] text-gray-600 bg-gray-100 px-1 py-0 rounded border border-gray-200">
+                                  {item.partner_item_code}
+                                </span>
                               )}
                             </td>
                             {hasDistinctPartner && (
-                              <td className="px-3 py-1.5 font-mono text-gray-700 font-medium">
+                              <td className="py-1 px-2 font-mono text-gray-700 font-medium whitespace-nowrap border-r border-gray-200">
                                 {item.partner_item_code || " "}
                               </td>
                             )}
-                            <td className="px-3 py-1.5 text-gray-700 font-medium break-words max-w-xs">
+                            <td className="py-1 px-2 text-gray-700 font-medium whitespace-nowrap border-r border-gray-200 max-w-xs truncate" title={item.description}>
                               {item.description}
                             </td>
-                            <td className="px-2 py-1.5 text-gray-700 whitespace-nowrap">
+                            <td className="py-1 px-2 text-gray-700 whitespace-nowrap border-r border-gray-200">
                               {item.color ? (
-                                <span className="px-2 py-0.5 bg-gray-100 text-gray-800 rounded font-medium text-[11px] border border-gray-200">
+                                <span className="px-1.5 py-0 bg-gray-100 text-gray-800 rounded font-medium text-[10px] border border-gray-200">
                                   {item.color}
                                 </span>
                               ) : (
                                 <span className="text-gray-300"> </span>
                               )}
                             </td>
-                            <td className="px-2 py-1.5 text-center font-mono text-gray-700 whitespace-nowrap">
-                              <span className="px-2 py-0.5 bg-gray-100 rounded text-[11px] font-semibold border border-gray-200">
+                            <td className="py-1 px-2 text-center font-mono text-gray-700 whitespace-nowrap border-r border-gray-200">
+                              <span className="px-1.5 py-0 bg-gray-100 rounded text-[10px] font-semibold border border-gray-200">
                                 {item.size || "M"}
                               </span>
                             </td>
-                            <td className="px-3 py-1.5 text-right font-mono text-gray-700 whitespace-nowrap">
+                            <td className="py-1 px-2 text-right font-mono text-gray-700 whitespace-nowrap border-r border-gray-200">
                               {item.quantity.toLocaleString()}
                             </td>
-                            <td className="px-3 py-1.5 text-right font-mono text-emerald-700 font-semibold whitespace-nowrap">
+                            <td className="py-1 px-2 text-right font-mono text-emerald-700 font-semibold whitespace-nowrap border-r border-gray-200">
                               {lineShip.toLocaleString()}
                             </td>
-                            <td className="px-3 py-1.5 text-right font-mono font-bold text-gray-900 whitespace-nowrap">
+                            <td className="py-1 px-2 text-right font-mono font-bold text-gray-900 whitespace-nowrap border-r border-gray-200">
                               {lineRem.toLocaleString()}
                             </td>
-                            <td className="px-3 py-1.5 text-center whitespace-nowrap">
+                            <td className="py-1 px-2 text-center whitespace-nowrap border-r border-gray-200 last:border-r-0">
                               {lineRem <= 0 ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                                   <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Fulfilled
                                 </span>
                               ) : lineShip > 0 ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-50 text-orange-700 border border-orange-200">
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0 rounded-full text-[10px] font-bold bg-orange-50 text-orange-700 border border-orange-200">
                                   Partial
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
                                   Pending
                                 </span>
                               )}
                             </td>
                             {hasPricing && (
-                              <td className="px-3 py-1.5 text-right font-mono text-gray-600 whitespace-nowrap">
+                              <td className="py-1 px-2 text-right font-mono text-gray-600 whitespace-nowrap border-r border-gray-200">
                                 {item.unit_price !== undefined
                                   ? `${activePO.currency || "USD"} ${item.unit_price.toFixed(2)}`
                                   : " "}
                               </td>
                             )}
                             {hasPricing && (
-                              <td className="px-3 py-1.5 text-right font-mono font-bold text-gray-900 whitespace-nowrap">
+                              <td className="py-1 px-2 text-right font-mono font-bold text-gray-900 whitespace-nowrap">
                                 {lineSubtotal !== undefined
                                   ? `${activePO.currency || "USD"} ${lineSubtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                                   : " "}
