@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Trans, useTranslation } from "react-i18next";
-import { format } from "date-fns";
+import { formatDate, formatNumber } from "@/i18n/format";
 import {
   History,
   Search,
@@ -28,11 +28,11 @@ const formatDateDisplay = (dateStr?: string | null) => {
     const s = dateStr.trim();
     if (/^\d{2}-\d{2}-\d{4}$/.test(s)) {
       const [d, m, y] = s.split("-");
-      return format(new Date(parseInt(y), parseInt(m) - 1, parseInt(d)), "MMM d, yyyy");
+      return formatDate(new Date(parseInt(y), parseInt(m) - 1, parseInt(d)));
     }
     const d = new Date(s);
     if (isNaN(d.getTime())) return s;
-    return format(d, "MMM d, yyyy");
+    return formatDate(d);
   } catch {
     return dateStr;
   }
@@ -173,7 +173,7 @@ export default function OrderHistory() {
             <h1 className="text-2xl font-bold tracking-tight text-gray-950">{t("header.title")}</h1>
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-              {t("header.archive", { total: totalOrders.toLocaleString() })}
+              {t("header.archive", { total: formatNumber(totalOrders) })}
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-1">
@@ -365,7 +365,7 @@ export default function OrderHistory() {
                       </td>
 
                       <td className="py-1 px-2 text-right whitespace-nowrap font-mono text-xs font-bold text-slate-900 border-r border-gray-200">
-                        {Math.round(Number(fulfilledQty)).toLocaleString()}
+                        {formatNumber(Math.round(Number(fulfilledQty)))}
                       </td>
 
                       <td className="py-1 px-2 whitespace-nowrap">
@@ -448,7 +448,7 @@ export default function OrderHistory() {
                       <span className="text-[10px] font-bold uppercase text-slate-400 block">{t("detail.totalShipped")}</span>
                       <span className="text-xs font-bold font-mono text-emerald-700 mt-1 block">
                         {t("detail.totalShippedValue", {
-                          quantity: Math.round(Number(activePO?.shipped_quantity ?? activePO?.quantity ?? 0)).toLocaleString(),
+                          quantity: formatNumber(Math.round(Number(activePO?.shipped_quantity ?? activePO?.quantity ?? 0))),
                         })}
                       </span>
                     </div>
@@ -497,10 +497,10 @@ export default function OrderHistory() {
                                 {li.description}
                               </td>
                               <td className="py-1 px-2 text-right font-mono text-slate-600 whitespace-nowrap border-r border-gray-200">
-                                {li.ordered.toLocaleString()} {li.uom}
+                                {formatNumber(li.ordered)} {li.uom}
                               </td>
                               <td className="py-1 px-2 text-right font-mono font-bold text-emerald-700 whitespace-nowrap">
-                                {li.shipped.toLocaleString()} {li.uom}
+                                {formatNumber(li.shipped)} {li.uom}
                               </td>
                             </tr>
                           ))}

@@ -11,5 +11,8 @@
     "PARTIAL": "部分",
     "SHIPPED": "已发运",
     "UPDATED": "已更新"
+  },
+  "time": {
+    "justNow": "刚刚"
   }
 }

@@ -21,10 +21,10 @@ import { poApi } from "@/services/poApi";
 import { shipmentService } from "@/services/shipmentService";
 import { useAuthStore } from "@/store/authStore";
 import { useNavigate } from "react-router-dom";
-import { format } from "date-fns";
 import { useMemo } from "react";
 import { Trans, useTranslation } from "react-i18next";
 import i18n from "@/i18n";
+import { formatDate, formatMonthShort, formatNumber } from "@/i18n/format";
 import {
   AreaChart,
   Area,
@@ -58,7 +58,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
             />
             <span className="text-slate-300 font-medium">{entry.name}:</span>
             <span className="text-white font-bold ml-auto">
-              {typeof entry.value === "number" ? entry.value.toLocaleString() : entry.value}
+              {typeof entry.value === "number" ? formatNumber(entry.value) : entry.value}
             </span>
           </div>
         ))}
@@ -105,7 +105,7 @@ const formatDateSafe = (dateStr: string | null | undefined): string => {
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return noDate;
   try {
-    return format(d, "MMM d, yyyy");
+    return formatDate(d);
   } catch {
     return noDate;
   }
@@ -253,7 +253,7 @@ export default function SupplierDashboard() {
     for (let i = 5; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      const label = d.toLocaleString("default", { month: "short" });
+      const label = formatMonthShort(d);
       monthsMap.set(key, { key, label, pieces: 0, boxes: 0, shipments: 0 });
     }
 
@@ -274,7 +274,8 @@ export default function SupplierDashboard() {
     }
 
     return Array.from(monthsMap.values());
-  }, [shipments]);
+    // t changes with the language, so month labels re-render on switch
+  }, [shipments, t]);
 
   const currentMonthPieces = useMemo(() => {
     if (monthlyProgress.length === 0) return 0;
@@ -353,11 +354,11 @@ export default function SupplierDashboard() {
   const kpiCards = [
     {
       label: t("kpi.dispatchedVolume.label"),
-      value: t("kpi.dispatchedVolume.value", { pieces: shipmentMetrics.totalPieces.toLocaleString() }),
+      value: t("kpi.dispatchedVolume.value", { pieces: formatNumber(shipmentMetrics.totalPieces) }),
       icon: Truck,
       iconBg: "bg-emerald-50 text-emerald-600 border-emerald-100",
       subtitle: t("kpi.dispatchedVolume.subtitle", {
-        cartons: shipmentMetrics.totalBoxes.toLocaleString(),
+        cartons: formatNumber(shipmentMetrics.totalBoxes),
         dispatches: shipmentMetrics.totalCount,
       }),
       badge: t("kpi.dispatchedVolume.badge"),
@@ -541,7 +542,7 @@ export default function SupplierDashboard() {
                   <Trans
                     t={t}
                     i18nKey="monthly.thisMonth"
-                    values={{ value: currentMonthPieces.toLocaleString() }}
+                    values={{ value: formatNumber(currentMonthPieces) }}
                     components={{ strong: <strong className="text-slate-900 font-semibold" /> }}
                   />
                 </span>
@@ -713,7 +714,7 @@ export default function SupplierDashboard() {
                         </div>
                         <div className="text-right">
                           <span className="font-semibold text-slate-900">
-                            {t("plants.pieces", { value: plant.pieces.toLocaleString() })}
+                            {t("plants.pieces", { value: formatNumber(plant.pieces) })}
                           </span>
                           <span className="text-slate-400 text-[11px] ml-1.5">
                             {t("plants.cartons", { count: plant.boxes })}
@@ -810,13 +811,13 @@ export default function SupplierDashboard() {
                             {t("dueSoon.target", { date: formatDateSafe(po.delivery_date) })}{" "}
                             {isPartial && po.remaining_quantity != null ? (
                               <span className="font-semibold text-slate-700">
-                                {Math.round(po.remaining_quantity).toLocaleString()}{" "}
-                                <span className="font-normal text-slate-400">/ {(po.quantity || 0).toLocaleString()}</span>{" "}
+                                {formatNumber(Math.round(po.remaining_quantity))}{" "}
+                                <span className="font-normal text-slate-400">/ {formatNumber(po.quantity || 0)}</span>{" "}
                                 <span className="text-emerald-600">{uom}</span>
                               </span>
                             ) : (
                               <span className="font-semibold text-slate-700">
-                                {(po.quantity || 0).toLocaleString()}{" "}
+                                {formatNumber(po.quantity || 0)}{" "}
                                 <span className="text-emerald-600">{uom}</span>
                               </span>
                             )}

@@ -52,7 +52,7 @@ function detectBrowserLanguage(): AppLanguage {
 }
 
 i18n.on("languageChanged", (lng) => {
-  document.documentElement.lang = lng;
+  if (typeof document !== "undefined") document.documentElement.lang = lng;
 });
 
 i18n.use(initReactI18next).init({
@@ -65,6 +65,7 @@ i18n.use(initReactI18next).init({
   interpolation: { escapeValue: false }, // React already escapes
   returnNull: false,
   initAsync: false, // resources are bundled, so be ready before the first render
+  showSupportNotice: false, // no promotional message in the browser console
 });
 
 /** The current language, always one of SUPPORTED_LANGUAGES. */

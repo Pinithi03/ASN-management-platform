@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { format } from "date-fns";
+import { formatDate, formatNumber } from "@/i18n/format";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Trans, useTranslation } from "react-i18next";
 import {
@@ -38,11 +38,11 @@ const formatDateDisplay = (dateStr?: string | null) => {
     const s = dateStr.trim();
     if (/^\d{2}-\d{2}-\d{4}$/.test(s)) {
       const [d, m, y] = s.split("-");
-      return format(new Date(parseInt(y), parseInt(m) - 1, parseInt(d)), "MMM d, yyyy");
+      return formatDate(new Date(parseInt(y), parseInt(m) - 1, parseInt(d)));
     }
     const d = new Date(s);
     if (isNaN(d.getTime())) return s;
-    return format(d, "MMM d, yyyy");
+    return formatDate(d);
   } catch {
     return dateStr;
   }
@@ -1174,13 +1174,13 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
 
                           {/* Ordered Qty */}
                           <td className="py-1 px-2 text-right whitespace-nowrap font-mono text-xs text-slate-600 border-r border-gray-200">
-                            {ln.ordered_qty.toLocaleString()}{" "}
+                            {formatNumber(ln.ordered_qty)}{" "}
                             <span className="text-[10px] text-slate-400">{ln.uom || "M"}</span>
                           </td>
 
                           {/* Shipped Qty */}
                           <td className="py-1 px-2 text-right whitespace-nowrap font-mono text-xs text-slate-500 border-r border-gray-200">
-                            {ln.shipped_qty > 0 ? ln.shipped_qty.toLocaleString() : "0"}
+                            {ln.shipped_qty > 0 ? formatNumber(ln.shipped_qty) : "0"}
                           </td>
 
                           {/* Remaining Open Balance */}
@@ -1193,7 +1193,7 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
                                   : "bg-blue-50 text-blue-800 border-blue-200"
                               )}
                             >
-                              {ln.remaining_qty.toLocaleString()}
+                              {formatNumber(ln.remaining_qty)}
                               <span className="text-[10px] font-semibold opacity-75">{ln.uom || "M"}</span>
                             </span>
                           </td>

@@ -17,7 +17,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy import desc, func, or_, select, update, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from starlette.concurrency import run_in_threadpool
+
 from app.core.exceptions import NotFoundError
+from app.core.languages import Language, normalise_language, to_keycloak_locale
 # Phase 4 replaces this with Keycloak Admin API calls (keycloak_admin.py).
 # For now, credential endpoints return 501 Not Implemented.
 # from app.core.credentials_store import (
@@ -153,6 +156,7 @@ class SupplierResponse(BaseModel):
     profile_picture_url: Optional[str] = None
     current_hu_number: Optional[str] = None
     hu_locked: bool = False
+    preferred_language: str = "en"
     is_active: bool = True
     is_deleted: bool = False
     deleted_at: Optional[str] = None
@@ -204,6 +208,7 @@ class SupplierCreateRequest(BaseModel):
     profile_picture_url: Optional[str] = None
     current_hu_number: Optional[str] = None
     is_active: bool = True
+    preferred_language: Language = "en"
 
 
 class SupplierUpdateRequest(BaseModel):
@@ -220,6 +225,7 @@ class SupplierUpdateRequest(BaseModel):
     current_hu_number: Optional[str] = None
     hu_locked: Optional[bool] = None
     is_active: Optional[bool] = None
+    preferred_language: Optional[Language] = None
 
 
 # Buyer plant and brand names to never confuse with suppliers
@@ -464,6 +470,7 @@ async def list_suppliers(
                 profile_picture_url=s.profile_picture_url,
                 current_hu_number=s.current_hu_number,
                 hu_locked=bool(s.hu_locked),
+                preferred_language=s.preferred_language or "en",
                 is_active=s.is_active,
                 is_deleted=bool(s.is_deleted),
                 deleted_at=s.deleted_at.isoformat() if s.deleted_at else None,
@@ -623,6 +630,7 @@ async def create_supplier(
         current_hu_number=hu_str,
         hu_locked=has_hu,
         is_active=payload.is_active,
+        preferred_language=payload.preferred_language,
     )
     db.add(new_supp)
     await db.commit()
@@ -652,6 +660,7 @@ async def create_supplier(
             name=new_supp.name,
             supplier_id=str(new_supp.id),
             temporary_password=temp_pw,
+            locale=to_keycloak_locale(payload.preferred_language),
         )
         kc_uid = kc_res.get("keycloak_id")
     except Exception as ex:
@@ -688,6 +697,7 @@ async def create_supplier(
             supplier_name=new_supp.name,
             supplier_code=new_supp.supplier_code,
             temporary_password=temp_pw,
+            language=new_supp.preferred_language,
         )
     except Exception as ex:
         logger.error("Failed to send welcome credentials email to %s: %s", new_supp.email, ex)
@@ -706,6 +716,7 @@ async def create_supplier(
         profile_picture_url=new_supp.profile_picture_url,
         current_hu_number=new_supp.current_hu_number,
         hu_locked=bool(new_supp.hu_locked),
+        preferred_language=new_supp.preferred_language or "en",
         is_active=new_supp.is_active,
         is_deleted=False,
         deleted_at=None,
@@ -797,9 +808,21 @@ async def update_supplier(
         supp.hu_locked = payload.hu_locked
     if payload.is_active is not None:
         supp.is_active = payload.is_active
+    language_changed = (
+        payload.preferred_language is not None and payload.preferred_language != supp.preferred_language
+    )
+    if payload.preferred_language is not None:
+        supp.preferred_language = payload.preferred_language
 
     await db.commit()
     await db.refresh(supp)
+
+    if language_changed:
+        # Keep the supplier's Keycloak login language in sync (best effort)
+        from app.services.keycloak_admin import set_supplier_locale_in_keycloak
+        await run_in_threadpool(
+            set_supplier_locale_in_keycloak, supp.supplier_code, to_keycloak_locale(supp.preferred_language)
+        )
 
     # Count POs
     po_cnt = (
@@ -824,6 +847,7 @@ async def update_supplier(
         profile_picture_url=supp.profile_picture_url,
         current_hu_number=supp.current_hu_number,
         hu_locked=bool(supp.hu_locked),
+        preferred_language=supp.preferred_language or "en",
         is_active=supp.is_active,
         is_deleted=bool(supp.is_deleted),
         deleted_at=supp.deleted_at.isoformat() if supp.deleted_at else None,
@@ -898,6 +922,7 @@ async def update_supplier_avatar(
         profile_picture_url=supp.profile_picture_url,
         current_hu_number=supp.current_hu_number,
         hu_locked=bool(supp.hu_locked),
+        preferred_language=supp.preferred_language or "en",
         is_active=supp.is_active,
         is_deleted=bool(supp.is_deleted),
         deleted_at=supp.deleted_at.isoformat() if supp.deleted_at else None,
@@ -1049,6 +1074,7 @@ async def restore_supplier(
         profile_picture_url=supp.profile_picture_url,
         current_hu_number=supp.current_hu_number,
         hu_locked=bool(supp.hu_locked),
+        preferred_language=supp.preferred_language or "en",
         is_active=supp.is_active,
         is_deleted=False,
         deleted_at=None,
@@ -1140,6 +1166,7 @@ async def activate_supplier_credentials(
             name=supplier.name,
             supplier_id=str(supplier.id),
             temporary_password=cred["temporary_password"],
+            locale=to_keycloak_locale(normalise_language(supplier.preferred_language) or "en"),
         )
         kc_uid = kc_res.get("keycloak_id")
         if usr and kc_uid:
@@ -1157,6 +1184,7 @@ async def activate_supplier_credentials(
             supplier_name=supplier.name,
             supplier_code=supplier.supplier_code,
             temporary_password=cred["temporary_password"],
+            language=supplier.preferred_language,
         )
     except Exception as ex:
         logger.error("Email sending error for %s: %s", supplier.supplier_code, ex)
@@ -1323,6 +1351,7 @@ async def set_supplier_hu_number(
         profile_picture_url=supp.profile_picture_url,
         current_hu_number=supp.current_hu_number,
         hu_locked=bool(supp.hu_locked),
+        preferred_language=supp.preferred_language or "en",
         is_active=supp.is_active,
         is_deleted=bool(supp.is_deleted),
         deleted_at=supp.deleted_at.isoformat() if supp.deleted_at else None,

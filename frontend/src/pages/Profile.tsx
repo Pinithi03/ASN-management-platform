@@ -23,6 +23,7 @@ import {
   clearAllSupplierDrafts,
 } from "@/utils/draftStorage";
 import { cn } from "@/utils/cn";
+import { getErrorMessage } from "@/services/apiError";
 
 export default function Profile() {
   const { t } = useTranslation(["profile", "common"]);
@@ -120,7 +121,7 @@ export default function Profile() {
       setHuInput("");
       setIsAdminEditOpen(false);
     } catch (err: any) {
-      setHuError(err?.response?.data?.detail || err?.message || t("profile:hu.saveFailed"));
+      setHuError(getErrorMessage(err, t("profile:hu.saveFailed")));
     } finally {
       setIsSavingHu(false);
     }
@@ -196,7 +197,7 @@ export default function Profile() {
       setAvatarSuccess(t("profile:avatar.uploaded"));
     } catch (err: any) {
       console.error("Avatar upload failed:", err);
-      setAvatarError(err?.response?.data?.detail || err?.message || t("profile:avatar.uploadFailed"));
+      setAvatarError(getErrorMessage(err, t("profile:avatar.uploadFailed")));
     } finally {
       setIsUploadingAvatar(false);
       if (fileInputRef.current) {
@@ -221,7 +222,7 @@ export default function Profile() {
       setAvatarSuccess(t("profile:avatar.removed"));
     } catch (err: any) {
       console.error("Failed to remove avatar:", err);
-      setAvatarError(err?.response?.data?.detail || err?.message || t("profile:avatar.removeFailed"));
+      setAvatarError(getErrorMessage(err, t("profile:avatar.removeFailed")));
     } finally {
       setIsUploadingAvatar(false);
     }

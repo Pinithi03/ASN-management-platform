@@ -18,11 +18,11 @@ import {
   RefreshCw,
   RotateCcw,
 } from "lucide-react";
-import { format } from "date-fns";
 import { useTranslation } from "react-i18next";
 import { emailApi } from "@/services/emailApi";
 import type { EmailAttachment, ParsedData } from "@/types/email";
 import type { EmailsResources } from "@/i18n/resources";
+import { formatDate as formatLocalDate, formatNumber } from "@/i18n/format";
 
 type ParsedLabelKey = keyof EmailsResources["parsed"];
 
@@ -80,7 +80,7 @@ type PreviewKind = "html" | "xml" | "text" | "image" | "pdf" | "none";
 // ─── Helpers ────────────────────────────────────────────────────
 
 function formatDate(value: string | null): string {
-  return value ? format(new Date(value), "MMM d yyyy, HH:mm:ss") : " ";
+  return value ? formatLocalDate(value, "dateTime") : " ";
 }
 
 function formatBytes(bytes: number | null): string {
@@ -92,7 +92,7 @@ function formatBytes(bytes: number | null): string {
 
 function displayValue(value: unknown): string {
   if (value === null || value === undefined || value === "") return " ";
-  if (typeof value === "number") return value.toLocaleString();
+  if (typeof value === "number") return formatNumber(value);
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
 }
@@ -102,7 +102,7 @@ function formatMoney(value: unknown, currency?: string): string {
   const num = typeof value === "number" ? value : parseFloat(String(value));
   if (isNaN(num)) return String(value);
 
-  const formattedNum = num.toLocaleString(undefined, {
+  const formattedNum = formatNumber(num, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 4,
   });

@@ -11,5 +11,8 @@
     "PARTIAL": "PARZIALE",
     "SHIPPED": "SPEDITO",
     "UPDATED": "AGGIORNATO"
+  },
+  "time": {
+    "justNow": "proprio ora"
   }
 }

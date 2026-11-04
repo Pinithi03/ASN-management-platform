@@ -48,6 +48,10 @@ class Supplier(Base, TimestampMixin, SoftDeleteMixin):
     profile_picture_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     current_hu_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     hu_locked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Portal UI / email language: "en", "zh-CN" or "it" (see app.core.languages)
+    preferred_language: Mapped[str] = mapped_column(
+        String(10), nullable=False, default="en", server_default="en"
+    )
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 

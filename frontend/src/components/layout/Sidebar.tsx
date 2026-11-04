@@ -13,6 +13,7 @@ import LanguageSwitcher from "./LanguageSwitcher";
 import { useAuthStore } from "@/store/authStore";
 import { useQuery } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
+import { formatNumber, formatRelative } from "@/i18n/format";
 import { supplierApi } from "@/services/supplierApi";
 import { poApi } from "@/services/poApi";
 import {
@@ -318,7 +319,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       try {
         const d = new Date(po.created_at || po.delivery_date || "");
         if (!isNaN(d.getTime())) {
-          timeFormatted = formatDistanceToNow(d, { addSuffix: true });
+          timeFormatted = formatRelative(d);
         }
       } catch {}
 
@@ -327,7 +328,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         title: t("layout:notifications.newPoAssigned"),
         desc: t("layout:notifications.newPoAssignedDesc", {
           poNumber: po.po_number || t("layout:notifications.orderFallback"),
-          quantity: (po.quantity ?? 0).toLocaleString(),
+          quantity: formatNumber(po.quantity ?? 0),
         }),
         time: timeFormatted,
         unread: !readNotifIds.includes(notifId),

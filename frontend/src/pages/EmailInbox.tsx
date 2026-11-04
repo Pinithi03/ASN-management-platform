@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { emailApi } from "@/services/emailApi";
 import { useAuthStore } from "@/store/authStore";
-import { format } from "date-fns";
+import { formatDate, formatNumber } from "@/i18n/format";
 
 export default function EmailInbox() {
   const { t } = useTranslation(["emails", "layout"]);
@@ -100,9 +100,9 @@ export default function EmailInbox() {
     totalEmails === 0
       ? t("emails:inbox.paginationEmpty")
       : t("emails:inbox.pagination", {
-          start: startItem.toLocaleString(),
-          end: endItem.toLocaleString(),
-          total: totalEmails.toLocaleString(),
+          start: formatNumber(startItem),
+          end: formatNumber(endItem),
+          total: formatNumber(totalEmails),
         });
 
   return (
@@ -257,7 +257,7 @@ export default function EmailInbox() {
                         </td>
                         <td className="px-3.5 py-1.5 text-right text-slate-500 whitespace-nowrap">
                           {email.received_at
-                            ? format(new Date(email.received_at), "MMM d, HH:mm")
+                            ? formatDate(email.received_at, "shortDateTime")
                             : " "}
                         </td>
                       </tr>
@@ -271,7 +271,7 @@ export default function EmailInbox() {
             <div className="flex items-center justify-between px-4 py-2.5 border-t border-slate-200 bg-slate-50/60 select-none text-xs text-slate-500">
               <div>
                 <span className="font-semibold text-slate-700">
-                  {t("emails:inbox.totalEmails", { total: totalEmails.toLocaleString() })}
+                  {t("emails:inbox.totalEmails", { total: formatNumber(totalEmails) })}
                 </span>
               </div>
 

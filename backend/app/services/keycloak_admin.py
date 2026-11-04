@@ -50,18 +50,56 @@ def _get_admin_token() -> str:
         return _cached_token
 
 
+def _admin_api_and_headers() -> tuple[str, dict[str, str]]:
+    settings = get_settings()
+    base_api = f"{settings.KEYCLOAK_INTERNAL_URL.rstrip('/')}/admin/realms/{settings.KEYCLOAK_REALM}"
+    headers = {
+        "Authorization": f"Bearer {_get_admin_token()}",
+        "Content-Type": "application/json",
+    }
+    return base_api, headers
+
+
+def set_user_locale(keycloak_user_id: str, locale: str) -> bool:
+    """
+    Set the Keycloak `locale` attribute of a user (the language of the login pages
+    and the `locale` claim in their tokens). Other attributes are preserved:
+    Keycloak replaces the whole attributes map on update, so read → merge → write.
+    """
+    try:
+        base_api, headers = _admin_api_and_headers()
+    except Exception as e:
+        logger.warning("Could not get admin token to set Keycloak locale: %s", e)
+        return False
+
+    with httpx.Client(timeout=10.0) as client:
+        resp = client.get(f"{base_api}/users/{keycloak_user_id}", headers=headers)
+        if resp.status_code != 200:
+            logger.warning("Keycloak user %s not readable for locale update: %s", keycloak_user_id, resp.status_code)
+            return False
+        attributes = dict(resp.json().get("attributes") or {})
+        attributes["locale"] = [locale]
+        upd = client.put(f"{base_api}/users/{keycloak_user_id}", json={"attributes": attributes}, headers=headers)
+        if upd.status_code in (200, 204):
+            logger.info("Keycloak user %s locale set to %s", keycloak_user_id, locale)
+            return True
+        logger.warning("Failed to set Keycloak locale for %s: %s %s", keycloak_user_id, upd.status_code, upd.text)
+        return False
+
+
 def provision_supplier_in_keycloak(
     supplier_code: str,
     email: str,
     name: str,
     supplier_id: str,
     temporary_password: str,
+    locale: Optional[str] = None,
 ) -> dict[str, Any]:
     """
     Create or update a Keycloak user for an external supplier partner.
     - Username: supplier_code
     - Role: SUPPLIER
-    - Attributes: supplier_id, supplier_code
+    - Attributes: supplier_id, supplier_code, locale (Keycloak locale code, e.g. "zh-Hans")
     - Password: temporary_password (flagged as temporary with UPDATE_PASSWORD action)
     """
     settings = get_settings()
@@ -88,16 +126,24 @@ def provision_supplier_in_keycloak(
             raise RuntimeError(f"Keycloak user lookup failed: {lookup_resp.status_code}")
 
         users = lookup_resp.json()
+        attributes: dict[str, list[str]] = {
+            "supplier_id": [str(supplier_id)],
+            "supplier_code": [clean_code],
+        }
+        if locale:
+            attributes["locale"] = [locale]
+        elif users:
+            # Keep a language the supplier already chose (PUT replaces all attributes)
+            existing_locale = (users[0].get("attributes") or {}).get("locale")
+            if existing_locale:
+                attributes["locale"] = existing_locale
         user_body = {
             "username": clean_code,
             "enabled": True,
             "emailVerified": True,
             "email": safe_email,
             "firstName": safe_name,
-            "attributes": {
-                "supplier_id": [str(supplier_id)],
-                "supplier_code": [clean_code],
-            },
+            "attributes": attributes,
             "requiredActions": ["UPDATE_PASSWORD"],
         }
 
@@ -197,6 +243,28 @@ def set_supplier_enabled_in_keycloak(supplier_code: str, enabled: bool) -> bool:
                     return True
                 else:
                     logger.warning("Failed to update Keycloak user %s enabled state: %s", candidate, upd_resp.text)
+    return False
+
+
+def set_supplier_locale_in_keycloak(supplier_code: str, locale: str) -> bool:
+    """Set the `locale` attribute of a supplier user, looked up by supplier code (username)."""
+    try:
+        base_api, headers = _admin_api_and_headers()
+    except Exception as e:
+        logger.warning("Could not get admin token to set supplier locale: %s", e)
+        return False
+
+    clean_code = str(supplier_code).strip()
+    with httpx.Client(timeout=10.0) as client:
+        for candidate in (clean_code, clean_code.lower(), clean_code.upper()):
+            resp = client.get(
+                f"{base_api}/users",
+                params={"username": candidate, "exact": "true"},
+                headers=headers,
+            )
+            if resp.status_code == 200 and resp.json():
+                return set_user_locale(resp.json()[0]["id"], locale)
+    logger.warning("Keycloak user for supplier %s not found; locale not updated", clean_code)
     return False
 
 

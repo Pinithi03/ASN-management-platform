@@ -10,6 +10,8 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Trans, useTranslation } from "react-i18next";
 import i18n from "@/i18n";
+import { formatDate, formatNumber } from "@/i18n/format";
+import { getErrorMessage } from "@/services/apiError";
 import {
   Search,
   Download,
@@ -333,7 +335,7 @@ export default function Shipments() {
       }
       setTimeout(() => window.URL.revokeObjectURL(url), 60000);
     } catch (e: any) {
-      alert(t("labels.downloadFailed", { error: e?.response?.data?.detail || e.message || e }));
+      alert(t("labels.downloadFailed", { error: getErrorMessage(e, String(e)) }));
     } finally {
       setActionLoadingId(null);
     }
@@ -367,7 +369,7 @@ export default function Shipments() {
         alert(t("xml.noXml"));
       }
     } catch (err: any) {
-      alert(t("xml.loadFailed", { error: err?.response?.data?.detail || err?.message || t("xml.unknownError") }));
+      alert(t("xml.loadFailed", { error: getErrorMessage(err, t("xml.unknownError")) }));
     } finally {
       setActionLoadingId(null);
     }
@@ -550,7 +552,7 @@ export default function Shipments() {
                         </td>
                         <td className="py-1 px-2 whitespace-nowrap border-r border-gray-200">
                           <span className="text-gray-900 font-bold font-mono text-xs">
-                            {s.total_pieces?.toLocaleString()}
+                            {formatNumber(s.total_pieces)}
                           </span>{" "}
                           <span className="text-gray-500 text-xs font-medium">{uomLabel}</span>
                         </td>
@@ -565,7 +567,7 @@ export default function Shipments() {
                           </span>
                         </td>
                         <td className="whitespace-nowrap py-1 px-2 text-gray-600 text-xs border-r border-gray-200">
-                          {s.ship_date ? new Date(s.ship_date).toLocaleDateString("en-GB") : " "}
+                          {s.ship_date ? formatDate(s.ship_date, "numeric") : " "}
                         </td>
                         <td className="whitespace-nowrap py-1 px-2 text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1">
@@ -1236,7 +1238,7 @@ function WebPackingWizard({
     } catch (err: any) {
       alert(
         t("wizard.alerts.submissionError", {
-          error: err?.response?.data?.detail || err?.message || t("wizard.alerts.createFailed"),
+          error: getErrorMessage(err, t("wizard.alerts.createFailed")),
         })
       );
     } finally {
@@ -2534,7 +2536,7 @@ function WebPackingWizard({
                   <Trans
                     t={t}
                     i18nKey="wizard.step3.totalQty"
-                    values={{ qty: totalShippedUnits.toLocaleString(), uom: packedItems[0]?.uom || "M" }}
+                    values={{ qty: formatNumber(totalShippedUnits), uom: packedItems[0]?.uom || "M" }}
                     components={{ strong: <strong className="font-mono text-gray-900" /> }}
                   />
                 </span>
@@ -3253,8 +3255,15 @@ function ExcelPackingWorkflow({
     } catch (e: any) {
       console.error("Create shipment error:", e);
       const detail = e?.response?.data?.detail;
+      const errorCode = e?.response?.data?.code;
       let msg = t("wizard.alerts.createFailed");
-      if (typeof detail === "string") {
+      if (typeof errorCode === "string" && i18n.exists(`errors:${errorCode}`)) {
+        // Translated message for the coded error, plus any row-level details from the server
+        msg = getErrorMessage(e);
+        if (detail && typeof detail === "object" && Array.isArray(detail.errors) && detail.errors.length > 0) {
+          msg += ": " + detail.errors.join("; ");
+        }
+      } else if (typeof detail === "string") {
         msg = detail;
       } else if (detail && typeof detail === "object") {
         if (detail.message) {
@@ -3294,7 +3303,7 @@ function ExcelPackingWorkflow({
       a.remove();
       window.URL.revokeObjectURL(url);
     } catch (err: any) {
-      alert(t("excel.alerts.labelsFailed", { error: err?.response?.data?.detail || err.message || err }));
+      alert(t("excel.alerts.labelsFailed", { error: getErrorMessage(err, String(err)) }));
     } finally {
       setDownloadingLabels(false);
     }
@@ -3335,7 +3344,7 @@ function ExcelPackingWorkflow({
         }
       }
     } catch (err: any) {
-      alert(t("excel.alerts.xmlFailed", { error: err?.response?.data?.detail || err.message || err }));
+      alert(t("excel.alerts.xmlFailed", { error: getErrorMessage(err, String(err)) }));
     } finally {
       setDownloadingXml(false);
     }
@@ -3726,7 +3735,7 @@ function ExcelPackingWorkflow({
                       t={t}
                       i18nKey="wizard.step3.totalQty"
                       values={{
-                        qty: validationResult.total_quantity.toLocaleString(),
+                        qty: formatNumber(validationResult.total_quantity),
                         uom: validationResult.rows[0]?.uom || "M",
                       }}
                       components={{ strong: <strong className="font-mono text-gray-900" /> }}
@@ -3893,7 +3902,7 @@ function ExcelPackingWorkflow({
 
                           {/* Quantity */}
                           <td className="py-1 px-2 text-right font-mono font-bold text-gray-900 whitespace-nowrap border-r border-gray-200">
-                            {Number(r.quantity).toLocaleString()} {r.uom || "M"}
+                            {formatNumber(Number(r.quantity))} {r.uom || "M"}
                           </td>
 
                           {/* Gross Wt */}
@@ -4020,7 +4029,7 @@ function ExcelPackingWorkflow({
                                     {l.description}
                                   </td>
                                   <td className="py-1 px-2 text-right font-mono font-bold text-gray-800 whitespace-nowrap border-r border-gray-200">
-                                    {Number(l.remaining_qty ?? l.ordered_qty).toLocaleString()} {l.uom}
+                                    {formatNumber(Number(l.remaining_qty ?? l.ordered_qty))} {l.uom}
                                   </td>
                                   <td className="py-1 px-2 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                     {!isClosed && isChecked ? (
@@ -4361,7 +4370,7 @@ function ShipmentDetailModal({
         if (active) setData(res);
       })
       .catch((err) => {
-        if (active) setError(err?.response?.data?.detail || err?.message || t("detail.loadFailed"));
+        if (active) setError(getErrorMessage(err, t("detail.loadFailed")));
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -4417,7 +4426,7 @@ function ShipmentDetailModal({
                     <Trans
                       t={t}
                       i18nKey="detail.shipDate"
-                      values={{ date: new Date(data.ship_date).toLocaleDateString("en-GB") }}
+                      values={{ date: formatDate(data.ship_date, "numeric") }}
                       components={{ strong: <strong className="text-gray-800" /> }}
                     />
                   </>
@@ -4500,7 +4509,7 @@ function ShipmentDetailModal({
                               {meta.lot_number || " "}
                             </td>
                             <td className="py-1 px-2 text-right font-bold text-blue-700 whitespace-nowrap border-r border-gray-200">
-                              {meta.quantity?.toLocaleString() || meta.quantity || 0} {meta.uom || data.uom || "M"}
+                              {meta.quantity != null ? formatNumber(meta.quantity) : 0} {meta.uom || data.uom || "M"}
                             </td>
                             <td className="py-1 px-2 text-right text-gray-800 whitespace-nowrap border-r border-gray-200">
                               {c.gross_weight?.toFixed(2) || "0.00"}

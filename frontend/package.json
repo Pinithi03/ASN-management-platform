@@ -8,6 +8,8 @@
     "dev": "vite --port 3000",
     "build": "npm run i18n:check && tsc -b && vite build",
     "i18n:check": "node scripts/i18n-check.mjs",
+    "i18n:export": "node scripts/i18n-review.mjs export",
+    "i18n:import": "node scripts/i18n-review.mjs import",
     "preview": "vite preview",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "type-check": "tsc --noEmit",

@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supplierApi } from "@/services/supplierApi";
+import { LANGUAGE_NAMES, SUPPORTED_LANGUAGES } from "@/i18n";
 import {
   recordSupplierFieldChanges,
   recordSupplierCreateEvent,
@@ -48,6 +49,7 @@ export interface SupplierItem {
   tax_id?: string;
   address?: string;
   current_hu_number?: string;
+  preferred_language?: string;
   hu_locked?: boolean;
   is_active: boolean;
   is_deleted?: boolean;
@@ -282,6 +284,7 @@ export default function Suppliers() {
     current_hu_number: "",
     hu_locked: false,
     is_active: true,
+    preferred_language: "en",
   });
 
   const resetForm = () => {
@@ -293,6 +296,7 @@ export default function Suppliers() {
       current_hu_number: "",
       hu_locked: false,
       is_active: true,
+      preferred_language: "en",
     });
   };
 
@@ -324,6 +328,7 @@ export default function Suppliers() {
         profile_picture_url: formData.profile_picture_url.trim() || undefined,
         current_hu_number: formData.current_hu_number.trim() || undefined,
         is_active: formData.is_active,
+        preferred_language: formData.preferred_language,
       });
       recordSupplierCreateEvent({
         id: created.id,
@@ -399,6 +404,7 @@ export default function Suppliers() {
       current_hu_number: supplier.current_hu_number || "",
       hu_locked: Boolean(supplier.hu_locked),
       is_active: supplier.is_active,
+      preferred_language: supplier.preferred_language || "en",
     });
   };
 
@@ -424,6 +430,7 @@ export default function Suppliers() {
         current_hu_number: formData.current_hu_number.trim(),
         hu_locked: formData.hu_locked,
         is_active: formData.is_active,
+        preferred_language: formData.preferred_language,
       });
       await queryClient.invalidateQueries({ queryKey: ["suppliers"] });
       refetch();
@@ -1037,6 +1044,23 @@ export default function Suppliers() {
                     className="w-full h-10 px-3 text-sm rounded-xl border border-gray-200 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                   />
                 </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
+                    Language
+                  </label>
+                  <select
+                    value={formData.preferred_language}
+                    onChange={(e) => setFormData({ ...formData, preferred_language: e.target.value })}
+                    className="w-full h-10 px-3 text-sm rounded-xl border border-gray-200 bg-white focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                    title="Portal, login page and welcome email language for this supplier"
+                  >
+                    {SUPPORTED_LANGUAGES.map((lang) => (
+                      <option key={lang} value={lang}>
+                        {LANGUAGE_NAMES[lang]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div>
@@ -1195,6 +1219,23 @@ export default function Suppliers() {
                     onChange={(e) => setFormData({ ...formData, country: e.target.value })}
                     className="w-full h-10 px-3 text-sm rounded-xl border border-gray-200 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                   />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
+                    Language
+                  </label>
+                  <select
+                    value={formData.preferred_language}
+                    onChange={(e) => setFormData({ ...formData, preferred_language: e.target.value })}
+                    className="w-full h-10 px-3 text-sm rounded-xl border border-gray-200 bg-white focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                    title="Portal, login page and welcome email language for this supplier"
+                  >
+                    {SUPPORTED_LANGUAGES.map((lang) => (
+                      <option key={lang} value={lang}>
+                        {LANGUAGE_NAMES[lang]}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 

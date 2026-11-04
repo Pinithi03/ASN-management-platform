@@ -11,5 +11,8 @@
     "PARTIAL": "PARTIAL",
     "SHIPPED": "SHIPPED",
     "UPDATED": "UPDATED"
+  },
+  "time": {
+    "justNow": "just now"
   }
 }

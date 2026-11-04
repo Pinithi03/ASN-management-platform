@@ -23,10 +23,10 @@ import {
   getAllDrafts,
   clearManualDraft,
   clearExcelDraft,
-  formatDraftTime,
   ManualPackingDraft,
   ExcelPackingDraft,
 } from "@/utils/draftStorage";
+import { formatDraftAge, formatNumber } from "@/i18n/format";
 
 export default function Drafts() {
   const { t } = useTranslation("drafts");
@@ -255,14 +255,14 @@ export default function Drafts() {
                           {t("row.cartons", { count: totalCartons })}
                         </td>
                         <td className="py-1 px-2 whitespace-nowrap font-mono font-bold text-gray-900 border-r border-gray-200">
-                          {totalQty.toLocaleString()} {uom}
+                          {formatNumber(totalQty)} {uom}
                         </td>
                         <td className="py-1 px-2 whitespace-nowrap font-mono text-gray-700 border-r border-gray-200">
                           {t("row.seq", { seq: draft.startingSeq || 1 })}
                         </td>
                         <td className="py-1 px-2 whitespace-nowrap text-gray-500 border-r border-gray-200">
                           <span className="inline-flex items-center gap-1">
-                            <Clock className="w-3 h-3 text-gray-400" /> {formatDraftTime(draft.updatedAt)}
+                            <Clock className="w-3 h-3 text-gray-400" /> {formatDraftAge(draft.updatedAt)}
                           </span>
                         </td>
                         <td className="py-1 px-2 whitespace-nowrap text-right">
@@ -345,7 +345,7 @@ export default function Drafts() {
                         </td>
                         <td className="py-1 px-2 whitespace-nowrap font-mono font-bold text-gray-900 border-r border-gray-200">
                           {totalQuantity > 0
-                            ? t("row.quantityUnits", { quantity: totalQuantity.toLocaleString() })
+                            ? t("row.quantityUnits", { quantity: formatNumber(totalQuantity) })
                             : t("row.factoryMeasuring")}
                         </td>
                         <td className="py-1 px-2 whitespace-nowrap font-mono text-gray-700 border-r border-gray-200">
@@ -353,7 +353,7 @@ export default function Drafts() {
                         </td>
                         <td className="py-1 px-2 whitespace-nowrap text-gray-500 border-r border-gray-200">
                           <span className="inline-flex items-center gap-1">
-                            <Clock className="w-3 h-3 text-gray-400" /> {formatDraftTime(draft.updatedAt)}
+                            <Clock className="w-3 h-3 text-gray-400" /> {formatDraftAge(draft.updatedAt)}
                           </span>
                         </td>
                         <td className="py-1 px-2 whitespace-nowrap text-right">

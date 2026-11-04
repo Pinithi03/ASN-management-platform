@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
+import { formatDate, formatNumber } from "@/i18n/format";
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { Trans, useTranslation } from "react-i18next";
 import {
@@ -58,11 +59,11 @@ const formatDateDisplay = (dateStr?: string | null) => {
     const s = dateStr.trim();
     if (/^\d{2}-\d{2}-\d{4}$/.test(s)) {
       const [d, m, y] = s.split("-");
-      return format(new Date(parseInt(y), parseInt(m) - 1, parseInt(d)), "MMM d, yyyy");
+      return formatDate(new Date(parseInt(y), parseInt(m) - 1, parseInt(d)));
     }
     const d = new Date(s);
     if (isNaN(d.getTime())) return s;
-    return format(d, "MMM d, yyyy");
+    return formatDate(d);
   } catch {
     return dateStr;
   }
@@ -1446,17 +1447,17 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                         {po.status === "PARTIAL" && po.remaining_quantity !== undefined && po.remaining_quantity !== null ? (
                           <span className="inline-flex items-center gap-1">
                             <span className="font-bold text-orange-600">
-                              {po.remaining_quantity.toLocaleString()}
+                              {formatNumber(po.remaining_quantity)}
                             </span>
                             <span className="text-[10px] text-gray-400">
-                              / {po.quantity?.toLocaleString()}
+                              / {formatNumber(po.quantity)}
                             </span>
                           </span>
                         ) : po.status === "COMPLETED" ? (
                           <span className="font-bold text-emerald-600">0</span>
                         ) : (
                           <span className="font-semibold text-gray-900">
-                            {po.quantity?.toLocaleString() ?? "—"}
+                            {po.quantity != null ? formatNumber(po.quantity) : "—"}
                           </span>
                         )}
                       </td>
@@ -1677,13 +1678,13 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                               </span>
                             </td>
                             <td className="py-1 px-2 text-right font-mono text-gray-700 whitespace-nowrap border-r border-gray-200">
-                              {item.quantity.toLocaleString()}
+                              {formatNumber(item.quantity)}
                             </td>
                             <td className="py-1 px-2 text-right font-mono text-emerald-700 font-semibold whitespace-nowrap border-r border-gray-200">
-                              {lineShip.toLocaleString()}
+                              {formatNumber(lineShip)}
                             </td>
                             <td className="py-1 px-2 text-right font-mono font-bold text-gray-900 whitespace-nowrap border-r border-gray-200">
-                              {lineRem.toLocaleString()}
+                              {formatNumber(lineRem)}
                             </td>
                             <td className="py-1 px-2 text-center whitespace-nowrap border-r border-gray-200 last:border-r-0">
                               {lineRem <= 0 ? (
@@ -1703,14 +1704,14 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                             {hasPricing && (
                               <td className="py-1 px-2 text-right font-mono text-gray-600 whitespace-nowrap border-r border-gray-200">
                                 {item.unit_price !== undefined
-                                  ? `${activePO.currency || "USD"} ${item.unit_price.toFixed(2)}`
+                                  ? `${activePO.currency || "USD"} ${formatNumber(item.unit_price, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                                   : " "}
                               </td>
                             )}
                             {hasPricing && (
                               <td className="py-1 px-2 text-right font-mono font-bold text-gray-900 whitespace-nowrap">
                                 {lineSubtotal !== undefined
-                                  ? `${activePO.currency || "USD"} ${lineSubtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                  ? `${activePO.currency || "USD"} ${formatNumber(lineSubtotal, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                                   : " "}
                               </td>
                             )}
@@ -1724,20 +1725,20 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                           {t("purchaseOrders:modal.totals", { count: lineItems.length })}
                         </td>
                         <td className="px-3 py-2.5 text-right font-mono text-xs text-gray-700 whitespace-nowrap">
-                          {totalLineQuantity.toLocaleString()}
+                          {formatNumber(totalLineQuantity)}
                         </td>
                         <td className="px-3 py-2.5 text-right font-mono text-xs font-bold text-emerald-700 whitespace-nowrap">
-                          {totalShippedQuantity.toLocaleString()}
+                          {formatNumber(totalShippedQuantity)}
                         </td>
                         <td className="px-3 py-2.5 text-right font-mono text-sm font-bold text-blue-600 whitespace-nowrap">
-                          {totalRemainingQuantity.toLocaleString()}
+                          {formatNumber(totalRemainingQuantity)}
                         </td>
                         <td className="px-3 py-2.5"></td>
                         {hasPricing && <td className="px-3 py-2.5"></td>}
                         {hasPricing && (
                           <td className="px-3 py-2.5 text-right font-mono text-sm font-bold text-gray-900 whitespace-nowrap">
                             {activePO?.currency || "USD"}{" "}
-                            {displayTotalValue.toLocaleString(undefined, {
+                            {formatNumber(displayTotalValue, {
                               minimumFractionDigits: 2,
                               maximumFractionDigits: 2,
                             })}

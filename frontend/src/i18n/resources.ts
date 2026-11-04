@@ -14,6 +14,7 @@ import enPurchaseOrders from "@/locales/en/purchaseOrders.json";
 import enPurchaseOrderLines from "@/locales/en/purchaseOrderLines.json";
 import enEmails from "@/locales/en/emails.json";
 import enShipments from "@/locales/en/shipments.json";
+import enErrors from "@/locales/en/errors.json";
 import zhCommon from "@/locales/zh-CN/common.json";
 import zhLayout from "@/locales/zh-CN/layout.json";
 import zhDashboard from "@/locales/zh-CN/dashboard.json";
@@ -24,6 +25,7 @@ import zhPurchaseOrders from "@/locales/zh-CN/purchaseOrders.json";
 import zhPurchaseOrderLines from "@/locales/zh-CN/purchaseOrderLines.json";
 import zhEmails from "@/locales/zh-CN/emails.json";
 import zhShipments from "@/locales/zh-CN/shipments.json";
+import zhErrors from "@/locales/zh-CN/errors.json";
 import itCommon from "@/locales/it/common.json";
 import itLayout from "@/locales/it/layout.json";
 import itDashboard from "@/locales/it/dashboard.json";
@@ -34,6 +36,7 @@ import itPurchaseOrders from "@/locales/it/purchaseOrders.json";
 import itPurchaseOrderLines from "@/locales/it/purchaseOrderLines.json";
 import itEmails from "@/locales/it/emails.json";
 import itShipments from "@/locales/it/shipments.json";
+import itErrors from "@/locales/it/errors.json";
 
 export const resources = {
   en: {
@@ -47,6 +50,7 @@ export const resources = {
     purchaseOrderLines: enPurchaseOrderLines,
     emails: enEmails,
     shipments: enShipments,
+    errors: enErrors,
   },
   "zh-CN": {
     common: zhCommon,
@@ -59,6 +63,7 @@ export const resources = {
     purchaseOrderLines: zhPurchaseOrderLines,
     emails: zhEmails,
     shipments: zhShipments,
+    errors: zhErrors,
   },
   it: {
     common: itCommon,
@@ -71,10 +76,11 @@ export const resources = {
     purchaseOrderLines: itPurchaseOrderLines,
     emails: itEmails,
     shipments: itShipments,
+    errors: itErrors,
   },
 };
 
-export const namespaces = ["common", "layout", "dashboard", "profile", "drafts", "orderHistory", "purchaseOrders", "purchaseOrderLines", "emails", "shipments"] as const;
+export const namespaces = ["common", "layout", "dashboard", "profile", "drafts", "orderHistory", "purchaseOrders", "purchaseOrderLines", "emails", "shipments", "errors"] as const;
 
 export type LayoutResources = typeof enLayout;
 export type EmailsResources = typeof enEmails;

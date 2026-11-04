@@ -18,6 +18,7 @@ import { initKeycloak, keycloak, login } from "@/lib/keycloak";
 import { useAuthStore } from "@/store/authStore";
 import { authService } from "@/services/auth";
 import i18n, { normaliseLocale } from "@/i18n";
+import { getErrorMessage } from "@/services/apiError";
 
 type Status = "loading" | "ready" | "error";
 
@@ -47,11 +48,16 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
 
       // Load the user profile from the backend.
       const me = await authService.getMe();
+      // The backend also knows a supplier's saved language when the token has no `locale` yet
+      const savedLanguage = normaliseLocale(me.language);
+      if (savedLanguage && savedLanguage !== i18n.language) {
+        await i18n.changeLanguage(savedLanguage);
+      }
       setProfile(me);
       setStatus("ready");
     } catch (err: any) {
       console.error("Auth bootstrap failed:", err);
-      setErrorMsg(err?.message || t("layout:auth.couldNotConnect"));
+      setErrorMsg(getErrorMessage(err, t("layout:auth.couldNotConnect")));
       setStatus("error");
     }
   };
