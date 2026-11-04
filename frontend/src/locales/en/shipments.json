@@ -31,6 +31,76 @@
     "title": "Shipment {{number}}",
     "viewXml": "View ASN XML"
   },
+  "excel": {
+    "alerts": {
+      "createError": "Error creating shipment: {{error}}",
+      "labelsFailed": "Failed to download labels PDF: {{error}}",
+      "missingDates": "Please select a Delivery Date for Packing Slip(s): {{slips}}",
+      "needDate": "Please select a Delivery Date before creating the shipment.",
+      "needSlip": "Please enter a Packing Slip Number before creating the shipment.",
+      "noFile": "Please upload or select the validated Excel file before creating the shipment.",
+      "notExcel": "Please upload an Excel spreadsheet (.xlsx or .xls)",
+      "offline": "You are currently offline. Please reconnect to the network before sending the ASN to IUNGO.",
+      "selectLine": "Please select at least one line item before downloading template.",
+      "templateFailed": "Failed to download tailored template: {{error}}",
+      "xmlFailed": "Failed to download ASN XML: {{error}}"
+    },
+    "errors": {
+      "actionRequired": "Action Required",
+      "fixHint": "Please correct the values in your Excel file and upload again using the button above.",
+      "more_one": "...and {{count}} more rows with errors.",
+      "more_other": "...and {{count}} more rows with errors.",
+      "rowRef": "Row {{row}} (PO {{po}}, Line {{line}}, Ctn {{ctn}})",
+      "rowsInvalid_one": "{{count}} row has invalid data:",
+      "rowsInvalid_other": "{{count}} rows have invalid data:",
+      "title": "Validation Errors Detected in Excel Sheet"
+    },
+    "header": {
+      "dateEachSlip": "Please select a Delivery Date for each Packing Slip",
+      "downloadTemplate": "Download Tailored Template",
+      "downloadTemplateTitle": "Download Tailored Excel Template for selected POs",
+      "fixErrors": "Please fix Excel validation errors before sending",
+      "preparing": "Preparing Template...",
+      "reupload": "Click to re-upload / replace file",
+      "slipsCount_one": "{{count}} Packing Slips",
+      "slipsCount_other": "{{count}} Packing Slips",
+      "upload": "Upload Excel List"
+    },
+    "selection": {
+      "cartonCountTitle": "Number of carton/roll rows to generate for this line item in Excel",
+      "goBack": "Please go back and select POs first.",
+      "hint": "Uncheck the lines you do not wish to include in the Tailored Sheet. Configure the Pack Type for each PO, download the template, fill it locally, and upload it above.",
+      "noLines": "No line items found.",
+      "noPos": "No Purchase Orders selected.",
+      "selected": "{{count}} Selected",
+      "table": {
+        "cartons": "Cartons / Rolls",
+        "line": "Line",
+        "remaining": "Remaining Qty",
+        "sel": "Sel"
+      },
+      "title": "Purchase Orders & Lines Selection"
+    },
+    "success": {
+      "asnLine_one": "ASN {{asn}} • {{count}} Cartons/Rolls",
+      "asnLine_other": "ASN {{asn}} • {{count}} Cartons/Rolls",
+      "closeView": "Close & View in List",
+      "multi_one": "{{count}} Shipments Processed & Sent to IUNGO",
+      "multi_other": "{{count}} Shipments Processed & Sent to IUNGO",
+      "uploadAnother": "Upload Another"
+    },
+    "table": {
+      "copyHu": "Copy SSCC-20 HU",
+      "dateMissingTitle": "Please select delivery date for {{slip}}",
+      "dateTitle": "Delivery date for {{slip}}: {{date}}",
+      "deliveryDate": "Delivery Date",
+      "packingSlip": "Packing Slip No."
+    },
+    "validating": {
+      "hint": "Validating quantities and DTD weight rules (GW ≥ NW > 0)",
+      "title": "Verifying Excel lines..."
+    }
+  },
   "labels": {
     "downloadFailed": "Failed to download labels: {{error}}",
     "downloadPdf": "Download PDF",

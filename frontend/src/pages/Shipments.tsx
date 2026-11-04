@@ -3047,7 +3047,7 @@ function ExcelPackingWorkflow({
       };
 
       if (payload.configs.length === 0) {
-        alert("Please select at least one line item before downloading template.");
+        alert(t("excel.alerts.selectLine"));
         setDownloadingTailored(false);
         return;
       }
@@ -3074,7 +3074,7 @@ function ExcelPackingWorkflow({
         fileName: downloadFilename,
       });
     } catch (err: any) {
-      alert("Failed to download tailored template: " + (err.message || err));
+      alert(t("excel.alerts.templateFailed", { error: err.message || err }));
     } finally {
       setDownloadingTailored(false);
     }
@@ -3082,7 +3082,7 @@ function ExcelPackingWorkflow({
 
   const processFile = async (file: File) => {
     if (!file.name.endsWith(".xlsx") && !file.name.endsWith(".xls")) {
-      alert("Please upload an Excel spreadsheet (.xlsx or .xls)");
+      alert(t("excel.alerts.notExcel"));
       return;
     }
     setSelectedFile(file);
@@ -3180,11 +3180,11 @@ function ExcelPackingWorkflow({
 
   const handleCreateShipment = async () => {
     if (!isOnline) {
-      alert("You are currently offline. Please reconnect to the network before sending the ASN to IUNGO.");
+      alert(t("excel.alerts.offline"));
       return;
     }
     if (!selectedFile) {
-      alert("Please upload or select the validated Excel file before creating the shipment.");
+      alert(t("excel.alerts.noFile"));
       return;
     }
 
@@ -3192,17 +3192,17 @@ function ExcelPackingWorkflow({
     if (isMultiSlip) {
       const missing = detectedPackingSlips.filter((ps) => !packingSlipDates[ps]?.trim());
       if (missing.length > 0) {
-        alert(`Please select a Delivery Date for Packing Slip(s): ${missing.join(", ")}`);
+        alert(t("excel.alerts.missingDates", { slips: missing.join(", ") }));
         return;
       }
     } else {
       const singleDate = estimatedArrival?.trim() || (detectedPackingSlips[0] ? packingSlipDates[detectedPackingSlips[0]]?.trim() : "");
       if (!singleDate) {
-        alert("Please select a Delivery Date before creating the shipment.");
+        alert(t("excel.alerts.needDate"));
         return;
       }
       if (!packingSlipNumber.trim() && detectedPackingSlips.length === 0) {
-        alert("Please enter a Packing Slip Number before creating the shipment.");
+        alert(t("excel.alerts.needSlip"));
         return;
       }
     }
@@ -3253,7 +3253,7 @@ function ExcelPackingWorkflow({
     } catch (e: any) {
       console.error("Create shipment error:", e);
       const detail = e?.response?.data?.detail;
-      let msg = "Failed to create shipment";
+      let msg = t("wizard.alerts.createFailed");
       if (typeof detail === "string") {
         msg = detail;
       } else if (detail && typeof detail === "object") {
@@ -3274,7 +3274,7 @@ function ExcelPackingWorkflow({
       } else if (e?.message) {
         msg = e.message;
       }
-      alert(`Error creating shipment: ${msg}`);
+      alert(t("excel.alerts.createError", { error: msg }));
     } finally {
       setSubmitting(false);
     }
@@ -3294,7 +3294,7 @@ function ExcelPackingWorkflow({
       a.remove();
       window.URL.revokeObjectURL(url);
     } catch (err: any) {
-      alert(`Failed to download labels PDF: ${err?.response?.data?.detail || err.message || err}`);
+      alert(t("excel.alerts.labelsFailed", { error: err?.response?.data?.detail || err.message || err }));
     } finally {
       setDownloadingLabels(false);
     }
@@ -3335,7 +3335,7 @@ function ExcelPackingWorkflow({
         }
       }
     } catch (err: any) {
-      alert(`Failed to download ASN XML: ${err?.response?.data?.detail || err.message || err}`);
+      alert(t("excel.alerts.xmlFailed", { error: err?.response?.data?.detail || err.message || err }));
     } finally {
       setDownloadingXml(false);
     }
@@ -3387,10 +3387,10 @@ function ExcelPackingWorkflow({
                   ? "bg-emerald-100 text-emerald-800 border border-emerald-300 hover:bg-emerald-200"
                   : "bg-emerald-600 text-white hover:bg-emerald-700"
               )}
-              title={selectedFile ? "Click to re-upload / replace file" : "Upload Excel List"}
+              title={selectedFile ? t("excel.header.reupload") : t("excel.header.upload")}
             >
               <UploadCloud className="w-3.5 h-3.5" />
-              <span>{selectedFile ? selectedFile.name : "Upload Excel List"}</span>
+              <span>{selectedFile ? selectedFile.name : t("excel.header.upload")}</span>
             </button>
           </div>
 
@@ -3403,13 +3403,13 @@ function ExcelPackingWorkflow({
                 <div className="flex items-center gap-2">
                   <span className="px-2.5 py-1 bg-blue-50 border border-blue-200 text-blue-800 rounded-md font-bold text-xs flex items-center gap-1.5 shadow-2xs">
                     <Layers className="w-3.5 h-3.5 text-blue-600" />
-                    <span>{detectedPackingSlips.length} Packing Slips</span>
+                    <span>{t("excel.header.slipsCount", { count: detectedPackingSlips.length })}</span>
                   </span>
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
                   <label htmlFor="excel-ps-number" className="text-xs font-bold text-slate-700 whitespace-nowrap">
-                    Packing Slip No <span className="text-red-500">*</span>:
+                    <Trans t={t} i18nKey="wizard.step3.packingSlip" components={{ req: <span className="text-red-500" /> }} />
                   </label>
                   <input
                     id="excel-ps-number"
@@ -3426,7 +3426,7 @@ function ExcelPackingWorkflow({
                         }));
                       }
                     }}
-                    placeholder="e.g. 01007907"
+                    placeholder={t("wizard.step3.psPlaceholder")}
                     className="h-8 px-2.5 text-xs font-mono font-bold rounded-lg border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400 outline-none shadow-2xs w-36 disabled:bg-slate-100 disabled:text-slate-500"
                   />
                 </div>
@@ -3437,7 +3437,7 @@ function ExcelPackingWorkflow({
                   <div className="w-px h-6 bg-gray-300 hidden sm:block" />
                   <div className="flex items-center gap-2">
                     <label htmlFor="excel-delivery-date" className="text-xs font-bold text-slate-700 whitespace-nowrap">
-                      Delivery Date <span className="text-red-500">*</span>:
+                      <Trans t={t} i18nKey="wizard.step3.deliveryDate" components={{ req: <span className="text-red-500" /> }} />
                     </label>
                     <input
                       id="excel-delivery-date"
@@ -3470,15 +3470,15 @@ function ExcelPackingWorkflow({
               disabled={downloadingTailored}
               onClick={handleDownloadTailoredTemplate}
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer disabled:opacity-50"
-              title="Download Tailored Excel Template for selected POs"
+              title={t("excel.header.downloadTemplateTitle")}
             >
               {downloadingTailored ? (
                 <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Preparing Template...
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("excel.header.preparing")}
                 </>
               ) : (
                 <>
-                  <Download className="w-3.5 h-3.5" /> Download Tailored Template
+                  <Download className="w-3.5 h-3.5" /> {t("excel.header.downloadTemplate")}
                 </>
               )}
             </button>
@@ -3487,7 +3487,7 @@ function ExcelPackingWorkflow({
           {validationResult && (
             createdResponse ? (
               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 text-emerald-800 rounded-lg text-xs font-bold border border-emerald-200">
-                <Check className="w-3.5 h-3.5 stroke-[2.5]" /> Sent to IUNGO
+                <Check className="w-3.5 h-3.5 stroke-[2.5]" /> {t("xml.sent")}
               </span>
             ) : (
               <button
@@ -3495,28 +3495,28 @@ function ExcelPackingWorkflow({
                 disabled={submitting || !validationResult.is_valid || !isDatesComplete}
                 onClick={() => {
                   if (!isOnline) {
-                    alert("You are currently offline. Please reconnect to the network before sending the ASN to IUNGO.");
+                    alert(t("excel.alerts.offline"));
                     return;
                   }
                   if (!selectedFile) {
-                    alert("Please upload or select the validated Excel file before creating the shipment.");
+                    alert(t("excel.alerts.noFile"));
                     return;
                   }
                   const isMultiSlip = detectedPackingSlips.length > 1;
                   if (isMultiSlip) {
                     const missing = detectedPackingSlips.filter((ps) => !packingSlipDates[ps]?.trim());
                     if (missing.length > 0) {
-                      alert(`Please select a Delivery Date for Packing Slip(s): ${missing.join(", ")}`);
+                      alert(t("excel.alerts.missingDates", { slips: missing.join(", ") }));
                       return;
                     }
                   } else {
                     const singleDate = estimatedArrival?.trim() || (detectedPackingSlips[0] ? packingSlipDates[detectedPackingSlips[0]]?.trim() : "");
                     if (!singleDate) {
-                      alert("Please select a Delivery Date before creating the shipment.");
+                      alert(t("excel.alerts.needDate"));
                       return;
                     }
                     if (!packingSlipNumber.trim() && detectedPackingSlips.length === 0) {
-                      alert("Please enter a Packing Slip Number before creating the shipment.");
+                      alert(t("excel.alerts.needSlip"));
                       return;
                     }
                   }
@@ -3525,23 +3525,23 @@ function ExcelPackingWorkflow({
                 className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
                 title={
                   !validationResult.is_valid
-                    ? "Please fix Excel validation errors before sending"
+                    ? t("excel.header.fixErrors")
                     : detectedPackingSlips.length > 1 && !isDatesComplete
-                    ? "Please select a Delivery Date for each Packing Slip"
+                    ? t("excel.header.dateEachSlip")
                     : !packingSlipNumber.trim() && detectedPackingSlips.length === 0
-                    ? "Please enter Packing Slip Number before sending"
+                    ? t("wizard.toolbar.needSlipTitle")
                     : !estimatedArrival.trim()
-                    ? "Please select Delivery Date before sending"
-                    : "Send to IUNGO"
+                    ? t("wizard.toolbar.needDateTitle")
+                    : t("xml.sendButton")
                 }
               >
                 {submitting ? (
                   <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Sending to IUNGO...
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("wizard.toolbar.sending")}
                   </>
                 ) : (
                   <>
-                    <Send className="w-3.5 h-3.5" /> Send to IUNGO
+                    <Send className="w-3.5 h-3.5" /> {t("xml.sendButton")}
                   </>
                 )}
               </button>
@@ -3555,8 +3555,8 @@ function ExcelPackingWorkflow({
         {validating ? (
           <div className="flex-1 flex flex-col items-center justify-center rounded-xl border border-gray-200 bg-white p-8 text-sm text-gray-500 shadow-xs">
             <Loader2 className="h-8 w-8 animate-spin text-emerald-600 mb-3" />
-            <p className="font-semibold text-gray-700">Verifying Excel lines...</p>
-            <p className="text-xs mt-1 text-gray-400">Validating quantities and DTD weight rules (GW &ge; NW &gt; 0)</p>
+            <p className="font-semibold text-gray-700">{t("excel.validating.title")}</p>
+            <p className="text-xs mt-1 text-gray-400">{t("excel.validating.hint")}</p>
           </div>
         ) : validationResult ? (
           <div className="flex-1 flex flex-col space-y-3 overflow-hidden">
@@ -3571,15 +3571,20 @@ function ExcelPackingWorkflow({
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-bold text-emerald-950">
                         {createdResponse.shipments && createdResponse.shipments.length > 1
-                          ? `${createdResponse.shipments.length} Shipments Processed & Sent to IUNGO`
-                          : `Shipment ${createdResponse.shipment?.shipment_number || packingSlipNumber} Created & Sent to IUNGO`}
+                          ? t("excel.success.multi", { count: createdResponse.shipments.length })
+                          : t("wizard.step3.created", {
+                              number: createdResponse.shipment?.shipment_number || packingSlipNumber,
+                            })}
                       </span>
                       <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded">
-                        Transmitted
+                        {t("wizard.step3.transmitted")}
                       </span>
                     </div>
                     <p className="text-[11px] text-emerald-800 mt-0.5 font-mono">
-                      ASN {createdResponse.asn?.asn_number || `ASN-${packingSlipNumber}`} • {createdResponse.shipment?.total_boxes || validationResult.rows.length} Cartons/Rolls
+                      {t("excel.success.asnLine", {
+                        asn: createdResponse.asn?.asn_number || `ASN-${packingSlipNumber}`,
+                        count: createdResponse.shipment?.total_boxes || validationResult.rows.length,
+                      })}
                     </p>
                   </div>
                 </div>
@@ -3604,7 +3609,7 @@ function ExcelPackingWorkflow({
                     ) : (
                       <Printer className="w-3.5 h-3.5" />
                     )}
-                    <span>Print Labels</span>
+                    <span>{t("wizard.step3.printLabels")}</span>
                   </button>
                   <button
                     type="button"
@@ -3617,7 +3622,7 @@ function ExcelPackingWorkflow({
                     ) : (
                       <Download className="w-3.5 h-3.5" />
                     )}
-                    <span>Download XML</span>
+                    <span>{t("wizard.step3.downloadXml")}</span>
                   </button>
                   <button
                     type="button"
@@ -3631,14 +3636,14 @@ function ExcelPackingWorkflow({
                     }}
                     className="px-3 py-1.5 border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 rounded-lg text-xs font-semibold shadow-xs flex items-center gap-1.5 cursor-pointer"
                   >
-                    <RotateCcw className="w-3.5 h-3.5" /> Upload Another
+                    <RotateCcw className="w-3.5 h-3.5" /> {t("excel.success.uploadAnother")}
                   </button>
                   <button
                     type="button"
                     onClick={onSuccess}
                     className="px-3 py-1.5 border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 rounded-lg text-xs font-semibold shadow-xs transition-all cursor-pointer"
                   >
-                    Close & View in List
+                    {t("excel.success.closeView")}
                   </button>
                 </div>
               </div>
@@ -3651,9 +3656,9 @@ function ExcelPackingWorkflow({
               <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl space-y-2 text-xs shrink-0">
                 <div className="flex items-center gap-2 text-red-800 font-bold">
                   <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
-                  <span>Validation Errors Detected in Excel Sheet</span>
+                  <span>{t("excel.errors.title")}</span>
                   <span className="text-[10px] bg-red-200 text-red-900 px-1.5 py-0.5 rounded font-mono">
-                    Action Required
+                    {t("excel.errors.actionRequired")}
                   </span>
                 </div>
                 
@@ -3671,17 +3676,26 @@ function ExcelPackingWorkflow({
                   return (
                     <div className="mt-1 pt-2 border-t border-red-100">
                       <p className="font-semibold text-red-800 mb-1">
-                        {errorRows.length} {errorRows.length === 1 ? "row has" : "rows have"} invalid data:
+                        {t("excel.errors.rowsInvalid", { count: errorRows.length })}
                       </p>
                       <div className="max-h-28 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
                         {errorRows.slice(0, 10).map((r, idx) => (
                           <div key={idx} className="bg-white/80 p-1.5 rounded border border-red-200 text-red-900 font-mono text-[11px] flex items-center justify-between gap-2">
-                            <span>Row {r.row_index} (PO {r.po_number || "—"}, Line {r.po_item || "—"}, Ctn {String(r.carton_number).replace(/^#+/, "")})</span>
+                            <span>
+                              {t("excel.errors.rowRef", {
+                                row: r.row_index,
+                                po: r.po_number || "—",
+                                line: r.po_item || "—",
+                                ctn: String(r.carton_number).replace(/^#+/, ""),
+                              })}
+                            </span>
                             <span className="font-semibold text-red-600 truncate max-w-md">{r.errors.join(", ")}</span>
                           </div>
                         ))}
                         {errorRows.length > 10 && (
-                          <p className="text-[10px] text-red-500 italic">...and {errorRows.length - 10} more rows with errors.</p>
+                          <p className="text-[10px] text-red-500 italic">
+                            {t("excel.errors.more", { count: errorRows.length - 10 })}
+                          </p>
                         )}
                       </div>
                     </div>
@@ -3689,7 +3703,7 @@ function ExcelPackingWorkflow({
                 })()}
 
                 <p className="text-[11px] text-red-600 font-medium pt-0.5">
-                  Please correct the values in your Excel file and upload again using the button above.
+                  {t("excel.errors.fixHint")}
                 </p>
               </div>
             )}
@@ -3700,23 +3714,41 @@ function ExcelPackingWorkflow({
                 <div className="flex items-center gap-2">
                   <Layers className="w-3.5 h-3.5 text-emerald-600" />
                   <span className="text-xs font-bold text-gray-800 uppercase tracking-wider">
-                    Handling Units & Packing Breakdown
+                    {t("wizard.step3.breakdown")}
                   </span>
                   <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100/70 border border-emerald-200 px-2 py-0.5 rounded-full">
-                    {validationResult.rows.length} Cartons/Rolls
+                    {t("wizard.step3.cartonsRolls", { count: validationResult.rows.length })}
                   </span>
                 </div>
                 <div className="flex items-center gap-3 text-xs text-gray-600">
                   <span>
-                    Total Qty: <strong className="font-mono text-gray-900">{validationResult.total_quantity.toLocaleString()} {validationResult.rows[0]?.uom || "M"}</strong>
+                    <Trans
+                      t={t}
+                      i18nKey="wizard.step3.totalQty"
+                      values={{
+                        qty: validationResult.total_quantity.toLocaleString(),
+                        uom: validationResult.rows[0]?.uom || "M",
+                      }}
+                      components={{ strong: <strong className="font-mono text-gray-900" /> }}
+                    />
                   </span>
                   <span className="text-gray-300">|</span>
                   <span>
-                    GW: <strong className="font-mono text-gray-900">{validationResult.total_gross_weight.toFixed(2)} kg</strong>
+                    <Trans
+                      t={t}
+                      i18nKey="wizard.step3.gw"
+                      values={{ value: validationResult.total_gross_weight.toFixed(2) }}
+                      components={{ strong: <strong className="font-mono text-gray-900" /> }}
+                    />
                   </span>
                   <span className="text-gray-300">|</span>
                   <span>
-                    NW: <strong className="font-mono text-gray-900">{validationResult.total_net_weight.toFixed(2)} kg</strong>
+                    <Trans
+                      t={t}
+                      i18nKey="wizard.step3.nw"
+                      values={{ value: validationResult.total_net_weight.toFixed(2) }}
+                      components={{ strong: <strong className="font-mono text-gray-900" /> }}
+                    />
                   </span>
                 </div>
               </div>
@@ -3725,16 +3757,16 @@ function ExcelPackingWorkflow({
                 <table className="w-full text-left text-xs border-collapse">
                   <thead className="bg-zinc-700 text-white text-xs font-semibold uppercase tracking-wider sticky top-0 z-10 border-b border-zinc-800">
                     <tr>
-                      <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Ctn</th>
-                      <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Packing Slip No.</th>
-                      <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Delivery Date</th>
-                      <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Handling Unit (SSCC-20)</th>
-                      <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">PO & Line</th>
-                      <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Product Code</th>
-                      <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">Quantity</th>
-                      <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">Gross Wt (kg)</th>
-                      <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">Net Wt (kg)</th>
-                      <th className="py-1.5 px-2 whitespace-nowrap">Lot / Batch</th>
+                      <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("wizard.step3.table.ctn")}</th>
+                      <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("excel.table.packingSlip")}</th>
+                      <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("excel.table.deliveryDate")}</th>
+                      <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("wizard.step3.table.hu")}</th>
+                      <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("wizard.step3.table.poLine")}</th>
+                      <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("wizard.step3.table.productCode")}</th>
+                      <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">{t("wizard.step3.table.quantity")}</th>
+                      <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">{t("wizard.step3.table.gw")}</th>
+                      <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">{t("wizard.step3.table.nw")}</th>
+                      <th className="py-1.5 px-2 whitespace-nowrap">{t("wizard.step3.table.lot")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -3815,7 +3847,11 @@ function ExcelPackingWorkflow({
                                     ? "border-amber-400 bg-amber-50/60 text-amber-900 focus:border-amber-500 focus:ring-amber-400"
                                     : "border-slate-300 text-slate-800 focus:border-emerald-500 focus:ring-emerald-400"
                                 )}
-                                title={rowDate ? `Delivery date for ${rowPs}: ${rowDate}` : `Please select delivery date for ${rowPs}`}
+                                title={
+                                  rowDate
+                                    ? t("excel.table.dateTitle", { slip: rowPs, date: rowDate })
+                                    : t("excel.table.dateMissingTitle", { slip: rowPs })
+                                }
                               />
                             ) : null}
                           </td>
@@ -3832,7 +3868,7 @@ function ExcelPackingWorkflow({
                                   setTimeout(() => setCopiedHu(null), 1500);
                                 }}
                                 className="text-slate-400 hover:text-slate-700 p-0.5 rounded hover:bg-slate-200 transition-colors cursor-pointer"
-                                title="Copy SSCC-20 HU"
+                                title={t("excel.table.copyHu")}
                               >
                                 {copiedHu === generatedHu ? (
                                   <Check className="w-3 h-3 text-emerald-600" />
@@ -3886,8 +3922,10 @@ function ExcelPackingWorkflow({
           <div className="flex-1 flex flex-col rounded-xl border border-gray-300 bg-white shadow-xs p-3 overflow-hidden">
             <div className="w-full h-full flex flex-col">
               <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider mb-2.5 flex items-center justify-between border-b border-gray-200 pb-2 shrink-0">
-                <span>Purchase Orders & Lines Selection</span>
-                <span className="text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-600 font-mono">{activePos.length} Selected</span>
+                <span>{t("excel.selection.title")}</span>
+                <span className="text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-600 font-mono">
+                  {t("excel.selection.selected", { count: activePos.length })}
+                </span>
               </h3>
               
               <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar space-y-2.5">
@@ -3908,10 +3946,10 @@ function ExcelPackingWorkflow({
                             className="w-3.5 h-3.5 text-emerald-600 rounded border-gray-300 cursor-pointer" 
                           />
                           <span className="font-mono font-bold text-xs text-gray-900">PO {po}</span>
-                          <span className="text-[11px] text-gray-500 font-mono">({lines.length} {lines.length === 1 ? "line" : "lines"})</span>
+                          <span className="text-[11px] text-gray-500 font-mono">{t("wizard.step1.lines", { count: lines.length })}</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <label className="text-[10px] font-bold text-gray-500 uppercase">Pack Type</label>
+                          <label className="text-[10px] font-bold text-gray-500 uppercase">{t("wizard.step1.packType")}</label>
                           <select
                             value={poConfigs[po] || "BOX"}
                             onChange={(e) => setPoConfigs(prev => ({ ...prev, [po]: e.target.value as "BOX"|"ROLL" }))}
@@ -3927,12 +3965,12 @@ function ExcelPackingWorkflow({
                         <table className="w-full text-xs text-left border-collapse">
                           <thead className="sticky top-0 z-10 bg-zinc-700 shadow-xs">
                             <tr className="bg-zinc-700 text-white text-xs font-semibold uppercase tracking-wider border-b border-zinc-800">
-                              <th className="py-1.5 px-2 w-8 text-center border-r border-zinc-600">Sel</th>
-                              <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Line</th>
-                              <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Material Code</th>
-                              <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Description</th>
-                              <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">Remaining Qty</th>
-                              <th className="py-1.5 px-2 text-right w-32 whitespace-nowrap">Cartons / Rolls</th>
+                              <th className="py-1.5 px-2 w-8 text-center border-r border-zinc-600">{t("excel.selection.table.sel")}</th>
+                              <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("excel.selection.table.line")}</th>
+                              <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("wizard.step1.table.material")}</th>
+                              <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("wizard.step1.table.description")}</th>
+                              <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">{t("excel.selection.table.remaining")}</th>
+                              <th className="py-1.5 px-2 text-right w-32 whitespace-nowrap">{t("excel.selection.table.cartons")}</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -3969,7 +4007,11 @@ function ExcelPackingWorkflow({
                                   </td>
                                   <td className="py-1 px-2 font-mono font-bold text-gray-800 whitespace-nowrap border-r border-gray-200">
                                     {l.po_item}
-                                    {isClosed && <span className="ml-1.5 text-[10px] bg-red-100 text-red-700 px-1.5 py-0.2 rounded font-bold">Fulfilled</span>}
+                                    {isClosed && (
+                                      <span className="ml-1.5 text-[10px] bg-red-100 text-red-700 px-1.5 py-0.2 rounded font-bold">
+                                        {t("wizard.step1.fulfilled")}
+                                      </span>
+                                    )}
                                   </td>
                                   <td className="py-1 px-2 font-mono font-semibold text-gray-900 whitespace-nowrap border-r border-gray-200">
                                     {l.material_code || l.item_code}
@@ -3992,7 +4034,7 @@ function ExcelPackingWorkflow({
                                           setLineCartonCounts(prev => ({ ...prev, [`${po}|${l.po_item}`]: val }));
                                         }}
                                         className="w-14 h-6 px-1.5 text-xs text-center font-mono font-bold border border-gray-300 rounded bg-white focus:outline-emerald-500"
-                                        title="Number of carton/roll rows to generate for this line item in Excel"
+                                        title={t("excel.selection.cartonCountTitle")}
                                       />
                                     ) : (
                                       <span className="text-gray-400 font-mono">—</span>
@@ -4003,7 +4045,7 @@ function ExcelPackingWorkflow({
                             })}
                             {lines.length === 0 && (
                               <tr>
-                                <td colSpan={6} className="py-2 px-3 text-xs text-gray-400 italic">No line items found.</td>
+                                <td colSpan={6} className="py-2 px-3 text-xs text-gray-400 italic">{t("excel.selection.noLines")}</td>
                               </tr>
                             )}
                           </tbody>
@@ -4015,15 +4057,15 @@ function ExcelPackingWorkflow({
                 
                 {activePos.length === 0 && (
                   <div className="flex flex-col items-center justify-center h-32 text-gray-400">
-                    <p className="text-sm font-semibold">No Purchase Orders selected.</p>
-                    <p className="text-xs">Please go back and select POs first.</p>
+                    <p className="text-sm font-semibold">{t("excel.selection.noPos")}</p>
+                    <p className="text-xs">{t("excel.selection.goBack")}</p>
                   </div>
                 )}
               </div>
               
               <div className="mt-2.5 pt-2 border-t border-gray-200 shrink-0">
                 <p className="text-[11px] text-gray-500 text-center">
-                  Uncheck the lines you do not wish to include in the Tailored Sheet. Configure the Pack Type for each PO, download the template, fill it locally, and upload it above.
+                  {t("excel.selection.hint")}
                 </p>
               </div>
             </div>
@@ -4077,7 +4119,7 @@ function ExcelPackingWorkflow({
                   onClick={() => setShowConfirmExcelDispatch(false)}
                   className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
                 >
-                  Cancel
+                  {t("common:actions.cancel")}
                 </button>
                 <button
                   type="button"
@@ -4089,7 +4131,7 @@ function ExcelPackingWorkflow({
                   className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 active:bg-emerald-800 transition-colors cursor-pointer flex items-center gap-1.5"
                 >
                   {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                  {submitting ? "Sending..." : "Yes, Send ASN"}
+                  {submitting ? t("xml.confirm.sending") : t("xml.confirm.send")}
                 </button>
               </div>
             </div>

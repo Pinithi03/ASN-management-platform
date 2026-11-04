@@ -32,6 +32,81 @@
     "title": "Spedizione {{number}}",
     "viewXml": "Visualizza XML ASN"
   },
+  "excel": {
+    "alerts": {
+      "createError": "Errore durante la creazione della spedizione: {{error}}",
+      "labelsFailed": "Impossibile scaricare il PDF delle etichette: {{error}}",
+      "missingDates": "Seleziona una data di consegna per le bolle di consegna: {{slips}}",
+      "needDate": "Seleziona una data di consegna prima di creare la spedizione.",
+      "needSlip": "Inserisci un numero di bolla di consegna prima di creare la spedizione.",
+      "noFile": "Carica o seleziona il file Excel convalidato prima di creare la spedizione.",
+      "notExcel": "Carica un foglio di calcolo Excel (.xlsx o .xls)",
+      "offline": "Sei offline. Riconnettiti alla rete prima di inviare l'ASN a IUNGO.",
+      "selectLine": "Seleziona almeno una riga prima di scaricare il modello.",
+      "templateFailed": "Impossibile scaricare il modello personalizzato: {{error}}",
+      "xmlFailed": "Impossibile scaricare l'XML ASN: {{error}}"
+    },
+    "errors": {
+      "actionRequired": "Azione richiesta",
+      "fixHint": "Correggi i valori nel file Excel e ricaricalo con il pulsante in alto.",
+      "more_many": "...e altre {{count}} righe con errori.",
+      "more_one": "...e {{count}} altra riga con errori.",
+      "more_other": "...e altre {{count}} righe con errori.",
+      "rowRef": "Riga {{row}} (PO {{po}}, riga PO {{line}}, ctn {{ctn}})",
+      "rowsInvalid_many": "{{count}} righe contengono dati non validi:",
+      "rowsInvalid_one": "{{count}} riga contiene dati non validi:",
+      "rowsInvalid_other": "{{count}} righe contengono dati non validi:",
+      "title": "Errori di convalida rilevati nel foglio Excel"
+    },
+    "header": {
+      "dateEachSlip": "Seleziona una data di consegna per ogni bolla di consegna",
+      "downloadTemplate": "Scarica modello personalizzato",
+      "downloadTemplateTitle": "Scarica il modello Excel personalizzato per i PO selezionati",
+      "fixErrors": "Correggi gli errori di convalida Excel prima dell'invio",
+      "preparing": "Preparazione modello...",
+      "reupload": "Fai clic per ricaricare / sostituire il file",
+      "slipsCount_many": "{{count}} bolle di consegna",
+      "slipsCount_one": "{{count}} bolla di consegna",
+      "slipsCount_other": "{{count}} bolle di consegna",
+      "upload": "Carica lista Excel"
+    },
+    "selection": {
+      "cartonCountTitle": "Numero di righe cartone/rotolo da generare in Excel per questa riga",
+      "goBack": "Torna indietro e seleziona prima i PO.",
+      "hint": "Deseleziona le righe che non vuoi includere nel foglio personalizzato. Configura il tipo di imballo per ogni PO, scarica il modello, compilalo e caricalo qui sopra.",
+      "noLines": "Nessuna riga trovata.",
+      "noPos": "Nessun ordine d'acquisto selezionato.",
+      "selected": "{{count}} selezionati",
+      "table": {
+        "cartons": "Cartoni / Rotoli",
+        "line": "Riga",
+        "remaining": "Qtà residua",
+        "sel": "Sel."
+      },
+      "title": "Selezione ordini d'acquisto e righe"
+    },
+    "success": {
+      "asnLine_many": "ASN {{asn}} • {{count}} cartoni/rotoli",
+      "asnLine_one": "ASN {{asn}} • {{count}} cartone/rotolo",
+      "asnLine_other": "ASN {{asn}} • {{count}} cartoni/rotoli",
+      "closeView": "Chiudi e visualizza nell'elenco",
+      "multi_many": "{{count}} spedizioni elaborate e inviate a IUNGO",
+      "multi_one": "{{count}} spedizione elaborata e inviata a IUNGO",
+      "multi_other": "{{count}} spedizioni elaborate e inviate a IUNGO",
+      "uploadAnother": "Carica un altro file"
+    },
+    "table": {
+      "copyHu": "Copia HU SSCC-20",
+      "dateMissingTitle": "Seleziona la data di consegna per {{slip}}",
+      "dateTitle": "Data di consegna per {{slip}}: {{date}}",
+      "deliveryDate": "Data di consegna",
+      "packingSlip": "N. bolla di consegna"
+    },
+    "validating": {
+      "hint": "Convalida delle quantità e delle regole di peso DTD (lordo ≥ netto > 0)",
+      "title": "Verifica delle righe Excel..."
+    }
+  },
   "labels": {
     "downloadFailed": "Impossibile scaricare le etichette: {{error}}",
     "downloadPdf": "Scarica PDF",

@@ -30,6 +30,71 @@
     "title": "发运单 {{number}}",
     "viewXml": "查看 ASN XML"
   },
+  "excel": {
+    "alerts": {
+      "createError": "创建发运单时出错：{{error}}",
+      "labelsFailed": "无法下载标签 PDF：{{error}}",
+      "missingDates": "请为以下装箱单选择交货日期：{{slips}}",
+      "needDate": "创建发运单前请选择交货日期。",
+      "needSlip": "创建发运单前请输入装箱单号。",
+      "noFile": "创建发运单前，请上传或选择已验证的 Excel 文件。",
+      "notExcel": "请上传 Excel 电子表格（.xlsx 或 .xls）",
+      "offline": "您当前处于离线状态。请先重新连接网络，再将 ASN 发送到 IUNGO。",
+      "selectLine": "下载模板前请至少选择一个行项目。",
+      "templateFailed": "无法下载定制模板：{{error}}",
+      "xmlFailed": "无法下载 ASN XML：{{error}}"
+    },
+    "errors": {
+      "actionRequired": "需要处理",
+      "fixHint": "请更正 Excel 文件中的数值，然后使用上方的按钮重新上传。",
+      "more_other": "...还有 {{count}} 行有错误。",
+      "rowRef": "第 {{row}} 行（PO {{po}}，行 {{line}}，箱 {{ctn}}）",
+      "rowsInvalid_other": "{{count}} 行数据无效：",
+      "title": "Excel 表格中检测到验证错误"
+    },
+    "header": {
+      "dateEachSlip": "请为每张装箱单选择交货日期",
+      "downloadTemplate": "下载定制模板",
+      "downloadTemplateTitle": "下载所选 PO 的定制 Excel 模板",
+      "fixErrors": "发送前请修正 Excel 验证错误",
+      "preparing": "正在准备模板...",
+      "reupload": "点击重新上传 / 替换文件",
+      "slipsCount_other": "{{count}} 张装箱单",
+      "upload": "上传 Excel 清单"
+    },
+    "selection": {
+      "cartonCountTitle": "为此行项目在 Excel 中生成的纸箱/卷行数",
+      "goBack": "请返回并先选择 PO。",
+      "hint": "取消勾选不需要包含在定制表格中的行。为每个 PO 配置包装类型，下载模板，在本地填写后在上方上传。",
+      "noLines": "未找到行项目。",
+      "noPos": "未选择采购订单。",
+      "selected": "已选择 {{count}} 个",
+      "table": {
+        "cartons": "纸箱 / 卷",
+        "line": "行号",
+        "remaining": "剩余数量",
+        "sel": "选"
+      },
+      "title": "采购订单和行选择"
+    },
+    "success": {
+      "asnLine_other": "ASN {{asn}} • {{count}} 箱/卷",
+      "closeView": "关闭并在列表中查看",
+      "multi_other": "已处理 {{count}} 个发运单并发送到 IUNGO",
+      "uploadAnother": "上传其他文件"
+    },
+    "table": {
+      "copyHu": "复制 SSCC-20 HU",
+      "dateMissingTitle": "请为 {{slip}} 选择交货日期",
+      "dateTitle": "{{slip}} 的交货日期：{{date}}",
+      "deliveryDate": "交货日期",
+      "packingSlip": "装箱单号"
+    },
+    "validating": {
+      "hint": "正在验证数量和 DTD 重量规则（毛重 ≥ 净重 > 0）",
+      "title": "正在核对 Excel 行..."
+    }
+  },
   "labels": {
     "downloadFailed": "无法下载标签：{{error}}",
     "downloadPdf": "下载 PDF",
