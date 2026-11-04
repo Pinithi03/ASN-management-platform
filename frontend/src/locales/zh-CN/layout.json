@@ -1,11 +1,21 @@
 {
   "auth": {
     "couldNotConnect": "无法连接到登录服务器。",
+    "redirectingToLogin": "正在跳转到登录页…",
     "signingIn": "正在登录…",
     "unableToSignIn": "无法登录"
   },
   "language": {
     "change": "切换语言"
+  },
+  "lockout": {
+    "accountRevoked": "账户已撤销",
+    "accountSuspended": "账户已暂停",
+    "contact": "请联系管理员 <link>{{email}}</link> 以解决您的账户状态问题。",
+    "revokedMessage": "此供应商账户已被移除，平台访问已被禁用。",
+    "revokedTitle": "账户访问已撤销",
+    "suspendedMessage": "您的供应商合作伙伴账户目前已被中央管理部门暂停。",
+    "suspendedTitle": "账户已暂时停用"
   },
   "nav": {
     "account": "账户",
@@ -37,7 +47,8 @@
   "sidebar": {
     "collapse": "收起侧边栏",
     "expand": "展开侧边栏",
-    "supplierPortal": "供应商门户"
+    "supplierPortal": "供应商门户",
+    "toggleMenu": "切换菜单"
   },
   "signOut": {
     "confirmMessage": "确定要结束当前会话吗？",

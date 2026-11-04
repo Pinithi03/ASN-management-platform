@@ -1,11 +1,21 @@
 {
   "auth": {
     "couldNotConnect": "Could not connect to the login server.",
+    "redirectingToLogin": "Redirecting to login…",
     "signingIn": "Signing you in…",
     "unableToSignIn": "Unable to sign in"
   },
   "language": {
     "change": "Change language"
+  },
+  "lockout": {
+    "accountRevoked": "Account Revoked",
+    "accountSuspended": "Account Suspended",
+    "contact": "Contact Administration at <link>{{email}}</link> to resolve your account status.",
+    "revokedMessage": "This supplier account has been removed. Platform access has been disabled.",
+    "revokedTitle": "Account Access Revoked",
+    "suspendedMessage": "Your supplier partner account is currently suspended by central administration.",
+    "suspendedTitle": "Account Temporarily Suspended"
   },
   "nav": {
     "account": "Account",
@@ -37,7 +47,8 @@
   "sidebar": {
     "collapse": "Collapse sidebar",
     "expand": "Expand sidebar",
-    "supplierPortal": "Supplier Portal"
+    "supplierPortal": "Supplier Portal",
+    "toggleMenu": "Toggle Menu"
   },
   "signOut": {
     "confirmMessage": "Are you sure you want to end your current session?",

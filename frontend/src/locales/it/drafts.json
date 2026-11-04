@@ -1,0 +1,63 @@
+{
+  "actions": {
+    "discard": "Elimina",
+    "discardAll": "Elimina tutte",
+    "resumeExcel": "Riprendi caricamento Excel",
+    "resumePacking": "Riprendi imballaggio",
+    "uploadFilledSheet": "Carica il foglio compilato"
+  },
+  "confirm": {
+    "discardAll": "Vuoi davvero eliminare tutte le bozze salvate? Questa azione non può essere annullata.",
+    "discardExcel": "Eliminare la bozza di caricamento Excel salvata per il PO {{po}}?",
+    "discardManual": "Eliminare la bozza salvata per il PO {{po}}?"
+  },
+  "empty": {
+    "excelText": "Quando carichi una packing list in Caricamento Excel, i tuoi progressi vengono salvati qui in modo sicuro per riprenderli in qualsiasi momento.",
+    "excelTitle": "Nessuna bozza di caricamento Excel salvata",
+    "manualText": "Quando inserisci le quantità dei cartoni nel Processo manuale, i tuoi progressi vengono salvati qui in modo sicuro per riprenderli in qualsiasi momento.",
+    "manualTitle": "Nessuna bozza di imballaggio manuale salvata"
+  },
+  "header": {
+    "active_many": "{{count}} attive",
+    "active_one": "{{count}} attiva",
+    "active_other": "{{count}} attive",
+    "title": "Bozze salvate"
+  },
+  "row": {
+    "awaitingUpload": "In attesa di caricamento",
+    "cartons_many": "{{count}} cartoni",
+    "cartons_one": "{{count}} cartone",
+    "cartons_other": "{{count}} cartoni",
+    "deliveryNote": "Bolla di consegna: <value>{{note}}</value>",
+    "factoryMeasuring": "Misurazione in fabbrica",
+    "file": "File: <value>{{file}}</value>",
+    "quantityUnits": "{{quantity}} unità",
+    "seq": "Seq. #{{seq}}",
+    "stepCartons": "Passo {{step}}: Cartoni e HU",
+    "stepItems": "Passo {{step}}: Quantità articoli",
+    "stepReview": "Passo {{step}}: Revisione e invio",
+    "supplierCode": "Codice fornitore: <value>{{code}}</value>",
+    "units_many": "{{count}} unità",
+    "units_one": "{{count}} unità",
+    "units_other": "{{count}} unità"
+  },
+  "status": {
+    "needsAttention": "Richiede attenzione",
+    "templateDownloaded": "Modello scaricato",
+    "validated": "Convalidato"
+  },
+  "table": {
+    "actions": "Azioni",
+    "cartons": "Cartoni / Rotoli",
+    "nextSscc": "Prossimo SSCC / Stabilimento e ETA",
+    "poNumber": "Numero PO",
+    "shippingUnits": "Unità di spedizione",
+    "source": "Fornitore / File e bolla di consegna",
+    "status": "Passo / Stato",
+    "updated": "Aggiornato"
+  },
+  "tabs": {
+    "excel": "Caricamenti Excel",
+    "manual": "Imballaggio manuale"
+  }
+}

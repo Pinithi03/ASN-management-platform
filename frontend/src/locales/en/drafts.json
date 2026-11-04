@@ -1,0 +1,60 @@
+{
+  "actions": {
+    "discard": "Discard",
+    "discardAll": "Discard All",
+    "resumeExcel": "Resume Excel Drop",
+    "resumePacking": "Resume Packing",
+    "uploadFilledSheet": "Upload Filled Sheet"
+  },
+  "confirm": {
+    "discardAll": "Are you sure you want to discard all saved drafts? This action cannot be undone.",
+    "discardExcel": "Discard saved Excel drop draft for PO {{po}}?",
+    "discardManual": "Discard saved draft for PO {{po}}?"
+  },
+  "empty": {
+    "excelText": "When you upload a packing list in Excel Drop, your progress is saved safely here to resume at any time.",
+    "excelTitle": "No saved Excel drop drafts",
+    "manualText": "When you enter carton quantities in the Manual Process, your progress is saved safely here to resume at any time.",
+    "manualTitle": "No saved manual packing drafts"
+  },
+  "header": {
+    "active_one": "{{count}} Active",
+    "active_other": "{{count}} Active",
+    "title": "Saved Drafts"
+  },
+  "row": {
+    "awaitingUpload": "Awaiting Upload",
+    "cartons_one": "{{count}} Cartons",
+    "cartons_other": "{{count}} Cartons",
+    "deliveryNote": "Delivery Note: <value>{{note}}</value>",
+    "factoryMeasuring": "Factory Measuring",
+    "file": "File: <value>{{file}}</value>",
+    "quantityUnits": "{{quantity}} units",
+    "seq": "Seq #{{seq}}",
+    "stepCartons": "Step {{step}}: Cartons & HUs",
+    "stepItems": "Step {{step}}: Item Quantities",
+    "stepReview": "Step {{step}}: Review & Transmit",
+    "supplierCode": "Supplier Code: <value>{{code}}</value>",
+    "units_one": "{{count}} Units",
+    "units_other": "{{count}} Units"
+  },
+  "status": {
+    "needsAttention": "Needs Attention",
+    "templateDownloaded": "Template Downloaded",
+    "validated": "Validated"
+  },
+  "table": {
+    "actions": "Actions",
+    "cartons": "Cartons / Rolls",
+    "nextSscc": "Next SSCC / Plant & ETA",
+    "poNumber": "PO Number",
+    "shippingUnits": "Shipping Units",
+    "source": "Supplier / File & Delivery Note",
+    "status": "Step / Status",
+    "updated": "Updated"
+  },
+  "tabs": {
+    "excel": "Excel Drops",
+    "manual": "Manual Packing"
+  }
+}

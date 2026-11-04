@@ -1,0 +1,66 @@
+{
+  "avatar": {
+    "change": "更换",
+    "changeLogo": "更换徽标",
+    "changePhoto": "更换照片",
+    "clickToUpload": "点击上传或更换徽标",
+    "invalidType": "请选择有效的图片文件（PNG、JPG 或 WebP）。",
+    "loadFailed": "无法加载图片文件。",
+    "processing": "处理中...",
+    "readFailed": "无法读取图片文件。",
+    "remove": "移除",
+    "removeFailed": "无法移除头像。",
+    "removed": "头像已成功移除。",
+    "tooLarge": "图片文件大小必须小于 10MB。",
+    "upload": "上传徽标",
+    "uploadFailed": "无法上传头像。",
+    "uploaded": "头像已成功上传并保存！"
+  },
+  "cache": {
+    "clear": "清除本地草稿",
+    "cleared_other": "离线缓存已成功清除！（已删除 {{count}} 个草稿）",
+    "clearing": "正在清除...",
+    "confirm": "确定要清除本地离线草稿和缓存的装箱配置吗？这将重置此设备上尚未提交的草稿进度。",
+    "draftBadge_other": "{{count}} 个草稿",
+    "storageInfo": "已保存 {{items}} 项 • 此设备已使用 {{sizeKb}} KB 浏览器存储",
+    "title": "本地缓存和离线草稿"
+  },
+  "fallback": {
+    "contactName": "合作伙伴代表",
+    "initialized": "已初始化",
+    "representative": "代表",
+    "supplierName": "供应商合作伙伴"
+  },
+  "header": {
+    "active": "活跃合作伙伴",
+    "inactive": "未激活"
+  },
+  "hu": {
+    "edit": "编辑",
+    "initialLabel": "初始最后使用的 HU 编号",
+    "lastUsed": "最后使用的 HU 编号",
+    "lock": "锁定序列",
+    "locked": "已锁定",
+    "lockedNote": "序列已锁定，以确保 Calzedonia EDI 数据的完整性。如需调整，请联系系统管理员。",
+    "nextCarton": "下一个纸箱条码将从此编号 + 1 开始生成。",
+    "overrideLabel": "覆盖 HU 序列",
+    "placeholder": "例如 0（全新开始）或最后的序列号",
+    "saveFailed": "无法配置 HU 编号。",
+    "saved": "Handling Unit (HU) 序列号已成功保存并锁定。",
+    "setupNeeded": "需要设置",
+    "subtitle": "用于发运纸箱的 SSCC-20 条码追踪",
+    "synchronized": "已同步",
+    "title": "Handling Unit (HU) 序列",
+    "update": "更新"
+  },
+  "registry": {
+    "changesNote": "如需更改企业法定名称或账单信息，请联系总部管理部门。",
+    "companyName": "公司名称",
+    "contactPerson": "联系人",
+    "country": "国家/地区",
+    "partnerCode": "合作伙伴代码",
+    "subtitle": "来自工厂数据库的官方企业记录",
+    "title": "公司注册信息",
+    "verified": "已验证 ID"
+  }
+}

@@ -6,6 +6,7 @@
 
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { Trans, useTranslation } from "react-i18next";
 import {
   FileSpreadsheet,
   Layers,
@@ -28,6 +29,7 @@ import {
 } from "@/utils/draftStorage";
 
 export default function Drafts() {
+  const { t } = useTranslation("drafts");
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const isSupplier = user?.role === "SUPPLIER";
@@ -68,21 +70,21 @@ export default function Drafts() {
   };
 
   const handleDeleteManual = (draft: ManualPackingDraft) => {
-    if (confirm(`Discard saved draft for PO ${draft.poNumbers.join(", ")}?`)) {
+    if (confirm(t("confirm.discardManual", { po: draft.poNumbers.join(", ") }))) {
       clearManualDraft(draft.supplierCode, draft.poNumbers);
       loadDrafts();
     }
   };
 
   const handleDeleteExcel = (draft: ExcelPackingDraft) => {
-    if (confirm(`Discard saved Excel drop draft for PO ${draft.poNumbers.join(", ")}?`)) {
+    if (confirm(t("confirm.discardExcel", { po: draft.poNumbers.join(", ") }))) {
       clearExcelDraft(draft.supplierCode, draft.poNumbers);
       loadDrafts();
     }
   };
 
   const handleClearAll = () => {
-    if (!confirm("Are you sure you want to discard all saved drafts? This action cannot be undone.")) return;
+    if (!confirm(t("confirm.discardAll"))) return;
     manualDrafts.forEach((d) => clearManualDraft(d.supplierCode, d.poNumbers));
     excelDrafts.forEach((d) => clearExcelDraft(d.supplierCode, d.poNumbers));
     loadDrafts();
@@ -94,10 +96,10 @@ export default function Drafts() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-xl font-semibold text-slate-900">Saved Drafts</h1>
+            <h1 className="text-xl font-semibold text-slate-900">{t("header.title")}</h1>
             {totalCount > 0 && (
               <span className="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-slate-100 text-slate-700 border border-slate-200">
-                {totalCount} Active
+                {t("header.active", { count: totalCount })}
               </span>
             )}
           </div>
@@ -110,7 +112,7 @@ export default function Drafts() {
               onClick={handleClearAll}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-600 bg-white hover:bg-red-50 rounded-lg border border-slate-200 hover:border-red-200 transition-colors cursor-pointer"
             >
-              <Trash2 className="w-3.5 h-3.5" /> Discard All
+              <Trash2 className="w-3.5 h-3.5" /> {t("actions.discardAll")}
             </button>
           </div>
         )}
@@ -131,7 +133,7 @@ export default function Drafts() {
           )}
         >
           <Layers className="w-3.5 h-3.5" />
-          Manual Packing
+          {t("tabs.manual")}
           <span
             className={cn(
               "px-2 py-0.5 text-[11px] rounded-full font-bold",
@@ -158,7 +160,7 @@ export default function Drafts() {
           )}
         >
           <FileSpreadsheet className="w-3.5 h-3.5" />
-          Excel Drops
+          {t("tabs.excel")}
           <span
             className={cn(
               "px-2 py-0.5 text-[11px] rounded-full font-bold",
@@ -179,12 +181,10 @@ export default function Drafts() {
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-16 text-center">
           <FolderArchive className="w-12 h-12 mx-auto text-gray-300 mb-3" />
           <p className="font-semibold text-gray-700 text-base">
-            No saved {filterTab === "manual" ? "manual packing" : "Excel drop"} drafts
+            {filterTab === "manual" ? t("empty.manualTitle") : t("empty.excelTitle")}
           </p>
           <p className="text-xs text-gray-400 mt-1 max-w-md mx-auto">
-            {filterTab === "manual"
-              ? "When you enter carton quantities in the Manual Process, your progress is saved safely here to resume at any time."
-              : "When you upload a packing list in Excel Drop, your progress is saved safely here to resume at any time."}
+            {filterTab === "manual" ? t("empty.manualText") : t("empty.excelText")}
           </p>
         </div>
       ) : (
@@ -193,14 +193,14 @@ export default function Drafts() {
             <table className="w-full text-xs text-left border-collapse">
               <thead className="sticky top-0 z-10 bg-zinc-700 shadow-xs">
                 <tr className="bg-zinc-700 text-white text-xs font-semibold uppercase tracking-wider border-b border-zinc-800">
-                  <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Step / Status</th>
-                  <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">PO Number</th>
-                  <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Supplier / File & Delivery Note</th>
-                  <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Cartons / Rolls</th>
-                  <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Shipping Units</th>
-                  <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Next SSCC / Plant & ETA</th>
-                  <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Updated</th>
-                  <th className="py-1.5 px-2 text-right whitespace-nowrap">Actions</th>
+                  <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("table.status")}</th>
+                  <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("table.poNumber")}</th>
+                  <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("table.source")}</th>
+                  <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("table.cartons")}</th>
+                  <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("table.shippingUnits")}</th>
+                  <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("table.nextSscc")}</th>
+                  <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("table.updated")}</th>
+                  <th className="py-1.5 px-2 text-right whitespace-nowrap">{t("table.actions")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -222,26 +222,43 @@ export default function Drafts() {
                       >
                         <td className="py-1 px-2 whitespace-nowrap border-r border-gray-200">
                           <span className="inline-flex items-center px-1.5 py-0 rounded text-[10px] font-medium bg-gray-100 text-gray-700 border border-gray-200">
-                            Step {draft.step}: {draft.step === 1 ? "Item Quantities" : draft.step === 2 ? "Cartons & HUs" : "Review & Transmit"}
+                            {draft.step === 1
+                              ? t("row.stepItems", { step: draft.step })
+                              : draft.step === 2
+                              ? t("row.stepCartons", { step: draft.step })
+                              : t("row.stepReview", { step: draft.step })}
                           </span>
                         </td>
                         <td className="py-1 px-2 whitespace-nowrap font-mono font-bold text-gray-900 border-r border-gray-200">
                           PO {draft.poNumbers.join(", ")}
                         </td>
                         <td className="py-1 px-2 whitespace-nowrap text-gray-600 border-r border-gray-200">
-                          Supplier Code: <span className="font-mono text-gray-800 font-semibold">{draft.supplierCode}</span>
+                          <Trans
+                            t={t}
+                            i18nKey="row.supplierCode"
+                            values={{ code: draft.supplierCode }}
+                            components={{ value: <span className="font-mono text-gray-800 font-semibold" /> }}
+                          />
                           {draft.packingSlipNumber && (
-                            <> · Delivery Note: <span className="font-mono font-bold text-gray-900">{draft.packingSlipNumber}</span></>
+                            <>
+                              {" · "}
+                              <Trans
+                                t={t}
+                                i18nKey="row.deliveryNote"
+                                values={{ note: draft.packingSlipNumber }}
+                                components={{ value: <span className="font-mono font-bold text-gray-900" /> }}
+                              />
+                            </>
                           )}
                         </td>
                         <td className="py-1 px-2 whitespace-nowrap font-mono font-bold text-gray-900 border-r border-gray-200">
-                          {totalCartons} Cartons
+                          {t("row.cartons", { count: totalCartons })}
                         </td>
                         <td className="py-1 px-2 whitespace-nowrap font-mono font-bold text-gray-900 border-r border-gray-200">
                           {totalQty.toLocaleString()} {uom}
                         </td>
                         <td className="py-1 px-2 whitespace-nowrap font-mono text-gray-700 border-r border-gray-200">
-                          Seq #{draft.startingSeq || 1}
+                          {t("row.seq", { seq: draft.startingSeq || 1 })}
                         </td>
                         <td className="py-1 px-2 whitespace-nowrap text-gray-500 border-r border-gray-200">
                           <span className="inline-flex items-center gap-1">
@@ -255,7 +272,7 @@ export default function Drafts() {
                               onClick={() => handleDeleteManual(draft)}
                               className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold text-slate-600 hover:text-red-600 hover:bg-red-50 rounded border border-slate-200 bg-white transition-colors cursor-pointer"
                             >
-                              <Trash2 className="w-3 h-3" /> Discard
+                              <Trash2 className="w-3 h-3" /> {t("actions.discard")}
                             </button>
                             <button
                               type="button"
@@ -265,7 +282,7 @@ export default function Drafts() {
                                 isSupplier ? "bg-emerald-600 hover:bg-emerald-700" : "bg-brand-600 hover:bg-brand-700"
                               )}
                             >
-                              Resume Packing <ArrowRight className="w-3 h-3" />
+                              {t("actions.resumePacking")} <ArrowRight className="w-3 h-3" />
                             </button>
                           </div>
                         </td>
@@ -289,15 +306,15 @@ export default function Drafts() {
                         <td className="py-1 px-2 whitespace-nowrap border-r border-gray-200">
                           {isValid ? (
                             <span className="inline-flex items-center gap-1 px-1.5 py-0 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                              <CheckCircle2 className="w-3 h-3" /> Validated
+                              <CheckCircle2 className="w-3 h-3" /> {t("status.validated")}
                             </span>
                           ) : res ? (
                             <span className="inline-flex items-center gap-1 px-1.5 py-0 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
-                              <AlertCircle className="w-3 h-3" /> Needs Attention
+                              <AlertCircle className="w-3 h-3" /> {t("status.needsAttention")}
                             </span>
                           ) : (
                             <span className="inline-flex items-center gap-1 px-1.5 py-0 rounded text-[10px] font-bold bg-blue-100 text-blue-800">
-                              <FileSpreadsheet className="w-3 h-3" /> Template Downloaded
+                              <FileSpreadsheet className="w-3 h-3" /> {t("status.templateDownloaded")}
                             </span>
                           )}
                         </td>
@@ -305,16 +322,31 @@ export default function Drafts() {
                           PO {draft.poNumbers.join(", ")}
                         </td>
                         <td className="py-1 px-2 whitespace-nowrap text-gray-600 border-r border-gray-200">
-                          File: <span className="font-mono text-gray-800 font-medium">{draft.fileName || "Packing_List.xlsx"}</span>
+                          <Trans
+                            t={t}
+                            i18nKey="row.file"
+                            values={{ file: draft.fileName || "Packing_List.xlsx" }}
+                            components={{ value: <span className="font-mono text-gray-800 font-medium" /> }}
+                          />
                           {draft.packingSlipNumber && (
-                            <> · Delivery Note: <span className="font-mono font-bold text-gray-900">{draft.packingSlipNumber}</span></>
+                            <>
+                              {" · "}
+                              <Trans
+                                t={t}
+                                i18nKey="row.deliveryNote"
+                                values={{ note: draft.packingSlipNumber }}
+                                components={{ value: <span className="font-mono font-bold text-gray-900" /> }}
+                              />
+                            </>
                           )}
                         </td>
                         <td className="py-1 px-2 whitespace-nowrap font-mono font-bold text-gray-900 border-r border-gray-200">
-                          {totalCartons > 0 ? `${totalCartons} Units` : "Awaiting Upload"}
+                          {totalCartons > 0 ? t("row.units", { count: totalCartons }) : t("row.awaitingUpload")}
                         </td>
                         <td className="py-1 px-2 whitespace-nowrap font-mono font-bold text-gray-900 border-r border-gray-200">
-                          {totalQuantity > 0 ? `${totalQuantity.toLocaleString()} units` : "Factory Measuring"}
+                          {totalQuantity > 0
+                            ? t("row.quantityUnits", { quantity: totalQuantity.toLocaleString() })
+                            : t("row.factoryMeasuring")}
                         </td>
                         <td className="py-1 px-2 whitespace-nowrap font-mono text-gray-700 border-r border-gray-200">
                           {draft.plantCode || "PPA1"} · {draft.estimatedArrival || "N/A"}
@@ -331,14 +363,14 @@ export default function Drafts() {
                               onClick={() => handleDeleteExcel(draft)}
                               className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold text-slate-600 hover:text-red-600 hover:bg-red-50 rounded border border-slate-200 bg-white transition-colors cursor-pointer"
                             >
-                              <Trash2 className="w-3 h-3" /> Discard
+                              <Trash2 className="w-3 h-3" /> {t("actions.discard")}
                             </button>
                             <button
                               type="button"
                               onClick={() => handleResumeExcel(draft)}
                               className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-semibold shadow-2xs transition-colors cursor-pointer"
                             >
-                              {res ? "Resume Excel Drop" : "Upload Filled Sheet"} <ArrowRight className="w-3 h-3" />
+                              {res ? t("actions.resumeExcel") : t("actions.uploadFilledSheet")} <ArrowRight className="w-3 h-3" />
                             </button>
                           </div>
                         </td>
