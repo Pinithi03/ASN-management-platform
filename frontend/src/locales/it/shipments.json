@@ -1,0 +1,109 @@
+{
+  "cartons_many": "{{count}} cartoni",
+  "cartons_one": "{{count}} cartone",
+  "cartons_other": "{{count}} cartoni",
+  "creation": {
+    "backToLines": "Torna alle righe ordine d'acquisto",
+    "backToPos": "Torna agli ordini d'acquisto",
+    "backToShipments": "Torna alle spedizioni",
+    "excelTitle": "Spedizione tramite packing list Excel",
+    "switchToWeb": "Passa all'area di lavoro web →"
+  },
+  "detail": {
+    "breakdown": "Dettaglio cartoni e Handling Unit ({{count}})",
+    "clickToCopy": "Fai clic sull'HU per copiarlo",
+    "close": "Chiudi",
+    "copyHuTitle": "Fai clic per copiare l'HU a 20 cifre",
+    "destination": "Destinazione: <strong>{{plant}}</strong>",
+    "loadFailed": "Impossibile caricare i dettagli della spedizione",
+    "loading": "Caricamento dettagli cartoni...",
+    "printLabels": "Stampa / scarica etichette",
+    "shipDate": "Data di spedizione: <strong>{{date}}</strong>",
+    "table": {
+      "box": "Collo",
+      "gw": "Peso lordo (kg)",
+      "hu": "Handling Unit (HU a 20 cifre)",
+      "lot": "Lotto / Partita",
+      "nw": "Peso netto (kg)",
+      "poLine": "PO / Riga",
+      "productCode": "Codice prodotto",
+      "quantity": "Quantità"
+    },
+    "title": "Spedizione {{number}}",
+    "viewXml": "Visualizza XML ASN"
+  },
+  "labels": {
+    "downloadFailed": "Impossibile scaricare le etichette: {{error}}",
+    "downloadPdf": "Scarica PDF",
+    "printDirectly": "Stampa direttamente",
+    "printDirectlyTitle": "Apri l'anteprima di stampa nel browser",
+    "selectSize": "Seleziona formato etichetta",
+    "sizes": {
+      "a4": "Foglio A4 (4 etichette per pagina)",
+      "compact": "4\" × 3\" Compatto",
+      "landscape": "6\" × 4\" Orizzontale",
+      "portrait": "4\" × 6\" Verticale"
+    },
+    "title": "Stampa e scarica etichette con codice a barre"
+  },
+  "list": {
+    "actionsLabels": "Etichette",
+    "actionsXml": "XML ASN",
+    "empty": "Nessuna spedizione trovata",
+    "emptyHint": "Crea una spedizione con la procedura guidata web o carica una packing list Excel.",
+    "filter": {
+      "all": "Tutti gli stati",
+      "delivered": "Consegnata",
+      "dispatched": "Spedita",
+      "draft": "Bozza",
+      "packed": "Imballata",
+      "packing": "In imballaggio",
+      "xmlSent": "XML inviato"
+    },
+    "labelsTitle": "Stampa o scarica le etichette con codice a barre",
+    "loading": "Caricamento spedizioni…",
+    "searchPlaceholder": "Cerca n. spedizione, stabilimento...",
+    "table": {
+      "actions": "Azioni",
+      "cartons": "Cartoni / Rotoli",
+      "destination": "Stabilimento di destinazione",
+      "packingSlip": "N. bolla di consegna",
+      "poNumber": "Numero PO",
+      "shipDate": "Data di spedizione",
+      "status": "Stato",
+      "totalQty": "Quantità totale"
+    },
+    "title": "Spedizioni",
+    "xmlTitle": "Visualizza XML EDI SdDataSlice"
+  },
+  "status": {
+    "ACCEPTED": "ACCETTATA",
+    "DELIVERED": "CONSEGNATA",
+    "DISPATCHED": "SPEDITA",
+    "DRAFT": "BOZZA",
+    "PACKED": "IMBALLATA",
+    "PACKING": "IN IMBALLAGGIO",
+    "RECEIVED": "RICEVUTA",
+    "REJECTED": "RIFIUTATA",
+    "XML_SENT": "XML INVIATO"
+  },
+  "xml": {
+    "confirm": {
+      "message": "Vuoi davvero inviare questo avviso di spedizione (ASN) a IUNGO? Una volta inviato, l'invio non può essere annullato.",
+      "recipient": "Email del destinatario",
+      "send": "Sì, invia ASN",
+      "sending": "Invio...",
+      "title": "Inviare l'ASN a IUNGO?"
+    },
+    "copied": "Copiato negli appunti",
+    "copy": "Copia XML",
+    "download": "Scarica file .xml",
+    "loadFailed": "Impossibile caricare l'XML ASN: {{error}}",
+    "noXml": "Questa spedizione non ha ancora un XML ASN generato. Completa l'imballaggio per generare l'ASN.",
+    "sendButton": "Invia a IUNGO",
+    "sent": "Inviato a IUNGO",
+    "title": "XML ASN — Spedizione {{number}}",
+    "unknownError": "Errore sconosciuto",
+    "validated": "✓ EDI convalidato"
+  }
+}

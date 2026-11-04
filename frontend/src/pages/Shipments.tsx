@@ -8,6 +8,8 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { Trans, useTranslation } from "react-i18next";
+import i18n from "@/i18n";
 import {
   Search,
   Download,
@@ -65,6 +67,15 @@ const statusColor: Record<string, string> = {
   DISPATCHED: "bg-emerald-50 text-emerald-700 border-emerald-200",
   DELIVERED: "bg-emerald-50 text-emerald-700 border-emerald-200",
 };
+
+const SHIPMENT_STATUSES = Object.keys(statusColor);
+type ShipmentStatus = "DRAFT" | "PACKING" | "PACKED" | "XML_SENT" | "RECEIVED" | "ACCEPTED" | "REJECTED" | "DISPATCHED" | "DELIVERED";
+
+/** Display label for a shipment status code; unknown codes are shown as before. */
+const shipmentStatusLabel = (status: string): string =>
+  SHIPMENT_STATUSES.includes(status)
+    ? i18n.t(`shipments:status.${status as ShipmentStatus}`)
+    : status.replace(/_/g, " ");
 
 export const PLANT_NAMES: Record<string, string> = {
   PPA1: "Omega Line Ltd (PPA1)",
@@ -195,6 +206,7 @@ type PackedItem = POLineItem & {
 };
 
 export default function Shipments() {
+  const { t } = useTranslation("shipments");
   const user = useAuthStore((s) => s.user);
   const isSupplier = user?.role === "SUPPLIER";
   const navigate = useNavigate();
@@ -321,7 +333,7 @@ export default function Shipments() {
       }
       setTimeout(() => window.URL.revokeObjectURL(url), 60000);
     } catch (e: any) {
-      alert(`Failed to download labels: ${e?.response?.data?.detail || e.message || e}`);
+      alert(t("labels.downloadFailed", { error: e?.response?.data?.detail || e.message || e }));
     } finally {
       setActionLoadingId(null);
     }
@@ -334,7 +346,7 @@ export default function Shipments() {
       if (shipment.asn?.xml_content) {
         setXmlModalData({
           open: true,
-          title: `ASN XML — Shipment ${shipment.shipment_number}`,
+          title: t("xml.title", { number: shipment.shipment_number }),
           xmlContent: shipment.asn.xml_content,
           asnId: shipment.asn?.id,
           validated: shipment.asn.xml_validated ?? true,
@@ -346,16 +358,16 @@ export default function Shipments() {
         const data = await shipmentService.getASNXmlPreview(asnId);
         setXmlModalData({
           open: true,
-          title: `ASN XML — Shipment ${shipment.shipment_number}`,
+          title: t("xml.title", { number: shipment.shipment_number }),
           xmlContent: data.xml_content,
           asnId: asnId,
           validated: data.xml_validated,
         });
       } else {
-        alert("This shipment does not have a generated ASN XML yet. Finalize packing to generate the ASN.");
+        alert(t("xml.noXml"));
       }
     } catch (err: any) {
-      alert(`Failed to load ASN XML: ${err?.response?.data?.detail || err?.message || "Unknown error"}`);
+      alert(t("xml.loadFailed", { error: err?.response?.data?.detail || err?.message || t("xml.unknownError") }));
     } finally {
       setActionLoadingId(null);
     }
@@ -386,7 +398,7 @@ export default function Shipments() {
       {!isCreating ? (
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-xl font-semibold text-slate-900">Shipments</h1>
+            <h1 className="text-xl font-semibold text-slate-900">{t("list.title")}</h1>
           </div>
         </div>
       ) : creationMethod === "excel" ? (
@@ -406,13 +418,13 @@ export default function Shipments() {
             <ArrowLeft className="w-4 h-4" />{" "}
             {poQuery
               ? searchParams.get("source") === "lines" || searchParams.get("lines")
-                ? "Back to Purchase Order Lines"
-                : "Back to Purchase Orders"
-              : "Back to Shipments"}
+                ? t("creation.backToLines")
+                : t("creation.backToPos")
+              : t("creation.backToShipments")}
           </button>
           <div className="flex items-center gap-3">
             <span className="text-xs font-bold text-gray-800 uppercase tracking-wide">
-              Excel Packing List Dispatch
+              {t("creation.excelTitle")}
             </span>
             <button
               onClick={() => {
@@ -431,7 +443,7 @@ export default function Shipments() {
                 isSupplier ? "text-emerald-600 hover:text-emerald-700" : "text-blue-600 hover:text-blue-700"
               )}
             >
-              Switch to Web Workbench →
+              {t("creation.switchToWeb")}
             </button>
           </div>
         </div>
@@ -452,7 +464,7 @@ export default function Shipments() {
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search shipment #, plant..."
+                placeholder={t("list.searchPlaceholder")}
                 className="w-full pl-10 pr-4 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 shadow-xs"
               />
             </div>
@@ -461,13 +473,13 @@ export default function Shipments() {
               onChange={(e) => setStatusFilter(e.target.value)}
               className="px-3.5 py-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 shadow-xs cursor-pointer"
             >
-              <option value="ALL">All Statuses</option>
-              <option value="DRAFT">Draft</option>
-              <option value="PACKING">Packing</option>
-              <option value="PACKED">Packed</option>
-              <option value="XML_SENT">XML Sent</option>
-              <option value="DISPATCHED">Dispatched</option>
-              <option value="DELIVERED">Delivered</option>
+              <option value="ALL">{t("list.filter.all")}</option>
+              <option value="DRAFT">{t("list.filter.draft")}</option>
+              <option value="PACKING">{t("list.filter.packing")}</option>
+              <option value="PACKED">{t("list.filter.packed")}</option>
+              <option value="XML_SENT">{t("list.filter.xmlSent")}</option>
+              <option value="DISPATCHED">{t("list.filter.dispatched")}</option>
+              <option value="DELIVERED">{t("list.filter.delivered")}</option>
             </select>
           </div>
 
@@ -476,14 +488,14 @@ export default function Shipments() {
               <table className="w-full text-xs border-collapse">
                 <thead className="sticky top-0 z-10 bg-zinc-700 shadow-xs">
                   <tr className="border-b border-zinc-800 bg-zinc-700 text-left text-xs font-semibold uppercase tracking-wider text-white">
-                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Packing Slip No</th>
-                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">PO Number</th>
-                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Destination Plant</th>
-                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Cartons / Rolls</th>
-                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Total Quantity</th>
-                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Status</th>
-                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Ship Date</th>
-                    <th className="py-1.5 px-2 text-right whitespace-nowrap">Actions</th>
+                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("list.table.packingSlip")}</th>
+                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("list.table.poNumber")}</th>
+                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("list.table.destination")}</th>
+                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("list.table.cartons")}</th>
+                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("list.table.totalQty")}</th>
+                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("list.table.status")}</th>
+                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("list.table.shipDate")}</th>
+                    <th className="py-1.5 px-2 text-right whitespace-nowrap">{t("list.table.actions")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -533,7 +545,7 @@ export default function Shipments() {
                         </td>
                         <td className="py-1 px-2 whitespace-nowrap border-r border-gray-200">
                           <span className="font-semibold text-gray-800 font-mono text-xs">
-                            {s.total_boxes} {s.total_boxes === 1 ? "Carton" : "Cartons"}
+                            {t("cartons", { count: s.total_boxes })}
                           </span>
                         </td>
                         <td className="py-1 px-2 whitespace-nowrap border-r border-gray-200">
@@ -549,7 +561,7 @@ export default function Shipments() {
                               statusColor[s.status] || "bg-gray-50 text-gray-700 border-gray-200"
                             )}
                           >
-                            {s.status.replace(/_/g, " ")}
+                            {shipmentStatusLabel(s.status)}
                           </span>
                         </td>
                         <td className="whitespace-nowrap py-1 px-2 text-gray-600 text-xs border-r border-gray-200">
@@ -568,7 +580,7 @@ export default function Shipments() {
                                 })
                               }
                               disabled={actionLoadingId === `labels-${s.id}`}
-                              title="Print or Download Barcode Labels"
+                              title={t("list.labelsTitle")}
                               className="inline-flex items-center gap-1 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50 cursor-pointer"
                             >
                               {actionLoadingId === `labels-${s.id}` ? (
@@ -576,13 +588,13 @@ export default function Shipments() {
                               ) : (
                                 <Printer className="h-3 w-3 text-slate-500" />
                               )}
-                              Labels
+                              {t("list.actionsLabels")}
                             </button>
 
                             <button
                               onClick={() => handlePreviewXml(s)}
                               disabled={actionLoadingId === `xml-${s.id}`}
-                              title="View SdDataSlice EDI XML"
+                              title={t("list.xmlTitle")}
                               className="inline-flex items-center gap-1 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50 cursor-pointer"
                             >
                               {actionLoadingId === `xml-${s.id}` ? (
@@ -590,7 +602,7 @@ export default function Shipments() {
                               ) : (
                                 <FileCode className="h-3 w-3 text-slate-500" />
                               )}
-                              ASN XML
+                              {t("list.actionsXml")}
                             </button>
                           </div>
                         </td>
@@ -601,16 +613,16 @@ export default function Shipments() {
                     <tr>
                       <td colSpan={8} className="px-5 py-16 text-center text-gray-400">
                         <Loader2 className="mx-auto h-7 w-7 animate-spin text-blue-500 mb-3" />
-                        <p className="font-medium text-gray-600">Loading shipments…</p>
+                        <p className="font-medium text-gray-600">{t("list.loading")}</p>
                       </td>
                     </tr>
                   ) : filteredShipments.length === 0 ? (
                     <tr>
                       <td colSpan={8} className="px-5 py-16 text-center text-gray-400">
                         <Box className="w-12 h-12 mx-auto text-gray-200 mb-3" />
-                        <p className="font-semibold text-gray-700 text-base">No shipments found</p>
+                        <p className="font-semibold text-gray-700 text-base">{t("list.empty")}</p>
                         <p className="text-xs text-gray-400 mt-1">
-                          Create a shipment using the Web Wizard or upload an Excel Packing List.
+                          {t("list.emptyHint")}
                         </p>
                       </td>
                     </tr>
@@ -696,6 +708,7 @@ function WebPackingWizard({
   onSuccess: () => void;
   onOpenLabelModal?: (id: string, num: string, count?: number) => void;
 }) {
+  const { t } = useTranslation(["shipments", "common"]);
   const user = useAuthStore((s) => s.user);
   const isSupplier = user?.role === "SUPPLIER";
   const navigate = useNavigate();
@@ -2604,15 +2617,15 @@ function WebPackingWizard({
                 <Send className="w-5 h-5" />
               </div>
               <h3 className="text-lg font-bold text-gray-900">
-                Send ASN to IUNGO?
+                {t("shipments:xml.confirm.title")}
               </h3>
               <p className="mt-2 text-sm text-gray-500 leading-relaxed">
-                Are you sure you want to dispatch this Advance Shipping Notice (ASN) to IUNGO? Once sent, this transmission cannot be undone.
+                {t("shipments:xml.confirm.message")}
               </p>
 
               <div className="mt-3">
                 <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                  Recipient Email
+                  {t("shipments:xml.confirm.recipient")}
                 </label>
                 <div className="px-3 py-2 bg-slate-50 border border-slate-200 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 focus-within:bg-white rounded-xl text-xs text-slate-700 flex items-center gap-2 transition-all">
                   <Mail className="w-4 h-4 text-slate-400 shrink-0" />
@@ -2670,6 +2683,7 @@ function ExcelPackingWorkflow({
   onSuccess: () => void;
   onOpenLabelModal?: (id: string, num: string, count?: number) => void;
 }) {
+  const { t } = useTranslation(["shipments", "common"]);
   const user = useAuthStore((s) => s.user);
   const [dragActive, setDragActive] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -3970,15 +3984,15 @@ function ExcelPackingWorkflow({
                 <Send className="w-5 h-5" />
               </div>
               <h3 className="text-lg font-bold text-gray-900">
-                Send ASN to IUNGO?
+                {t("shipments:xml.confirm.title")}
               </h3>
               <p className="mt-2 text-sm text-gray-500 leading-relaxed">
-                Are you sure you want to dispatch this Advance Shipping Notice (ASN) to IUNGO? Once sent, this transmission cannot be undone.
+                {t("shipments:xml.confirm.message")}
               </p>
 
               <div className="mt-3">
                 <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                  Recipient Email
+                  {t("shipments:xml.confirm.recipient")}
                 </label>
                 <div className="px-3 py-2 bg-slate-50 border border-slate-200 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 focus-within:bg-white rounded-xl text-xs text-slate-700 flex items-center gap-2 transition-all">
                   <Mail className="w-4 h-4 text-slate-400 shrink-0" />
@@ -4037,6 +4051,7 @@ function XmlPreviewModal({
   };
   onClose: () => void;
 }) {
+  const { t } = useTranslation(["shipments", "common"]);
   const [copied, setCopied] = useState(false);
   const [sending, setSending] = useState(false);
   const [sentSuccess, setSentSuccess] = useState(false);
@@ -4091,7 +4106,7 @@ function XmlPreviewModal({
               <div className="flex items-center gap-2 text-xs text-gray-500">
                 <span className="font-mono">DOCTYPE: SdDataSlice SYSTEM "m2Data_Partner.dtd"</span>
                 <span>•</span>
-                <span className="text-emerald-600 font-semibold">✓ EDI Validated</span>
+                <span className="text-emerald-600 font-semibold">{t("shipments:xml.validated")}</span>
               </div>
             </div>
           </div>
@@ -4113,20 +4128,20 @@ function XmlPreviewModal({
               className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 shadow-xs cursor-pointer transition-colors"
             >
               {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : null}
-              {copied ? "Copied to clipboard" : "Copy XML"}
+              {copied ? t("shipments:xml.copied") : t("shipments:xml.copy")}
             </button>
             <button
               onClick={handleDownload}
               className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 shadow-xs cursor-pointer transition-colors"
             >
-              <Download className="h-3.5 w-3.5" /> Download .xml File
+              <Download className="h-3.5 w-3.5" /> {t("shipments:xml.download")}
             </button>
           </div>
 
           <div className="flex items-center gap-3">
             {sentSuccess ? (
               <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200">
-                <Check className="h-4 w-4" /> Sent to IUNGO
+                <Check className="h-4 w-4" /> {t("shipments:xml.sent")}
               </span>
             ) : (
               <button
@@ -4135,7 +4150,7 @@ function XmlPreviewModal({
                 className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 cursor-pointer transition-colors"
               >
                 {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                Send to IUNGO
+                {t("shipments:xml.sendButton")}
               </button>
             )}
           </div>
@@ -4159,15 +4174,15 @@ function XmlPreviewModal({
                 <Send className="w-5 h-5" />
               </div>
               <h3 className="text-lg font-bold text-gray-900">
-                Send ASN to IUNGO?
+                {t("shipments:xml.confirm.title")}
               </h3>
               <p className="mt-2 text-sm text-gray-500 leading-relaxed">
-                Are you sure you want to dispatch this Advance Shipping Notice (ASN) to IUNGO? Once sent, this transmission cannot be undone.
+                {t("shipments:xml.confirm.message")}
               </p>
 
               <div className="mt-3">
                 <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                  Recipient Email
+                  {t("shipments:xml.confirm.recipient")}
                 </label>
                 <div className="px-3 py-2 bg-slate-50 border border-slate-200 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:bg-white rounded-xl text-xs text-slate-700 flex items-center gap-2 transition-all">
                   <Mail className="w-4 h-4 text-slate-400 shrink-0" />
@@ -4188,7 +4203,7 @@ function XmlPreviewModal({
                   onClick={() => setShowConfirmXmlSend(false)}
                   className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
                 >
-                  Cancel
+                  {t("common:actions.cancel")}
                 </button>
                 <button
                   type="button"
@@ -4200,7 +4215,7 @@ function XmlPreviewModal({
                   className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 active:bg-blue-800 transition-colors cursor-pointer flex items-center gap-1.5"
                 >
                   {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                  {sending ? "Sending..." : "Yes, Send ASN"}
+                  {sending ? t("shipments:xml.confirm.sending") : t("shipments:xml.confirm.send")}
                 </button>
               </div>
             </div>
@@ -4225,6 +4240,7 @@ function ShipmentDetailModal({
   onDownloadLabels: (id: string, num: string, count?: number) => void;
   onPreviewXml: (shipment: any) => void;
 }) {
+  const { t } = useTranslation("shipments");
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -4239,7 +4255,7 @@ function ShipmentDetailModal({
         if (active) setData(res);
       })
       .catch((err) => {
-        if (active) setError(err?.response?.data?.detail || err?.message || "Failed to load shipment details");
+        if (active) setError(err?.response?.data?.detail || err?.message || t("detail.loadFailed"));
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -4269,7 +4285,7 @@ function ShipmentDetailModal({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-bold text-gray-900">
-                  Shipment {data?.shipment_number || "..."}
+                  {t("detail.title", { number: data?.shipment_number || "..." })}
                 </h2>
                 {data?.status && (
                   <span
@@ -4278,14 +4294,27 @@ function ShipmentDetailModal({
                       statusColor[data.status] || "bg-gray-100 text-gray-700 border-gray-200"
                     )}
                   >
-                    {data.status.replace(/_/g, " ")}
+                    {shipmentStatusLabel(data.status)}
                   </span>
                 )}
               </div>
               <p className="text-xs text-gray-500 mt-0.5">
-                Destination: <strong className="text-gray-800">{plantName}</strong>
+                <Trans
+                  t={t}
+                  i18nKey="detail.destination"
+                  values={{ plant: plantName }}
+                  components={{ strong: <strong className="text-gray-800" /> }}
+                />
                 {data?.ship_date && (
-                  <> • Ship Date: <strong className="text-gray-800">{new Date(data.ship_date).toLocaleDateString("en-GB")}</strong></>
+                  <>
+                    {" • "}
+                    <Trans
+                      t={t}
+                      i18nKey="detail.shipDate"
+                      values={{ date: new Date(data.ship_date).toLocaleDateString("en-GB") }}
+                      components={{ strong: <strong className="text-gray-800" /> }}
+                    />
+                  </>
                 )}
               </p>
             </div>
@@ -4303,7 +4332,7 @@ function ShipmentDetailModal({
           {loading ? (
             <div className="py-20 text-center text-gray-500">
               <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-3" />
-              <p className="font-semibold text-sm">Loading carton details...</p>
+              <p className="font-semibold text-sm">{t("detail.loading")}</p>
             </div>
           ) : error ? (
             <div className="py-12 text-center text-red-600 bg-red-50 rounded-xl border border-red-200">
@@ -4316,24 +4345,24 @@ function ShipmentDetailModal({
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">
-                    Carton & Handling Unit Breakdown ({data.cartons?.length || 0})
+                    {t("detail.breakdown", { count: data.cartons?.length || 0 })}
                   </h3>
                   <span className="text-xs text-gray-400">
-                    Click HU to copy
+                    {t("detail.clickToCopy")}
                   </span>
                 </div>
                 <div className="overflow-auto max-h-[62vh] border border-gray-300 shadow-2xs">
                   <table className="w-full text-left text-xs border-collapse">
                     <thead className="sticky top-0 z-10 bg-zinc-700 text-white text-xs font-semibold uppercase tracking-wider border-b border-zinc-800 shadow-xs">
                       <tr>
-                        <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Box</th>
-                        <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Handling Unit (20-digit HU)</th>
-                        <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">PO / Line Item</th>
-                        <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Product Code</th>
-                        <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Lot / Batch</th>
-                        <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">Quantity</th>
-                        <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">GW (kg)</th>
-                        <th className="py-1.5 px-2 text-right whitespace-nowrap">NW (kg)</th>
+                        <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("detail.table.box")}</th>
+                        <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("detail.table.hu")}</th>
+                        <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("detail.table.poLine")}</th>
+                        <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("detail.table.productCode")}</th>
+                        <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("detail.table.lot")}</th>
+                        <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">{t("detail.table.quantity")}</th>
+                        <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">{t("detail.table.gw")}</th>
+                        <th className="py-1.5 px-2 text-right whitespace-nowrap">{t("detail.table.nw")}</th>
                       </tr>
                     </thead>
                     <tbody className="font-mono">
@@ -4346,7 +4375,7 @@ function ShipmentDetailModal({
                               <button
                                 type="button"
                                 onClick={() => handleCopyHu(c.hu_number)}
-                                title="Click to copy 20-digit HU"
+                                title={t("detail.copyHuTitle")}
                                 className="inline-flex items-center gap-1.5 text-gray-800 hover:text-blue-700 cursor-pointer font-bold transition-colors"
                               >
                                 {c.hu_number}
@@ -4390,7 +4419,7 @@ function ShipmentDetailModal({
             onClick={onClose}
             className="px-4 py-2 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 transition-colors cursor-pointer"
           >
-            Close
+            {t("detail.close")}
           </button>
 
           {data && (
@@ -4402,7 +4431,7 @@ function ShipmentDetailModal({
                 className="inline-flex items-center gap-1.5 px-4 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
               >
                 <FileCode className="w-3.5 h-3.5 text-slate-500" />
-                View ASN XML
+                {t("detail.viewXml")}
               </button>
 
               <button
@@ -4410,7 +4439,7 @@ function ShipmentDetailModal({
                 className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
               >
                 <Printer className="w-3.5 h-3.5" />
-                Print / Download Labels
+                {t("detail.printLabels")}
               </button>
             </div>
           )}
@@ -4439,6 +4468,7 @@ function LabelPrintModal({
   onDownload: (size: string, autoPrint: boolean) => void;
   isLoading?: boolean;
 }) {
+  const { t } = useTranslation(["shipments", "common"]);
   const [selectedSize, setSelectedSize] = useState<string>(() => {
     return localStorage.getItem("asn_preferred_label_size") || "6x4";
   });
@@ -4449,10 +4479,10 @@ function LabelPrintModal({
   };
 
   const SIZES = [
-    { id: "6x4", title: '6" × 4" Landscape' },
-    { id: "4x6", title: '4" × 6" Portrait' },
-    { id: "4x3", title: '4" × 3" Compact' },
-    { id: "a4", title: 'A4 Sheet (4 Labels / Page)' },
+    { id: "6x4", title: t("shipments:labels.sizes.landscape") },
+    { id: "4x6", title: t("shipments:labels.sizes.portrait") },
+    { id: "4x3", title: t("shipments:labels.sizes.compact") },
+    { id: "a4", title: t("shipments:labels.sizes.a4") },
   ];
 
   return (
@@ -4461,9 +4491,9 @@ function LabelPrintModal({
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
           <div>
-            <h2 className="text-base font-semibold text-gray-900">Print & Download Barcode Labels</h2>
+            <h2 className="text-base font-semibold text-gray-900">{t("shipments:labels.title")}</h2>
             <p className="text-xs text-gray-500 font-mono mt-0.5">
-              {data.shipmentNumber} • {data.totalBoxes ?? 1} {data.totalBoxes === 1 ? "Carton" : "Cartons"}
+              {data.shipmentNumber} • {t("shipments:cartons", { count: data.totalBoxes ?? 1 })}
             </p>
           </div>
           <button
@@ -4477,7 +4507,7 @@ function LabelPrintModal({
         {/* Content */}
         <div className="p-6 space-y-3">
           <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider block">
-            Select Label Size
+            {t("shipments:labels.selectSize")}
           </label>
           <div className="space-y-2">
             {SIZES.map((s) => {
@@ -4514,7 +4544,7 @@ function LabelPrintModal({
             onClick={onClose}
             className="px-4 py-2 border border-gray-200 rounded-lg text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors cursor-pointer"
           >
-            Cancel
+            {t("common:actions.cancel")}
           </button>
 
           <div className="flex items-center gap-2">
@@ -4523,10 +4553,10 @@ function LabelPrintModal({
               disabled={isLoading}
               onClick={() => onDownload(selectedSize, true)}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 rounded-lg text-xs font-medium transition-colors cursor-pointer disabled:opacity-50"
-              title="Open print preview directly in browser"
+              title={t("shipments:labels.printDirectlyTitle")}
             >
               {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              Print Directly
+              {t("shipments:labels.printDirectly")}
             </button>
 
             <button
@@ -4536,7 +4566,7 @@ function LabelPrintModal({
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
             >
               {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              Download PDF
+              {t("shipments:labels.downloadPdf")}
             </button>
           </div>
         </div>

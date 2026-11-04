@@ -1,0 +1,108 @@
+{
+  "cartons_one": "{{count}} Carton",
+  "cartons_other": "{{count}} Cartons",
+  "creation": {
+    "backToLines": "Back to Purchase Order Lines",
+    "backToPos": "Back to Purchase Orders",
+    "backToShipments": "Back to Shipments",
+    "excelTitle": "Excel Packing List Dispatch",
+    "switchToWeb": "Switch to Web Workbench →"
+  },
+  "detail": {
+    "breakdown": "Carton & Handling Unit Breakdown ({{count}})",
+    "clickToCopy": "Click HU to copy",
+    "close": "Close",
+    "copyHuTitle": "Click to copy 20-digit HU",
+    "destination": "Destination: <strong>{{plant}}</strong>",
+    "loadFailed": "Failed to load shipment details",
+    "loading": "Loading carton details...",
+    "printLabels": "Print / Download Labels",
+    "shipDate": "Ship Date: <strong>{{date}}</strong>",
+    "table": {
+      "box": "Box",
+      "gw": "GW (kg)",
+      "hu": "Handling Unit (20-digit HU)",
+      "lot": "Lot / Batch",
+      "nw": "NW (kg)",
+      "poLine": "PO / Line Item",
+      "productCode": "Product Code",
+      "quantity": "Quantity"
+    },
+    "title": "Shipment {{number}}",
+    "viewXml": "View ASN XML"
+  },
+  "labels": {
+    "downloadFailed": "Failed to download labels: {{error}}",
+    "downloadPdf": "Download PDF",
+    "printDirectly": "Print Directly",
+    "printDirectlyTitle": "Open print preview directly in browser",
+    "selectSize": "Select Label Size",
+    "sizes": {
+      "a4": "A4 Sheet (4 Labels / Page)",
+      "compact": "4\" × 3\" Compact",
+      "landscape": "6\" × 4\" Landscape",
+      "portrait": "4\" × 6\" Portrait"
+    },
+    "title": "Print & Download Barcode Labels"
+  },
+  "list": {
+    "actionsLabels": "Labels",
+    "actionsXml": "ASN XML",
+    "empty": "No shipments found",
+    "emptyHint": "Create a shipment using the Web Wizard or upload an Excel Packing List.",
+    "filter": {
+      "all": "All Statuses",
+      "delivered": "Delivered",
+      "dispatched": "Dispatched",
+      "draft": "Draft",
+      "packed": "Packed",
+      "packing": "Packing",
+      "xmlSent": "XML Sent"
+    },
+    "labelsTitle": "Print or Download Barcode Labels",
+    "loading": "Loading shipments…",
+    "searchPlaceholder": "Search shipment #, plant...",
+    "table": {
+      "actions": "Actions",
+      "cartons": "Cartons / Rolls",
+      "destination": "Destination Plant",
+      "packingSlip": "Packing Slip No",
+      "poNumber": "PO Number",
+      "shipDate": "Ship Date",
+      "status": "Status",
+      "totalQty": "Total Quantity"
+    },
+    "title": "Shipments",
+    "xmlTitle": "View SdDataSlice EDI XML"
+  },
+  "status": {
+    "ACCEPTED": "ACCEPTED",
+    "DELIVERED": "DELIVERED",
+    "DISPATCHED": "DISPATCHED",
+    "DRAFT": "DRAFT",
+    "PACKED": "PACKED",
+    "PACKING": "PACKING",
+    "RECEIVED": "RECEIVED",
+    "REJECTED": "REJECTED",
+    "XML_SENT": "XML SENT"
+  },
+  "xml": {
+    "confirm": {
+      "message": "Are you sure you want to dispatch this Advance Shipping Notice (ASN) to IUNGO? Once sent, this transmission cannot be undone.",
+      "recipient": "Recipient Email",
+      "send": "Yes, Send ASN",
+      "sending": "Sending...",
+      "title": "Send ASN to IUNGO?"
+    },
+    "copied": "Copied to clipboard",
+    "copy": "Copy XML",
+    "download": "Download .xml File",
+    "loadFailed": "Failed to load ASN XML: {{error}}",
+    "noXml": "This shipment does not have a generated ASN XML yet. Finalize packing to generate the ASN.",
+    "sendButton": "Send to IUNGO",
+    "sent": "Sent to IUNGO",
+    "title": "ASN XML — Shipment {{number}}",
+    "unknownError": "Unknown error",
+    "validated": "✓ EDI Validated"
+  }
+}

@@ -1,0 +1,107 @@
+{
+  "cartons_other": "{{count}} 箱",
+  "creation": {
+    "backToLines": "返回采购订单行",
+    "backToPos": "返回采购订单",
+    "backToShipments": "返回发运列表",
+    "excelTitle": "Excel 装箱单发运",
+    "switchToWeb": "切换到网页工作台 →"
+  },
+  "detail": {
+    "breakdown": "纸箱和 Handling Unit 明细（{{count}}）",
+    "clickToCopy": "点击 HU 即可复制",
+    "close": "关闭",
+    "copyHuTitle": "点击复制 20 位 HU",
+    "destination": "目的地：<strong>{{plant}}</strong>",
+    "loadFailed": "无法加载发运详情",
+    "loading": "正在加载纸箱详情...",
+    "printLabels": "打印 / 下载标签",
+    "shipDate": "发运日期：<strong>{{date}}</strong>",
+    "table": {
+      "box": "箱号",
+      "gw": "毛重 (kg)",
+      "hu": "Handling Unit（20 位 HU）",
+      "lot": "批次 / 批号",
+      "nw": "净重 (kg)",
+      "poLine": "PO / 行项目",
+      "productCode": "产品代码",
+      "quantity": "数量"
+    },
+    "title": "发运单 {{number}}",
+    "viewXml": "查看 ASN XML"
+  },
+  "labels": {
+    "downloadFailed": "无法下载标签：{{error}}",
+    "downloadPdf": "下载 PDF",
+    "printDirectly": "直接打印",
+    "printDirectlyTitle": "在浏览器中直接打开打印预览",
+    "selectSize": "选择标签尺寸",
+    "sizes": {
+      "a4": "A4 纸（每页 4 张标签）",
+      "compact": "4\" × 3\" 紧凑",
+      "landscape": "6\" × 4\" 横向",
+      "portrait": "4\" × 6\" 纵向"
+    },
+    "title": "打印和下载条码标签"
+  },
+  "list": {
+    "actionsLabels": "标签",
+    "actionsXml": "ASN XML",
+    "empty": "未找到发运单",
+    "emptyHint": "使用网页向导创建发运单，或上传 Excel 装箱单。",
+    "filter": {
+      "all": "所有状态",
+      "delivered": "已交付",
+      "dispatched": "已发运",
+      "draft": "草稿",
+      "packed": "已装箱",
+      "packing": "装箱中",
+      "xmlSent": "XML 已发送"
+    },
+    "labelsTitle": "打印或下载条码标签",
+    "loading": "正在加载发运单…",
+    "searchPlaceholder": "搜索发运单号、工厂...",
+    "table": {
+      "actions": "操作",
+      "cartons": "纸箱 / 卷",
+      "destination": "目的地工厂",
+      "packingSlip": "装箱单号",
+      "poNumber": "PO 编号",
+      "shipDate": "发运日期",
+      "status": "状态",
+      "totalQty": "总数量"
+    },
+    "title": "发运",
+    "xmlTitle": "查看 SdDataSlice EDI XML"
+  },
+  "status": {
+    "ACCEPTED": "已接受",
+    "DELIVERED": "已交付",
+    "DISPATCHED": "已发运",
+    "DRAFT": "草稿",
+    "PACKED": "已装箱",
+    "PACKING": "装箱中",
+    "RECEIVED": "已接收",
+    "REJECTED": "已拒绝",
+    "XML_SENT": "XML 已发送"
+  },
+  "xml": {
+    "confirm": {
+      "message": "确定要将此预先发货通知 (ASN) 发送到 IUNGO 吗？发送后无法撤销。",
+      "recipient": "收件人邮箱",
+      "send": "是，发送 ASN",
+      "sending": "正在发送...",
+      "title": "将 ASN 发送到 IUNGO？"
+    },
+    "copied": "已复制到剪贴板",
+    "copy": "复制 XML",
+    "download": "下载 .xml 文件",
+    "loadFailed": "无法加载 ASN XML：{{error}}",
+    "noXml": "此发运单尚未生成 ASN XML。请完成装箱以生成 ASN。",
+    "sendButton": "发送到 IUNGO",
+    "sent": "已发送到 IUNGO",
+    "title": "ASN XML — 发运单 {{number}}",
+    "unknownError": "未知错误",
+    "validated": "✓ EDI 已验证"
+  }
+}
