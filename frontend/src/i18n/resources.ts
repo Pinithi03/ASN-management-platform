@@ -10,18 +10,24 @@ import enDashboard from "@/locales/en/dashboard.json";
 import enProfile from "@/locales/en/profile.json";
 import enDrafts from "@/locales/en/drafts.json";
 import enOrderHistory from "@/locales/en/orderHistory.json";
+import enPurchaseOrders from "@/locales/en/purchaseOrders.json";
+import enPurchaseOrderLines from "@/locales/en/purchaseOrderLines.json";
 import zhCommon from "@/locales/zh-CN/common.json";
 import zhLayout from "@/locales/zh-CN/layout.json";
 import zhDashboard from "@/locales/zh-CN/dashboard.json";
 import zhProfile from "@/locales/zh-CN/profile.json";
 import zhDrafts from "@/locales/zh-CN/drafts.json";
 import zhOrderHistory from "@/locales/zh-CN/orderHistory.json";
+import zhPurchaseOrders from "@/locales/zh-CN/purchaseOrders.json";
+import zhPurchaseOrderLines from "@/locales/zh-CN/purchaseOrderLines.json";
 import itCommon from "@/locales/it/common.json";
 import itLayout from "@/locales/it/layout.json";
 import itDashboard from "@/locales/it/dashboard.json";
 import itProfile from "@/locales/it/profile.json";
 import itDrafts from "@/locales/it/drafts.json";
 import itOrderHistory from "@/locales/it/orderHistory.json";
+import itPurchaseOrders from "@/locales/it/purchaseOrders.json";
+import itPurchaseOrderLines from "@/locales/it/purchaseOrderLines.json";
 
 export const resources = {
   en: {
@@ -31,6 +37,8 @@ export const resources = {
     profile: enProfile,
     drafts: enDrafts,
     orderHistory: enOrderHistory,
+    purchaseOrders: enPurchaseOrders,
+    purchaseOrderLines: enPurchaseOrderLines,
   },
   "zh-CN": {
     common: zhCommon,
@@ -39,6 +47,8 @@ export const resources = {
     profile: zhProfile,
     drafts: zhDrafts,
     orderHistory: zhOrderHistory,
+    purchaseOrders: zhPurchaseOrders,
+    purchaseOrderLines: zhPurchaseOrderLines,
   },
   it: {
     common: itCommon,
@@ -47,9 +57,11 @@ export const resources = {
     profile: itProfile,
     drafts: itDrafts,
     orderHistory: itOrderHistory,
+    purchaseOrders: itPurchaseOrders,
+    purchaseOrderLines: itPurchaseOrderLines,
   },
 };
 
-export const namespaces = ["common", "layout", "dashboard", "profile", "drafts", "orderHistory"] as const;
+export const namespaces = ["common", "layout", "dashboard", "profile", "drafts", "orderHistory", "purchaseOrders", "purchaseOrderLines"] as const;
 
 export type LayoutResources = typeof enLayout;

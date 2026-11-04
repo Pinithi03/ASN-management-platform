@@ -3,5 +3,13 @@
     "cancel": "取消",
     "signOut": "退出登录",
     "tryAgain": "重试"
+  },
+  "poStatus": {
+    "ACTIVE": "活动",
+    "CANCELLED": "已取消",
+    "COMPLETED": "已完成",
+    "PARTIAL": "部分",
+    "SHIPPED": "已发运",
+    "UPDATED": "已更新"
   }
 }

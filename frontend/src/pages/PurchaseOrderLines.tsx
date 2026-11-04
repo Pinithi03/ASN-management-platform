@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { useNavigate, useLocation } from "react-router-dom";
+import { Trans, useTranslation } from "react-i18next";
 import {
   ListOrdered,
   Search,
@@ -32,7 +33,7 @@ import { usePlantSelection } from "@/hooks/usePlantSelection";
 import { saveManualDraft, saveExcelDraft } from "@/utils/draftStorage";
 
 const formatDateDisplay = (dateStr?: string | null) => {
-  if (!dateStr) return "—";
+  if (!dateStr) return "â€”";
   try {
     const s = dateStr.trim();
     if (/^\d{2}-\d{2}-\d{4}$/.test(s)) {
@@ -62,6 +63,7 @@ export interface PurchaseOrderLinesProps {
 }
 
 export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {}) {
+  const { t } = useTranslation(["purchaseOrderLines", "purchaseOrders", "layout"]);
   const navigate = useNavigate();
   const location = useLocation();
   const user = useAuthStore((s) => s.user);
@@ -241,9 +243,9 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
 
   // Multi-PO chips & autocomplete helpers
   const normalizePO = (value: string) =>
-    value.trim().replace(/^[A-Z0-9]{2,6}\s*[-–—_]\s*(?=\d{6,}$)/i, "");
+    value.trim().replace(/^[A-Z0-9]{2,6}\s*[-â€“â€”_]\s*(?=\d{6,}$)/i, "");
   const isPOToken = (value: string) =>
-    /^(?:[A-Z0-9]{2,6}\s*[-–—_]\s*)?\d{6,15}$/i.test(value.trim());
+    /^(?:[A-Z0-9]{2,6}\s*[-â€“â€”_]\s*)?\d{6,15}$/i.test(value.trim());
 
   const suggestions = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -451,8 +453,14 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
       if ((firstGroup && thisGroup && firstGroup !== thisGroup) || firstLoc !== thisLoc) {
         setCrossLocationWarning({
           attemptedLabel: line.po_line_label,
-          targetDesc: `${line.plant_name || line.plant_code} (Store ${thisLoc})`,
-          currentDesc: `${firstSelectedLine.plant_name || firstSelectedLine.plant_code} (Store ${firstLoc})`,
+          targetDesc: t("purchaseOrderLines:crossWarning.storeDesc", {
+            plant: line.plant_name || line.plant_code,
+            store: thisLoc,
+          }),
+          currentDesc: t("purchaseOrderLines:crossWarning.storeDesc", {
+            plant: firstSelectedLine.plant_name || firstSelectedLine.plant_code,
+            store: firstLoc,
+          }),
         });
         return;
       }
@@ -551,9 +559,10 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
     }
 
     setDraftToast(
-      `Saved ${selectedItems.length} line${selectedItems.length > 1 ? "s" : ""} (${
-        selectedUniquePOs.length
-      } PO${selectedUniquePOs.length > 1 ? "s" : ""}) to Drafts`
+      t("purchaseOrderLines:draft.saved", {
+        lines: t("purchaseOrderLines:draft.linesCount", { count: selectedItems.length }),
+        pos: t("purchaseOrderLines:draft.posCount", { count: selectedUniquePOs.length }),
+      })
     );
     setTimeout(() => setDraftToast(null), 4000);
   };
@@ -581,10 +590,10 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
                 type="button"
                 onClick={() => selectPlant("ALL")}
                 className="inline-flex items-center gap-1 font-medium text-slate-500 hover:text-blue-600 transition-colors cursor-pointer"
-                title="Switch factory plant"
+                title={t("purchaseOrders:shared.switchPlant")}
               >
                 <Factory className="w-3.5 h-3.5" />
-                <span>Factory Plants</span>
+                <span>{t("purchaseOrders:shared.breadcrumb")}</span>
               </button>
               <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
               <span className="font-semibold text-slate-700">
@@ -595,7 +604,7 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
 
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-bold tracking-tight text-gray-950">
-              Purchase Order Lines
+              {t("purchaseOrderLines:header.title")}
             </h1>
             {activeMode === "manual" ? (
               <span
@@ -607,7 +616,7 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
                 )}
               >
                 <Layers className={cn("w-3.5 h-3.5", isSupplier ? "text-emerald-600" : "text-blue-600")} />
-                Manual Process
+                {t("layout:nav.manualProcess")}
               </span>
             ) : (
               <span
@@ -619,7 +628,7 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
                 )}
               >
                 <FileSpreadsheet className={cn("w-3.5 h-3.5", isSupplier ? "text-emerald-600" : "text-blue-600")} />
-                Excel Drop
+                {t("layout:nav.excelDrop")}
               </span>
             )}
           </div>
@@ -651,10 +660,10 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
                         : "bg-blue-600 text-white shadow-xs font-bold"
                       : "bg-white text-slate-700 hover:text-slate-950 hover:bg-slate-50 border border-slate-200/80 hover:border-slate-300 shadow-2xs"
                   )}
-                  title={`Store ${loc.code} (${loc.count} available POs)`}
+                  title={t("purchaseOrders:shared.storeTitle", { code: loc.code, count: loc.count })}
                 >
                   <Warehouse className={cn("w-3.5 h-3.5 transition-colors", isSelected ? "text-white" : "text-slate-400 group-hover:text-slate-600")} />
-                  <span>Store {loc.code}</span>
+                  <span>{t("purchaseOrders:shared.store", { code: loc.code })}</span>
                   {/* Notification badge */}
                   <span
                     className={cn(
@@ -677,13 +686,13 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
         )}
       </div>
 
-      {/* ─── PLANT GATEWAY MODE: 5-Plant Horizontal Accordion Showcase ─── */}
+      {/* â”€â”€â”€ PLANT GATEWAY MODE: 5-Plant Horizontal Accordion Showcase â”€â”€â”€ */}
       {selectedPlant === "ALL" ? (
         <PlantAccordionShowcase
           orders={allOrdersList}
           onSelectPlant={selectPlant}
           isSupplier={isSupplier}
-          ctaLabel="View Plant Order Lines"
+          ctaLabel={t("purchaseOrderLines:gatewayCta")}
         />
       ) : (
         <div className="flex-1 min-h-0 flex flex-col gap-3">
@@ -699,7 +708,7 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
                 onClick={() => navigate("/drafts")}
                 className="px-3 py-1 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-700 transition-colors cursor-pointer"
               >
-                Open Drafts →
+                {t("purchaseOrderLines:draft.openDrafts")}
               </button>
             </div>
           )}
@@ -710,10 +719,20 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
               <div className="flex items-start sm:items-center gap-3">
                 <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
                 <div className="text-xs">
-                  <span className="font-bold">Cannot Mix Plants or Storage Locations: </span>
-                  Current selection belongs to <span className="font-semibold underline">{crossLocationWarning.currentDesc}</span>.
-                  Line <span className="font-mono font-semibold">{crossLocationWarning.attemptedLabel}</span> belongs to{" "}
-                  <span className="font-semibold underline">{crossLocationWarning.targetDesc}</span>.
+                  <Trans
+                    t={t}
+                    i18nKey="purchaseOrderLines:crossWarning.message"
+                    values={{
+                      current: crossLocationWarning.currentDesc,
+                      line: crossLocationWarning.attemptedLabel,
+                      target: crossLocationWarning.targetDesc,
+                    }}
+                    components={{
+                      b: <span className="font-bold" />,
+                      u: <span className="font-semibold underline" />,
+                      mono: <span className="font-mono font-semibold" />,
+                    }}
+                  />
                 </div>
               </div>
               <button
@@ -751,9 +770,11 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
                     isSupplier ? "text-emerald-950" : "text-blue-950"
                   )}
                 >
-                  {selectedLineMap.size} Order Line{selectedLineMap.size > 1 ? "s" : ""} Selected
+                  {t("purchaseOrderLines:selection.selected", { count: selectedLineMap.size })}
                   <span className="font-normal text-xs text-slate-500 ml-1.5">
-                    ({selectedUniquePOs.length} PO{selectedUniquePOs.length > 1 ? "s" : ""})
+                    {t("purchaseOrderLines:selection.selectedPos", {
+                      pos: t("purchaseOrderLines:draft.posCount", { count: selectedUniquePOs.length }),
+                    })}
                   </span>
                 </span>
               </div>
@@ -765,7 +786,7 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
                   className="h-8 px-2.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
                 >
                   <X className="w-3.5 h-3.5 text-slate-400" />
-                  Clear
+                  {t("purchaseOrderLines:selection.clear")}
                 </button>
 
                 <button
@@ -774,7 +795,7 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
                   className="h-8 px-3 text-xs font-semibold text-slate-800 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
                 >
                   <FileEdit className="w-3.5 h-3.5 text-slate-600" />
-                  <span>Save Draft</span>
+                  <span>{t("purchaseOrderLines:selection.saveDraft")}</span>
                 </button>
 
                 {activeMode === "manual" ? (
@@ -789,7 +810,7 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
                     )}
                   >
                     <PackagePlus className="w-3.5 h-3.5" />
-                    <span>+ Create Delivery</span>
+                    <span>{t("purchaseOrders:shared.createDelivery")}</span>
                   </button>
                 ) : (
                   <button
@@ -803,7 +824,7 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
                     )}
                   >
                     <FileSpreadsheet className="w-3.5 h-3.5" />
-                    <span>Excel Drop Delivery</span>
+                    <span>{t("purchaseOrders:shared.excelDropDelivery")}</span>
                   </button>
                 )}
               </div>
@@ -836,7 +857,7 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
                         removePOChip(chip);
                       }}
                       className="p-0.5 rounded hover:bg-black/5 cursor-pointer"
-                      title={`Remove ${chip}`}
+                      title={t("purchaseOrders:shared.removeChip", { chip })}
                     >
                       <X className="w-3 h-3" />
                     </button>
@@ -847,8 +868,14 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
                   type="text"
                   placeholder={
                     poChips.length > 0
-                      ? "Add another PO or filter by line / material..."
-                      : `Search PO / Line (e.g. 2001382767 00100-0001), material in ${KNOWN_PLANTS[selectedPlant]?.name?.replace(" Ltd", "") || "Plant"} (${selectedLocation === "ALL" ? "All Stores" : selectedLocation})...`
+                      ? t("purchaseOrderLines:search.addAnother")
+                      : t("purchaseOrderLines:search.placeholder", {
+                          plant:
+                            KNOWN_PLANTS[selectedPlant]?.name?.replace(" Ltd", "") ||
+                            t("purchaseOrderLines:search.plantFallback"),
+                          location:
+                            selectedLocation === "ALL" ? t("purchaseOrderLines:empty.allStores") : selectedLocation,
+                        })
                   }
                   value={search}
                   onChange={(e) => handleSearchChange(e.target.value)}
@@ -869,7 +896,7 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
                       clearSearch();
                     }}
                     className="absolute right-2.5 top-[11px] p-0.5 text-gray-400 hover:text-gray-600 rounded cursor-pointer"
-                    title="Clear search"
+                    title={t("purchaseOrders:shared.clearSearch")}
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -880,8 +907,8 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
               {isDropdownOpen && suggestions.length > 0 && (
                 <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden divide-y divide-gray-100 animate-in fade-in slide-in-from-top-1 duration-150">
                   <div className="px-3.5 py-1.5 bg-gray-50/90 text-[11px] font-semibold text-gray-500 uppercase tracking-wider flex items-center justify-between">
-                    <span>Suggested PO Numbers</span>
-                    <span className="text-[10px] text-gray-400 font-normal">Use ↑ ↓ & Enter</span>
+                    <span>{t("purchaseOrders:shared.suggested")}</span>
+                    <span className="text-[10px] text-gray-400 font-normal">{t("purchaseOrders:shared.keysHint")}</span>
                   </div>
                   <div className="max-h-[240px] overflow-y-auto py-1">
                     {suggestions.map((poNum, idx) => {
@@ -921,7 +948,7 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
                   setDeliveryDateFilter(e.target.value);
                   setPage(1);
                 }}
-                title="Filter by Delivery Date"
+                title={t("purchaseOrders:shared.filterDeliveryDate")}
                 className="pl-9 pr-8 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-700 shadow-2xs font-medium min-h-[42px]"
               />
               {deliveryDateFilter && (
@@ -932,7 +959,7 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
                     setPage(1);
                   }}
                   className="absolute right-2.5 p-0.5 text-gray-400 hover:text-gray-600 rounded cursor-pointer"
-                  title="Clear delivery date filter"
+                  title={t("purchaseOrders:shared.clearDeliveryDate")}
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -945,14 +972,20 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
             {isLoading ? (
               <div className="flex items-center justify-center py-24 text-gray-400">
                 <RefreshCw className="w-6 h-6 animate-spin mr-2 text-blue-500" />
-                Loading active purchase order lines...
+                {t("purchaseOrderLines:loading")}
               </div>
             ) : lines.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 text-gray-400 px-4 text-center">
                 <ListOrdered className="w-12 h-12 mb-3 text-gray-300" />
-                <p className="text-lg font-medium text-gray-700">No open purchase order lines found</p>
+                <p className="text-lg font-medium text-gray-700">{t("purchaseOrderLines:empty.title")}</p>
                 <p className="text-xs text-gray-400 mt-1 max-w-md">
-                  All line items for {KNOWN_PLANTS[selectedPlant]?.name} ({selectedLocation === "ALL" ? "All Stores" : `Store ${selectedLocation}`}) are either fulfilled or do not match your search or delivery date filter.
+                  {t("purchaseOrderLines:empty.text", {
+                    plant: KNOWN_PLANTS[selectedPlant]?.name,
+                    location:
+                      selectedLocation === "ALL"
+                        ? t("purchaseOrderLines:empty.allStores")
+                        : t("purchaseOrders:shared.store", { code: selectedLocation }),
+                  })}
                 </p>
                 <div className="flex items-center gap-2 mt-4">
                   {(poChips.length > 0 || search || deliveryDateFilter) && (
@@ -964,7 +997,7 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
                       }}
                       className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
                     >
-                      Clear Filters
+                      {t("purchaseOrderLines:empty.clearFilters")}
                     </button>
                   )}
                   <button
@@ -972,7 +1005,7 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
                     onClick={() => selectPlant("ALL")}
                     className="px-3 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors cursor-pointer"
                   >
-                    Change Plant
+                    {t("purchaseOrderLines:empty.changePlant")}
                   </button>
                 </div>
               </div>
@@ -986,7 +1019,7 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
                           type="button"
                           onClick={toggleAllCurrentPage}
                           className="text-zinc-200 hover:text-white transition-colors cursor-pointer inline-flex items-center justify-center"
-                          title="Select all open lines on this page"
+                          title={t("purchaseOrderLines:table.selectAll")}
                         >
                           {allCurrentPageSelected ? (
                             <CheckSquare className="w-3.5 h-3.5 text-white" />
@@ -995,13 +1028,13 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
                           )}
                         </button>
                       </th>
-                      <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">PO / Line</th>
-                      <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Material / Code</th>
-                      <th className="py-1.5 px-2 min-w-[220px] border-r border-zinc-600">Description</th>
-                      <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Delivery Date</th>
-                      <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">Ordered</th>
-                      <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">Shipped</th>
-                      <th className="py-1.5 px-2 text-right whitespace-nowrap">Remaining Qty</th>
+                      <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("purchaseOrderLines:table.poLine")}</th>
+                      <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("purchaseOrderLines:table.material")}</th>
+                      <th className="py-1.5 px-2 min-w-[220px] border-r border-zinc-600">{t("purchaseOrders:modalTable.description")}</th>
+                      <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("purchaseOrders:table.deliveryDate")}</th>
+                      <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">{t("purchaseOrders:modalTable.ordered")}</th>
+                      <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">{t("purchaseOrders:modalTable.shipped")}</th>
+                      <th className="py-1.5 px-2 text-right whitespace-nowrap">{t("purchaseOrderLines:table.remaining")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1038,7 +1071,7 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
                                 "text-gray-400 transition-colors inline-flex items-center justify-center cursor-pointer",
                                 isSupplier ? "hover:text-emerald-600" : "hover:text-blue-600"
                               )}
-                              title={`Select ${ln.po_line_label}`}
+                              title={t("purchaseOrderLines:table.selectLine", { line: ln.po_line_label })}
                             >
                               {isSelected ? (
                                 <CheckSquare className={cn("w-3.5 h-3.5", isSupplier ? "text-emerald-600" : "text-blue-600")} />
@@ -1066,7 +1099,7 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
                               {ln.po_version && ln.po_version > 1 ? (
                                 <span
                                   className="text-[10px] font-bold text-amber-700"
-                                  title={`Revised PO (V${ln.po_version})`}
+                                  title={t("purchaseOrderLines:table.revised", { version: ln.po_version })}
                                 >
                                   v{ln.po_version}
                                 </span>
@@ -1079,7 +1112,7 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
                                   handleCopyIdentifier(ln.po_line_label, ln.line_uid);
                                 }}
                                 className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-slate-200 text-slate-400 hover:text-slate-700 transition-all cursor-pointer"
-                                title={`Copy "${ln.po_line_label}"`}
+                                title={t("purchaseOrderLines:table.copy", { label: ln.po_line_label })}
                               >
                                 {copiedUid === ln.line_uid ? (
                                   <Check className="w-3 h-3 text-emerald-600" />
@@ -1094,11 +1127,11 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
                           <td className="py-1 px-2 whitespace-nowrap border-r border-gray-200">
                             <div className="flex items-center gap-1.5">
                               <span className="font-mono text-xs font-semibold text-slate-900">
-                                {ln.material_code || "—"}
+                                {ln.material_code || "â€”"}
                               </span>
                               {(ln.partner_code || ln.color) && (
                                 <span className="text-[10px] text-slate-500 font-mono">
-                                  ({[ln.partner_code, ln.color].filter(Boolean).join(" · ")})
+                                  ({[ln.partner_code, ln.color].filter(Boolean).join(" Â· ")})
                                 </span>
                               )}
                             </div>
@@ -1107,7 +1140,7 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
                           {/* Description */}
                           <td className="py-1 px-2 max-w-[300px] whitespace-nowrap border-r border-gray-200">
                             <p className="text-xs text-slate-700 truncate" title={ln.material_description || undefined}>
-                              {ln.material_description || "—"}
+                              {ln.material_description || "â€”"}
                             </p>
                           </td>
 

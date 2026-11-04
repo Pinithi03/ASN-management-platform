@@ -3,5 +3,13 @@
     "cancel": "Cancel",
     "signOut": "Sign Out",
     "tryAgain": "Try again"
+  },
+  "poStatus": {
+    "ACTIVE": "ACTIVE",
+    "CANCELLED": "CANCELLED",
+    "COMPLETED": "COMPLETED",
+    "PARTIAL": "PARTIAL",
+    "SHIPPED": "SHIPPED",
+    "UPDATED": "UPDATED"
   }
 }

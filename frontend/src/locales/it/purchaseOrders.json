@@ -1,0 +1,152 @@
+{
+  "crossWarning": {
+    "clearAndSelect": "Deseleziona e seleziona {{po}}",
+    "dismiss": "Chiudi avviso",
+    "location": "Magazzino {{code}}",
+    "message": "<b>Impossibile combinare stabilimenti o magazzini: </b>La selezione attuale riguarda <u>{{current}}</u>. Gli ordini per <u>{{target}}</u> (es. {{po}}) devono essere spediti con una consegna separata."
+  },
+  "empty": {
+    "clearDate": "Cancella data di consegna",
+    "filtered": "Nessun ordine d'acquisto corrisponde allo stabilimento, al magazzino o alla data di consegna selezionati.",
+    "hint": "Prova a modificare la ricerca o i filtri",
+    "resetPlant": "Reimposta filtri stabilimento e magazzino",
+    "title": "Nessun ordine d'acquisto trovato"
+  },
+  "gateway": {
+    "activeOrders": "Ordini attivi",
+    "badgeUnit_many": "PO",
+    "badgeUnit_one": "PO",
+    "badgeUnit_other": "PO",
+    "cta": "{{label}} ({{count}})",
+    "ctaDefault": "Visualizza ordini dello stabilimento",
+    "deliveryStores": "Magazzini di consegna",
+    "destinationFactory": "Stabilimento di destinazione",
+    "directHub": "Hub di spedizione diretta",
+    "locationCountry": "{{location}}, Sri Lanka",
+    "locations": "magazzini",
+    "locked": "Bloccato",
+    "lockedCta": "Bloccato — Nessun PO assegnato",
+    "lockedTitle": "{{plant}} — Bloccato (si sblocca automaticamente quando si riceve un PO da questo stabilimento)",
+    "mobileCount_many": "{{count}} PO",
+    "mobileCount_one": "{{count}} PO",
+    "mobileCount_other": "{{count}} PO",
+    "openTitle": "Apri {{plant}} ({{count}} PO attivi)",
+    "plantLocked": "Stabilimento bloccato",
+    "posUnit": "PO",
+    "readyOrders": "Ordini pronti",
+    "storeTitle": "Visualizza {{plant}} - Magazzino {{store}}",
+    "stores": "Magazzini:",
+    "toDispatch": "da spedire",
+    "zeroPos": "0 PO"
+  },
+  "header": {
+    "title": "Ordini d'acquisto"
+  },
+  "history": {
+    "qty": "Qtà: {{old}} → {{new}}",
+    "source": "Origine: {{source}}",
+    "title": "Cronologia revisioni e aggiornamenti",
+    "version": "Versione {{version}}"
+  },
+  "lineStatus": {
+    "fulfilled": "Evaso",
+    "partial": "Parziale",
+    "pending": "In attesa"
+  },
+  "loading": "Caricamento ordini d'acquisto...",
+  "modal": {
+    "addToBatch": "Aggiungi alla selezione",
+    "cancelledPo": "PO annullato",
+    "close": "Chiudi",
+    "closeTitle": "Chiudi finestra",
+    "contact": "Contatto: <strong>{{name}}</strong>",
+    "copied": "Copiato",
+    "copyPo": "Copia numero PO",
+    "excelTitle": "Prepara la consegna in uscita tramite caricamento Excel",
+    "fullyFulfilled": "Completamente evaso (Completato)",
+    "lineItems": "Righe e quantità",
+    "notation": "Annotazione: <value>{{notation}}</value>",
+    "openPlantToSelect": "Apri uno stabilimento per selezionare i PO",
+    "original": "v1 Originale",
+    "plant": "Stabilimento:",
+    "primaryLineFallback": "Riga principale",
+    "proceedExcel": "Procedi con caricamento Excel",
+    "proceedManual": "Procedi con consegna manuale",
+    "refreshing": "Aggiornamento righe...",
+    "revision": "Revisione v{{version}}",
+    "selectedForBatch": "Selezionato per consegna cumulativa",
+    "sourceEmail": "Email di origine:",
+    "totals_many": "Totali ({{count}} righe):",
+    "totals_one": "Totali ({{count}} riga):",
+    "totals_other": "Totali ({{count}} righe):"
+  },
+  "modalTable": {
+    "color": "Colore",
+    "description": "Descrizione",
+    "item": "Codice articolo / materiale",
+    "no": "N.",
+    "openBalance": "Saldo aperto",
+    "ordered": "Ordinato",
+    "partner": "Codice partner",
+    "shipped": "Spedito",
+    "status": "Stato",
+    "subtotal": "Subtotale",
+    "unitPrice": "Prezzo unitario",
+    "uom": "UOM"
+  },
+  "row": {
+    "cancelled": "Questo PO è annullato",
+    "completed": "Questo PO è completamente evaso (Completato)",
+    "conflict": "Impossibile combinare: appartiene a {{plant}} (Magazzino {{store}}). Il lotto attuale è per il Magazzino {{current}}.",
+    "revised": "Ordine modificato dal cliente (Versione {{version}})",
+    "select": "Seleziona PO"
+  },
+  "search": {
+    "addAnother": "Aggiungi un altro numero PO...",
+    "default": "Cerca numero PO o incolla più PO separati da virgola...",
+    "escHint": "Esc per chiudere",
+    "found": "Trovati {{found}} di {{total}}",
+    "inPlant": "Cerca PO in {{plant}}...",
+    "inPlantLocation": "Cerca PO in {{plant}} ({{location}})...",
+    "notFound": "Non trovati:",
+    "notFoundIn": "Non trovati in {{plant}}:",
+    "pasteHint": "Incolla più PO separati da virgola per cercarli insieme",
+    "selectHint": "Seleziona ↵"
+  },
+  "selection": {
+    "clear": "Annulla selezione",
+    "selected_many": "{{count}} ordini d'acquisto selezionati",
+    "selected_one": "{{count}} ordine d'acquisto selezionato",
+    "selected_other": "{{count}} ordini d'acquisto selezionati"
+  },
+  "shared": {
+    "breadcrumb": "Stabilimenti",
+    "clearDeliveryDate": "Cancella filtro data di consegna",
+    "clearSearch": "Cancella ricerca",
+    "createDelivery": "+ Crea consegna",
+    "excelDropDelivery": "Consegna tramite Excel",
+    "filterDeliveryDate": "Filtra per data di consegna",
+    "keysHint": "Usa ↑ ↓ e Invio",
+    "removeChip": "Rimuovi {{chip}}",
+    "store": "Magazzino {{code}}",
+    "storeTitle": "Magazzino {{code}} ({{count}} PO disponibili)",
+    "suggested": "Numeri PO suggeriti",
+    "switchPlant": "Cambia stabilimento"
+  },
+  "statusFilter": {
+    "active": "Attivo",
+    "all": "Tutti gli stati attivi",
+    "partial": "Parziale",
+    "updated": "Aggiornato"
+  },
+  "table": {
+    "contact": "Contatto",
+    "deliveryDate": "Data di consegna",
+    "notation": "Annotazione",
+    "orderDate": "Data ordine",
+    "poNumber": "Numero PO",
+    "quantity": "Quantità",
+    "selectAll": "Seleziona tutto",
+    "status": "Stato"
+  }
+}

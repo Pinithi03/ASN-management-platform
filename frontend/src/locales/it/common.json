@@ -3,5 +3,13 @@
     "cancel": "Annulla",
     "signOut": "Esci",
     "tryAgain": "Riprova"
+  },
+  "poStatus": {
+    "ACTIVE": "ATTIVO",
+    "CANCELLED": "ANNULLATO",
+    "COMPLETED": "COMPLETATO",
+    "PARTIAL": "PARZIALE",
+    "SHIPPED": "SPEDITO",
+    "UPDATED": "AGGIORNATO"
   }
 }
