@@ -6,7 +6,10 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/utils/cn";
+import type { LayoutResources } from "@/i18n/resources";
+import LanguageSwitcher from "./LanguageSwitcher";
 import { useAuthStore } from "@/store/authStore";
 import { useQuery } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
@@ -56,18 +59,24 @@ interface SidebarProps {
   onToggle: () => void;
 }
 
+type NavLabelKey = keyof LayoutResources["nav"];
+
 interface NavSubItem {
   to: string;
   mode: "manual" | "excel";
   icon: React.ComponentType<{ className?: string }>;
+  /** English label; also the item's stable id. Shown as-is when there is no labelKey (admin-only items). */
   label: string;
+  labelKey?: NavLabelKey;
 }
 
 interface NavItem {
   to: string;
   basePath?: string;
   icon: React.ComponentType<{ className?: string }>;
+  /** English label; also the item's stable id. Shown as-is when there is no labelKey (admin-only items). */
   label: string;
+  labelKey?: NavLabelKey;
   children?: NavSubItem[];
 }
 
@@ -84,30 +93,32 @@ export interface NotificationItem {
 
 // Admin portal navigation
 const adminMainNav: NavItem[] = [
-  { to: "/overview", icon: LayoutDashboard, label: "Overview" },
+  { to: "/overview", icon: LayoutDashboard, label: "Overview", labelKey: "overview" },
   {
     icon: FileText,
     label: "Purchase Orders",
+    labelKey: "purchaseOrders",
     basePath: "/purchase-orders",
     to: "/purchase-orders/manual",
     children: [
-      { to: "/purchase-orders/manual", mode: "manual", icon: Layers, label: "Manual Process" },
-      { to: "/purchase-orders/excel", mode: "excel", icon: FileSpreadsheet, label: "Excel Drop" },
+      { to: "/purchase-orders/manual", mode: "manual", icon: Layers, label: "Manual Process", labelKey: "manualProcess" },
+      { to: "/purchase-orders/excel", mode: "excel", icon: FileSpreadsheet, label: "Excel Drop", labelKey: "excelDrop" },
     ],
   },
   {
     icon: ListOrdered,
     label: "Purchase Order Lines",
+    labelKey: "purchaseOrderLines",
     basePath: "/purchase-order-lines",
     to: "/purchase-order-lines/manual",
     children: [
-      { to: "/purchase-order-lines/manual", mode: "manual", icon: Layers, label: "Manual Process" },
-      { to: "/purchase-order-lines/excel", mode: "excel", icon: FileSpreadsheet, label: "Excel Drop" },
+      { to: "/purchase-order-lines/manual", mode: "manual", icon: Layers, label: "Manual Process", labelKey: "manualProcess" },
+      { to: "/purchase-order-lines/excel", mode: "excel", icon: FileSpreadsheet, label: "Excel Drop", labelKey: "excelDrop" },
     ],
   },
-  { to: "/drafts", icon: FileEdit, label: "Drafts" },
-  { to: "/shipments", icon: PackagePlus, label: "Shipments" },
-  { to: "/order-history", icon: History, label: "Order History" },
+  { to: "/drafts", icon: FileEdit, label: "Drafts", labelKey: "drafts" },
+  { to: "/shipments", icon: PackagePlus, label: "Shipments", labelKey: "shipments" },
+  { to: "/order-history", icon: History, label: "Order History", labelKey: "orderHistory" },
   { to: "/emails", icon: Mail, label: "Email Inbox" },
   { to: "/suppliers", icon: Truck, label: "Suppliers" },
 ];
@@ -122,32 +133,34 @@ const supplierMainNav: NavItem[] = [
   {
     icon: FileText,
     label: "Purchase Orders",
+    labelKey: "purchaseOrders",
     basePath: "/purchase-orders",
     to: "/purchase-orders/manual",
     children: [
-      { to: "/purchase-orders/manual", mode: "manual", icon: Layers, label: "Manual Process" },
-      { to: "/purchase-orders/excel", mode: "excel", icon: FileSpreadsheet, label: "Excel Drop" },
+      { to: "/purchase-orders/manual", mode: "manual", icon: Layers, label: "Manual Process", labelKey: "manualProcess" },
+      { to: "/purchase-orders/excel", mode: "excel", icon: FileSpreadsheet, label: "Excel Drop", labelKey: "excelDrop" },
     ],
   },
   {
     icon: ListOrdered,
     label: "Purchase Order Lines",
+    labelKey: "purchaseOrderLines",
     basePath: "/purchase-order-lines",
     to: "/purchase-order-lines/manual",
     children: [
-      { to: "/purchase-order-lines/manual", mode: "manual", icon: Layers, label: "Manual Process" },
-      { to: "/purchase-order-lines/excel", mode: "excel", icon: FileSpreadsheet, label: "Excel Drop" },
+      { to: "/purchase-order-lines/manual", mode: "manual", icon: Layers, label: "Manual Process", labelKey: "manualProcess" },
+      { to: "/purchase-order-lines/excel", mode: "excel", icon: FileSpreadsheet, label: "Excel Drop", labelKey: "excelDrop" },
     ],
   },
-  { to: "/drafts", icon: FileEdit, label: "Drafts" },
-  { to: "/shipments", icon: PackagePlus, label: "Shipments" },
-  { to: "/order-history", icon: History, label: "Order History" },
-  { to: "/overview", icon: LayoutDashboard, label: "Overview" },
-  { to: "/emails", icon: Mail, label: "My Emails" },
+  { to: "/drafts", icon: FileEdit, label: "Drafts", labelKey: "drafts" },
+  { to: "/shipments", icon: PackagePlus, label: "Shipments", labelKey: "shipments" },
+  { to: "/order-history", icon: History, label: "Order History", labelKey: "orderHistory" },
+  { to: "/overview", icon: LayoutDashboard, label: "Overview", labelKey: "overview" },
+  { to: "/emails", icon: Mail, label: "My Emails", labelKey: "myEmails" },
 ];
 
 const supplierSettingsNav: NavItem[] = [
-  { to: "/profile", icon: UserCircle, label: "Profile" },
+  { to: "/profile", icon: UserCircle, label: "Profile", labelKey: "profile" },
 ];
 
 function matchesBasePath(pathname: string, basePath: string): boolean {
@@ -155,6 +168,9 @@ function matchesBasePath(pathname: string, basePath: string): boolean {
 }
 
 export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
+  const { t } = useTranslation(["layout", "common"]);
+  const navLabel = (item: { label: string; labelKey?: NavLabelKey }) =>
+    item.labelKey ? t(`layout:nav.${item.labelKey}`) : item.label;
   const navigate = useNavigate();
   const location = useLocation();
   const user = useAuthStore((s) => s.user);
@@ -298,7 +314,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
     const pos = poData?.items || [];
     pos.forEach((po) => {
       const notifId = `po-${po.id}`;
-      let timeFormatted = "Recently";
+      let timeFormatted = t("layout:notifications.recently");
       try {
         const d = new Date(po.created_at || po.delivery_date || "");
         if (!isNaN(d.getTime())) {
@@ -308,8 +324,11 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
       notifs.push({
         id: notifId,
-        title: "New Purchase Order Assigned",
-        desc: `PO ${po.po_number || "Order"} assigned to your account (${(po.quantity ?? 0).toLocaleString()} units)`,
+        title: t("layout:notifications.newPoAssigned"),
+        desc: t("layout:notifications.newPoAssignedDesc", {
+          poNumber: po.po_number || t("layout:notifications.orderFallback"),
+          quantity: (po.quantity ?? 0).toLocaleString(),
+        }),
         time: timeFormatted,
         unread: !readNotifIds.includes(notifId),
         to: "/purchase-orders",
@@ -319,7 +338,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
     });
 
     return notifs;
-  }, [poData, readNotifIds]);
+  }, [poData, readNotifIds, t]);
 
   const notifications: NotificationItem[] = isAdmin ? adminNotifications : supplierNotifications;
 
@@ -454,7 +473,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
               ASN Platform
             </span>
             <span className="text-xs text-slate-500 truncate">
-              {isAdmin ? "Admin Portal" : "Supplier Portal"}
+              {isAdmin ? "Admin Portal" : t("layout:sidebar.supplierPortal")}
             </span>
           </div>
         )}
@@ -465,7 +484,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         <div className={cn("mb-2", !collapsed && "px-2")}>
           {!collapsed && (
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-              Main
+              {t("layout:nav.main")}
             </span>
           )}
         </div>
@@ -502,11 +521,11 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                         : "bg-emerald-50 text-emerald-700 font-semibold"
                       : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                   )}
-                  title={collapsed ? item.label : undefined}
+                  title={collapsed ? navLabel(item) : undefined}
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <item.icon className="h-5 w-5 flex-shrink-0" />
-                    {!collapsed && <span className="truncate">{item.label}</span>}
+                    {!collapsed && <span className="truncate">{navLabel(item)}</span>}
                   </div>
                   {!collapsed && (
                     <ChevronDown
@@ -538,7 +557,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                           )}
                         >
                           <sub.icon className="h-3.5 w-3.5 flex-shrink-0" />
-                          <span>{sub.label}</span>
+                          <span>{navLabel(sub)}</span>
                         </NavLink>
                       );
                     })}
@@ -561,11 +580,11 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                     : "bg-emerald-50 text-emerald-700 font-semibold"
                   : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
               )}
-              title={collapsed ? item.label : undefined}
+              title={collapsed ? navLabel(item) : undefined}
             >
               <div className="flex items-center gap-3">
                 <item.icon className="h-5 w-5 flex-shrink-0" />
-                {!collapsed && <span>{item.label}</span>}
+                {!collapsed && <span>{navLabel(item)}</span>}
               </div>
               {!collapsed && isDraftItem && draftCount > 0 && (
                 <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-brand-50 text-brand-700 border border-brand-200">
@@ -580,7 +599,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         <div className={cn("mb-2 mt-6", !collapsed && "px-2")}>
           {!collapsed && (
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-              {isAdmin ? "Settings" : "Account"}
+              {isAdmin ? "Settings" : t("layout:nav.account")}
             </span>
           )}
         </div>
@@ -596,10 +615,10 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   : "bg-emerald-50 text-emerald-700 font-semibold"
                 : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
             )}
-            title={collapsed ? item.label : undefined}
+            title={collapsed ? navLabel(item) : undefined}
           >
             <item.icon className="h-5 w-5 flex-shrink-0" />
-            {!collapsed && <span>{item.label}</span>}
+            {!collapsed && <span>{navLabel(item)}</span>}
           </NavLink>
         ))}
       </nav>
@@ -621,11 +640,11 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
               <div className="flex items-center gap-2">
                 <Bell className="w-4 h-4 text-blue-600" />
                 <h3 className="text-xs font-bold text-slate-900">
-                  {isAdmin ? "Notifications" : "Alerts"}
+                  {isAdmin ? "Notifications" : t("layout:notifications.alerts")}
                 </h3>
                 {unreadCount > 0 && (
                   <span className="px-2 py-0.5 text-[10px] font-bold bg-blue-100 text-blue-700 rounded-full border border-blue-200">
-                    {unreadCount} new
+                    {t("layout:notifications.newCount", { count: unreadCount })}
                   </span>
                 )}
               </div>
@@ -635,7 +654,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                     onClick={handleMarkAllRead}
                     className="text-[11px] font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1 cursor-pointer"
                   >
-                    <CheckCheck className="w-3.5 h-3.5" /> Mark all read
+                    <CheckCheck className="w-3.5 h-3.5" /> {t("layout:notifications.markAllRead")}
                   </button>
                 )}
                 <button
@@ -654,7 +673,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   <div className="w-8 h-8 mx-auto rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mb-1.5">
                     <CheckCheck className="w-4 h-4" />
                   </div>
-                  <p className="text-xs font-medium text-slate-600">No unread notifications</p>
+                  <p className="text-xs font-medium text-slate-600">{t("layout:notifications.noUnread")}</p>
                 </div>
               ) : (
                 activeNotifications.map((item) => {
@@ -684,7 +703,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                           e.stopPropagation();
                           handleDismissNotif(item.id);
                         }}
-                        title="Mark as read"
+                        title={t("layout:notifications.markAsRead")}
                         className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all shrink-0 rounded"
                       >
                         <Check className="w-3 h-3" />
@@ -704,7 +723,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 }}
                 className="text-xs font-semibold text-blue-600 hover:text-blue-700 inline-flex items-center gap-1 cursor-pointer"
               >
-                {isAdmin ? "Manage All Suppliers" : "View My Orders"} <ArrowRight className="w-3 h-3" />
+                {isAdmin ? "Manage All Suppliers" : t("layout:notifications.viewMyOrders")} <ArrowRight className="w-3 h-3" />
               </button>
             </div>
           </div>
@@ -736,23 +755,25 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   ) : (
                     <>
                       <p className="text-xs font-bold font-mono text-slate-900 truncate">
-                        {user?.supplier_code || "Supplier"}
+                        {user?.supplier_code || t("layout:user.supplier")}
                       </p>
                       <p className="text-[11px] text-slate-500 truncate" title={user?.supplier_name || user?.name || undefined}>
-                        {user?.supplier_name || user?.name || "Supplier Partner"}
+                        {user?.supplier_name || user?.name || t("layout:user.supplierPartner")}
                       </p>
                     </>
                   )}
                 </div>
               </div>
 
-              {/* Action Icons: Notification Bell + Sign Out */}
+              {/* Action Icons: Language + Notification Bell + Sign Out */}
               <div className="flex items-center gap-1 shrink-0">
+                <LanguageSwitcher />
+
                 <button
                   type="button"
                   onClick={() => setNotifOpen(!notifOpen)}
                   className="relative p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-200/60 transition-colors cursor-pointer"
-                  title="Notifications"
+                  title={t("layout:notifications.title")}
                 >
                   <Bell className="w-4 h-4" />
                   {unreadCount > 0 && (
@@ -771,7 +792,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   type="button"
                   onClick={() => setShowLogoutConfirm(true)}
                   className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                  title="Sign Out"
+                  title={t("common:actions.signOut")}
                 >
                   <LogOut className="w-4 h-4" />
                 </button>
@@ -786,16 +807,18 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 "flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold text-white shadow-xs cursor-pointer",
                 isAdmin ? "bg-blue-600" : "bg-emerald-600"
               )}
-              title={user?.name || user?.supplier_name || "Profile"}
+              title={user?.name || user?.supplier_name || t("layout:nav.profile")}
             >
               {(user?.supplier_name || user?.name || (isAdmin ? "Admin" : "Supplier")).charAt(0).toUpperCase()}
             </div>
+
+            <LanguageSwitcher collapsed />
 
             <button
               type="button"
               onClick={() => setNotifOpen(!notifOpen)}
               className="relative p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-200/60 transition-colors cursor-pointer"
-              title="Notifications"
+              title={t("layout:notifications.title")}
             >
               <Bell className="w-4 h-4" />
               {unreadCount > 0 && (
@@ -814,7 +837,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
               type="button"
               onClick={() => setShowLogoutConfirm(true)}
               className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-              title="Sign Out"
+              title={t("common:actions.signOut")}
             >
               <LogOut className="w-4 h-4" />
             </button>
@@ -826,7 +849,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       <button
         onClick={onToggle}
         className="flex h-10 items-center justify-center border-t border-slate-200 text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors shrink-0 cursor-pointer"
-        title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        title={collapsed ? t("layout:sidebar.expand") : t("layout:sidebar.collapse")}
       >
         {collapsed ? (
           <ChevronRight className="h-4 w-4" />
@@ -848,10 +871,10 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
             <div>
               <h3 className="text-lg font-bold text-gray-900">
-                Sign Out
+                {t("layout:signOut.title")}
               </h3>
               <p className="mt-2 text-sm text-gray-500 leading-relaxed">
-                Are you sure you want to end your current session?
+                {t("layout:signOut.confirmMessage")}
               </p>
 
               <div className="mt-6 flex items-center justify-end gap-3">
@@ -860,14 +883,14 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   onClick={() => setShowLogoutConfirm(false)}
                   className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
                 >
-                  Cancel
+                  {t("common:actions.cancel")}
                 </button>
                 <button
                   type="button"
                   onClick={handleConfirmLogout}
                   className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-700 active:bg-red-800 transition-colors cursor-pointer"
                 >
-                  Sign Out
+                  {t("common:actions.signOut")}
                 </button>
               </div>
             </div>

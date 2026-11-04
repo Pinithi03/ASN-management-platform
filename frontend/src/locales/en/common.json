@@ -1,0 +1,7 @@
+{
+  "actions": {
+    "cancel": "Cancel",
+    "signOut": "Sign Out",
+    "tryAgain": "Try again"
+  }
+}

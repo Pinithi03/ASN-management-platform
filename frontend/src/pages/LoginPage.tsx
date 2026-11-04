@@ -2,11 +2,11 @@
  * Login is handled directly by Keycloak.
  */
 import { useEffect } from "react";
-import { keycloak } from "@/lib/keycloak";
+import { login } from "@/lib/keycloak";
 
 export default function LoginPage() {
   useEffect(() => {
-    keycloak.login();
+    login();
   }, []);
 
   return (

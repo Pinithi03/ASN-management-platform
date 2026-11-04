@@ -1,0 +1,50 @@
+{
+  "auth": {
+    "couldNotConnect": "Impossibile connettersi al server di accesso.",
+    "signingIn": "Accesso in corso…",
+    "unableToSignIn": "Impossibile accedere"
+  },
+  "language": {
+    "change": "Cambia lingua"
+  },
+  "nav": {
+    "account": "Account",
+    "drafts": "Bozze",
+    "excelDrop": "Caricamento Excel",
+    "main": "Principale",
+    "manualProcess": "Processo manuale",
+    "myEmails": "Le mie email",
+    "orderHistory": "Storico ordini",
+    "overview": "Panoramica",
+    "profile": "Profilo",
+    "purchaseOrderLines": "Righe ordine d'acquisto",
+    "purchaseOrders": "Ordini d'acquisto",
+    "shipments": "Spedizioni"
+  },
+  "notifications": {
+    "alerts": "Avvisi",
+    "markAllRead": "Segna tutto come letto",
+    "markAsRead": "Segna come letto",
+    "newCount": "{{count}} nuovi",
+    "newPoAssigned": "Nuovo ordine d'acquisto assegnato",
+    "newPoAssignedDesc": "PO {{poNumber}} assegnato al tuo account ({{quantity}} unità)",
+    "noUnread": "Nessuna notifica non letta",
+    "orderFallback": "Ordine",
+    "recently": "Di recente",
+    "title": "Notifiche",
+    "viewMyOrders": "Visualizza i miei ordini"
+  },
+  "sidebar": {
+    "collapse": "Comprimi barra laterale",
+    "expand": "Espandi barra laterale",
+    "supplierPortal": "Portale fornitori"
+  },
+  "signOut": {
+    "confirmMessage": "Vuoi davvero terminare la sessione corrente?",
+    "title": "Esci"
+  },
+  "user": {
+    "supplier": "Fornitore",
+    "supplierPartner": "Partner fornitore"
+  }
+}

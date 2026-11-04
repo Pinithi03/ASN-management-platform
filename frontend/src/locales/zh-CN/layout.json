@@ -1,0 +1,50 @@
+{
+  "auth": {
+    "couldNotConnect": "无法连接到登录服务器。",
+    "signingIn": "正在登录…",
+    "unableToSignIn": "无法登录"
+  },
+  "language": {
+    "change": "切换语言"
+  },
+  "nav": {
+    "account": "账户",
+    "drafts": "草稿",
+    "excelDrop": "Excel 导入",
+    "main": "主菜单",
+    "manualProcess": "手动处理",
+    "myEmails": "我的邮件",
+    "orderHistory": "订单历史",
+    "overview": "概览",
+    "profile": "个人资料",
+    "purchaseOrderLines": "采购订单行",
+    "purchaseOrders": "采购订单",
+    "shipments": "发运"
+  },
+  "notifications": {
+    "alerts": "提醒",
+    "markAllRead": "全部标为已读",
+    "markAsRead": "标为已读",
+    "newCount": "{{count}} 条新消息",
+    "newPoAssigned": "已分配新的采购订单",
+    "newPoAssignedDesc": "PO {{poNumber}} 已分配到您的账户（{{quantity}} 件）",
+    "noUnread": "没有未读通知",
+    "orderFallback": "订单",
+    "recently": "最近",
+    "title": "通知",
+    "viewMyOrders": "查看我的订单"
+  },
+  "sidebar": {
+    "collapse": "收起侧边栏",
+    "expand": "展开侧边栏",
+    "supplierPortal": "供应商门户"
+  },
+  "signOut": {
+    "confirmMessage": "确定要结束当前会话吗？",
+    "title": "退出登录"
+  },
+  "user": {
+    "supplier": "供应商",
+    "supplierPartner": "供应商合作伙伴"
+  }
+}

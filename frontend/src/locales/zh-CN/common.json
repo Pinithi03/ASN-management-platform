@@ -1,0 +1,7 @@
+{
+  "actions": {
+    "cancel": "取消",
+    "signOut": "退出登录",
+    "tryAgain": "重试"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "actions": {
+    "cancel": "Annulla",
+    "signOut": "Esci",
+    "tryAgain": "Riprova"
+  }
+}
