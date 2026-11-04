@@ -1501,6 +1501,32 @@ function WebPackingWizard({
     );
   };
 
+  const copyGrossWeightToAllCartons = (itemId: string, grossWeight: number) => {
+    if (grossWeight == null || isNaN(grossWeight) || grossWeight <= 0) return;
+    setPackedItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== itemId) return item;
+        return {
+          ...item,
+          boxes: item.boxes.map((b) => ({ ...b, gross_weight: grossWeight })),
+        };
+      })
+    );
+  };
+
+  const copyNetWeightToAllCartons = (itemId: string, netWeight: number) => {
+    if (netWeight == null || isNaN(netWeight) || netWeight <= 0) return;
+    setPackedItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== itemId) return item;
+        return {
+          ...item,
+          boxes: item.boxes.map((b) => ({ ...b, net_weight: netWeight })),
+        };
+      })
+    );
+  };
+
   const handleProceedToReview = () => {
     // If packingSlipNumber is empty, look for the first carton pack_number entered in table
     if (!packingSlipNumber.trim()) {
@@ -1524,10 +1550,7 @@ function WebPackingWizard({
           alert(`Carton ${bIdx + 1} for item ${item.item_code} has 0 or invalid quantity.`);
           return;
         }
-        if (!box.batch_code || !box.batch_code.trim()) {
-          alert(`Carton ${bIdx + 1} for item ${item.item_code}: Batch / Lot number is mandatory.`);
-          return;
-        }
+        // Batch / Lot is optional (defaults to DEFAULT in payload if omitted)
         const gw = box.gross_weight != null && !isNaN(Number(box.gross_weight)) ? Number(box.gross_weight) : null;
         const nw = box.net_weight != null && !isNaN(Number(box.net_weight)) ? Number(box.net_weight) : null;
 
@@ -2175,10 +2198,10 @@ function WebPackingWizard({
                           <th className="py-1.5 px-2 min-w-[170px] whitespace-nowrap border-r border-zinc-600">20-digit HU Number</th>
                           <th className="py-1.5 px-2 text-right w-24 whitespace-nowrap border-r border-zinc-600">Qty ({item.uom || "M"})</th>
                           <th className="py-1.5 px-2 text-left w-36 whitespace-nowrap border-r border-zinc-600">
-                            Batch / Lot <span className="text-red-400">*</span>
+                            Batch / Lot
                           </th>
-                          <th className="py-1.5 px-2 text-right w-28 whitespace-nowrap border-r border-zinc-600">Gross Wt (kg)</th>
-                          <th className="py-1.5 px-2 text-right w-28 whitespace-nowrap border-r border-zinc-600">Net Wt (kg)</th>
+                          <th className="py-1.5 px-2 text-left w-36 whitespace-nowrap border-r border-zinc-600">Gross Wt (kg)</th>
+                          <th className="py-1.5 px-2 text-left w-36 whitespace-nowrap border-r border-zinc-600">Net Wt (kg)</th>
                           {visibleColumns.supplier_ref && <th className="py-1.5 px-2 w-32 whitespace-nowrap border-r border-zinc-600">Supplier Carton Ref</th>}
                           {visibleColumns.width && <th className="py-1.5 px-2 text-right w-24 whitespace-nowrap border-r border-zinc-600">Width</th>}
                           {visibleColumns.pack_no && <th className="py-1.5 px-2 w-28 whitespace-nowrap border-r border-zinc-600">Packing Slip No.</th>}
@@ -2244,41 +2267,65 @@ function WebPackingWizard({
                             </td>
 
                             {/* 5. Gross Weight (Mandatory) */}
-                            <td className="py-1 px-2 text-right whitespace-nowrap border-r border-gray-200">
-                              <input
-                                type="number"
-                                step="0.01"
-                                min="0.01"
-                                value={box.gross_weight !== null && box.gross_weight !== undefined ? box.gross_weight : ""}
-                                onChange={(e) =>
-                                  updateBox(item.id, idx, {
-                                    gross_weight: e.target.value === "" ? null : parseFloat(e.target.value) || 0,
-                                  })
-                                }
-                                placeholder="0.00"
-                                className={`w-24 h-6 px-1.5 text-xs text-right bg-white border rounded font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none ${
-                                  typeof box.gross_weight === "number" && typeof box.net_weight === "number" && box.gross_weight <= box.net_weight
-                                    ? "border-red-400 bg-red-50 text-red-700"
-                                    : "border-gray-300"
-                                }`}
-                              />
+                            <td className="py-1 px-2 whitespace-nowrap border-r border-gray-200">
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0.01"
+                                  value={box.gross_weight !== null && box.gross_weight !== undefined ? box.gross_weight : ""}
+                                  onChange={(e) =>
+                                    updateBox(item.id, idx, {
+                                      gross_weight: e.target.value === "" ? null : parseFloat(e.target.value) || 0,
+                                    })
+                                  }
+                                  placeholder="0.00"
+                                  className={`w-20 h-6 px-1.5 text-xs text-right bg-white border rounded font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none ${
+                                    typeof box.gross_weight === "number" && typeof box.net_weight === "number" && box.gross_weight <= box.net_weight
+                                      ? "border-red-400 bg-red-50 text-red-700"
+                                      : "border-gray-300"
+                                  }`}
+                                />
+                                {item.boxes.length > 1 && idx === 0 && box.gross_weight != null && !isNaN(Number(box.gross_weight)) && Number(box.gross_weight) > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => copyGrossWeightToAllCartons(item.id, Number(box.gross_weight))}
+                                    className="px-1.5 py-0.5 text-[10px] bg-gray-100 hover:bg-blue-50 text-gray-600 hover:text-blue-700 rounded border border-gray-200 transition-colors cursor-pointer shrink-0 font-medium"
+                                    title="Copy this gross weight to all cartons of this line item"
+                                  >
+                                    All ↓
+                                  </button>
+                                )}
+                              </div>
                             </td>
 
                             {/* 6. Net Weight (Mandatory) */}
-                            <td className="py-1 px-2 text-right whitespace-nowrap border-r border-gray-200">
-                              <input
-                                type="number"
-                                step="0.01"
-                                min="0.01"
-                                value={box.net_weight !== null && box.net_weight !== undefined ? box.net_weight : ""}
-                                onChange={(e) =>
-                                  updateBox(item.id, idx, {
-                                    net_weight: e.target.value === "" ? null : parseFloat(e.target.value) || 0,
-                                  })
-                                }
-                                placeholder="0.00"
-                                className="w-24 h-6 px-1.5 text-xs text-right bg-white border border-gray-300 rounded font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
-                              />
+                            <td className="py-1 px-2 whitespace-nowrap border-r border-gray-200">
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0.01"
+                                  value={box.net_weight !== null && box.net_weight !== undefined ? box.net_weight : ""}
+                                  onChange={(e) =>
+                                    updateBox(item.id, idx, {
+                                      net_weight: e.target.value === "" ? null : parseFloat(e.target.value) || 0,
+                                    })
+                                  }
+                                  placeholder="0.00"
+                                  className="w-20 h-6 px-1.5 text-xs text-right bg-white border border-gray-300 rounded font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                                />
+                                {item.boxes.length > 1 && idx === 0 && box.net_weight != null && !isNaN(Number(box.net_weight)) && Number(box.net_weight) > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => copyNetWeightToAllCartons(item.id, Number(box.net_weight))}
+                                    className="px-1.5 py-0.5 text-[10px] bg-gray-100 hover:bg-blue-50 text-gray-600 hover:text-blue-700 rounded border border-gray-200 transition-colors cursor-pointer shrink-0 font-medium"
+                                    title="Copy this net weight to all cartons of this line item"
+                                  >
+                                    All ↓
+                                  </button>
+                                )}
+                              </div>
                               {typeof box.gross_weight === "number" && typeof box.net_weight === "number" && box.gross_weight <= box.net_weight && (
                                 <span className="text-[10px] text-red-600 font-bold block mt-0.5">GW &le; NW!</span>
                               )}
