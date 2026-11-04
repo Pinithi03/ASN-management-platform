@@ -506,16 +506,11 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
     if (selectedLineMap.size === 0) return;
     const suppCode = user?.supplier_code || "0000018194";
     const selectedItems = Array.from(selectedLineMap.values());
-    const minDelivery =
-      selectedItems
-        .map((i) => i.delivery_date || "")
-        .filter(Boolean)
-        .sort()[0] || "";
 
     if (activeMode === "excel") {
       saveExcelDraft(suppCode, selectedUniquePOs, {
         plantCode: selectedItems[0]?.plant_code || KNOWN_PLANTS[selectedPlant]?.defaultCode || "PPA1",
-        estimatedArrival: minDelivery,
+        estimatedArrival: "",
         packingSlipNumber: "",
         packingSlipDates: {},
         validationResult: null,
@@ -546,7 +541,7 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
         packedItems: [],
         startingSeq: 1,
         packingSlipNumber: "",
-        deliveryDate: minDelivery,
+        deliveryDate: "",
       });
     }
 

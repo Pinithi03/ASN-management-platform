@@ -710,6 +710,7 @@ function WebPackingWizard({
   const [startingSeq, setStartingSeq] = useState<number>(1);
   const [packingSlipNumber, setPackingSlipNumber] = useState("");
   const [deliveryDate, setDeliveryDate] = useState("");
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const [copiedHu, setCopiedHu] = useState<string | null>(null);
 
   const [splitConfigs, setSplitConfigs] = useState<Record<string, { mode: "qty" | "count"; value: string }>>({});
@@ -1263,16 +1264,8 @@ function WebPackingWizard({
         }));
       });
 
-      // Default Delivery Date from PO XML delivery_date if not set from draft
-      setDeliveryDate((prev) => {
-        if (prev) return prev;
-        const rawDate = openLinesData.find((l) => l.delivery_date)?.delivery_date;
-        if (rawDate) {
-          const formatted = rawDate.includes("T") ? rawDate.split("T")[0] : rawDate;
-          if (/^\d{4}-\d{2}-\d{2}$/.test(formatted)) return formatted;
-        }
-        return new Date(Date.now() + 86400000).toISOString().split("T")[0];
-      });
+      // Do not default Delivery Date from PO - supplier must pick the delivery date
+      setDeliveryDate((prev) => prev || "");
     }
   }, [openLinesData]);
 
@@ -1765,27 +1758,29 @@ function WebPackingWizard({
                         alert("You are currently offline. Please reconnect to the internet before sending the ASN to IUNGO.");
                         return;
                       }
+                      setAttemptedSubmit(true);
                       const trimmedPs = packingSlipNumber.trim();
-                      if (!trimmedPs) {
-                        alert("Please enter Packing Slip / Delivery Note Number before dispatching.");
+                      const trimmedDate = deliveryDate.trim();
+                      if (!trimmedPs && !trimmedDate) {
+                        alert("Please enter Packing Slip Number and select Delivery Date before sending to IUNGO.");
+                        document.getElementById("wizard-ps-number")?.focus();
                         return;
                       }
-                      const trimmedDate = deliveryDate.trim();
+                      if (!trimmedPs) {
+                        alert("Please enter Packing Slip / Delivery Note Number before dispatching.");
+                        document.getElementById("wizard-ps-number")?.focus();
+                        return;
+                      }
                       if (!trimmedDate) {
-                        alert("Please enter or select Delivery Date before dispatching.");
+                        alert("Please select Delivery Date before dispatching.");
+                        document.getElementById("wizard-delivery-date")?.focus();
                         return;
                       }
                       setShowConfirmDispatch(true);
                     }}
-                    disabled={isSubmitting || !packingSlipNumber.trim() || !deliveryDate.trim()}
+                    disabled={isSubmitting}
                     className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
-                    title={
-                      !packingSlipNumber.trim()
-                        ? "Please enter Packing Slip Number before sending"
-                        : !deliveryDate.trim()
-                        ? "Please select Delivery Date before sending"
-                        : "Send to IUNGO"
-                    }
+                    title="Send to IUNGO"
                   >
                     {isSubmitting ? (
                       <>
@@ -2486,7 +2481,12 @@ function WebPackingWizard({
                 placeholder="e.g. 01007907"
                 value={packingSlipNumber}
                 onChange={(e) => setPackingSlipNumber(e.target.value)}
-                className="h-7 px-2 text-xs font-mono font-bold rounded border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400 outline-none shadow-2xs w-36"
+                className={cn(
+                  "h-7 px-2 text-xs font-mono font-bold rounded border bg-white outline-none shadow-2xs w-36 transition-all",
+                  attemptedSubmit && !packingSlipNumber.trim()
+                    ? "border-red-500 ring-2 ring-red-200 bg-red-50/40"
+                    : "border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400"
+                )}
               />
             </div>
 
@@ -2503,7 +2503,12 @@ function WebPackingWizard({
                 disabled={Boolean(submitSuccessResult)}
                 value={deliveryDate}
                 onChange={(e) => setDeliveryDate(e.target.value)}
-                className="h-7 px-2 text-xs font-mono font-bold rounded border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400 outline-none shadow-2xs cursor-pointer"
+                className={cn(
+                  "h-7 px-2 text-xs font-mono font-bold rounded border bg-white outline-none shadow-2xs cursor-pointer transition-all",
+                  attemptedSubmit && !deliveryDate.trim()
+                    ? "border-red-500 ring-2 ring-red-200 bg-red-50/40"
+                    : "border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400"
+                )}
               />
             </div>
           </div>
@@ -2729,6 +2734,7 @@ function ExcelPackingWorkflow({
   const [estimatedArrival, setEstimatedArrival] = useState("");
   const [packingSlipNumber, setPackingSlipNumber] = useState("");
   const [packingSlipDates, setPackingSlipDates] = useState<Record<string, string>>({});
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const [startingSeq, setStartingSeq] = useState<number>(1);
 
   // Synchronize next sequential HU sequence for supplier
@@ -2976,7 +2982,7 @@ function ExcelPackingWorkflow({
       setPoLines(fetchedLines);
       setPoConfigs(newConfigs);
       setSelectedLines(newSelected);
-      if (minDate && !estimatedArrival) setEstimatedArrival(minDate);
+      // Do not default Delivery Date from PO - supplier must pick or Excel provides it
       if (pCode && !plantCode) setPlantCode(pCode);
     };
 
@@ -3310,15 +3316,6 @@ function ExcelPackingWorkflow({
     }
   };
 
-  const isDatesComplete = useMemo(() => {
-    if (detectedPackingSlips.length > 1) {
-      return detectedPackingSlips.every((ps) => Boolean(packingSlipDates[ps]?.trim()));
-    }
-    const singleDate = estimatedArrival?.trim() || (detectedPackingSlips[0] ? packingSlipDates[detectedPackingSlips[0]]?.trim() : "");
-    const singlePs = packingSlipNumber.trim() || (detectedPackingSlips[0] ? detectedPackingSlips[0] : "");
-    return Boolean(singleDate && singlePs);
-  }, [detectedPackingSlips, packingSlipDates, estimatedArrival, packingSlipNumber]);
-
   return (
     <div
       onDragEnter={!createdResponse && !validationResult ? handleDrag : undefined}
@@ -3396,7 +3393,12 @@ function ExcelPackingWorkflow({
                       }
                     }}
                     placeholder="e.g. 01007907"
-                    className="h-8 px-2.5 text-xs font-mono font-bold rounded-lg border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400 outline-none shadow-2xs w-36 disabled:bg-slate-100 disabled:text-slate-500"
+                    className={cn(
+                      "h-8 px-2.5 text-xs font-mono font-bold rounded-lg border bg-white outline-none shadow-2xs w-36 disabled:bg-slate-100 disabled:text-slate-500 transition-all",
+                      attemptedSubmit && !packingSlipNumber.trim() && detectedPackingSlips.length === 0
+                        ? "border-red-500 ring-2 ring-red-200 bg-red-50/40"
+                        : "border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400"
+                    )}
                   />
                 </div>
               )}
@@ -3422,7 +3424,12 @@ function ExcelPackingWorkflow({
                           [targetKey]: val,
                         }));
                       }}
-                      className="h-8 px-2.5 text-xs font-mono font-bold rounded-lg border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400 outline-none shadow-2xs cursor-pointer disabled:bg-slate-100 disabled:text-slate-500"
+                      className={cn(
+                        "h-8 px-2.5 text-xs font-mono font-bold rounded-lg border bg-white outline-none shadow-2xs cursor-pointer disabled:bg-slate-100 disabled:text-slate-500 transition-all",
+                        attemptedSubmit && !(estimatedArrival?.trim() || (detectedPackingSlips[0] ? packingSlipDates[detectedPackingSlips[0]]?.trim() : ""))
+                          ? "border-red-500 ring-2 ring-red-200 bg-red-50/40"
+                          : "border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400"
+                      )}
                     />
                   </div>
                 </>
@@ -3461,7 +3468,7 @@ function ExcelPackingWorkflow({
             ) : (
               <button
                 type="button"
-                disabled={submitting || !validationResult.is_valid || !isDatesComplete}
+                disabled={submitting || (validationResult && !validationResult.is_valid)}
                 onClick={() => {
                   if (!isOnline) {
                     alert("You are currently offline. Please reconnect to the network before sending the ASN to IUNGO.");
@@ -3471,6 +3478,11 @@ function ExcelPackingWorkflow({
                     alert("Please upload or select the validated Excel file before creating the shipment.");
                     return;
                   }
+                  if (!validationResult.is_valid) {
+                    alert("Please resolve Excel validation errors before sending to IUNGO.");
+                    return;
+                  }
+                  setAttemptedSubmit(true);
                   const isMultiSlip = detectedPackingSlips.length > 1;
                   if (isMultiSlip) {
                     const missing = detectedPackingSlips.filter((ps) => !packingSlipDates[ps]?.trim());
@@ -3480,12 +3492,20 @@ function ExcelPackingWorkflow({
                     }
                   } else {
                     const singleDate = estimatedArrival?.trim() || (detectedPackingSlips[0] ? packingSlipDates[detectedPackingSlips[0]]?.trim() : "");
-                    if (!singleDate) {
-                      alert("Please select a Delivery Date before creating the shipment.");
+                    const singlePs = packingSlipNumber.trim() || (detectedPackingSlips[0] ? detectedPackingSlips[0] : "");
+                    if (!singlePs && !singleDate) {
+                      alert("Please enter Packing Slip Number and select Delivery Date before creating the shipment.");
+                      document.getElementById("excel-ps-number")?.focus();
                       return;
                     }
-                    if (!packingSlipNumber.trim() && detectedPackingSlips.length === 0) {
+                    if (!singlePs) {
                       alert("Please enter a Packing Slip Number before creating the shipment.");
+                      document.getElementById("excel-ps-number")?.focus();
+                      return;
+                    }
+                    if (!singleDate) {
+                      alert("Please select a Delivery Date before creating the shipment.");
+                      document.getElementById("excel-delivery-date")?.focus();
                       return;
                     }
                   }
@@ -3495,12 +3515,6 @@ function ExcelPackingWorkflow({
                 title={
                   !validationResult.is_valid
                     ? "Please fix Excel validation errors before sending"
-                    : detectedPackingSlips.length > 1 && !isDatesComplete
-                    ? "Please select a Delivery Date for each Packing Slip"
-                    : !packingSlipNumber.trim() && detectedPackingSlips.length === 0
-                    ? "Please enter Packing Slip Number before sending"
-                    : !estimatedArrival.trim()
-                    ? "Please select Delivery Date before sending"
                     : "Send to IUNGO"
                 }
               >
@@ -3779,8 +3793,10 @@ function ExcelPackingWorkflow({
                                   }));
                                 }}
                                 className={cn(
-                                  "h-6 px-1.5 text-xs font-mono font-bold rounded border bg-white focus:outline-none focus:ring-1 cursor-pointer disabled:bg-slate-100 disabled:text-slate-500 w-30 shadow-2xs",
-                                  !rowDate && !createdResponse
+                                  "h-6 px-1.5 text-xs font-mono font-bold rounded border bg-white focus:outline-none focus:ring-1 cursor-pointer disabled:bg-slate-100 disabled:text-slate-500 w-30 shadow-2xs transition-all",
+                                  attemptedSubmit && !rowDate
+                                    ? "border-red-500 ring-2 ring-red-200 bg-red-50/40 text-red-900 focus:border-red-500 focus:ring-red-400"
+                                    : !rowDate && !createdResponse
                                     ? "border-amber-400 bg-amber-50/60 text-amber-900 focus:border-amber-500 focus:ring-amber-400"
                                     : "border-slate-300 text-slate-800 focus:border-emerald-500 focus:ring-emerald-400"
                                 )}
