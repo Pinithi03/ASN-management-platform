@@ -1164,17 +1164,17 @@ function WebPackingWizard({
 
   const handleDispatchASN = async () => {
     if (!isOnline) {
-      alert("You are currently offline. Please reconnect to the internet before sending the ASN to IUNGO.");
+      alert(t("wizard.alerts.offline"));
       return;
     }
     const trimmedPs = packingSlipNumber.trim();
     if (!trimmedPs) {
-      alert("Please enter Packing Slip / Delivery Note Number before dispatching.");
+      alert(t("wizard.alerts.needPackingSlip"));
       return;
     }
     const trimmedDate = deliveryDate.trim();
     if (!trimmedDate) {
-      alert("Please enter or select Delivery Date before dispatching.");
+      alert(t("wizard.alerts.needDeliveryDate"));
       return;
     }
     setIsSubmitting(true);
@@ -1234,7 +1234,11 @@ function WebPackingWizard({
       clearManualDraft(activeSupplierCode, poNumbers);
       clearExcelDraft(activeSupplierCode, poNumbers);
     } catch (err: any) {
-      alert("Submission error: " + (err?.response?.data?.detail || err?.message || "Failed to create shipment"));
+      alert(
+        t("wizard.alerts.submissionError", {
+          error: err?.response?.data?.detail || err?.message || t("wizard.alerts.createFailed"),
+        })
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -1299,13 +1303,13 @@ function WebPackingWizard({
     );
   };
 
-  const formatSummary = useMemo(() => {
-    if (items.length === 0) return "All Boxes";
+  const formatSummary = useMemo((): "mixed" | "rolls" | "boxes" => {
+    if (items.length === 0) return "boxes";
     const hasRolls = items.some((i) => i.packaging_type === "ROLL");
     const hasBoxes = items.some((i) => (i.packaging_type || "BOX") === "BOX");
-    if (hasRolls && hasBoxes) return "Mixed (Box & Roll)";
-    if (hasRolls) return "All Rolls";
-    return "All Boxes";
+    if (hasRolls && hasBoxes) return "mixed";
+    if (hasRolls) return "rolls";
+    return "boxes";
   }, [items]);
 
   const handleShippingNowChange = (id: string, val: number) => {
@@ -1320,21 +1324,26 @@ function WebPackingWizard({
   const handleProceedToPacking = () => {
     const toPack = items.filter((i) => (i.shipping_now || 0) > 0);
     if (toPack.length === 0) {
-      alert("Please enter a shipping quantity for at least one item.");
+      alert(t("wizard.alerts.noQuantity"));
       return;
     }
 
     const overBalanceItems = toPack.filter((i) => (i.shipping_now || 0) > (i.remaining_qty || 0));
     if (overBalanceItems.length > 0) {
       alert(
-        `Shipping quantity exceeds current open balance for:\n\n` +
-          overBalanceItems
-            .map(
-              (it) =>
-                `• PO ${it.po_number} Item ${it.po_item}: Requested ${it.shipping_now} ${it.uom}, but current open balance is only ${it.remaining_qty} ${it.uom}`
+        t("wizard.alerts.overBalance", {
+          lines: overBalanceItems
+            .map((it) =>
+              t("wizard.alerts.overBalanceLine", {
+                po: it.po_number,
+                item: it.po_item,
+                requested: it.shipping_now,
+                balance: it.remaining_qty,
+                uom: it.uom,
+              })
             )
-            .join("\n") +
-          `\n\nPlease adjust the shipping quantity to not exceed the current available balance.`
+            .join("\n"),
+        })
       );
       return;
     }
@@ -1433,13 +1442,13 @@ function WebPackingWizard({
     const rawVal = parseFloat(config.value);
 
     if (isNaN(rawVal) || rawVal <= 0) {
-      alert("Please enter a valid positive number greater than 0 to split.");
+      alert(t("wizard.alerts.invalidSplit"));
       return;
     }
 
     const totalQty = item.shipping_now || 0;
     if (totalQty <= 0) {
-      alert("Shipping quantity is 0. Please set shipping quantity first.");
+      alert(t("wizard.alerts.zeroShipping"));
       return;
     }
 
@@ -1448,7 +1457,7 @@ function WebPackingWizard({
     } else {
       const count = Math.round(rawVal);
       if (count < 1) {
-        alert("Please enter at least 1 carton.");
+        alert(t("wizard.alerts.minOneCarton"));
         return;
       }
       handleSplitByCount(item.id, count);
@@ -1527,35 +1536,34 @@ function WebPackingWizard({
       const boxTotal = item.boxes.reduce((acc, b) => acc + (Number(b.qty) || 0), 0);
       if (boxTotal !== item.shipping_now) {
         alert(
-          `Item ${item.item_code} carton quantities total (${boxTotal}) does not match shipping quantity (${item.shipping_now}). Please balance carton quantities.`
+          t("wizard.alerts.unbalanced", { item: item.item_code, total: boxTotal, shipping: item.shipping_now })
         );
         return;
       }
       for (let bIdx = 0; bIdx < item.boxes.length; bIdx++) {
         const box = item.boxes[bIdx];
+        const cartonRef = { carton: bIdx + 1, item: item.item_code };
         if (!box.qty || box.qty <= 0) {
-          alert(`Carton ${bIdx + 1} for item ${item.item_code} has 0 or invalid quantity.`);
+          alert(t("wizard.alerts.invalidQty", cartonRef));
           return;
         }
         if (!box.batch_code || !box.batch_code.trim()) {
-          alert(`Carton ${bIdx + 1} for item ${item.item_code}: Batch / Lot number is mandatory.`);
+          alert(t("wizard.alerts.lotRequired", cartonRef));
           return;
         }
         const gw = box.gross_weight != null && !isNaN(Number(box.gross_weight)) ? Number(box.gross_weight) : null;
         const nw = box.net_weight != null && !isNaN(Number(box.net_weight)) ? Number(box.net_weight) : null;
 
         if (nw === null || nw <= 0) {
-          alert(`Carton ${bIdx + 1} for item ${item.item_code}: Net Weight (kg) is mandatory and must be greater than 0.`);
+          alert(t("wizard.alerts.nwRequired", cartonRef));
           return;
         }
         if (gw === null || gw <= 0) {
-          alert(`Carton ${bIdx + 1} for item ${item.item_code}: Gross Weight (kg) is mandatory and must be greater than 0.`);
+          alert(t("wizard.alerts.gwRequired", cartonRef));
           return;
         }
         if (gw <= nw) {
-          alert(
-            `Carton ${bIdx + 1} for item ${item.item_code}: Gross Weight (${gw} kg) must be strictly greater than Net Weight (${nw} kg).`
-          );
+          alert(t("wizard.alerts.gwNotGreater", { ...cartonRef, gw, nw }));
           return;
         }
       }
@@ -1570,11 +1578,13 @@ function WebPackingWizard({
           <div className="flex items-center gap-2.5">
             <Clock className="h-4 w-4 text-amber-600 shrink-0" />
             <span className="text-xs font-semibold">
-              Unsaved draft recovered: Packing Slip{" "}
-              <strong className="font-mono text-amber-800">
-                {unresumedDraft.packingSlipNumber || "(In Progress)"}
-              </strong>{" "}
-              ({unresumedDraft.packedItems?.length || 0} items)
+              <Trans
+                t={t}
+                i18nKey="wizard.draft.recovered"
+                count={unresumedDraft.packedItems?.length || 0}
+                values={{ slip: unresumedDraft.packingSlipNumber || t("wizard.draft.inProgress") }}
+                components={{ strong: <strong className="font-mono text-amber-800" /> }}
+              />
             </span>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -1583,14 +1593,14 @@ function WebPackingWizard({
               onClick={restoreDraft}
               className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg shadow-sm cursor-pointer transition-colors"
             >
-              Restore Draft
+              {t("wizard.draft.restore")}
             </button>
             <button
               type="button"
               onClick={discardDraft}
               className="px-2.5 py-1 text-gray-500 hover:text-gray-800 text-xs font-medium cursor-pointer"
             >
-              Discard
+              {t("wizard.draft.discard")}
             </button>
           </div>
         </div>
@@ -1613,26 +1623,32 @@ function WebPackingWizard({
                 }
               }}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 rounded-lg border border-gray-300 shadow-xs transition-colors cursor-pointer"
-              title={step === 1 ? (poNumbers.length > 0 ? "Return to Order Workspace" : "Return to previous screen") : "Return to previous step"}
+              title={
+                step === 1
+                  ? poNumbers.length > 0
+                    ? t("wizard.toolbar.returnWorkspace")
+                    : t("wizard.toolbar.returnPrevScreen")
+                  : t("wizard.toolbar.returnPrevStep")
+              }
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               {step === 1
                 ? poNumbers.length > 0
                   ? fromLinesView
-                    ? "Back to Order Lines"
-                    : "Back to Purchase Orders"
-                  : "Exit Workbench"
-                : "Back"}
+                    ? t("wizard.toolbar.backToLines")
+                    : t("wizard.toolbar.backToPos")
+                  : t("wizard.toolbar.exit")
+                : t("wizard.toolbar.back")}
             </button>
 
             <button
               type="button"
               onClick={handleManualSaveDraft}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 rounded-lg border border-gray-300 shadow-2xs transition-colors cursor-pointer"
-              title="Save current progress to Drafts in the sidebar"
+              title={t("wizard.draft.saveTitle")}
             >
               <FileEdit className="w-3.5 h-3.5 text-blue-600" />
-              {draftSavedToast ? "Saved to Drafts!" : "Save Draft"}
+              {draftSavedToast ? t("wizard.draft.saved") : t("wizard.draft.save")}
             </button>
           </div>
 
@@ -1650,7 +1666,7 @@ function WebPackingWizard({
                   : "text-gray-600 hover:text-gray-900"
               )}
             >
-              1. Item Quantities
+              {t("wizard.toolbar.step1")}
             </button>
             <span className="text-gray-400 px-1">›</span>
             <button
@@ -1668,7 +1684,7 @@ function WebPackingWizard({
                   : "text-gray-600 hover:text-gray-900 disabled:opacity-40"
               )}
             >
-              2. Carton Packing & HUs
+              {t("wizard.toolbar.step2")}
             </button>
             <span className="text-gray-400 px-1">›</span>
             <button
@@ -1686,7 +1702,7 @@ function WebPackingWizard({
                   : "text-gray-600 hover:text-gray-900 disabled:opacity-40"
               )}
             >
-              3. Review & Transmit
+              {t("wizard.toolbar.step3")}
             </button>
           </div>
 
@@ -1701,14 +1717,18 @@ function WebPackingWizard({
                   isSupplier ? "bg-emerald-600 hover:bg-emerald-700" : "bg-blue-600 hover:bg-blue-700"
                 )}
               >
-                Proceed to Packing <ChevronRight className="w-3.5 h-3.5" />
+                {t("wizard.toolbar.proceedPacking")} <ChevronRight className="w-3.5 h-3.5" />
               </button>
             )}
 
             {step === 2 && (
               <div className="flex items-center gap-2">
                 <span className="hidden lg:inline-flex items-center px-2.5 py-1 text-[11px] font-mono text-gray-700 bg-gray-100 rounded-lg border border-gray-200">
-                  Cartons: {packedItems.reduce((acc, curr) => acc + curr.boxes.length, 0)} | Qty: {packedItems.reduce((acc, curr) => acc + (curr.shipping_now || 0), 0)} {packedItems[0]?.uom || "M"}
+                  {t("wizard.toolbar.summary", {
+                    cartons: packedItems.reduce((acc, curr) => acc + curr.boxes.length, 0),
+                    qty: packedItems.reduce((acc, curr) => acc + (curr.shipping_now || 0), 0),
+                    uom: packedItems[0]?.uom || "M",
+                  })}
                 </span>
                 <button
                   type="button"
@@ -1718,7 +1738,7 @@ function WebPackingWizard({
                     isSupplier ? "bg-emerald-600 hover:bg-emerald-700" : "bg-blue-600 hover:bg-blue-700"
                   )}
                 >
-                  Review Shipment <ChevronRight className="w-3.5 h-3.5" />
+                  {t("wizard.toolbar.reviewShipment")} <ChevronRight className="w-3.5 h-3.5" />
                 </button>
               </div>
             )}
@@ -1730,12 +1750,12 @@ function WebPackingWizard({
                     type="button"
                     onClick={() => setPreviewXmlModal(buildLiveXmlPreview())}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg shadow-2xs transition-colors cursor-pointer"
-                    title="Preview official SdDataSlice XML"
+                    title={t("wizard.toolbar.previewXmlTitle")}
                   >
-                    <Eye className="w-3.5 h-3.5 text-blue-600" /> Preview XML
+                    <Eye className="w-3.5 h-3.5 text-blue-600" /> {t("wizard.toolbar.previewXml")}
                   </button>
                   <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 text-emerald-800 rounded-lg text-xs font-bold border border-emerald-200">
-                    <Check className="w-3.5 h-3.5 stroke-[2.5]" /> Sent to IUNGO
+                    <Check className="w-3.5 h-3.5 stroke-[2.5]" /> {t("xml.sent")}
                   </span>
                 </div>
               ) : (
@@ -1744,25 +1764,25 @@ function WebPackingWizard({
                     type="button"
                     onClick={() => setPreviewXmlModal(buildLiveXmlPreview())}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg shadow-2xs transition-colors cursor-pointer"
-                    title="Preview official SdDataSlice XML before sending"
+                    title={t("wizard.toolbar.previewXmlBeforeTitle")}
                   >
-                    <Eye className="w-3.5 h-3.5 text-blue-600" /> Preview XML
+                    <Eye className="w-3.5 h-3.5 text-blue-600" /> {t("wizard.toolbar.previewXml")}
                   </button>
                   <button
                     type="button"
                     onClick={() => {
                       if (!isOnline) {
-                        alert("You are currently offline. Please reconnect to the internet before sending the ASN to IUNGO.");
+                        alert(t("wizard.alerts.offline"));
                         return;
                       }
                       const trimmedPs = packingSlipNumber.trim();
                       if (!trimmedPs) {
-                        alert("Please enter Packing Slip / Delivery Note Number before dispatching.");
+                        alert(t("wizard.alerts.needPackingSlip"));
                         return;
                       }
                       const trimmedDate = deliveryDate.trim();
                       if (!trimmedDate) {
-                        alert("Please enter or select Delivery Date before dispatching.");
+                        alert(t("wizard.alerts.needDeliveryDate"));
                         return;
                       }
                       setShowConfirmDispatch(true);
@@ -1771,19 +1791,19 @@ function WebPackingWizard({
                     className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
                     title={
                       !packingSlipNumber.trim()
-                        ? "Please enter Packing Slip Number before sending"
+                        ? t("wizard.toolbar.needSlipTitle")
                         : !deliveryDate.trim()
-                        ? "Please select Delivery Date before sending"
-                        : "Send to IUNGO"
+                        ? t("wizard.toolbar.needDateTitle")
+                        : t("xml.sendButton")
                     }
                   >
                     {isSubmitting ? (
                       <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Sending to IUNGO...
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("wizard.toolbar.sending")}
                       </>
                     ) : (
                       <>
-                        <Send className="w-3.5 h-3.5" /> Send to IUNGO
+                        <Send className="w-3.5 h-3.5" /> {t("xml.sendButton")}
                       </>
                     )}
                   </button>
@@ -1800,28 +1820,28 @@ function WebPackingWizard({
           <div className="border-b border-gray-100 pb-2 flex flex-wrap items-center justify-between gap-2">
             <div>
               <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wide">
-                Purchase Order Line Item Allocation
+                {t("wizard.step1.title")}
               </h2>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-gray-500">Format:</span>
+              <span className="text-xs font-semibold text-gray-500">{t("wizard.step1.format")}</span>
               <span
                 className={cn(
                   "inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-bold shadow-xs border",
-                  formatSummary.includes("Roll") && !formatSummary.includes("Mixed")
+                  formatSummary === "rolls"
                     ? "bg-amber-50 text-amber-800 border-amber-200"
-                    : formatSummary.includes("Mixed")
+                    : formatSummary === "mixed"
                     ? "bg-purple-50 text-purple-800 border-purple-200"
                     : isSupplier
                     ? "bg-emerald-50 text-emerald-800 border-emerald-200"
                     : "bg-blue-50 text-blue-800 border-blue-200"
                 )}
               >
-                {formatSummary.includes("Mixed")
-                  ? "Mixed (Box & Roll)"
-                  : formatSummary === "All Rolls"
-                  ? "All Rolls"
-                  : "All Boxes"}
+                {formatSummary === "mixed"
+                  ? t("wizard.step1.formatMixed")
+                  : formatSummary === "rolls"
+                  ? t("wizard.step1.formatRolls")
+                  : t("wizard.step1.formatBoxes")}
               </span>
             </div>
           </div>
@@ -1832,7 +1852,7 @@ function WebPackingWizard({
             </div>
           ) : items.length === 0 ? (
             <div className="py-12 text-center text-gray-400">
-              <p className="text-xs">No line items found for the selected orders.</p>
+              <p className="text-xs">{t("wizard.step1.noLines")}</p>
               <button
                 onClick={() => navigate("/purchase-orders")}
                 className={cn(
@@ -1840,7 +1860,7 @@ function WebPackingWizard({
                   isSupplier ? "text-emerald-600" : "text-blue-600"
                 )}
               >
-                Select orders from Purchase Orders page
+                {t("wizard.step1.selectOrders")}
               </button>
             </div>
           ) : (
@@ -1855,18 +1875,20 @@ function WebPackingWizard({
                     <div className="flex items-center justify-between bg-gray-100/90 px-3 py-1.5 border-b border-gray-300">
                       <div className="flex items-center gap-2">
                         <span className="font-mono font-bold text-xs text-gray-900">PO {poNo}</span>
-                        <span className="text-[11px] text-gray-500 font-medium font-mono">({poItems.length} {poItems.length === 1 ? "line" : "lines"})</span>
+                        <span className="text-[11px] text-gray-500 font-medium font-mono">
+                          {t("wizard.step1.lines", { count: poItems.length })}
+                        </span>
                       </div>
 
                       <div className="flex items-center gap-2">
-                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Pack Type</label>
+                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t("wizard.step1.packType")}</label>
                         <select
                           value={poPackType}
                           onChange={(e) => handleSetPoPackagingType(poNo, e.target.value as "BOX" | "ROLL")}
                           className="text-xs font-bold bg-white border border-gray-300 rounded px-2 py-0.5 outline-none focus:border-emerald-500 shadow-2xs cursor-pointer"
                         >
-                          <option value="BOX">Box</option>
-                          <option value="ROLL">Roll</option>
+                          <option value="BOX">{t("wizard.step1.box")}</option>
+                          <option value="ROLL">{t("wizard.step1.roll")}</option>
                         </select>
                       </div>
                     </div>
@@ -1876,13 +1898,13 @@ function WebPackingWizard({
                       <table className="w-full text-xs text-left border-collapse">
                         <thead className="sticky top-0 z-10 bg-zinc-700 shadow-xs">
                           <tr className="bg-zinc-700 text-white text-xs font-semibold uppercase tracking-wider border-b border-zinc-800">
-                            <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Item</th>
-                            <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Material Code</th>
-                            <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Description</th>
-                            <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">Ordered</th>
-                            <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">Shipped</th>
-                            <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">Open Balance</th>
-                            <th className="py-1.5 px-2 text-right w-40 whitespace-nowrap">Shipping Qty</th>
+                            <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("wizard.step1.table.item")}</th>
+                            <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("wizard.step1.table.material")}</th>
+                            <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("wizard.step1.table.description")}</th>
+                            <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">{t("wizard.step1.table.ordered")}</th>
+                            <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">{t("wizard.step1.table.shipped")}</th>
+                            <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">{t("wizard.step1.table.openBalance")}</th>
+                            <th className="py-1.5 px-2 text-right w-40 whitespace-nowrap">{t("wizard.step1.table.shippingQty")}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1906,7 +1928,7 @@ function WebPackingWizard({
                                 {item.remaining_qty <= 0 ? (
                                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                                     <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                    Fulfilled
+                                    {t("wizard.step1.fulfilled")}
                                   </span>
                                 ) : (
                                   <div className="flex items-center justify-end gap-1">
@@ -1933,7 +1955,7 @@ function WebPackingWizard({
                                           : "text-blue-700 bg-blue-50/80 border-blue-300 hover:bg-blue-100"
                                       )}
                                     >
-                                      Max
+                                      {t("wizard.step1.max")}
                                     </button>
                                   </div>
                                 )}
@@ -1958,7 +1980,7 @@ function WebPackingWizard({
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1">
             <div className="flex items-center gap-3 flex-wrap">
               <h2 className="text-xs font-bold text-gray-800 uppercase tracking-wide">
-                Carton Packaging & Handling Unit Assignment
+                {t("wizard.step2.title")}
               </h2>
 
               {/* Optional Columns Dropdown */}
@@ -1967,10 +1989,10 @@ function WebPackingWizard({
                   type="button"
                   onClick={() => setShowColumnMenu((v) => !v)}
                   className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white hover:bg-gray-50 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 shadow-xs transition-colors cursor-pointer"
-                  title="Toggle optional packing columns from Excel (Batch/Lot, Supplier Ref, Width, Pack No)"
+                  title={t("wizard.step2.optionalColumnsTitle")}
                 >
                   <SlidersHorizontal className="w-3.5 h-3.5 text-gray-500" />
-                  <span>Optional Columns</span>
+                  <span>{t("wizard.step2.optionalColumns")}</span>
                   <span className="px-1.5 py-0.2 bg-gray-100 text-gray-700 text-[10px] rounded-full font-mono font-bold">
                     {Object.values(visibleColumns).filter(Boolean).length}/3
                   </span>
@@ -1979,7 +2001,7 @@ function WebPackingWizard({
                 {showColumnMenu && (
                   <div className="absolute left-0 mt-1.5 w-64 bg-white border border-gray-200 rounded-xl shadow-xl z-50 p-2.5 text-xs space-y-1">
                     <div className="px-2 py-1 font-bold text-gray-500 text-[10px] uppercase tracking-wider border-b border-gray-100 flex items-center justify-between">
-                      <span>Toggle Optional Columns</span>
+                      <span>{t("wizard.step2.toggleOptional")}</span>
                       <button
                         type="button"
                         onClick={() => setShowColumnMenu(false)}
@@ -1989,9 +2011,9 @@ function WebPackingWizard({
                       </button>
                     </div>
                     {[
-                      { key: "supplier_ref", label: "Supplier Carton Ref", desc: "Supplier internal ref / barcode" },
-                      { key: "width", label: "Width", desc: "Material / roll width" },
-                      { key: "pack_no", label: "Packing Slip No.", desc: "Per-carton custom delivery note override" },
+                      { key: "supplier_ref", label: t("wizard.step2.col.supplierRef"), desc: t("wizard.step2.col.supplierRefDesc") },
+                      { key: "width", label: t("wizard.step2.col.width"), desc: t("wizard.step2.col.widthDesc") },
+                      { key: "pack_no", label: t("wizard.step2.col.packNo"), desc: t("wizard.step2.col.packNoDesc") },
                     ].map((col) => (
                       <label
                         key={col.key}
@@ -2042,7 +2064,7 @@ function WebPackingWizard({
                           ? "bg-amber-50 text-amber-800 border-amber-200"
                           : "bg-blue-50 text-blue-800 border-blue-200"
                       )}>
-                        {isRoll ? "Roll Packing" : "Box Packing"}
+                        {isRoll ? t("wizard.step2.rollPacking") : t("wizard.step2.boxPacking")}
                       </span>
                     </div>
 
@@ -2053,19 +2075,16 @@ function WebPackingWizard({
                         const valNum = parseFloat(cfg.value || "0");
                         let previewInfo = "";
                         if (valNum > 0 && item.shipping_now) {
-                          if (cfg.mode === "qty") {
-                            const c = Math.ceil(item.shipping_now / valNum);
-                            previewInfo = `→ ${c} ${c === 1 ? (isRoll ? "roll" : "box") : (isRoll ? "rolls" : "boxes")}`;
-                          } else {
-                            const c = Math.round(valNum);
-                            previewInfo = `→ ${c} ${c === 1 ? (isRoll ? "roll" : "box") : (isRoll ? "rolls" : "boxes")}`;
-                          }
+                          const c = cfg.mode === "qty" ? Math.ceil(item.shipping_now / valNum) : Math.round(valNum);
+                          previewInfo = isRoll
+                            ? t("wizard.step2.previewRolls", { count: c })
+                            : t("wizard.step2.previewBoxes", { count: c });
                         }
 
                         return (
                           <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-md p-0.5 shadow-2xs">
                             <span className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider pl-1">
-                              Split:
+                              {t("wizard.step2.split")}
                             </span>
 
                             {/* Mode Segmented Switch */}
@@ -2087,9 +2106,9 @@ function WebPackingWizard({
                                     ? "bg-white text-blue-700 font-bold shadow-2xs"
                                     : "text-gray-600 hover:text-gray-900"
                                 )}
-                                title={`Split by quantity per ${isRoll ? "roll" : "carton"}`}
+                                title={isRoll ? t("wizard.step2.splitByQtyRollTitle") : t("wizard.step2.splitByQtyBoxTitle")}
                               >
-                                Qty / {isRoll ? "Roll" : "Box"}
+                                {isRoll ? t("wizard.step2.qtyPerRoll") : t("wizard.step2.qtyPerBox")}
                               </button>
                               <button
                                 type="button"
@@ -2108,9 +2127,9 @@ function WebPackingWizard({
                                     ? "bg-white text-blue-700 font-bold shadow-2xs"
                                     : "text-gray-600 hover:text-gray-900"
                                 )}
-                                title={`Split into total number of ${isRoll ? "rolls" : "cartons"}`}
+                                title={isRoll ? t("wizard.step2.splitCountRollTitle") : t("wizard.step2.splitCountBoxTitle")}
                               >
-                                # of {isRoll ? "Rolls" : "Boxes"}
+                                {isRoll ? t("wizard.step2.numRolls") : t("wizard.step2.numBoxes")}
                               </button>
                             </div>
 
@@ -2138,14 +2157,20 @@ function WebPackingWizard({
                               }}
                               placeholder={
                                 cfg.mode === "count"
-                                  ? "Count"
-                                  : `Per ${isRoll ? "roll" : "box"}`
+                                  ? t("wizard.step2.countPlaceholder")
+                                  : isRoll
+                                  ? t("wizard.step2.perRollPlaceholder")
+                                  : t("wizard.step2.perBoxPlaceholder")
                               }
                               className="w-16 h-6 px-1.5 text-xs font-mono bg-white border border-gray-300 rounded text-gray-900 placeholder:text-gray-400 focus:outline-hidden focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                               title={
                                 cfg.mode === "count"
-                                  ? `Enter number of ${isRoll ? "rolls" : "cartons"} to divide into`
-                                  : `Enter quantity packed per ${isRoll ? "roll" : "carton"}`
+                                  ? isRoll
+                                    ? t("wizard.step2.countRollInputTitle")
+                                    : t("wizard.step2.countBoxInputTitle")
+                                  : isRoll
+                                  ? t("wizard.step2.qtyRollInputTitle")
+                                  : t("wizard.step2.qtyBoxInputTitle")
                               }
                             />
 
@@ -2161,9 +2186,9 @@ function WebPackingWizard({
                               type="button"
                               onClick={() => handleApplySplit(item)}
                               className="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded text-[11px] font-medium transition-colors cursor-pointer shadow-2xs"
-                              title="Click or press Enter to split cartons"
+                              title={t("wizard.step2.splitButtonTitle")}
                             >
-                              Split
+                              {t("wizard.step2.splitButton")}
                             </button>
                           </div>
                         );
@@ -2174,7 +2199,7 @@ function WebPackingWizard({
                         onClick={() => addBox(item.id)}
                         className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-white hover:bg-gray-50 border border-gray-300 rounded text-gray-700 text-xs font-medium shadow-2xs transition-colors cursor-pointer shrink-0"
                       >
-                        + Add {isRoll ? "Roll" : "Carton"}
+                        {isRoll ? t("wizard.step2.addRoll") : t("wizard.step2.addCarton")}
                       </button>
                     </div>
                   </div>
@@ -2184,18 +2209,22 @@ function WebPackingWizard({
                     <table className="w-full text-xs text-left border-collapse">
                       <thead className="sticky top-0 z-10 bg-zinc-700 shadow-xs">
                         <tr className="bg-zinc-700 text-white text-xs font-semibold uppercase tracking-wider border-b border-zinc-800">
-                          <th className="py-1.5 px-2 text-center w-24 whitespace-nowrap border-r border-zinc-600" title="Carton sequence and EDI Line Reference">{isRoll ? "Roll" : "Carton"}</th>
-                          <th className="py-1.5 px-2 min-w-[170px] whitespace-nowrap border-r border-zinc-600">20-digit HU Number</th>
-                          <th className="py-1.5 px-2 text-right w-24 whitespace-nowrap border-r border-zinc-600">Qty ({item.uom || "M"})</th>
-                          <th className="py-1.5 px-2 text-left w-36 whitespace-nowrap border-r border-zinc-600">
-                            Batch / Lot <span className="text-red-400">*</span>
+                          <th className="py-1.5 px-2 text-center w-24 whitespace-nowrap border-r border-zinc-600" title={t("wizard.step2.table.cartonTitle")}>
+                            {isRoll ? t("wizard.step2.table.roll") : t("wizard.step2.table.carton")}
                           </th>
-                          <th className="py-1.5 px-2 text-right w-28 whitespace-nowrap border-r border-zinc-600">Gross Wt (kg)</th>
-                          <th className="py-1.5 px-2 text-right w-28 whitespace-nowrap border-r border-zinc-600">Net Wt (kg)</th>
-                          {visibleColumns.supplier_ref && <th className="py-1.5 px-2 w-32 whitespace-nowrap border-r border-zinc-600">Supplier Carton Ref</th>}
-                          {visibleColumns.width && <th className="py-1.5 px-2 text-right w-24 whitespace-nowrap border-r border-zinc-600">Width</th>}
-                          {visibleColumns.pack_no && <th className="py-1.5 px-2 w-28 whitespace-nowrap border-r border-zinc-600">Packing Slip No.</th>}
-                          <th className="py-1.5 px-2 text-center w-12 whitespace-nowrap">Action</th>
+                          <th className="py-1.5 px-2 min-w-[170px] whitespace-nowrap border-r border-zinc-600">{t("wizard.step2.table.hu")}</th>
+                          <th className="py-1.5 px-2 text-right w-24 whitespace-nowrap border-r border-zinc-600">
+                            {t("wizard.step2.table.qty", { uom: item.uom || "M" })}
+                          </th>
+                          <th className="py-1.5 px-2 text-left w-36 whitespace-nowrap border-r border-zinc-600">
+                            <Trans t={t} i18nKey="wizard.step2.table.lot" components={{ req: <span className="text-red-400" /> }} />
+                          </th>
+                          <th className="py-1.5 px-2 text-right w-28 whitespace-nowrap border-r border-zinc-600">{t("wizard.step2.table.gw")}</th>
+                          <th className="py-1.5 px-2 text-right w-28 whitespace-nowrap border-r border-zinc-600">{t("wizard.step2.table.nw")}</th>
+                          {visibleColumns.supplier_ref && <th className="py-1.5 px-2 w-32 whitespace-nowrap border-r border-zinc-600">{t("wizard.step2.col.supplierRef")}</th>}
+                          {visibleColumns.width && <th className="py-1.5 px-2 text-right w-24 whitespace-nowrap border-r border-zinc-600">{t("wizard.step2.col.width")}</th>}
+                          {visibleColumns.pack_no && <th className="py-1.5 px-2 w-28 whitespace-nowrap border-r border-zinc-600">{t("wizard.step2.col.packNo")}</th>}
+                          <th className="py-1.5 px-2 text-center w-12 whitespace-nowrap">{t("wizard.step2.table.action")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -2204,7 +2233,7 @@ function WebPackingWizard({
                             {/* 1. Carton # and Line Reference: e.g. 1 (1-1) */}
                             <td className="py-1 px-2 font-mono text-center text-xs whitespace-nowrap border-r border-gray-200">
                               <span className="font-bold text-gray-800">{idx + 1}</span>
-                              <span className="text-[11px] text-gray-500 font-medium ml-1" title="EDI Line Reference (Item-Carton)">
+                              <span className="text-[11px] text-gray-500 font-medium ml-1" title={t("wizard.step2.ediRefTitle")}>
                                 ({itemIdx + 1}-{idx + 1})
                               </span>
                             </td>
@@ -2248,9 +2277,9 @@ function WebPackingWizard({
                                     type="button"
                                     onClick={() => copyBatchToAllCartons(item.id, box.batch_code)}
                                     className="px-1.5 py-0.5 text-[10px] bg-gray-100 hover:bg-blue-50 text-gray-600 hover:text-blue-700 rounded border border-gray-200 transition-colors cursor-pointer shrink-0 font-medium"
-                                    title="Copy this batch to all cartons of this line item"
+                                    title={t("wizard.step2.copyBatchTitle")}
                                   >
-                                    All ↓
+                                    {t("wizard.step2.copyBatch")}
                                   </button>
                                 )}
                               </div>
@@ -2293,7 +2322,7 @@ function WebPackingWizard({
                                 className="w-24 h-6 px-1.5 text-xs text-right bg-white border border-gray-300 rounded font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                               />
                               {typeof box.gross_weight === "number" && typeof box.net_weight === "number" && box.gross_weight <= box.net_weight && (
-                                <span className="text-[10px] text-red-600 font-bold block mt-0.5">GW &le; NW!</span>
+                                <span className="text-[10px] text-red-600 font-bold block mt-0.5">{t("wizard.step2.gwLeNw")}</span>
                               )}
                             </td>
 
@@ -2305,7 +2334,7 @@ function WebPackingWizard({
                                   value={box.supplier_carton_ref || ""}
                                   onChange={(e) => updateBox(item.id, idx, { supplier_carton_ref: e.target.value })}
                                   className="w-28 h-6 px-1.5 text-xs bg-white border border-gray-300 rounded font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
-                                  placeholder="Optional"
+                                  placeholder={t("wizard.step2.optional")}
                                 />
                               </td>
                             )}
@@ -2324,7 +2353,7 @@ function WebPackingWizard({
                                     })
                                   }
                                   className="w-20 h-6 px-1.5 text-xs text-right bg-white border border-gray-300 rounded font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
-                                  placeholder="Optional"
+                                  placeholder={t("wizard.step2.optional")}
                                 />
                               </td>
                             )}
@@ -2337,7 +2366,7 @@ function WebPackingWizard({
                                   value={box.pack_number || packingSlipNumber || ""}
                                   onChange={(e) => updateBox(item.id, idx, { pack_number: e.target.value })}
                                   className="w-24 h-6 px-1.5 text-xs bg-white border border-gray-300 rounded font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
-                                  placeholder={packingSlipNumber || "Required *"}
+                                  placeholder={packingSlipNumber || t("wizard.step2.required")}
                                 />
                               </td>
                             )}
@@ -2349,7 +2378,7 @@ function WebPackingWizard({
                                   type="button"
                                   onClick={() => removeBox(item.id, idx)}
                                   className="text-gray-400 hover:text-red-600 p-0.5 rounded hover:bg-gray-100 transition-colors cursor-pointer"
-                                  title="Remove carton"
+                                  title={t("wizard.step2.removeCarton")}
                                 >
                                   <X className="w-3.5 h-3.5" />
                                 </button>
@@ -2364,17 +2393,29 @@ function WebPackingWizard({
                   {/* Summary row */}
                   <div className="flex items-center justify-between text-xs px-1">
                     <span className="text-gray-500 font-medium">
-                      Cartons in line: <strong className="text-gray-900 font-mono">{item.boxes.length}</strong>
+                      <Trans
+                        t={t}
+                        i18nKey="wizard.step2.cartonsInLine"
+                        values={{ count: item.boxes.length }}
+                        components={{ strong: <strong className="text-gray-900 font-mono" /> }}
+                      />
                     </span>
                     <div className="flex items-center gap-2 font-mono">
-                      <span className="text-gray-700">Total Packed: <strong>{packedQtySum}</strong> / {item.shipping_now} {item.uom || "M"}</span>
+                      <span className="text-gray-700">
+                        <Trans
+                          t={t}
+                          i18nKey="wizard.step2.totalPacked"
+                          values={{ packed: packedQtySum, shipping: item.shipping_now, uom: item.uom || "M" }}
+                          components={{ strong: <strong /> }}
+                        />
+                      </span>
                       {isBalanced ? (
                         <span className="text-emerald-700 font-semibold font-sans bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                          Balanced
+                          {t("wizard.step2.balanced")}
                         </span>
                       ) : (
                         <span className="text-red-700 font-semibold font-sans bg-red-50 px-2 py-0.5 rounded border border-red-200">
-                          Discrepancy: {packedQtySum - (item.shipping_now || 0)}
+                          {t("wizard.step2.discrepancy", { diff: packedQtySum - (item.shipping_now || 0) })}
                         </span>
                       )}
                     </div>
@@ -2399,10 +2440,12 @@ function WebPackingWizard({
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-bold text-emerald-950">
-                      Shipment {submitSuccessResult.shipment?.shipment_number || packingSlipNumber} Created & Sent to IUNGO
+                      {t("wizard.step3.created", {
+                        number: submitSuccessResult.shipment?.shipment_number || packingSlipNumber,
+                      })}
                     </span>
                     <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-200 text-emerald-900 px-1.5 py-0.5 rounded">
-                      Transmitted
+                      {t("wizard.step3.transmitted")}
                     </span>
                   </div>
                   <p className="text-[11px] text-emerald-800 mt-0.5 font-mono">
@@ -2416,14 +2459,14 @@ function WebPackingWizard({
                   onClick={handlePrintLabels}
                   className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-semibold shadow-xs flex items-center gap-1.5 cursor-pointer"
                 >
-                  <Printer className="w-3.5 h-3.5" /> Print Labels
+                  <Printer className="w-3.5 h-3.5" /> {t("wizard.step3.printLabels")}
                 </button>
                 <button
                   type="button"
                   onClick={handleDownloadXml}
                   className="px-2.5 py-1 border border-emerald-300 bg-white hover:bg-emerald-50 text-emerald-900 rounded text-xs font-semibold shadow-xs flex items-center gap-1.5 cursor-pointer"
                 >
-                  <Download className="w-3.5 h-3.5" /> Download XML
+                  <Download className="w-3.5 h-3.5" /> {t("wizard.step3.downloadXml")}
                 </button>
                 {poNumbers.length > 0 && (
                   <button
@@ -2431,7 +2474,7 @@ function WebPackingWizard({
                     onClick={() => navigate("/purchase-orders/manual")}
                     className="px-2.5 py-1 border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 rounded text-xs font-semibold shadow-xs transition-all cursor-pointer"
                   >
-                    Return to POs
+                    {t("wizard.step3.returnToPos")}
                   </button>
                 )}
               </div>
@@ -2442,14 +2485,14 @@ function WebPackingWizard({
           <div className="bg-slate-50/70 border border-slate-200 rounded-lg p-2 flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
               <label htmlFor="wizard-ps-number" className="text-xs font-bold text-slate-700 whitespace-nowrap">
-                Packing Slip No <span className="text-red-500">*</span>:
+                <Trans t={t} i18nKey="wizard.step3.packingSlip" components={{ req: <span className="text-red-500" /> }} />
               </label>
               <input
                 id="wizard-ps-number"
                 type="text"
                 required
                 disabled={Boolean(submitSuccessResult)}
-                placeholder="e.g. 01007907"
+                placeholder={t("wizard.step3.psPlaceholder")}
                 value={packingSlipNumber}
                 onChange={(e) => setPackingSlipNumber(e.target.value)}
                 className="h-7 px-2 text-xs font-mono font-bold rounded border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400 outline-none shadow-2xs w-36"
@@ -2460,7 +2503,7 @@ function WebPackingWizard({
 
             <div className="flex items-center gap-2">
               <label htmlFor="wizard-delivery-date" className="text-xs font-bold text-slate-700 whitespace-nowrap">
-                Delivery Date <span className="text-red-500">*</span>:
+                <Trans t={t} i18nKey="wizard.step3.deliveryDate" components={{ req: <span className="text-red-500" /> }} />
               </label>
               <input
                 id="wizard-delivery-date"
@@ -2480,18 +2523,39 @@ function WebPackingWizard({
               <div className="flex items-center gap-2">
                 <Layers className="w-3.5 h-3.5 text-emerald-600" />
                 <span className="text-xs font-bold text-gray-800 uppercase tracking-wider">
-                  Handling Units & Packing Breakdown
+                  {t("wizard.step3.breakdown")}
                 </span>
                 <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100/70 border border-emerald-200 px-2 py-0.5 rounded-full">
-                  {allCartonsList.length} Cartons/Rolls
+                  {t("wizard.step3.cartonsRolls", { count: allCartonsList.length })}
                 </span>
               </div>
               <div className="flex items-center gap-3 text-xs text-gray-600">
-                <span>Total Qty: <strong className="font-mono text-gray-900">{totalShippedUnits.toLocaleString()} {packedItems[0]?.uom || "M"}</strong></span>
+                <span>
+                  <Trans
+                    t={t}
+                    i18nKey="wizard.step3.totalQty"
+                    values={{ qty: totalShippedUnits.toLocaleString(), uom: packedItems[0]?.uom || "M" }}
+                    components={{ strong: <strong className="font-mono text-gray-900" /> }}
+                  />
+                </span>
                 <span className="text-gray-300">|</span>
-                <span>GW: <strong className="font-mono text-gray-900">{totalGw.toFixed(2)} kg</strong></span>
+                <span>
+                  <Trans
+                    t={t}
+                    i18nKey="wizard.step3.gw"
+                    values={{ value: totalGw.toFixed(2) }}
+                    components={{ strong: <strong className="font-mono text-gray-900" /> }}
+                  />
+                </span>
                 <span className="text-gray-300">|</span>
-                <span>NW: <strong className="font-mono text-gray-900">{totalNw.toFixed(2)} kg</strong></span>
+                <span>
+                  <Trans
+                    t={t}
+                    i18nKey="wizard.step3.nw"
+                    values={{ value: totalNw.toFixed(2) }}
+                    components={{ strong: <strong className="font-mono text-gray-900" /> }}
+                  />
+                </span>
               </div>
             </div>
 
@@ -2499,14 +2563,14 @@ function WebPackingWizard({
               <table className="w-full text-left text-xs border-collapse">
                 <thead className="bg-zinc-700 text-white text-xs font-semibold uppercase tracking-wider sticky top-0 z-10 border-b border-zinc-800">
                   <tr>
-                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Ctn</th>
-                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Handling Unit (SSCC-20)</th>
-                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">PO & Line</th>
-                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Product Code</th>
-                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Quantity</th>
-                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Gross Wt (kg)</th>
-                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Net Wt (kg)</th>
-                    <th className="py-1.5 px-2 whitespace-nowrap">Lot / Batch</th>
+                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("wizard.step3.table.ctn")}</th>
+                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("wizard.step3.table.hu")}</th>
+                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("wizard.step3.table.poLine")}</th>
+                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("wizard.step3.table.productCode")}</th>
+                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("wizard.step3.table.quantity")}</th>
+                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("wizard.step3.table.gw")}</th>
+                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("wizard.step3.table.nw")}</th>
+                    <th className="py-1.5 px-2 whitespace-nowrap">{t("wizard.step3.table.lot")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2524,7 +2588,7 @@ function WebPackingWizard({
                               setTimeout(() => setCopiedHu(null), 1500);
                             }}
                             className="text-slate-400 hover:text-emerald-600 transition-colors p-0.5 cursor-pointer"
-                            title="Copy HU"
+                            title={t("wizard.step3.copyHu")}
                           >
                             {copiedHu === c.hu_number ? (
                               <Check className="w-3 h-3 text-emerald-600" />
@@ -2558,7 +2622,7 @@ function WebPackingWizard({
                 <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gray-50/80">
                   <div className="flex items-center gap-2">
                     <FileText className="w-4 h-4 text-blue-600" />
-                    <span className="font-bold text-gray-900 text-sm">Official SdDataSlice XML</span>
+                    <span className="font-bold text-gray-900 text-sm">{t("wizard.step3.xmlTitle")}</span>
                   </div>
                   <button
                     onClick={() => setPreviewXmlModal(null)}
@@ -2576,22 +2640,22 @@ function WebPackingWizard({
                     className="px-3.5 py-1.5 text-xs font-semibold border border-gray-300 rounded-lg hover:bg-white text-gray-700 cursor-pointer inline-flex items-center gap-1.5"
                   >
                     <Download className="w-3.5 h-3.5" />
-                    Download XML
+                    {t("wizard.step3.downloadXml")}
                   </button>
                   <button
                     onClick={() => {
                       navigator.clipboard.writeText(previewXmlModal);
-                      alert("XML copied to clipboard!");
+                      alert(t("wizard.alerts.xmlCopied"));
                     }}
                     className="px-3.5 py-1.5 text-xs font-semibold border border-gray-300 rounded-lg hover:bg-white text-gray-700 cursor-pointer"
                   >
-                    Copy XML
+                    {t("xml.copy")}
                   </button>
                   <button
                     onClick={() => setPreviewXmlModal(null)}
                     className="px-4 py-1.5 text-xs font-semibold bg-gray-900 text-white rounded-lg hover:bg-gray-800 cursor-pointer"
                   >
-                    Close
+                    {t("detail.close")}
                   </button>
                 </div>
               </div>
@@ -2646,7 +2710,7 @@ function WebPackingWizard({
                   onClick={() => setShowConfirmDispatch(false)}
                   className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
                 >
-                  Cancel
+                  {t("common:actions.cancel")}
                 </button>
                 <button
                   type="button"
@@ -2658,7 +2722,7 @@ function WebPackingWizard({
                   className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 active:bg-emerald-800 transition-colors cursor-pointer flex items-center gap-1.5"
                 >
                   {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                  {isSubmitting ? "Sending..." : "Yes, Send ASN"}
+                  {isSubmitting ? t("xml.confirm.sending") : t("xml.confirm.send")}
                 </button>
               </div>
             </div>
