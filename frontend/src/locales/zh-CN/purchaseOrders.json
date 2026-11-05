@@ -14,7 +14,7 @@
   },
   "gateway": {
     "activeOrders": "活动订单",
-    "badgeUnit_other": "PO",
+    "badgeUnit_other": "采购订单",
     "cta": "{{label}}（{{count}}）",
     "ctaDefault": "查看工厂订单",
     "deliveryStores": "交货库位",
@@ -23,17 +23,17 @@
     "locationCountry": "斯里兰卡 {{location}}",
     "locations": "个库位",
     "locked": "已锁定",
-    "lockedCta": "已锁定 — 未分配 PO",
-    "lockedTitle": "{{plant}} — 已锁定（收到该工厂的 PO 后自动解锁）",
-    "mobileCount_other": "{{count}} 个 PO",
-    "openTitle": "打开 {{plant}}（{{count}} 个活动 PO）",
+    "lockedCta": "已锁定 — 未分配采购订单",
+    "lockedTitle": "{{plant}} — 已锁定（收到该工厂的采购订单后自动解锁）",
+    "mobileCount_other": "{{count}} 个采购订单",
+    "openTitle": "打开 {{plant}}（{{count}} 个活动采购订单）",
     "plantLocked": "工厂已锁定",
-    "posUnit": "个 PO",
+    "posUnit": "个采购订单",
     "readyOrders": "可发运订单",
     "storeTitle": "查看 {{plant}} - 库位 {{store}}",
     "stores": "库位：",
     "toDispatch": "待发运",
-    "zeroPos": "0 个 PO"
+    "zeroPos": "0 个采购订单"
   },
   "header": {
     "title": "采购订单"
@@ -52,17 +52,17 @@
   "loading": "正在加载采购订单...",
   "modal": {
     "addToBatch": "加入批量选择",
-    "cancelledPo": "已取消的 PO",
+    "cancelledPo": "已取消的采购订单",
     "close": "关闭",
     "closeTitle": "关闭窗口",
     "contact": "联系人：<strong>{{name}}</strong>",
     "copied": "已复制",
-    "copyPo": "复制 PO 编号",
+    "copyPo": "复制采购订单号",
     "excelTitle": "使用 Excel 导入准备出库交货",
     "fullyFulfilled": "已全部履约（已完成）",
     "lineItems": "行项目和数量",
     "notation": "备注：<value>{{notation}}</value>",
-    "openPlantToSelect": "请先打开一个工厂再选择 PO",
+    "openPlantToSelect": "请先打开一个工厂再选择采购订单",
     "original": "v1 原始版本",
     "plant": "工厂：",
     "primaryLineFallback": "主行项目",
@@ -89,22 +89,22 @@
     "uom": "UOM"
   },
   "row": {
-    "cancelled": "此 PO 已取消",
-    "completed": "此 PO 已全部履约（已完成）",
+    "cancelled": "此采购订单已取消",
+    "completed": "此采购订单已全部履约（已完成）",
     "conflict": "不能混合：属于 {{plant}}（库位 {{store}}）。当前批次为库位 {{current}}。",
     "revised": "客户已修订订单（版本 {{version}}）",
-    "select": "选择 PO"
+    "select": "选择采购订单"
   },
   "search": {
-    "addAnother": "添加另一个 PO 编号...",
-    "default": "搜索 PO 编号或粘贴以逗号分隔的多个 PO...",
+    "addAnother": "添加另一个采购订单号...",
+    "default": "搜索采购订单号或粘贴以逗号分隔的多个采购订单...",
     "escHint": "按 Esc 关闭",
     "found": "已找到 {{found}} / {{total}}",
-    "inPlant": "在 {{plant}} 中搜索 PO...",
-    "inPlantLocation": "在 {{plant}}（{{location}}）中搜索 PO...",
+    "inPlant": "在 {{plant}} 中搜索采购订单...",
+    "inPlantLocation": "在 {{plant}}（{{location}}）中搜索采购订单...",
     "notFound": "未找到：",
     "notFoundIn": "在 {{plant}} 中未找到：",
-    "pasteHint": "粘贴以逗号分隔的多个 PO 可同时搜索",
+    "pasteHint": "粘贴以逗号分隔的多个采购订单可同时搜索",
     "selectHint": "选择 ↵"
   },
   "selection": {
@@ -121,8 +121,8 @@
     "keysHint": "使用 ↑ ↓ 和 Enter",
     "removeChip": "移除 {{chip}}",
     "store": "库位 {{code}}",
-    "storeTitle": "库位 {{code}}（{{count}} 个可用 PO）",
-    "suggested": "建议的 PO 编号",
+    "storeTitle": "库位 {{code}}（{{count}} 个可用采购订单）",
+    "suggested": "建议的采购订单号",
     "switchPlant": "切换工厂"
   },
   "statusFilter": {
@@ -136,7 +136,7 @@
     "deliveryDate": "交货日期",
     "notation": "备注",
     "orderDate": "订单日期",
-    "poNumber": "PO 编号",
+    "poNumber": "采购订单号",
     "quantity": "数量",
     "selectAll": "全选",
     "status": "状态"

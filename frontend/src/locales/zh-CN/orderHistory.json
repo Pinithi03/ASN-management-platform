@@ -15,7 +15,7 @@
     "description": "描述",
     "material": "物料",
     "ordered": "订购数量",
-    "poLine": "PO / 行",
+    "poLine": "采购订单 / 行",
     "shipped": "已发运"
   },
   "empty": {
@@ -34,22 +34,22 @@
   },
   "loading": "正在加载已完成订单历史...",
   "search": {
-    "addAnother": "添加另一个已完成的 PO 编号...",
+    "addAnother": "添加另一个已完成的采购订单号...",
     "clear": "清除搜索",
-    "placeholder": "搜索已完成的 PO 编号、款式、描述，或粘贴以逗号分隔的多个 PO..."
+    "placeholder": "搜索已完成的采购订单号、款式、描述，或粘贴以逗号分隔的多个采购订单..."
   },
   "status": {
     "completed": "已完成"
   },
   "table": {
     "completedDate": "完成日期",
-    "copyPo": "复制 PO 编号",
+    "copyPo": "复制采购订单号",
     "deliveryDate": "交货日期",
     "description": "描述 / 款式",
     "fulfilledQty": "已履约数量",
     "orderDate": "订单日期",
     "plantStore": "工厂和仓库",
-    "poNumber": "PO 编号",
+    "poNumber": "采购订单号",
     "status": "状态"
   }
 }

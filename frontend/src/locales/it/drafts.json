@@ -8,8 +8,8 @@
   },
   "confirm": {
     "discardAll": "Vuoi davvero eliminare tutte le bozze salvate? Questa azione non può essere annullata.",
-    "discardExcel": "Eliminare la bozza di caricamento Excel salvata per il PO {{po}}?",
-    "discardManual": "Eliminare la bozza salvata per il PO {{po}}?"
+    "discardExcel": "Eliminare la bozza di caricamento Excel salvata per l'ordine d'acquisto {{po}}?",
+    "discardManual": "Eliminare la bozza salvata per l'ordine d'acquisto {{po}}?"
   },
   "empty": {
     "excelText": "Quando carichi una packing list in Caricamento Excel, i tuoi progressi vengono salvati qui in modo sicuro per riprenderli in qualsiasi momento.",
@@ -50,7 +50,7 @@
     "actions": "Azioni",
     "cartons": "Cartoni / Rotoli",
     "nextSscc": "Prossimo SSCC / Stabilimento e ETA",
-    "poNumber": "Numero PO",
+    "poNumber": "Numero ordine",
     "shippingUnits": "Unità di spedizione",
     "source": "Fornitore / File e bolla di consegna",
     "status": "Passo / Stato",

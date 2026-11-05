@@ -8,9 +8,9 @@
     "linesCount_one": "{{count}} riga",
     "linesCount_other": "{{count}} righe",
     "openDrafts": "Apri bozze →",
-    "posCount_many": "{{count}} PO",
-    "posCount_one": "{{count}} PO",
-    "posCount_other": "{{count}} PO",
+    "posCount_one": "{{count}} ordine",
+    "posCount_many": "{{count}} ordini",
+    "posCount_other": "{{count}} ordini",
     "saved": "Salvate {{lines}} ({{pos}}) nelle bozze"
   },
   "empty": {
@@ -26,8 +26,8 @@
   },
   "loading": "Caricamento righe d'ordine attive...",
   "search": {
-    "addAnother": "Aggiungi un altro PO o filtra per riga / materiale...",
-    "placeholder": "Cerca PO / riga (es. 2001382767 00100-0001), materiale in {{plant}} ({{location}})...",
+    "addAnother": "Aggiungi un altro ordine d'acquisto o filtra per riga / materiale...",
+    "placeholder": "Cerca ordine d'acquisto / riga (es. 2001382767 00100-0001), materiale in {{plant}} ({{location}})...",
     "plantFallback": "Stabilimento"
   },
   "selection": {
@@ -41,9 +41,9 @@
   "table": {
     "copy": "Copia \"{{label}}\"",
     "material": "Materiale / Codice",
-    "poLine": "PO / Riga",
+    "poLine": "Ordine / Riga",
     "remaining": "Qtà residua",
-    "revised": "PO revisionato (V{{version}})",
+    "revised": "Ordine revisionato (V{{version}})",
     "selectAll": "Seleziona tutte le righe aperte in questa pagina",
     "selectLine": "Seleziona {{line}}"
   }

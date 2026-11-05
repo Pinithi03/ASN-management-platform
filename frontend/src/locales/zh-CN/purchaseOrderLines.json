@@ -6,7 +6,7 @@
   "draft": {
     "linesCount_other": "{{count}} 行",
     "openDrafts": "打开草稿 →",
-    "posCount_other": "{{count}} 个 PO",
+    "posCount_other": "{{count}} 个采购订单",
     "saved": "已将 {{lines}}（{{pos}}）保存到草稿"
   },
   "empty": {
@@ -22,8 +22,8 @@
   },
   "loading": "正在加载活动采购订单行...",
   "search": {
-    "addAnother": "添加另一个 PO 或按行 / 物料筛选...",
-    "placeholder": "搜索 PO / 行（例如 2001382767 00100-0001）、{{plant}}（{{location}}）中的物料...",
+    "addAnother": "添加另一个采购订单或按行 / 物料筛选...",
+    "placeholder": "搜索采购订单 / 行（例如 2001382767 00100-0001）、{{plant}}（{{location}}）中的物料...",
     "plantFallback": "工厂"
   },
   "selection": {
@@ -35,9 +35,9 @@
   "table": {
     "copy": "复制“{{label}}”",
     "material": "物料 / 代码",
-    "poLine": "PO / 行",
+    "poLine": "采购订单 / 行",
     "remaining": "剩余数量",
-    "revised": "已修订 PO（V{{version}}）",
+    "revised": "已修订采购订单（V{{version}}）",
     "selectAll": "选择本页所有未结行",
     "selectLine": "选择 {{line}}"
   }

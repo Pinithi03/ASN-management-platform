@@ -37,7 +37,7 @@
     "markAsRead": "标为已读",
     "newCount": "{{count}} 条新消息",
     "newPoAssigned": "已分配新的采购订单",
-    "newPoAssignedDesc": "PO {{poNumber}} 已分配到您的账户（{{quantity}} 件）",
+    "newPoAssignedDesc": "采购订单 {{poNumber}} 已分配到您的账户（{{quantity}} 件）",
     "noUnread": "没有未读通知",
     "orderFallback": "订单",
     "recently": "最近",

@@ -15,7 +15,7 @@
     "description": "Descrizione",
     "material": "Materiale",
     "ordered": "Ordinato",
-    "poLine": "PO / Riga",
+    "poLine": "Ordine / Riga",
     "shipped": "Spedito"
   },
   "empty": {
@@ -34,22 +34,22 @@
   },
   "loading": "Caricamento storico ordini completati...",
   "search": {
-    "addAnother": "Aggiungi un altro numero PO completato...",
+    "addAnother": "Aggiungi un altro numero ordine completato...",
     "clear": "Cancella ricerca",
-    "placeholder": "Cerca numero PO completato, modello, descrizione o incolla più PO separati da virgola..."
+    "placeholder": "Cerca numero ordine completato, modello, descrizione o incolla più ordini d'acquisto separati da virgola..."
   },
   "status": {
     "completed": "COMPLETATO"
   },
   "table": {
     "completedDate": "Data completamento",
-    "copyPo": "Copia numero PO",
+    "copyPo": "Copia numero ordine",
     "deliveryDate": "Data di consegna",
     "description": "Descrizione / Modello",
     "fulfilledQty": "Qtà evasa",
     "orderDate": "Data ordine",
     "plantStore": "Stabilimento e magazzino",
-    "poNumber": "Numero PO",
+    "poNumber": "Numero ordine",
     "status": "Stato"
   }
 }

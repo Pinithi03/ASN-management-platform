@@ -304,7 +304,7 @@ export default function PlantAccordionShowcase({
                         </div>
                         <div className="text-xl sm:text-2xl font-black text-white mt-0.5">
                           {stats.totalOrders}
-                          <span className="text-xs font-medium text-gray-400 ml-1.5">{t("gateway.posUnit")}</span>
+                          <span className="text-xs font-medium text-gray-400 ml-1.5">{t("gateway.posUnit", { count: stats.totalOrders })}</span>
                         </div>
                       </div>
 

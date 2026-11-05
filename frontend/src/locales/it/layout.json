@@ -37,7 +37,7 @@
     "markAsRead": "Segna come letto",
     "newCount": "{{count}} nuovi",
     "newPoAssigned": "Nuovo ordine d'acquisto assegnato",
-    "newPoAssignedDesc": "PO {{poNumber}} assegnato al tuo account ({{quantity}} unità)",
+    "newPoAssignedDesc": "Ordine d'acquisto {{poNumber}} assegnato al tuo account ({{quantity}} unità)",
     "noUnread": "Nessuna notifica non letta",
     "orderFallback": "Ordine",
     "recently": "Di recente",

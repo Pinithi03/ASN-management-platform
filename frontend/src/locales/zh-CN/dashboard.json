@@ -23,7 +23,7 @@
     "partial": "部分",
     "target": "目标日期：{{date}} · 数量：",
     "title": "即将到期的交货",
-    "unnamedPo": "未命名 PO"
+    "unnamedPo": "未命名采购订单"
   },
   "fallback": {
     "apparelItem": "服装物品",
@@ -53,17 +53,17 @@
       "badge": "{{percent}}% 分批",
       "label": "部分履约",
       "subtitle": "总体完成 {{percent}}%",
-      "value": "{{count}} 个 PO"
+      "value": "{{count}} 个采购订单"
     },
     "unprocessed": {
       "badge": "未处理",
       "label": "未处理订单",
-      "subtitle": "占已分配 PO 的 {{percent}}%",
-      "value": "{{count}} 个 PO"
+      "subtitle": "占已分配采购订单的 {{percent}}%",
+      "value": "{{count}} 个采购订单"
     }
   },
   "lifecycle": {
-    "assignedPos": "已分配 PO",
+    "assignedPos": "已分配订单",
     "cancelled": "已取消",
     "completedBadge": "已完成 {{percent}}%",
     "completedShipped": "已完成并发运",

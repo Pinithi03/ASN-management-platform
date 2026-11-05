@@ -23,7 +23,7 @@
     "partial": "Parziale",
     "target": "Prevista: {{date}} · Quantità:",
     "title": "Consegne in scadenza",
-    "unnamedPo": "PO senza nome"
+    "unnamedPo": "Ordine senza nome"
   },
   "fallback": {
     "apparelItem": "Articolo di abbigliamento",
@@ -53,17 +53,21 @@
       "badge": "{{percent}}% suddiviso",
       "label": "Evasione parziale",
       "subtitle": "{{percent}}% completato in totale",
-      "value": "{{count}} PO"
+      "value_one": "{{count}} ordine",
+      "value_many": "{{count}} ordini",
+      "value_other": "{{count}} ordini"
     },
     "unprocessed": {
       "badge": "Aperti",
       "label": "Ordini da elaborare",
-      "subtitle": "{{percent}}% dei PO assegnati",
-      "value": "{{count}} PO"
+      "subtitle": "{{percent}}% degli ordini assegnati",
+      "value_one": "{{count}} ordine",
+      "value_many": "{{count}} ordini",
+      "value_other": "{{count}} ordini"
     }
   },
   "lifecycle": {
-    "assignedPos": "PO assegnati",
+    "assignedPos": "Ordini assegnati",
     "cancelled": "Annullati",
     "completedBadge": "{{percent}}% completati",
     "completedShipped": "Completati e spediti",
