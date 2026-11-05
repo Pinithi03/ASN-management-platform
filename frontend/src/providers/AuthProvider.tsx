@@ -4,7 +4,7 @@
  * On mount:
  *   1. Initialises keycloak-js (redirects to Keycloak if no session)
  *   2. Applies the user's language from the token's `locale` claim
- *   3. Calls GET /auth/me to load the user profile
+ *   3. Calls GET /auth/me to load the user profile (admins are then switched to English)
  *   4. Stores the profile in the Zustand auth store
  *   5. Renders children
  *
@@ -48,10 +48,15 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
 
       // Load the user profile from the backend.
       const me = await authService.getMe();
-      // The backend also knows a supplier's saved language when the token has no `locale` yet
-      const savedLanguage = normaliseLocale(me.language);
-      if (savedLanguage && savedLanguage !== i18n.language) {
-        await i18n.changeLanguage(savedLanguage);
+      if (me.role === "ADMIN" || me.role === "SUPER_ADMIN") {
+        // Admins always use English, whatever locale is saved on the account
+        if (i18n.language !== "en") await i18n.changeLanguage("en");
+      } else {
+        // The backend also knows a supplier's saved language when the token has no `locale` yet
+        const savedLanguage = normaliseLocale(me.language);
+        if (savedLanguage && savedLanguage !== i18n.language) {
+          await i18n.changeLanguage(savedLanguage);
+        }
       }
       setProfile(me);
       setStatus("ready");

@@ -766,9 +766,9 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 </div>
               </div>
 
-              {/* Action Icons: Language + Notification Bell + Sign Out */}
+              {/* Action Icons: Language (suppliers only) + Notification Bell + Sign Out */}
               <div className="flex items-center gap-1 shrink-0">
-                <LanguageSwitcher />
+                {!isAdmin && <LanguageSwitcher />}
 
                 <button
                   type="button"
@@ -813,7 +813,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
               {(user?.supplier_name || user?.name || (isAdmin ? "Admin" : "Supplier")).charAt(0).toUpperCase()}
             </div>
 
-            <LanguageSwitcher collapsed />
+            {!isAdmin && <LanguageSwitcher collapsed />}
 
             <button
               type="button"

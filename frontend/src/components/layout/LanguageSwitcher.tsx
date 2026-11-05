@@ -11,6 +11,7 @@ import { Check, Globe } from "lucide-react";
 import i18n, { LANGUAGE_NAMES, SUPPORTED_LANGUAGES, currentLanguage, type AppLanguage } from "@/i18n";
 import { keycloak } from "@/lib/keycloak";
 import { authService } from "@/services/auth";
+import { useAuthStore } from "@/store/authStore";
 import { cn } from "@/utils/cn";
 
 interface LanguageSwitcherProps {
@@ -23,6 +24,7 @@ export default function LanguageSwitcher({ collapsed = false }: LanguageSwitcher
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const active = currentLanguage();
+  const role = useAuthStore((s) => s.user?.role);
 
   // Close the menu on click outside
   useEffect(() => {
@@ -40,6 +42,8 @@ export default function LanguageSwitcher({ collapsed = false }: LanguageSwitcher
     if (lang === active) return;
 
     await i18n.changeLanguage(lang);
+    // Admins always use English, so never save a language for them
+    if (role === "ADMIN" || role === "SUPER_ADMIN") return;
 
     try {
       await authService.updatePreferences({ language: lang });
