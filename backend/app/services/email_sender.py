@@ -12,56 +12,49 @@ from email.mime.text import MIMEText
 from typing import Optional
 
 from app.core.config import get_settings
+from app.core.languages import normalise_language
+from app.services.welcome_email_texts import WELCOME_TEXTS
 
 logger = logging.getLogger(__name__)
 
 
-def send_supplier_welcome_email(
-    to_email: str,
+def render_supplier_welcome_email(
     supplier_name: str,
     supplier_code: str,
     temporary_password: str,
-    portal_url: Optional[str] = None,
-) -> bool:
-    """
-    Send an automated onboarding email to the supplier partner with their
-    portal access link, username (supplier code), and temporary password.
-    """
-    settings = get_settings()
-    portal_link = portal_url or settings.PORTAL_URL or "http://localhost:3000"
-    recipient = (to_email or "").strip()
+    portal_link: str,
+    language: Optional[str] = None,
+) -> tuple[str, str, str]:
+    """Build (subject, plain text, HTML) of the welcome email in the given language."""
+    lang = normalise_language(language) or "en"
+    tx = WELCOME_TEXTS.get(lang, WELCOME_TEXTS["en"])
 
-    if not recipient:
-        logger.warning("Skipping welcome email: no recipient email provided for supplier %s", supplier_code)
-        return False
-
-    sender = settings.SMTP_FROM_EMAIL or "ASN Portal <no-reply@asn-platform.local>"
-    subject = f"Welcome to ASN Portal — Login Credentials for #{supplier_code}"
+    subject = str(tx['subject']).format(code=supplier_code)
+    greeting = str(tx['greeting']).format(name=supplier_name)
+    uses = "\n".join(f"- {line}" for line in tx['text_uses'])  # type: ignore[union-attr]
 
     # Plain text version
-    text_content = f"""Dear {supplier_name},
+    text_content = f"""{greeting}
 
-Your partner account on the ASN Management Platform has been successfully activated.
+{tx['text_intro']}
 
-Here are your portal access credentials:
+{tx['text_creds_heading']}
 --------------------------------------------------
-Portal Access URL: {portal_link}
-Username (Partner ID): {supplier_code}
-Temporary Password: {temporary_password}
+{tx['text_label_url']} {portal_link}
+{tx['label_username']} {supplier_code}
+{tx['label_password']} {temporary_password}
 --------------------------------------------------
 
-SECURITY NOTICE:
-Upon your first sign-in, you will be prompted by Keycloak to choose your own secure, permanent password before accessing the system.
+{tx['text_security_heading']}
+{tx['text_security']}
 
-You can use the ASN portal to:
-- Review and track your purchase orders
-- Submit Advance Shipping Notices (ASNs)
-- Monitor delivery statuses and packing lists
+{tx['text_uses_heading']}
+{uses}
 
-If you have any questions, please contact Sirio Central Procurement HQ at sirio.asn.dev@gmail.com.
+{tx['text_contact']}
 
-Best regards,
-Supply Chain & Procurement Team
+{tx['sign_off']}
+{tx['team']}
 """
 
     # Rich HTML version
@@ -94,45 +87,79 @@ Supply Chain & Procurement Team
   <div class="container">
     <div class="header">
       <h1>ASN Management Platform</h1>
-      <p>Partner Supply Chain Portal</p>
+      <p>{tx['html_subtitle']}</p>
     </div>
     <div class="content">
-      <div class="salutation">Dear {supplier_name},</div>
+      <div class="salutation">{greeting}</div>
       <p class="intro">
-        Your supplier partner account has been successfully provisioned. You can now access the portal to review inbound purchase orders, monitor dispatches, and manage Advance Shipping Notices (ASNs).
+        {tx['html_intro']}
       </p>
 
       <div class="credentials-box">
         <div class="cred-row">
-          <span class="cred-label">Portal URL:</span>
+          <span class="cred-label">{tx['html_label_url']}</span>
           <span class="cred-val"><a href="{portal_link}" style="color: #2563eb; text-decoration: none;">{portal_link}</a></span>
         </div>
         <div class="cred-row">
-          <span class="cred-label">Username (Partner ID):</span>
+          <span class="cred-label">{tx['label_username']}</span>
           <span class="cred-val">#{supplier_code}</span>
         </div>
         <div class="cred-row">
-          <span class="cred-label">Temporary Password:</span>
+          <span class="cred-label">{tx['label_password']}</span>
           <span class="cred-val"><span class="temp-pw">{temporary_password}</span></span>
         </div>
       </div>
 
       <div style="text-align: center; margin-bottom: 24px;">
-        <a href="{portal_link}" class="btn">Log In to ASN Portal &rarr;</a>
+        <a href="{portal_link}" class="btn">{tx['html_button']}</a>
       </div>
 
       <div class="notice">
-        <strong>Security Policy:</strong> This temporary password is for initial sign-in only. Keycloak will prompt you to choose your own secure permanent password immediately upon logging in.
+        <strong>{tx['html_policy_label']}</strong> {tx['html_policy']}
       </div>
     </div>
     <div class="footer">
       Sirio, Benji, Omega Line, Alpha Apparels, Vavuniya Apparels<br>
-      For technical support, contact Sirio Admin HQ: <a href="mailto:sirio.asn.dev@gmail.com" style="color: #2563eb;">sirio.asn.dev@gmail.com</a>
+      {tx['html_support']} <a href="mailto:sirio.asn.dev@gmail.com" style="color: #2563eb;">sirio.asn.dev@gmail.com</a>
     </div>
   </div>
 </body>
 </html>
 """
+
+    return subject, text_content, html_content
+
+
+def send_supplier_welcome_email(
+    to_email: str,
+    supplier_name: str,
+    supplier_code: str,
+    temporary_password: str,
+    portal_url: Optional[str] = None,
+    language: Optional[str] = None,
+) -> bool:
+    """
+    Send an automated onboarding email to the supplier partner with their
+    portal access link, username (supplier code), and temporary password.
+
+    `language` ("en", "zh-CN", "it") selects the email texts; default English.
+    """
+    settings = get_settings()
+    portal_link = portal_url or settings.PORTAL_URL or "http://localhost:3000"
+    recipient = (to_email or "").strip()
+
+    if not recipient:
+        logger.warning("Skipping welcome email: no recipient email provided for supplier %s", supplier_code)
+        return False
+
+    sender = settings.SMTP_FROM_EMAIL or "ASN Portal <no-reply@asn-platform.local>"
+    subject, text_content, html_content = render_supplier_welcome_email(
+        supplier_name=supplier_name,
+        supplier_code=supplier_code,
+        temporary_password=temporary_password,
+        portal_link=portal_link,
+        language=language,
+    )
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject

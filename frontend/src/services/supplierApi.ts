@@ -7,6 +7,8 @@ import type { SupplierItem } from "@/pages/Suppliers";
 export interface SupplierCreateParams {
   supplier_code: string;
   name: string;
+  /** "en" | "zh-CN" | "it" — portal, login page and welcome email language */
+  preferred_language?: string;
   email?: string;
   contact_name?: string;
   phone?: string;
@@ -21,6 +23,7 @@ export interface SupplierCreateParams {
 
 export interface SupplierUpdateParams {
   name?: string;
+  preferred_language?: string;
   supplier_code?: string;
   email?: string;
   contact_name?: string;

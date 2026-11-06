@@ -63,7 +63,8 @@ const config: Config = {
         xs: "2px",
       },
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
+        // Chinese fallbacks so zh-CN text never falls back to a random system font
+        sans: ["Inter", "system-ui", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", "sans-serif"],
       },
     },
   },

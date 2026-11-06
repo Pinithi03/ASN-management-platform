@@ -18,6 +18,8 @@ export interface AuthUser {
   supplier_id: string | null;
   supplier_code: string | null;
   supplier_name: string | null;
+  /** Saved portal language ("en" | "zh-CN" | "it"); older backends may omit it. */
+  language?: string;
 }
 
 interface AuthState {

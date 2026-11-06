@@ -1,0 +1,144 @@
+{
+  "crossWarning": {
+    "clearAndSelect": "清除并选择 {{po}}",
+    "dismiss": "关闭提示",
+    "location": "库位 {{code}}",
+    "message": "<b>不能混合不同工厂或库位：</b>当前选择属于 <u>{{current}}</u>。<u>{{target}}</u> 的订单（例如 {{po}}）必须单独发运。"
+  },
+  "empty": {
+    "clearDate": "清除交货日期",
+    "filtered": "没有与所选工厂、库位或交货日期匹配的采购订单。",
+    "hint": "请尝试调整搜索或筛选条件",
+    "resetPlant": "重置工厂和库位筛选",
+    "title": "未找到采购订单"
+  },
+  "gateway": {
+    "activeOrders": "活动订单",
+    "badgeUnit_other": "采购订单",
+    "cta": "{{label}}（{{count}}）",
+    "ctaDefault": "查看工厂订单",
+    "deliveryStores": "交货库位",
+    "destinationFactory": "目的地工厂",
+    "directHub": "直接发运中心",
+    "locationCountry": "斯里兰卡 {{location}}",
+    "locations": "个库位",
+    "locked": "已锁定",
+    "lockedCta": "已锁定 — 未分配采购订单",
+    "lockedTitle": "{{plant}} — 已锁定（收到该工厂的采购订单后自动解锁）",
+    "mobileCount_other": "{{count}} 个采购订单",
+    "openTitle": "打开 {{plant}}（{{count}} 个活动采购订单）",
+    "plantLocked": "工厂已锁定",
+    "posUnit": "个采购订单",
+    "readyOrders": "可发运订单",
+    "storeTitle": "查看 {{plant}} - 库位 {{store}}",
+    "stores": "库位：",
+    "toDispatch": "待发运",
+    "zeroPos": "0 个采购订单"
+  },
+  "header": {
+    "title": "采购订单"
+  },
+  "history": {
+    "qty": "数量：{{old}} → {{new}}",
+    "source": "来源：{{source}}",
+    "title": "修订和更新历史",
+    "version": "版本 {{version}}"
+  },
+  "lineStatus": {
+    "fulfilled": "已履约",
+    "partial": "部分",
+    "pending": "待处理"
+  },
+  "loading": "正在加载采购订单...",
+  "modal": {
+    "addToBatch": "加入批量选择",
+    "cancelledPo": "已取消的采购订单",
+    "close": "关闭",
+    "closeTitle": "关闭窗口",
+    "contact": "联系人：<strong>{{name}}</strong>",
+    "copied": "已复制",
+    "copyPo": "复制采购订单号",
+    "excelTitle": "使用 Excel 导入准备出库交货",
+    "fullyFulfilled": "已全部履约（已完成）",
+    "lineItems": "行项目和数量",
+    "notation": "备注：<value>{{notation}}</value>",
+    "openPlantToSelect": "请先打开一个工厂再选择采购订单",
+    "original": "v1 原始版本",
+    "plant": "工厂：",
+    "primaryLineFallback": "主行项目",
+    "proceedExcel": "继续 Excel 导入",
+    "proceedManual": "继续手动交货",
+    "refreshing": "正在刷新行项目...",
+    "revision": "v{{version}} 修订版",
+    "selectedForBatch": "已选择批量交货",
+    "sourceEmail": "来源邮件：",
+    "totals_other": "合计（{{count}} 行）："
+  },
+  "modalTable": {
+    "color": "颜色",
+    "description": "描述",
+    "item": "物料 / 物料代码",
+    "no": "序号",
+    "openBalance": "未结数量",
+    "ordered": "订购数量",
+    "partner": "合作伙伴代码",
+    "shipped": "已发运",
+    "status": "状态",
+    "subtotal": "小计",
+    "unitPrice": "单价",
+    "uom": "UOM"
+  },
+  "row": {
+    "cancelled": "此采购订单已取消",
+    "completed": "此采购订单已全部履约（已完成）",
+    "conflict": "不能混合：属于 {{plant}}（库位 {{store}}）。当前批次为库位 {{current}}。",
+    "revised": "客户已修订订单（版本 {{version}}）",
+    "select": "选择采购订单"
+  },
+  "search": {
+    "addAnother": "添加另一个采购订单号...",
+    "default": "搜索采购订单号或粘贴以逗号分隔的多个采购订单...",
+    "escHint": "按 Esc 关闭",
+    "found": "已找到 {{found}} / {{total}}",
+    "inPlant": "在 {{plant}} 中搜索采购订单...",
+    "inPlantLocation": "在 {{plant}}（{{location}}）中搜索采购订单...",
+    "notFound": "未找到：",
+    "notFoundIn": "在 {{plant}} 中未找到：",
+    "pasteHint": "粘贴以逗号分隔的多个采购订单可同时搜索",
+    "selectHint": "选择 ↵"
+  },
+  "selection": {
+    "clear": "清除选择",
+    "selected_other": "已选择 {{count}} 个采购订单"
+  },
+  "shared": {
+    "breadcrumb": "工厂",
+    "clearDeliveryDate": "清除交货日期筛选",
+    "clearSearch": "清除搜索",
+    "createDelivery": "+ 创建交货",
+    "excelDropDelivery": "Excel 导入交货",
+    "filterDeliveryDate": "按交货日期筛选",
+    "keysHint": "使用 ↑ ↓ 和 Enter",
+    "removeChip": "移除 {{chip}}",
+    "store": "库位 {{code}}",
+    "storeTitle": "库位 {{code}}（{{count}} 个可用采购订单）",
+    "suggested": "建议的采购订单号",
+    "switchPlant": "切换工厂"
+  },
+  "statusFilter": {
+    "active": "活动",
+    "all": "所有活动状态",
+    "partial": "部分",
+    "updated": "已更新"
+  },
+  "table": {
+    "contact": "联系人",
+    "deliveryDate": "交货日期",
+    "notation": "备注",
+    "orderDate": "订单日期",
+    "poNumber": "采购订单号",
+    "quantity": "数量",
+    "selectAll": "全选",
+    "status": "状态"
+  }
+}

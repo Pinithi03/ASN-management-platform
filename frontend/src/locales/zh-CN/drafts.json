@@ -1,0 +1,57 @@
+{
+  "actions": {
+    "discard": "放弃",
+    "discardAll": "全部放弃",
+    "resumeExcel": "继续 Excel 导入",
+    "resumePacking": "继续装箱",
+    "uploadFilledSheet": "上传已填写的表格"
+  },
+  "confirm": {
+    "discardAll": "确定要放弃所有已保存的草稿吗？此操作无法撤销。",
+    "discardExcel": "放弃采购订单 {{po}} 已保存的 Excel 导入草稿？",
+    "discardManual": "放弃采购订单 {{po}} 已保存的草稿？"
+  },
+  "empty": {
+    "excelText": "在 Excel 导入中上传装箱单后，您的进度会安全保存在这里，可随时继续。",
+    "excelTitle": "没有已保存的 Excel 导入草稿",
+    "manualText": "在手动处理中输入纸箱数量后，您的进度会安全保存在这里，可随时继续。",
+    "manualTitle": "没有已保存的手动装箱草稿"
+  },
+  "header": {
+    "active_other": "{{count}} 个进行中",
+    "title": "已保存的草稿"
+  },
+  "row": {
+    "awaitingUpload": "等待上传",
+    "cartons_other": "{{count}} 箱",
+    "deliveryNote": "送货单：<value>{{note}}</value>",
+    "factoryMeasuring": "工厂测量中",
+    "file": "文件：<value>{{file}}</value>",
+    "quantityUnits": "{{quantity}} 单位",
+    "seq": "序号 #{{seq}}",
+    "stepCartons": "第 {{step}} 步：纸箱和 HU",
+    "stepItems": "第 {{step}} 步：物料数量",
+    "stepReview": "第 {{step}} 步：审核并传输",
+    "supplierCode": "供应商代码：<value>{{code}}</value>",
+    "units_other": "{{count}} 个单位"
+  },
+  "status": {
+    "needsAttention": "需要处理",
+    "templateDownloaded": "模板已下载",
+    "validated": "已验证"
+  },
+  "table": {
+    "actions": "操作",
+    "cartons": "纸箱 / 卷",
+    "nextSscc": "下一个 SSCC / 工厂和预计到达",
+    "poNumber": "采购订单号",
+    "shippingUnits": "发运数量",
+    "source": "供应商 / 文件和送货单",
+    "status": "步骤 / 状态",
+    "updated": "更新时间"
+  },
+  "tabs": {
+    "excel": "Excel 导入",
+    "manual": "手动装箱"
+  }
+}

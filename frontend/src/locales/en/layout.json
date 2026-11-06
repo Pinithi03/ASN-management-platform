@@ -1,0 +1,61 @@
+{
+  "auth": {
+    "couldNotConnect": "Could not connect to the login server.",
+    "redirectingToLogin": "Redirecting to login…",
+    "signingIn": "Signing you in…",
+    "unableToSignIn": "Unable to sign in"
+  },
+  "language": {
+    "change": "Change language"
+  },
+  "lockout": {
+    "accountRevoked": "Account Revoked",
+    "accountSuspended": "Account Suspended",
+    "contact": "Contact Administration at <link>{{email}}</link> to resolve your account status.",
+    "revokedMessage": "This supplier account has been removed. Platform access has been disabled.",
+    "revokedTitle": "Account Access Revoked",
+    "suspendedMessage": "Your supplier partner account is currently suspended by central administration.",
+    "suspendedTitle": "Account Temporarily Suspended"
+  },
+  "nav": {
+    "account": "Account",
+    "drafts": "Drafts",
+    "excelDrop": "Excel Drop",
+    "main": "Main",
+    "manualProcess": "Manual Process",
+    "myEmails": "My Emails",
+    "orderHistory": "Order History",
+    "overview": "Overview",
+    "profile": "Profile",
+    "purchaseOrderLines": "Purchase Order Lines",
+    "purchaseOrders": "Purchase Orders",
+    "shipments": "Shipments"
+  },
+  "notifications": {
+    "alerts": "Alerts",
+    "markAllRead": "Mark all read",
+    "markAsRead": "Mark as read",
+    "newCount": "{{count}} new",
+    "newPoAssigned": "New Purchase Order Assigned",
+    "newPoAssignedDesc": "PO {{poNumber}} assigned to your account ({{quantity}} units)",
+    "noUnread": "No unread notifications",
+    "orderFallback": "Order",
+    "recently": "Recently",
+    "title": "Notifications",
+    "viewMyOrders": "View My Orders"
+  },
+  "sidebar": {
+    "collapse": "Collapse sidebar",
+    "expand": "Expand sidebar",
+    "supplierPortal": "Supplier Portal",
+    "toggleMenu": "Toggle Menu"
+  },
+  "signOut": {
+    "confirmMessage": "Are you sure you want to end your current session?",
+    "title": "Sign Out"
+  },
+  "user": {
+    "supplier": "Supplier",
+    "supplierPartner": "Supplier Partner"
+  }
+}

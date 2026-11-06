@@ -2,9 +2,41 @@
 Custom exception classes and exception handlers.
 """
 
-from typing import Any
-from fastapi import Request, status
+from typing import Any, Optional
+from fastapi import HTTPException, Request, status
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
+
+
+class CodedHTTPException(HTTPException):
+    """
+    HTTPException with a stable error code the frontend can translate.
+
+    The response keeps `detail` (English, for logs and existing clients) and adds
+    `code` and `params`:
+        {"detail": "Shipment not found", "code": "SHIPMENT_NOT_FOUND", "params": {}}
+    """
+
+    def __init__(
+        self,
+        status_code: int,
+        detail: Any = None,
+        *,
+        code: str,
+        params: Optional[dict[str, Any]] = None,
+        headers: Optional[dict[str, str]] = None,
+    ):
+        super().__init__(status_code=status_code, detail=detail, headers=headers)
+        self.code = code
+        self.params = params or {}
+
+
+async def coded_http_exception_handler(request: Request, exc: CodedHTTPException) -> JSONResponse:
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=jsonable_encoder({"detail": exc.detail, "code": exc.code, "params": exc.params}),
+        headers=exc.headers,
+    )
 
 
 class AppException(Exception):

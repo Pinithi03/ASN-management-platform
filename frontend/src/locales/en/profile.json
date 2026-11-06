@@ -1,0 +1,68 @@
+{
+  "avatar": {
+    "change": "Change",
+    "changeLogo": "Change Logo",
+    "changePhoto": "Change photo",
+    "clickToUpload": "Click to upload or change logo",
+    "invalidType": "Please select a valid image file (PNG, JPG, or WebP).",
+    "loadFailed": "Failed to load image file.",
+    "processing": "Processing...",
+    "readFailed": "Failed to read image file.",
+    "remove": "Remove",
+    "removeFailed": "Failed to remove profile picture.",
+    "removed": "Profile picture removed successfully.",
+    "tooLarge": "Image file size must be under 10MB.",
+    "upload": "Upload Logo",
+    "uploadFailed": "Failed to upload profile picture.",
+    "uploaded": "Profile picture uploaded and saved successfully!"
+  },
+  "cache": {
+    "clear": "Clear Local Drafts",
+    "cleared_one": "Offline cache cleared successfully! ({{count}} draft purged)",
+    "cleared_other": "Offline cache cleared successfully! ({{count}} drafts purged)",
+    "clearing": "Clearing...",
+    "confirm": "Are you sure you want to clear your local offline drafts and cached packing configurations? This will reset local unsent draft progress on this device.",
+    "draftBadge_one": "{{count}} Draft",
+    "draftBadge_other": "{{count}} Drafts",
+    "storageInfo": "{{items}} saved items • {{sizeKb}} KB browser storage used on this device",
+    "title": "Local Cache & Offline Drafts"
+  },
+  "fallback": {
+    "contactName": "Partner Representative",
+    "initialized": "Initialized",
+    "representative": "Representative",
+    "supplierName": "Supplier Partner"
+  },
+  "header": {
+    "active": "Active Partner",
+    "inactive": "Inactive"
+  },
+  "hu": {
+    "edit": "Edit",
+    "initialLabel": "Initial Last Used HU Number",
+    "lastUsed": "Last Used HU Number",
+    "lock": "Lock Sequence",
+    "locked": "Locked",
+    "lockedNote": "Sequence is locked to preserve Calzedonia EDI integrity. Contact System Administrator for adjustments.",
+    "nextCarton": "Next carton barcode will generate from this number + 1.",
+    "overrideLabel": "Override HU Sequence",
+    "placeholder": "e.g. 0 (if starting fresh) or last serial",
+    "saveFailed": "Failed to configure HU number.",
+    "saved": "Handling Unit (HU) sequence number saved successfully and locked.",
+    "setupNeeded": "Setup Needed",
+    "subtitle": "SSCC-20 barcode tracking for dispatch cartons",
+    "synchronized": "Synchronized",
+    "title": "Handling Unit (HU) Sequence",
+    "update": "Update"
+  },
+  "registry": {
+    "changesNote": "To request changes to legal enterprise name or billing details, please contact Central HQ Administration.",
+    "companyName": "Company Name",
+    "contactPerson": "Contact Person",
+    "country": "Country / Region",
+    "partnerCode": "Partner Code",
+    "subtitle": "Official enterprise records from plant database",
+    "title": "Company Registry Details",
+    "verified": "Verified ID"
+  }
+}

@@ -4,6 +4,7 @@
 
 import { useState } from "react";
 import { Outlet } from "react-router-dom";
+import { Trans, useTranslation } from "react-i18next";
 import Sidebar from "./Sidebar";
 import { useAuthStore } from "@/store/authStore";
 import { useQuery } from "@tanstack/react-query";
@@ -11,6 +12,7 @@ import { supplierApi } from "@/services/supplierApi";
 import { ShieldAlert, Lock, Building2, Menu } from "lucide-react";
 
 export default function MainLayout() {
+  const { t } = useTranslation(["layout", "common"]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const user = useAuthStore((s) => s.user);
@@ -58,7 +60,7 @@ export default function MainLayout() {
           <button
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
             className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 cursor-pointer"
-            title="Toggle Menu"
+            title={t("layout:sidebar.toggleMenu")}
           >
             <Menu className="h-5 w-5" />
           </button>
@@ -85,24 +87,35 @@ export default function MainLayout() {
                         : "bg-amber-50 text-amber-800 border border-amber-200"
                     }`}
                   >
-                    {supplierAccountState === "DELETED" ? "Account Revoked" : "Account Suspended"}
+                    {supplierAccountState === "DELETED"
+                      ? t("layout:lockout.accountRevoked")
+                      : t("layout:lockout.accountSuspended")}
                   </span>
 
                   <h2 className="text-xl font-bold text-slate-900">
                     {supplierAccountState === "DELETED"
-                      ? "Account Access Revoked"
-                      : "Account Temporarily Suspended"}
+                      ? t("layout:lockout.revokedTitle")
+                      : t("layout:lockout.suspendedTitle")}
                   </h2>
 
                   <p className="text-xs text-slate-500 leading-relaxed max-w-sm mx-auto">
                     {supplierAccountState === "DELETED"
-                      ? "This supplier account has been removed. Platform access has been disabled."
-                      : "Your supplier partner account is currently suspended by central administration."}
+                      ? t("layout:lockout.revokedMessage")
+                      : t("layout:lockout.suspendedMessage")}
                   </p>
                 </div>
 
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600">
-                  <p>Contact Administration at <a href="mailto:sirio.asn.dev@gmail.com" className="text-brand-600 font-medium hover:underline">sirio.asn.dev@gmail.com</a> to resolve your account status.</p>
+                  <p>
+                    <Trans
+                      t={t}
+                      i18nKey="layout:lockout.contact"
+                      values={{ email: "sirio.asn.dev@gmail.com" }}
+                      components={{
+                        link: <a href="mailto:sirio.asn.dev@gmail.com" className="text-brand-600 font-medium hover:underline" />,
+                      }}
+                    />
+                  </p>
                 </div>
 
                 <div className="pt-2 border-t border-slate-100 flex items-center justify-center">
@@ -111,7 +124,7 @@ export default function MainLayout() {
                     className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-brand-600 hover:bg-brand-700 active:bg-brand-800 rounded-lg shadow-2xs transition-all"
                   >
                     <Building2 className="w-4 h-4" />
-                    Sign Out
+                    {t("common:actions.signOut")}
                   </button>
                 </div>
               </div>

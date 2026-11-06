@@ -1,0 +1,47 @@
+{
+  "crossWarning": {
+    "message": "<b>Cannot Mix Plants or Storage Locations: </b>Current selection belongs to <u>{{current}}</u>. Line <mono>{{line}}</mono> belongs to <u>{{target}}</u>.",
+    "storeDesc": "{{plant}} (Store {{store}})"
+  },
+  "draft": {
+    "linesCount_one": "{{count}} line",
+    "linesCount_other": "{{count}} lines",
+    "openDrafts": "Open Drafts →",
+    "posCount_one": "{{count}} PO",
+    "posCount_other": "{{count}} POs",
+    "saved": "Saved {{lines}} ({{pos}}) to Drafts"
+  },
+  "empty": {
+    "allStores": "All Stores",
+    "changePlant": "Change Plant",
+    "clearFilters": "Clear Filters",
+    "text": "All line items for {{plant}} ({{location}}) are either fulfilled or do not match your search or delivery date filter.",
+    "title": "No open purchase order lines found"
+  },
+  "gatewayCta": "View Plant Order Lines",
+  "header": {
+    "title": "Purchase Order Lines"
+  },
+  "loading": "Loading active purchase order lines...",
+  "search": {
+    "addAnother": "Add another PO or filter by line / material...",
+    "placeholder": "Search PO / Line (e.g. 2001382767 00100-0001), material in {{plant}} ({{location}})...",
+    "plantFallback": "Plant"
+  },
+  "selection": {
+    "clear": "Clear",
+    "saveDraft": "Save Draft",
+    "selectedPos": "({{pos}})",
+    "selected_one": "{{count}} Order Line Selected",
+    "selected_other": "{{count}} Order Lines Selected"
+  },
+  "table": {
+    "copy": "Copy \"{{label}}\"",
+    "material": "Material / Code",
+    "poLine": "PO / Line",
+    "remaining": "Remaining Qty",
+    "revised": "Revised PO (V{{version}})",
+    "selectAll": "Select all open lines on this page",
+    "selectLine": "Select {{line}}"
+  }
+}

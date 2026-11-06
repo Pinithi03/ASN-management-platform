@@ -28,6 +28,7 @@ from sqlalchemy import desc, distinct, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.exceptions import CodedHTTPException
 from app.db.session import get_db
 from app.models.asn import ASNRecord
 from app.models.company import Company
@@ -363,14 +364,14 @@ async def validate_excel_packing_list(
     Performs live verification against DB open PO quantities and weight validation rules.
     """
     if not file.filename or not (file.filename.endswith(".xlsx") or file.filename.endswith(".xls")):
-        raise HTTPException(
+        raise CodedHTTPException(code="EXCEL_FILE_TYPE",
             status_code=400,
             detail="Only Excel spreadsheets (.xlsx or .xls) are accepted",
         )
 
     file_bytes = await file.read()
     if not file_bytes:
-        raise HTTPException(status_code=400, detail="Uploaded file is empty")
+        raise CodedHTTPException(code="FILE_EMPTY", status_code=400, detail="Uploaded file is empty")
 
     supplier_uuid = None
     if supplier_id:
@@ -414,12 +415,12 @@ async def create_shipment_from_excel(
     5. Save ASNRecord ready for dispatch
     """
     if not file.filename or not (file.filename.endswith(".xlsx") or file.filename.endswith(".xls")):
-        raise HTTPException(status_code=400, detail="Only Excel files (.xlsx) are accepted")
+        raise CodedHTTPException(code="EXCEL_FILE_TYPE", status_code=400, detail="Only Excel files (.xlsx) are accepted")
 
     ps_clean = str(packing_slip_number or "").strip()
     file_bytes = await file.read()
     if not file_bytes:
-        raise HTTPException(status_code=400, detail="File is empty")
+        raise CodedHTTPException(code="FILE_EMPTY", status_code=400, detail="File is empty")
 
     supplier_uuid = None
     if supplier_id:
@@ -436,7 +437,7 @@ async def create_shipment_from_excel(
         supplier_code=supplier_code,
     )
     if not validation_res.is_valid:
-        raise HTTPException(
+        raise CodedHTTPException(code="EXCEL_VALIDATION_FAILED",
             status_code=422,
             detail={
                 "message": "Excel file contains validation errors",
@@ -446,7 +447,7 @@ async def create_shipment_from_excel(
         )
 
     if not validation_res.rows:
-        raise HTTPException(status_code=400, detail="No carton data rows found in Excel sheet")
+        raise CodedHTTPException(code="EXCEL_NO_ROWS", status_code=400, detail="No carton data rows found in Excel sheet")
 
     # Fetch PO from DB first to get actual company_id, supplier_id, and destination
     distinct_pos = list({r.po_number for r in validation_res.rows if r.po_number})
@@ -570,7 +571,7 @@ async def create_shipment_from_excel(
     for r in validation_res.rows:
         row_ps = r.pack_number.strip() if r.pack_number and r.pack_number.strip() else ps_clean
         if not row_ps:
-            raise HTTPException(
+            raise CodedHTTPException(code="PACKING_SLIP_MISSING_ROW", params={"row": r.row_index},
                 status_code=422,
                 detail=f"Row {r.row_index}: Packing Slip Number is missing. Please provide in 'Packing Slip No.' column.",
             )
@@ -585,7 +586,7 @@ async def create_shipment_from_excel(
     existing_res = await db.scalars(existing_stmt)
     existing_list = list(existing_res.all())
     if existing_list:
-        raise HTTPException(
+        raise CodedHTTPException(code="PACKING_SLIP_EXISTS", params={"numbers": ", ".join(existing_list)},
             status_code=409,
             detail=f"Packing slip / Shipment number(s) '{', '.join(existing_list)}' already exist. Please use unique numbers.",
         )
@@ -819,7 +820,7 @@ async def create_shipment_from_excel(
     except Exception as e:
         logger.error("DB commit failed for multi-shipment creation: %s", e)
         await db.rollback()
-        raise HTTPException(
+        raise CodedHTTPException(code="SHIPMENT_SAVE_FAILED",
             status_code=500,
             detail=f"Failed to save shipment(s) to database: {str(e)}",
         )
@@ -909,11 +910,11 @@ async def create_direct_shipment(
     Allocates 20-digit Calzedonia HUs, validates DTD, and generates official ASN XML.
     """
     if not req.cartons:
-        raise HTTPException(status_code=400, detail="At least one carton is required.")
+        raise CodedHTTPException(code="CARTONS_REQUIRED", status_code=400, detail="At least one carton is required.")
 
     ps_clean = str(req.packing_slip_number or "").strip()
     if not ps_clean:
-        raise HTTPException(
+        raise CodedHTTPException(code="PACKING_SLIP_REQUIRED",
             status_code=422,
             detail="Packing Slip / Delivery Note Number is required",
         )
@@ -923,7 +924,7 @@ async def create_direct_shipment(
         select(Shipment.id).where(Shipment.shipment_number == ps_clean)
     )
     if existing_shipment:
-        raise HTTPException(
+        raise CodedHTTPException(code="PACKING_SLIP_EXISTS", params={"numbers": ps_clean},
             status_code=409,
             detail=f"Packing slip / Shipment number '{ps_clean}' already exists. Please enter a unique number.",
         )
@@ -931,23 +932,23 @@ async def create_direct_shipment(
     # 1. Validate weights and quantities (with auto-fallback for optional fields)
     for idx, c in enumerate(req.cartons):
         if c.quantity <= 0:
-            raise HTTPException(
+            raise CodedHTTPException(code="CARTON_QTY_INVALID", params={"carton": idx + 1},
                 status_code=422,
                 detail=f"Carton {idx + 1}: Quantity must be greater than 0",
             )
         # Validate mandatory weights: GW > NW > 0
         if c.net_weight is None or c.net_weight <= 0:
-            raise HTTPException(
+            raise CodedHTTPException(code="CARTON_NW_REQUIRED", params={"carton": idx + 1},
                 status_code=422,
                 detail=f"Carton {idx + 1}: Net weight is mandatory and must be greater than 0 kg",
             )
         if c.gross_weight is None or c.gross_weight <= 0:
-            raise HTTPException(
+            raise CodedHTTPException(code="CARTON_GW_REQUIRED", params={"carton": idx + 1},
                 status_code=422,
                 detail=f"Carton {idx + 1}: Gross weight is mandatory and must be greater than 0 kg",
             )
         if c.gross_weight <= c.net_weight:
-            raise HTTPException(
+            raise CodedHTTPException(code="CARTON_GW_NOT_GREATER", params={"carton": idx + 1, "gw": c.gross_weight, "nw": c.net_weight},
                 status_code=422,
                 detail=f"Carton {idx + 1}: Gross weight ({c.gross_weight} kg) must be strictly greater than net weight ({c.net_weight} kg)",
             )
@@ -1272,7 +1273,7 @@ async def create_direct_shipment(
     except Exception as e:
         logger.error("DB commit failed for direct shipment: %s", e)
         await db.rollback()
-        raise HTTPException(
+        raise CodedHTTPException(code="SHIPMENT_SAVE_FAILED",
             status_code=500,
             detail=f"Failed to save shipment to database: {str(e)}",
         )
@@ -1425,7 +1426,7 @@ async def get_shipment_detail(
         res = await db.execute(stmt)
         s = res.scalar_one_or_none()
         if not s:
-            raise HTTPException(status_code=404, detail="Shipment not found")
+            raise CodedHTTPException(code="SHIPMENT_NOT_FOUND", status_code=404, detail="Shipment not found")
 
         # Get packing slips / cartons
         ps_stmt = select(PackingSlip).where(PackingSlip.shipment_id == id).order_by(PackingSlip.box_number)
@@ -1533,7 +1534,7 @@ async def download_shipment_labels(
         res = await db.execute(stmt)
         shipment = res.scalar_one_or_none()
         if not shipment:
-            raise HTTPException(status_code=404, detail="Shipment not found")
+            raise CodedHTTPException(code="SHIPMENT_NOT_FOUND", status_code=404, detail="Shipment not found")
 
         # Get cartons
         ps_stmt = select(PackingSlip).where(PackingSlip.shipment_id == id).order_by(PackingSlip.box_number)
@@ -1541,7 +1542,7 @@ async def download_shipment_labels(
         cartons = ps_res.scalars().all()
 
         if not cartons:
-            raise HTTPException(status_code=400, detail="No carton records found for this shipment")
+            raise CodedHTTPException(code="NO_CARTONS", status_code=400, detail="No carton records found for this shipment")
 
         # Supplier info
         supp_name = "COATS THREAD EXPORTS (PVT) LTD"
@@ -1631,7 +1632,7 @@ async def download_shipment_labels(
         raise
     except Exception as e:
         logger.error("Label generation failed: %s", e)
-        raise HTTPException(status_code=500, detail=f"Failed to generate labels: {str(e)}")
+        raise CodedHTTPException(code="LABELS_FAILED", status_code=500, detail=f"Failed to generate labels: {str(e)}")
 
 
 @router.delete("/{shipment_id}")
@@ -1658,7 +1659,7 @@ async def delete_shipment(
     res = await db.execute(stmt)
     shipment = res.scalar_one_or_none()
     if not shipment:
-        raise HTTPException(status_code=404, detail="Shipment not found")
+        raise CodedHTTPException(code="SHIPMENT_NOT_FOUND", status_code=404, detail="Shipment not found")
 
     # Collect affected PO numbers
     affected_pos = set()

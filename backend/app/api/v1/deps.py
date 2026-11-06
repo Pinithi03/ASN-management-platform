@@ -25,6 +25,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
+from app.core.exceptions import CodedHTTPException
 from app.core.security import decode_access_token
 from app.db.session import get_db  # noqa: F401 — re-exported for endpoints
 from app.models.enums import UserRole, ROLE_PERMISSIONS
@@ -46,6 +47,7 @@ class CurrentUser(BaseModel):
     role: UserRole                      # ADMIN or SUPPLIER
     supplier_id: Optional[uuid.UUID] = None
     supplier_code: Optional[str] = None
+    locale: Optional[str] = None            # Keycloak `locale` claim (e.g. "it", "zh-Hans")
     permissions: frozenset[str]
 
     class Config:
@@ -97,14 +99,16 @@ async def get_current_user(
     elif UserRole.SUPPLIER.value in held_roles:
         role = UserRole.SUPPLIER
         if not claims.get("supplier_id"):
-            raise HTTPException(
+            raise CodedHTTPException(
                 status_code=403,
                 detail="Supplier account is not linked to a supplier",
+                code="SUPPLIER_NOT_LINKED",
             )
     else:
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=403,
             detail="No portal role assigned",
+            code="NO_PORTAL_ROLE",
         )
 
     # --- Build the user ---
@@ -117,6 +121,7 @@ async def get_current_user(
         role=role,
         supplier_id=uuid.UUID(supplier_id_raw) if supplier_id_raw else None,
         supplier_code=claims.get("supplier_code") if role is UserRole.SUPPLIER else None,
+        locale=claims.get("locale"),
         permissions=frozenset(ROLE_PERMISSIONS[role.value]),
     )
 

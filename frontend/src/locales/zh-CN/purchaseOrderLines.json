@@ -1,0 +1,44 @@
+{
+  "crossWarning": {
+    "message": "<b>不能混合不同工厂或库位：</b>当前选择属于 <u>{{current}}</u>。行 <mono>{{line}}</mono> 属于 <u>{{target}}</u>。",
+    "storeDesc": "{{plant}}（库位 {{store}}）"
+  },
+  "draft": {
+    "linesCount_other": "{{count}} 行",
+    "openDrafts": "打开草稿 →",
+    "posCount_other": "{{count}} 个采购订单",
+    "saved": "已将 {{lines}}（{{pos}}）保存到草稿"
+  },
+  "empty": {
+    "allStores": "所有库位",
+    "changePlant": "切换工厂",
+    "clearFilters": "清除筛选",
+    "text": "{{plant}}（{{location}}）的所有行项目均已履约，或与您的搜索或交货日期筛选不匹配。",
+    "title": "未找到未结采购订单行"
+  },
+  "gatewayCta": "查看工厂订单行",
+  "header": {
+    "title": "采购订单行"
+  },
+  "loading": "正在加载活动采购订单行...",
+  "search": {
+    "addAnother": "添加另一个采购订单或按行 / 物料筛选...",
+    "placeholder": "搜索采购订单 / 行（例如 2001382767 00100-0001）、{{plant}}（{{location}}）中的物料...",
+    "plantFallback": "工厂"
+  },
+  "selection": {
+    "clear": "清除",
+    "saveDraft": "保存草稿",
+    "selectedPos": "（{{pos}}）",
+    "selected_other": "已选择 {{count}} 个订单行"
+  },
+  "table": {
+    "copy": "复制“{{label}}”",
+    "material": "物料 / 代码",
+    "poLine": "采购订单 / 行",
+    "remaining": "剩余数量",
+    "revised": "已修订采购订单（V{{version}}）",
+    "selectAll": "选择本页所有未结行",
+    "selectLine": "选择 {{line}}"
+  }
+}
