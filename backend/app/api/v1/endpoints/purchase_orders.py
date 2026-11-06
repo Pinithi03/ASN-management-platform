@@ -23,6 +23,7 @@ from pydantic import BaseModel
 from sqlalchemy import desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import CodedHTTPException
 from app.api.v1.deps import CurrentUser, UserRole, get_current_user
 from app.db.session import get_db
 from app.models.email_message import EmailRecord
@@ -430,7 +431,7 @@ async def get_purchase_order(
     )
     po = result.scalar_one_or_none()
     if not po:
-        raise HTTPException(status_code=404, detail="Purchase order not found")
+        raise CodedHTTPException(code="PO_NOT_FOUND", status_code=404, detail="Purchase order not found")
 
     # Get source email subject if linked
     source_email_subject = None
@@ -547,7 +548,7 @@ async def update_purchase_order(
     )
     po = result.scalar_one_or_none()
     if not po:
-        raise HTTPException(status_code=404, detail="Purchase order not found")
+        raise CodedHTTPException(code="PO_NOT_FOUND", status_code=404, detail="Purchase order not found")
 
     if body.status is not None:
         po.status = body.status.upper()

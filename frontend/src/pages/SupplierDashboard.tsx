@@ -21,8 +21,10 @@ import { poApi } from "@/services/poApi";
 import { shipmentService } from "@/services/shipmentService";
 import { useAuthStore } from "@/store/authStore";
 import { useNavigate } from "react-router-dom";
-import { format } from "date-fns";
 import { useMemo } from "react";
+import { Trans, useTranslation } from "react-i18next";
+import i18n from "@/i18n";
+import { formatDate, formatMonthShort, formatNumber } from "@/i18n/format";
 import {
   AreaChart,
   Area,
@@ -56,7 +58,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
             />
             <span className="text-slate-300 font-medium">{entry.name}:</span>
             <span className="text-white font-bold ml-auto">
-              {typeof entry.value === "number" ? entry.value.toLocaleString() : entry.value}
+              {typeof entry.value === "number" ? formatNumber(entry.value) : entry.value}
             </span>
           </div>
         ))}
@@ -98,13 +100,14 @@ const calculateDaysLeft = (dateStr: string | null | undefined): number | null =>
 };
 
 const formatDateSafe = (dateStr: string | null | undefined): string => {
-  if (!dateStr) return "No Date";
+  const noDate = i18n.t("dashboard:fallback.noDate");
+  if (!dateStr) return noDate;
   const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return "No Date";
+  if (isNaN(d.getTime())) return noDate;
   try {
-    return format(d, "MMM d, yyyy");
+    return formatDate(d);
   } catch {
-    return "No Date";
+    return noDate;
   }
 };
 
@@ -131,10 +134,11 @@ const getPoProductDesc = (po: any): string => {
   if (itemCode && desc && itemCode !== desc) {
     return `${itemCode} — ${desc}`;
   }
-  return itemCode || desc || "Apparel Item";
+  return itemCode || desc || i18n.t("dashboard:fallback.apparelItem");
 };
 
 export default function SupplierDashboard() {
+  const { t } = useTranslation("dashboard");
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
 
@@ -227,10 +231,10 @@ export default function SupplierDashboard() {
     });
 
     const chartBuckets = [
-      { name: "Overdue", count: overdue, fill: "#ef4444" },
-      { name: "Critical (≤3d)", count: critical, fill: "#f59e0b" },
-      { name: "Due in 7d", count: upcoming, fill: "#10b981" },
-      { name: "On Track (>7d)", count: onTrack, fill: "#06b6d4" },
+      { id: "overdue", name: t("deadlines.bucketOverdue"), count: overdue, fill: "#ef4444" },
+      { id: "critical", name: t("deadlines.bucketCritical"), count: critical, fill: "#f59e0b" },
+      { id: "due7", name: t("deadlines.bucketDue7"), count: upcoming, fill: "#10b981" },
+      { id: "onTrack", name: t("deadlines.bucketOnTrack"), count: onTrack, fill: "#06b6d4" },
     ];
 
     return {
@@ -239,7 +243,7 @@ export default function SupplierDashboard() {
       urgentCount: critical,
       overdueCount: overdue,
     };
-  }, [poData]);
+  }, [poData, t]);
 
   // C. Monthly Shipping Progress (My Monthly Velocity)
   const monthlyProgress = useMemo(() => {
@@ -249,7 +253,7 @@ export default function SupplierDashboard() {
     for (let i = 5; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      const label = d.toLocaleString("default", { month: "short" });
+      const label = formatMonthShort(d);
       monthsMap.set(key, { key, label, pieces: 0, boxes: 0, shipments: 0 });
     }
 
@@ -270,7 +274,8 @@ export default function SupplierDashboard() {
     }
 
     return Array.from(monthsMap.values());
-  }, [shipments]);
+    // t changes with the language, so month labels re-render on switch
+  }, [shipments, t]);
 
   const currentMonthPieces = useMemo(() => {
     if (monthlyProgress.length === 0) return 0;
@@ -291,11 +296,11 @@ export default function SupplierDashboard() {
     const cancelled = poStats.cancelled || 0;
 
     const data = [
-      { name: "Completed & Shipped", value: completedOrShipped, color: STATUS_COLORS.COMPLETED },
-      { name: "Partial Fulfillment", value: partial, color: STATUS_COLORS.PARTIAL },
-      { name: "Unprocessed (New)", value: active, color: STATUS_COLORS.ACTIVE },
-      { name: "Updated / In Review", value: updated, color: STATUS_COLORS.UPDATED },
-      { name: "Cancelled", value: cancelled, color: STATUS_COLORS.CANCELLED },
+      { name: t("lifecycle.completedShipped"), value: completedOrShipped, color: STATUS_COLORS.COMPLETED },
+      { name: t("lifecycle.partial"), value: partial, color: STATUS_COLORS.PARTIAL },
+      { name: t("lifecycle.unprocessed"), value: active, color: STATUS_COLORS.ACTIVE },
+      { name: t("lifecycle.updated"), value: updated, color: STATUS_COLORS.UPDATED },
+      { name: t("lifecycle.cancelled"), value: cancelled, color: STATUS_COLORS.CANCELLED },
     ].filter((item) => item.value > 0);
 
     return {
@@ -304,7 +309,7 @@ export default function SupplierDashboard() {
       partialRate: Math.round((partial / total) * 100),
       unprocessedRate: Math.round((active / total) * 100),
     };
-  }, [poStats]);
+  }, [poStats, t]);
 
   // E. My Destination Plants Distribution
   const plantDistribution = useMemo(() => {
@@ -348,42 +353,48 @@ export default function SupplierDashboard() {
   // ─── Top KPI Cards Definition ──────────────────────────────────
   const kpiCards = [
     {
-      label: "Dispatched Volume",
-      value: shipmentMetrics.totalPieces > 0 ? `${shipmentMetrics.totalPieces.toLocaleString()} pcs` : "0 pcs",
+      label: t("kpi.dispatchedVolume.label"),
+      value: t("kpi.dispatchedVolume.value", { pieces: formatNumber(shipmentMetrics.totalPieces) }),
       icon: Truck,
       iconBg: "bg-emerald-50 text-emerald-600 border-emerald-100",
-      subtitle: `${shipmentMetrics.totalBoxes.toLocaleString()} cartons · ${shipmentMetrics.totalCount} dispatches`,
-      badge: "Dispatched",
+      subtitle: t("kpi.dispatchedVolume.subtitle", {
+        cartons: formatNumber(shipmentMetrics.totalBoxes),
+        dispatches: shipmentMetrics.totalCount,
+      }),
+      badge: t("kpi.dispatchedVolume.badge"),
       badgeStyle: "bg-emerald-50 text-emerald-700 border-emerald-200",
       onClick: () => navigate("/shipments"),
     },
     {
-      label: "Deliveries Due Soon",
-      value: `${urgentCount + overdueCount} Orders`,
+      label: t("kpi.dueSoon.label"),
+      value: t("kpi.dueSoon.value", { count: urgentCount + overdueCount }),
       icon: AlertTriangle,
       iconBg: overdueCount > 0 ? "bg-red-50 text-red-600 border-red-100" : "bg-amber-50 text-amber-600 border-amber-100",
-      subtitle: `${overdueCount > 0 ? `${overdueCount} overdue · ` : ""}${urgentCount} urgent (≤3d)`,
-      badge: overdueCount > 0 ? "Attention" : "Approaching",
+      subtitle:
+        overdueCount > 0
+          ? t("kpi.dueSoon.subtitleWithOverdue", { overdue: overdueCount, urgent: urgentCount })
+          : t("kpi.dueSoon.subtitle", { urgent: urgentCount }),
+      badge: overdueCount > 0 ? t("kpi.dueSoon.badgeAttention") : t("kpi.dueSoon.badgeApproaching"),
       badgeStyle: overdueCount > 0 ? "bg-red-50 text-red-700 border-red-200" : "bg-amber-50 text-amber-700 border-amber-200",
       onClick: () => navigate("/purchase-orders"),
     },
     {
-      label: "Unprocessed Orders",
-      value: `${poStats?.active ?? 0} POs`,
+      label: t("kpi.unprocessed.label"),
+      value: t("kpi.unprocessed.value", { count: poStats?.active ?? 0 }),
       icon: Package,
       iconBg: "bg-slate-100 text-slate-700 border-slate-200",
-      subtitle: `${unprocessedRate}% of assigned POs`,
-      badge: "Open",
+      subtitle: t("kpi.unprocessed.subtitle", { percent: unprocessedRate }),
+      badge: t("kpi.unprocessed.badge"),
       badgeStyle: "bg-slate-100 text-slate-700 border-slate-200",
       onClick: () => navigate("/purchase-orders?status=ACTIVE"),
     },
     {
-      label: "Partial Fulfillment",
-      value: `${poStats?.partial ?? 0} POs`,
+      label: t("kpi.partial.label"),
+      value: t("kpi.partial.value", { count: poStats?.partial ?? 0 }),
       icon: Layers,
       iconBg: "bg-amber-50 text-amber-600 border-amber-100",
-      subtitle: `${fulfillmentRate}% completed overall`,
-      badge: `${partialRate}% Split`,
+      subtitle: t("kpi.partial.subtitle", { percent: fulfillmentRate }),
+      badge: t("kpi.partial.badge", { percent: partialRate }),
       badgeStyle: "bg-amber-50 text-amber-700 border-amber-200",
       onClick: () => navigate("/purchase-orders?status=PARTIAL"),
     },
@@ -393,9 +404,9 @@ export default function SupplierDashboard() {
     <div className="p-6 space-y-6 bg-slate-50 min-h-screen text-slate-900 font-sans">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight">Overview</h1>
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight">{t("header.title")}</h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Real-time dispatch throughput, active order readiness, and plant fulfillment metrics
+            {t("header.subtitle")}
           </p>
         </div>
         <button
@@ -404,14 +415,14 @@ export default function SupplierDashboard() {
           className="self-start sm:self-auto inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-2xs transition-colors cursor-pointer"
         >
           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-          <span>Order History ({poStats?.completed ?? 0})</span>
+          <span>{t("header.orderHistory", { count: poStats?.completed ?? 0 })}</span>
         </button>
       </div>
       {isLoading ? (
         <div className="flex flex-col items-center justify-center py-24 gap-4">
           <div className="w-10 h-10 rounded-full border-3 border-emerald-600/30 border-t-emerald-600 animate-spin" />
           <p className="text-xs font-medium text-slate-500 animate-pulse">
-            Loading supplier dispatch analytics...
+            {t("loading")}
           </p>
         </div>
       ) : (
@@ -460,17 +471,17 @@ export default function SupplierDashboard() {
                 <div className="flex items-center gap-2">
                   <TrendingUp className="w-4 h-4 text-emerald-600" />
                   <h2 className="text-sm font-bold text-slate-900">
-                    Monthly Dispatch Throughput
+                    {t("monthly.title")}
                   </h2>
                 </div>
                 <div className="flex items-center gap-4 text-xs">
                   <div className="flex items-center gap-1.5">
                     <span className="w-2.5 h-2.5 rounded-xs bg-emerald-600" />
-                    <span className="text-slate-600 font-medium">Pieces</span>
+                    <span className="text-slate-600 font-medium">{t("monthly.legendPieces")}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="w-2.5 h-2.5 rounded-xs bg-slate-400" />
-                    <span className="text-slate-600 font-medium">Cartons</span>
+                    <span className="text-slate-600 font-medium">{t("monthly.legendCartons")}</span>
                   </div>
                 </div>
               </div>
@@ -507,7 +518,7 @@ export default function SupplierDashboard() {
                     <Area
                       type="monotone"
                       dataKey="pieces"
-                      name="Pieces Shipped"
+                      name={t("monthly.seriesPieces")}
                       stroke="#10b981"
                       strokeWidth={2}
                       fillOpacity={1}
@@ -516,7 +527,7 @@ export default function SupplierDashboard() {
                     <Area
                       type="monotone"
                       dataKey="boxes"
-                      name="Carton Boxes"
+                      name={t("monthly.seriesCartons")}
                       stroke="#64748b"
                       strokeWidth={1.5}
                       fillOpacity={1}
@@ -528,13 +539,18 @@ export default function SupplierDashboard() {
 
               <div className="mt-4 pt-3.5 border-t border-slate-100 flex items-center justify-between text-xs">
                 <span className="text-slate-500">
-                  This Month: <strong className="text-slate-900 font-semibold">{currentMonthPieces.toLocaleString()} pcs</strong>
+                  <Trans
+                    t={t}
+                    i18nKey="monthly.thisMonth"
+                    values={{ value: formatNumber(currentMonthPieces) }}
+                    components={{ strong: <strong className="text-slate-900 font-semibold" /> }}
+                  />
                 </span>
                 <button
                   onClick={() => navigate("/shipments")}
                   className="text-emerald-600 hover:text-emerald-700 font-semibold flex items-center gap-1 cursor-pointer"
                 >
-                  All Shipments <ArrowRight className="w-3 h-3" />
+                  {t("links.allShipments")} <ArrowRight className="w-3 h-3" />
                 </button>
               </div>
             </div>
@@ -546,15 +562,15 @@ export default function SupplierDashboard() {
                   <div className="flex items-center gap-2">
                     <BarChart3 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                     <h2 className="text-base font-bold text-slate-900 dark:text-white">
-                      Order Fulfillment Status
+                      {t("lifecycle.title")}
                     </h2>
                   </div>
                   <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
-                    {fulfillmentRate}% Completed
+                    {t("lifecycle.completedBadge", { percent: fulfillmentRate })}
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-                  My assigned orders across packaging states
+                  {t("lifecycle.subtitle")}
                 </p>
 
                 <div className="h-52 w-full relative">
@@ -581,7 +597,7 @@ export default function SupplierDashboard() {
                       {poStats?.total ?? 0}
                     </span>
                     <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-                      Assigned POs
+                      {t("lifecycle.assignedPos")}
                     </span>
                   </div>
                 </div>
@@ -614,15 +630,15 @@ export default function SupplierDashboard() {
                 <div className="flex items-center gap-2">
                   <Calendar className="w-4 h-4 text-amber-500" />
                   <h2 className="text-base font-bold text-slate-900 dark:text-white">
-                    Upcoming Delivery Deadlines
+                    {t("deadlines.title")}
                   </h2>
                 </div>
                 <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                  Target Dispatch Dates
+                  {t("deadlines.targetDates")}
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-                Schedule of orders to pack and dispatch to avoid plant penalties
+                {t("deadlines.subtitle")}
               </p>
 
               <div className="h-56 w-full">
@@ -638,7 +654,7 @@ export default function SupplierDashboard() {
                     />
                     <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
                     <Tooltip content={<CustomTooltip />} />
-                    <Bar dataKey="count" name="Orders Count" radius={[6, 6, 0, 0]}>
+                    <Bar dataKey="count" name={t("deadlines.seriesOrders")} radius={[6, 6, 0, 0]}>
                       {urgencyData.map((entry, index) => (
                         <Cell key={`bar-${index}`} fill={entry.fill} />
                       ))}
@@ -649,23 +665,23 @@ export default function SupplierDashboard() {
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 text-center">
                 <div className="p-2 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50">
-                  <p className="text-[10px] uppercase font-bold text-rose-600 dark:text-rose-400">Overdue</p>
+                  <p className="text-[10px] uppercase font-bold text-rose-600 dark:text-rose-400">{t("deadlines.tileOverdue")}</p>
                   <p className="text-lg font-extrabold text-rose-700 dark:text-rose-300">{overdueCount}</p>
                 </div>
                 <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50">
-                  <p className="text-[10px] uppercase font-bold text-amber-600 dark:text-amber-400">Due ≤ 3 Days</p>
+                  <p className="text-[10px] uppercase font-bold text-amber-600 dark:text-amber-400">{t("deadlines.tileDue3")}</p>
                   <p className="text-lg font-extrabold text-amber-700 dark:text-amber-300">{urgentCount}</p>
                 </div>
                 <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/50">
-                  <p className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400">Due in 7 Days</p>
+                  <p className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400">{t("deadlines.tileDue7")}</p>
                   <p className="text-lg font-extrabold text-emerald-700 dark:text-emerald-300">
-                    {urgencyData.find((u) => u.name.includes("7d"))?.count || 0}
+                    {urgencyData.find((u) => u.id === "due7")?.count || 0}
                   </p>
                 </div>
                 <div className="p-2 rounded-xl bg-cyan-50 dark:bg-cyan-950/40 border border-cyan-200 dark:border-cyan-900/50">
-                  <p className="text-[10px] uppercase font-bold text-cyan-600 dark:text-cyan-400">On Track</p>
+                  <p className="text-[10px] uppercase font-bold text-cyan-600 dark:text-cyan-400">{t("deadlines.tileOnTrack")}</p>
                   <p className="text-lg font-extrabold text-cyan-700 dark:text-cyan-300">
-                    {urgencyData.find((u) => u.name.includes("Track"))?.count || 0}
+                    {urgencyData.find((u) => u.id === "onTrack")?.count || 0}
                   </p>
                 </div>
               </div>
@@ -678,11 +694,11 @@ export default function SupplierDashboard() {
                   <div className="flex items-center gap-2">
                     <Building2 className="w-4 h-4 text-emerald-600" />
                     <h2 className="text-sm font-bold text-slate-900">
-                      Manufacturing Destinations
+                      {t("plants.title")}
                     </h2>
                   </div>
                   <span className="text-xs font-semibold text-slate-500">
-                    Assigned Plants
+                    {t("plants.assigned")}
                   </span>
                 </div>
 
@@ -698,10 +714,10 @@ export default function SupplierDashboard() {
                         </div>
                         <div className="text-right">
                           <span className="font-semibold text-slate-900">
-                            {plant.pieces.toLocaleString()} pcs
+                            {t("plants.pieces", { value: formatNumber(plant.pieces) })}
                           </span>
                           <span className="text-slate-400 text-[11px] ml-1.5">
-                            ({plant.boxes} cartons)
+                            {t("plants.cartons", { count: plant.boxes })}
                           </span>
                         </div>
                       </div>
@@ -717,8 +733,8 @@ export default function SupplierDashboard() {
               </div>
 
               <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-                <span>Standard DTD XML & 20-digit SSCC labels</span>
-                <span className="font-semibold text-emerald-600">Plant Validated</span>
+                <span>{t("plants.footer")}</span>
+                <span className="font-semibold text-emerald-600">{t("plants.validated")}</span>
               </div>
             </div>
           </div>
@@ -731,14 +747,14 @@ export default function SupplierDashboard() {
                 <div className="flex items-center gap-2">
                   <Clock className="w-4 h-4 text-slate-500" />
                   <h2 className="text-sm font-bold text-slate-900">
-                    Deliveries Due Soon
+                    {t("dueSoon.title")}
                   </h2>
                 </div>
                 <button
                   onClick={() => navigate("/purchase-orders")}
                   className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 flex items-center gap-1 cursor-pointer"
                 >
-                  All Orders <ArrowRight className="w-3 h-3" />
+                  {t("links.allOrders")} <ArrowRight className="w-3 h-3" />
                 </button>
               </div>
 
@@ -761,7 +777,7 @@ export default function SupplierDashboard() {
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-xs font-bold text-slate-900 font-mono">
-                              {po.po_number || "Unnamed PO"}
+                              {po.po_number || t("dueSoon.unnamedPo")}
                             </span>
                             <span
                               className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
@@ -773,16 +789,16 @@ export default function SupplierDashboard() {
                               }`}
                             >
                               {isOverdue
-                                ? `Overdue (${Math.abs(days)}d)`
+                                ? t("dueSoon.overdue", { days: Math.abs(days) })
                                 : days === 0
-                                ? "Due Today"
+                                ? t("dueSoon.dueToday")
                                 : days === 1
-                                ? "Due Tomorrow"
-                                : `${days}d left`}
+                                ? t("dueSoon.dueTomorrow")
+                                : t("dueSoon.daysLeft", { days })}
                             </span>
                             {isPartial && (
                               <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                                Partial
+                                {t("dueSoon.partial")}
                               </span>
                             )}
                           </div>
@@ -792,16 +808,16 @@ export default function SupplierDashboard() {
                             <span>{productDesc}</span>
                           </p>
                           <p className="text-[10px] text-slate-400 mt-0.5">
-                            Target: {formatDateSafe(po.delivery_date)} · Quantity:{" "}
+                            {t("dueSoon.target", { date: formatDateSafe(po.delivery_date) })}{" "}
                             {isPartial && po.remaining_quantity != null ? (
                               <span className="font-semibold text-slate-700">
-                                {Math.round(po.remaining_quantity).toLocaleString()}{" "}
-                                <span className="font-normal text-slate-400">/ {(po.quantity || 0).toLocaleString()}</span>{" "}
+                                {formatNumber(Math.round(po.remaining_quantity))}{" "}
+                                <span className="font-normal text-slate-400">/ {formatNumber(po.quantity || 0)}</span>{" "}
                                 <span className="text-emerald-600">{uom}</span>
                               </span>
                             ) : (
                               <span className="font-semibold text-slate-700">
-                                {(po.quantity || 0).toLocaleString()}{" "}
+                                {formatNumber(po.quantity || 0)}{" "}
                                 <span className="text-emerald-600">{uom}</span>
                               </span>
                             )}
@@ -813,7 +829,7 @@ export default function SupplierDashboard() {
                             onClick={() => navigate(`/shipments?create=true&po=${encodeURIComponent(po.po_number || "")}`)}
                             className="px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-2xs transition-all flex items-center gap-1 cursor-pointer"
                           >
-                            Pack Now <ChevronRight className="w-3 h-3" />
+                            {t("dueSoon.packNow")} <ChevronRight className="w-3 h-3" />
                           </button>
                         </div>
                       </div>
@@ -823,7 +839,7 @@ export default function SupplierDashboard() {
               ) : (
                 <div className="text-center py-10 text-slate-400 text-xs">
                   <CheckCircle2 className="w-8 h-8 mx-auto text-emerald-500 mb-2 opacity-60" />
-                  All assigned orders are on schedule
+                  {t("dueSoon.allOnSchedule")}
                 </div>
               )}
             </div>
@@ -834,14 +850,14 @@ export default function SupplierDashboard() {
                 <div className="flex items-center gap-2">
                   <Box className="w-4 h-4 text-emerald-600" />
                   <h2 className="text-sm font-bold text-slate-900">
-                    Recent Dispatches
+                    {t("recent.title")}
                   </h2>
                 </div>
                 <button
                   onClick={() => navigate("/shipments")}
                   className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 flex items-center gap-1 cursor-pointer"
                 >
-                  All Shipments <ArrowRight className="w-3 h-3" />
+                  {t("links.allShipments")} <ArrowRight className="w-3 h-3" />
                 </button>
               </div>
 
@@ -863,7 +879,11 @@ export default function SupplierDashboard() {
                           </span>
                         </div>
                         <p className="text-[11px] text-slate-500 mt-0.5 truncate">
-                          Plant: {s.plant_code || "PPA1"} · {s.total_boxes} cartons · {s.total_pieces} pcs
+                          {t("recent.plantLine", {
+                            plant: s.plant_code || "PPA1",
+                            cartons: s.total_boxes,
+                            pieces: s.total_pieces,
+                          })}
                         </p>
                       </div>
 
@@ -876,7 +896,7 @@ export default function SupplierDashboard() {
               ) : (
                 <div className="text-center py-10 text-slate-400 text-xs">
                   <Box className="w-8 h-8 mx-auto text-slate-400 mb-2 opacity-50" />
-                  No shipments dispatched yet
+                  {t("recent.none")}
                 </div>
               )}
             </div>

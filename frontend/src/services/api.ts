@@ -8,7 +8,7 @@
  */
 
 import axios from "axios";
-import { keycloak } from "@/lib/keycloak";
+import { keycloak, login } from "@/lib/keycloak";
 
 export const api = axios.create({
   baseURL: "/api/v1",
@@ -52,7 +52,7 @@ api.interceptors.response.use(
         return api(original);
       } catch {
         // Session is truly gone — back to the login page.
-        keycloak.login();
+        login();
       }
     }
 

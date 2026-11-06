@@ -1,0 +1,55 @@
+{
+  "detail": {
+    "buyerContact": "Contatto acquirente: <strong>{{contact}}</strong>",
+    "completedOn": "Completato il",
+    "destinationPlant": "Stabilimento di destinazione",
+    "fulfilledLineFallback": "Riga d'ordine evasa",
+    "lineItems": "Righe evase ({{count}})",
+    "loading": "Caricamento dettagli di evasione...",
+    "revisionHistory": "Cronologia audit e revisioni dell'ordine",
+    "subtitle": "Riepilogo dell'ordine evaso e audit trail",
+    "totalShipped": "Totale spedito",
+    "totalShippedValue": "{{quantity}} unità"
+  },
+  "detailTable": {
+    "description": "Descrizione",
+    "material": "Materiale",
+    "ordered": "Ordinato",
+    "poLine": "Ordine / Riga",
+    "shipped": "Spedito"
+  },
+  "empty": {
+    "resetFilters": "Reimposta filtri",
+    "text": "Quando tutte le righe di un ordine d'acquisto sono spedite al 100%, l'ordine viene spostato qui automaticamente per mantenere ordinate le aree di lavoro attive.",
+    "title": "Nessun ordine completato"
+  },
+  "filters": {
+    "allPlants": "Tutti gli stabilimenti (5)",
+    "plantTitle": "Filtra ordini completati per stabilimento"
+  },
+  "header": {
+    "archive": "Archivio completati ({{total}})",
+    "subtitle": "Ordini d'acquisto completamente spediti e completati, separati dalle aree di spedizione attive",
+    "title": "Storico ordini"
+  },
+  "loading": "Caricamento storico ordini completati...",
+  "search": {
+    "addAnother": "Aggiungi un altro numero ordine completato...",
+    "clear": "Cancella ricerca",
+    "placeholder": "Cerca numero ordine completato, modello, descrizione o incolla più ordini d'acquisto separati da virgola..."
+  },
+  "status": {
+    "completed": "COMPLETATO"
+  },
+  "table": {
+    "completedDate": "Data completamento",
+    "copyPo": "Copia numero ordine",
+    "deliveryDate": "Data di consegna",
+    "description": "Descrizione / Modello",
+    "fulfilledQty": "Qtà evasa",
+    "orderDate": "Data ordine",
+    "plantStore": "Stabilimento e magazzino",
+    "poNumber": "Numero ordine",
+    "status": "Stato"
+  }
+}

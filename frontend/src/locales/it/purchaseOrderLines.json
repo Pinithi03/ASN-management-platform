@@ -1,0 +1,50 @@
+{
+  "crossWarning": {
+    "message": "<b>Impossibile combinare stabilimenti o magazzini: </b>La selezione attuale appartiene a <u>{{current}}</u>. La riga <mono>{{line}}</mono> appartiene a <u>{{target}}</u>.",
+    "storeDesc": "{{plant}} (Magazzino {{store}})"
+  },
+  "draft": {
+    "linesCount_many": "{{count}} righe",
+    "linesCount_one": "{{count}} riga",
+    "linesCount_other": "{{count}} righe",
+    "openDrafts": "Apri bozze →",
+    "posCount_one": "{{count}} ordine",
+    "posCount_many": "{{count}} ordini",
+    "posCount_other": "{{count}} ordini",
+    "saved": "Salvate {{lines}} ({{pos}}) nelle bozze"
+  },
+  "empty": {
+    "allStores": "Tutti i magazzini",
+    "changePlant": "Cambia stabilimento",
+    "clearFilters": "Cancella filtri",
+    "text": "Tutte le righe per {{plant}} ({{location}}) sono già evase oppure non corrispondono alla ricerca o al filtro per data di consegna.",
+    "title": "Nessuna riga d'ordine aperta trovata"
+  },
+  "gatewayCta": "Visualizza righe d'ordine dello stabilimento",
+  "header": {
+    "title": "Righe ordine d'acquisto"
+  },
+  "loading": "Caricamento righe d'ordine attive...",
+  "search": {
+    "addAnother": "Aggiungi un altro ordine d'acquisto o filtra per riga / materiale...",
+    "placeholder": "Cerca ordine d'acquisto / riga (es. 2001382767 00100-0001), materiale in {{plant}} ({{location}})...",
+    "plantFallback": "Stabilimento"
+  },
+  "selection": {
+    "clear": "Annulla",
+    "saveDraft": "Salva bozza",
+    "selectedPos": "({{pos}})",
+    "selected_many": "{{count}} righe d'ordine selezionate",
+    "selected_one": "{{count}} riga d'ordine selezionata",
+    "selected_other": "{{count}} righe d'ordine selezionate"
+  },
+  "table": {
+    "copy": "Copia \"{{label}}\"",
+    "material": "Materiale / Codice",
+    "poLine": "Ordine / Riga",
+    "remaining": "Qtà residua",
+    "revised": "Ordine revisionato (V{{version}})",
+    "selectAll": "Seleziona tutte le righe aperte in questa pagina",
+    "selectLine": "Seleziona {{line}}"
+  }
+}

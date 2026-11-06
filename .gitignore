@@ -83,3 +83,6 @@ GEMINI.md
 
 # Runtime local cache
 backend/app/data/
+
+# Translation review exports (npm run i18n:export)
+i18n-review*.csv

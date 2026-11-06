@@ -1,0 +1,55 @@
+{
+  "detail": {
+    "buyerContact": "买方联系人：<strong>{{contact}}</strong>",
+    "completedOn": "完成日期",
+    "destinationPlant": "目的地工厂",
+    "fulfilledLineFallback": "已履约订单行",
+    "lineItems": "已履约行项目（{{count}}）",
+    "loading": "正在加载履约详情...",
+    "revisionHistory": "订单审计与修订历史",
+    "subtitle": "已履约订单摘要与审计记录",
+    "totalShipped": "总发运量",
+    "totalShippedValue": "{{quantity}} 单位"
+  },
+  "detailTable": {
+    "description": "描述",
+    "material": "物料",
+    "ordered": "订购数量",
+    "poLine": "采购订单 / 行",
+    "shipped": "已发运"
+  },
+  "empty": {
+    "resetFilters": "重置筛选",
+    "text": "当采购订单的所有行项目 100% 发运后，订单会自动移到这里，以保持活动工作区整洁。",
+    "title": "暂无已完成订单"
+  },
+  "filters": {
+    "allPlants": "所有工厂（5）",
+    "plantTitle": "按工厂筛选已完成订单"
+  },
+  "header": {
+    "archive": "已完成归档（{{total}}）",
+    "subtitle": "已全部发运并完成的采购订单，与活动发运工作区分开显示",
+    "title": "订单历史"
+  },
+  "loading": "正在加载已完成订单历史...",
+  "search": {
+    "addAnother": "添加另一个已完成的采购订单号...",
+    "clear": "清除搜索",
+    "placeholder": "搜索已完成的采购订单号、款式、描述，或粘贴以逗号分隔的多个采购订单..."
+  },
+  "status": {
+    "completed": "已完成"
+  },
+  "table": {
+    "completedDate": "完成日期",
+    "copyPo": "复制采购订单号",
+    "deliveryDate": "交货日期",
+    "description": "描述 / 款式",
+    "fulfilledQty": "已履约数量",
+    "orderDate": "订单日期",
+    "plantStore": "工厂和仓库",
+    "poNumber": "采购订单号",
+    "status": "状态"
+  }
+}

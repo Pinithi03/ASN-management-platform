@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Building2,
   ShieldCheck,
@@ -22,8 +23,10 @@ import {
   clearAllSupplierDrafts,
 } from "@/utils/draftStorage";
 import { cn } from "@/utils/cn";
+import { getErrorMessage } from "@/services/apiError";
 
 export default function Profile() {
+  const { t } = useTranslation(["profile", "common"]);
   const user = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
 
@@ -45,11 +48,7 @@ export default function Profile() {
   const draftStorageInfo = getDraftStorageEstimate(user?.role === "SUPPLIER" ? (user.supplier_code || undefined) : undefined);
 
   const handleClearCache = async () => {
-    if (
-      !window.confirm(
-        "Are you sure you want to clear your local offline drafts and cached packing configurations? This will reset local unsent draft progress on this device."
-      )
-    ) {
+    if (!window.confirm(t("profile:cache.confirm"))) {
       return;
     }
     setIsClearingCache(true);
@@ -57,9 +56,7 @@ export default function Profile() {
     try {
       const suppCode = user?.role === "SUPPLIER" ? (user.supplier_code || undefined) : undefined;
       const res = await clearAllSupplierDrafts(suppCode);
-      setCacheSuccessMsg(
-        `Offline cache cleared successfully! (${res.clearedDrafts} draft${res.clearedDrafts === 1 ? "" : "s"} purged)`
-      );
+      setCacheSuccessMsg(t("profile:cache.cleared", { count: res.clearedDrafts }));
       setTimeout(() => setCacheSuccessMsg(null), 4000);
     } catch (err: any) {
       console.warn("Failed to clear offline cache:", err);
@@ -91,10 +88,10 @@ export default function Profile() {
 
   const matchedSupplier: SupplierItem = found || {
     id: user?.supplier_id || "profile-user",
-    name: user?.supplier_name || user?.name || "Supplier Partner",
+    name: user?.supplier_name || user?.name || t("profile:fallback.supplierName"),
     supplier_code: user?.supplier_code || "N/A",
     email: user?.email || "partner@plant.local",
-    contact_name: user?.name || "Partner Representative",
+    contact_name: user?.name || t("profile:fallback.contactName"),
     phone: "N/A",
     country: "Sri Lanka",
     category: "Textiles & Garments",
@@ -120,11 +117,11 @@ export default function Profile() {
 
       await supplierApi.setHuNumber(targetId, huInput.trim());
       await queryClient.invalidateQueries({ queryKey: ["suppliers"] });
-      setHuSuccess("Handling Unit (HU) sequence number saved successfully and locked.");
+      setHuSuccess(t("profile:hu.saved"));
       setHuInput("");
       setIsAdminEditOpen(false);
     } catch (err: any) {
-      setHuError(err?.response?.data?.detail || err?.message || "Failed to configure HU number.");
+      setHuError(getErrorMessage(err, t("profile:hu.saveFailed")));
     } finally {
       setIsSavingHu(false);
     }
@@ -162,10 +159,10 @@ export default function Profile() {
           const dataUrl = canvas.toDataURL("image/jpeg", 0.88);
           resolve(dataUrl);
         };
-        img.onerror = () => reject(new Error("Failed to load image file."));
+        img.onerror = () => reject(new Error(t("profile:avatar.loadFailed")));
         img.src = e.target?.result as string;
       };
-      reader.onerror = () => reject(new Error("Failed to read image file."));
+      reader.onerror = () => reject(new Error(t("profile:avatar.readFailed")));
       reader.readAsDataURL(file);
     });
   };
@@ -175,12 +172,12 @@ export default function Profile() {
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
-      setAvatarError("Please select a valid image file (PNG, JPG, or WebP).");
+      setAvatarError(t("profile:avatar.invalidType"));
       return;
     }
 
     if (file.size > 10 * 1024 * 1024) {
-      setAvatarError("Image file size must be under 10MB.");
+      setAvatarError(t("profile:avatar.tooLarge"));
       return;
     }
 
@@ -197,10 +194,10 @@ export default function Profile() {
 
       await supplierApi.uploadAvatar(targetId, optimizedDataUrl);
       await queryClient.invalidateQueries({ queryKey: ["suppliers"] });
-      setAvatarSuccess("Profile picture uploaded and saved successfully!");
+      setAvatarSuccess(t("profile:avatar.uploaded"));
     } catch (err: any) {
       console.error("Avatar upload failed:", err);
-      setAvatarError(err?.response?.data?.detail || err?.message || "Failed to upload profile picture.");
+      setAvatarError(getErrorMessage(err, t("profile:avatar.uploadFailed")));
     } finally {
       setIsUploadingAvatar(false);
       if (fileInputRef.current) {
@@ -222,10 +219,10 @@ export default function Profile() {
 
       await supplierApi.uploadAvatar(targetId, null);
       await queryClient.invalidateQueries({ queryKey: ["suppliers"] });
-      setAvatarSuccess("Profile picture removed successfully.");
+      setAvatarSuccess(t("profile:avatar.removed"));
     } catch (err: any) {
       console.error("Failed to remove avatar:", err);
-      setAvatarError(err?.response?.data?.detail || err?.message || "Failed to remove profile picture.");
+      setAvatarError(getErrorMessage(err, t("profile:avatar.removeFailed")));
     } finally {
       setIsUploadingAvatar(false);
     }
@@ -257,7 +254,7 @@ export default function Profile() {
               <div
                 onClick={() => fileInputRef.current?.click()}
                 className="w-16 h-16 rounded-xl border border-slate-200 shadow-2xs overflow-hidden bg-slate-50 flex items-center justify-center cursor-pointer group-hover:border-emerald-500 transition-colors"
-                title="Click to upload or change logo"
+                title={t("profile:avatar.clickToUpload")}
               >
                 {matchedSupplier.profile_picture_url ? (
                   <img
@@ -280,10 +277,10 @@ export default function Profile() {
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isUploadingAvatar}
                 className="absolute inset-0 rounded-xl bg-black/40 text-white flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-not-allowed"
-                title="Change photo"
+                title={t("profile:avatar.changePhoto")}
               >
                 <Camera className="w-4 h-4 mb-0.5" />
-                <span className="text-[9px] font-semibold">Change</span>
+                <span className="text-[9px] font-semibold">{t("profile:avatar.change")}</span>
               </button>
             </div>
 
@@ -295,11 +292,11 @@ export default function Profile() {
                 </span>
                 {matchedSupplier.is_active ? (
                   <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    Active Partner
+                    {t("profile:header.active")}
                   </span>
                 ) : (
                   <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-200">
-                    Inactive
+                    {t("profile:header.inactive")}
                   </span>
                 )}
               </div>
@@ -335,12 +332,14 @@ export default function Profile() {
               {isUploadingAvatar ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Processing...</span>
+                  <span>{t("profile:avatar.processing")}</span>
                 </>
               ) : (
                 <>
                   <Upload className="w-3.5 h-3.5" />
-                  <span>{matchedSupplier.profile_picture_url ? "Change Logo" : "Upload Logo"}</span>
+                  <span>
+                    {matchedSupplier.profile_picture_url ? t("profile:avatar.changeLogo") : t("profile:avatar.upload")}
+                  </span>
                 </>
               )}
             </button>
@@ -353,7 +352,7 @@ export default function Profile() {
                 className="px-3 py-1.5 text-xs font-medium text-red-600 hover:text-red-700 bg-white hover:bg-red-50 border border-slate-200 hover:border-red-200 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                <span>Remove</span>
+                <span>{t("profile:avatar.remove")}</span>
               </button>
             )}
           </div>
@@ -371,20 +370,20 @@ export default function Profile() {
                   <Boxes className="w-4 h-4" />
                 </div>
                 <div>
-                  <h2 className="text-sm font-bold text-slate-900">Handling Unit (HU) Sequence</h2>
-                  <p className="text-[11px] text-slate-500">SSCC-20 barcode tracking for dispatch cartons</p>
+                  <h2 className="text-sm font-bold text-slate-900">{t("profile:hu.title")}</h2>
+                  <p className="text-[11px] text-slate-500">{t("profile:hu.subtitle")}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 {isHuLocked ? (
                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
                     <Lock className="w-3 h-3 text-amber-600" />
-                    Locked
+                    {t("profile:hu.locked")}
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
                     <AlertCircle className="w-3 h-3 text-rose-600" />
-                    Setup Needed
+                    {t("profile:hu.setupNeeded")}
                   </span>
                 )}
                 {isAdmin && isHuLocked && (
@@ -396,7 +395,7 @@ export default function Profile() {
                     }}
                     className="text-[11px] font-semibold px-2 py-0.5 rounded-md border border-slate-200 hover:bg-slate-50 text-slate-700 transition-colors cursor-pointer"
                   >
-                    {isAdminEditOpen ? "Cancel" : "Edit"}
+                    {isAdminEditOpen ? t("common:actions.cancel") : t("profile:hu.edit")}
                   </button>
                 )}
               </div>
@@ -424,33 +423,33 @@ export default function Profile() {
                   <div className="p-3.5 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-between gap-3">
                     <div>
                       <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-                        Last Used HU Number
+                        {t("profile:hu.lastUsed")}
                       </span>
                       <span className="font-mono text-base sm:text-lg font-bold text-slate-900 block mt-0.5">
-                        {matchedSupplier.current_hu_number || "Initialized"}
+                        {matchedSupplier.current_hu_number || t("profile:fallback.initialized")}
                       </span>
                     </div>
                     <span className="text-[11px] font-medium text-slate-600 bg-white border border-slate-200 px-2.5 py-1 rounded shadow-2xs">
-                      Synchronized
+                      {t("profile:hu.synchronized")}
                     </span>
                   </div>
 
                   <p className="text-[11px] text-slate-500">
-                    Sequence is locked to preserve Calzedonia EDI integrity. Contact System Administrator for adjustments.
+                    {t("profile:hu.lockedNote")}
                   </p>
                 </div>
               ) : (
                 <form onSubmit={handleSaveHu} className="space-y-3">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      {isAdminEditOpen ? "Override HU Sequence" : "Initial Last Used HU Number"}
+                      {isAdminEditOpen ? t("profile:hu.overrideLabel") : t("profile:hu.initialLabel")}
                     </label>
                     <div className="flex items-center gap-2">
                       <input
                         type="text"
                         value={huInput}
                         onChange={(e) => setHuInput(e.target.value)}
-                        placeholder="e.g. 0 (if starting fresh) or last serial"
+                        placeholder={t("profile:hu.placeholder")}
                         className="flex-1 h-9 px-3 text-xs font-mono rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400 outline-none"
                         disabled={isSavingHu}
                         required
@@ -461,11 +460,11 @@ export default function Profile() {
                         className="h-9 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors flex items-center gap-1.5 shadow-2xs disabled:opacity-50 cursor-pointer"
                       >
                         {isSavingHu ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Lock className="w-3.5 h-3.5" />}
-                        <span>{isAdminEditOpen ? "Update" : "Lock Sequence"}</span>
+                        <span>{isAdminEditOpen ? t("profile:hu.update") : t("profile:hu.lock")}</span>
                       </button>
                     </div>
                   </div>
-                  <p className="text-[11px] text-slate-500">Next carton barcode will generate from this number + 1.</p>
+                  <p className="text-[11px] text-slate-500">{t("profile:hu.nextCarton")}</p>
                 </form>
               )}
             </div>
@@ -480,39 +479,41 @@ export default function Profile() {
                 <Building2 className="w-4 h-4" />
               </div>
               <div>
-                <h2 className="text-sm font-bold text-slate-900">Company Registry Details</h2>
-                <p className="text-[11px] text-slate-500">Official enterprise records from plant database</p>
+                <h2 className="text-sm font-bold text-slate-900">{t("profile:registry.title")}</h2>
+                <p className="text-[11px] text-slate-500">{t("profile:registry.subtitle")}</p>
               </div>
             </div>
             <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
-              <ShieldCheck className="w-3 h-3" /> Verified ID
+              <ShieldCheck className="w-3 h-3" /> {t("profile:registry.verified")}
             </span>
           </div>
 
           <div className="grid grid-cols-2 gap-3 text-xs pt-1">
             <div className="p-2.5 rounded-lg border border-slate-100 bg-slate-50/80">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Company Name</span>
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">{t("profile:registry.companyName")}</span>
               <span className="font-semibold text-slate-900 truncate block mt-0.5">{matchedSupplier.name}</span>
             </div>
 
             <div className="p-2.5 rounded-lg border border-slate-100 bg-slate-50/80">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Partner Code</span>
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">{t("profile:registry.partnerCode")}</span>
               <span className="font-mono font-bold text-slate-900 block mt-0.5">{matchedSupplier.supplier_code}</span>
             </div>
 
             <div className="p-2.5 rounded-lg border border-slate-100 bg-slate-50/80">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Contact Person</span>
-              <span className="font-medium text-slate-800 block mt-0.5">{matchedSupplier.contact_name || user?.name || "Representative"}</span>
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">{t("profile:registry.contactPerson")}</span>
+              <span className="font-medium text-slate-800 block mt-0.5">
+                {matchedSupplier.contact_name || user?.name || t("profile:fallback.representative")}
+              </span>
             </div>
 
             <div className="p-2.5 rounded-lg border border-slate-100 bg-slate-50/80">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Country / Region</span>
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">{t("profile:registry.country")}</span>
               <span className="font-medium text-slate-800 block mt-0.5">{matchedSupplier.country || "Sri Lanka"}</span>
             </div>
           </div>
 
           <p className="text-[11px] text-slate-500 pt-1">
-            To request changes to legal enterprise name or billing details, please contact Central HQ Administration.
+            {t("profile:registry.changesNote")}
           </p>
         </div>
       </div>
@@ -526,15 +527,18 @@ export default function Profile() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-xs font-bold text-slate-900">Local Cache & Offline Drafts</h3>
+                <h3 className="text-xs font-bold text-slate-900">{t("profile:cache.title")}</h3>
                 {draftCount > 0 && (
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-                    {draftCount} {draftCount === 1 ? "Draft" : "Drafts"}
+                    {t("profile:cache.draftBadge", { count: draftCount })}
                   </span>
                 )}
               </div>
               <p className="text-[11px] text-slate-500 mt-0.5">
-                {draftStorageInfo.draftCount} saved items • {draftStorageInfo.approxSizeKb} KB browser storage used on this device
+                {t("profile:cache.storageInfo", {
+                  items: draftStorageInfo.draftCount,
+                  sizeKb: draftStorageInfo.approxSizeKb,
+                })}
               </p>
             </div>
           </div>
@@ -559,12 +563,12 @@ export default function Profile() {
               {isClearingCache ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Clearing...</span>
+                  <span>{t("profile:cache.clearing")}</span>
                 </>
               ) : (
                 <>
                   <Trash2 className="w-3.5 h-3.5 text-red-600" />
-                  <span>Clear Local Drafts</span>
+                  <span>{t("profile:cache.clear")}</span>
                 </>
               )}
             </button>

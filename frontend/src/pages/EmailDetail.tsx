@@ -18,42 +18,54 @@ import {
   RefreshCw,
   RotateCcw,
 } from "lucide-react";
-import { format } from "date-fns";
+import { useTranslation } from "react-i18next";
 import { emailApi } from "@/services/emailApi";
 import type { EmailAttachment, ParsedData } from "@/types/email";
+import type { EmailsResources } from "@/i18n/resources";
+import { formatDate as formatLocalDate, formatNumber } from "@/i18n/format";
 
-const PO_FIELDS: { key: string; label: string; fallbackKey?: string }[] = [
-  { key: "po_number", label: "PO Number" },
+type ParsedLabelKey = keyof EmailsResources["parsed"];
+
+// `label` is the English label (and the IUNGO/XML tag name where it is CamelCase).
+// Only labels with a `labelKey` are translated; tag names stay as-is.
+const PO_FIELDS: { key: string; label: string; labelKey?: ParsedLabelKey; fallbackKey?: string }[] = [
+  { key: "po_number", label: "PO Number", labelKey: "poNumber" },
   { key: "partner_id", label: "PartnerId", fallbackKey: "supplier_code" },
-  { key: "supplier_name", label: "Supplier" },
-  { key: "buyer_name", label: "Buyer" },
+  { key: "supplier_name", label: "Supplier", labelKey: "supplier" },
+  { key: "buyer_name", label: "Buyer", labelKey: "buyer" },
   { key: "contact_person", label: "ContactPerson" },
-  { key: "order_date", label: "Order Date" },
-  { key: "delivery_date", label: "Delivery Date" },
-  { key: "destination", label: "Destination" },
+  { key: "order_date", label: "Order Date", labelKey: "orderDate" },
+  { key: "delivery_date", label: "Delivery Date", labelKey: "deliveryDate" },
+  { key: "destination", label: "Destination", labelKey: "destination" },
   { key: "delivery_address", label: "DeliveryAddress" },
-  { key: "payment", label: "Payment" },
-  { key: "address", label: "Address", fallbackKey: "supplier_address" },
+  { key: "payment", label: "Payment", labelKey: "payment" },
+  { key: "address", label: "Address", labelKey: "address", fallbackKey: "supplier_address" },
   { key: "zipcode", label: "ZIPCode", fallbackKey: "supplier_zipcode" },
-  { key: "city", label: "City", fallbackKey: "supplier_city" },
-  { key: "town", label: "Town", fallbackKey: "supplier_town" },
-  { key: "country", label: "Country", fallbackKey: "supplier_country" },
-  { key: "currency", label: "Currency" },
-  { key: "total_quantity", label: "Total Qty" },
-  { key: "total_value", label: "Total Value" },
-  { key: "source_filename", label: "Source File" },
-  { key: "order_url", label: "IUNGO Order Link" },
+  { key: "city", label: "City", labelKey: "city", fallbackKey: "supplier_city" },
+  { key: "town", label: "Town", labelKey: "town", fallbackKey: "supplier_town" },
+  { key: "country", label: "Country", labelKey: "country", fallbackKey: "supplier_country" },
+  { key: "currency", label: "Currency", labelKey: "currency" },
+  { key: "total_quantity", label: "Total Qty", labelKey: "totalQty" },
+  { key: "total_value", label: "Total Value", labelKey: "totalValue" },
+  { key: "source_filename", label: "Source File", labelKey: "sourceFile" },
+  { key: "order_url", label: "IUNGO Order Link", labelKey: "orderLink" },
 ];
 
-const LINE_ITEM_COLUMNS: { key: string; label: string; numeric?: boolean; fallbackKey?: string }[] = [
+const LINE_ITEM_COLUMNS: {
+  key: string;
+  label: string;
+  labelKey?: ParsedLabelKey;
+  numeric?: boolean;
+  fallbackKey?: string;
+}[] = [
   { key: "order_line_number", label: "OrderLineNumber", fallbackKey: "line_number" },
   { key: "item_code", label: "ItemCode" },
   { key: "partner_item_code", label: "PartnerItemCode", fallbackKey: "partner_code" },
   { key: "item_description", label: "ItemDescription", fallbackKey: "description" },
-  { key: "color", label: "Color" },
+  { key: "color", label: "Color", labelKey: "color" },
   { key: "qty_unit", label: "QtyUnit", fallbackKey: "size" },
-  { key: "quantity", label: "Qty", numeric: true },
-  { key: "unit_price", label: "Unit Price", numeric: true },
+  { key: "quantity", label: "Qty", labelKey: "qty", numeric: true },
+  { key: "unit_price", label: "Unit Price", labelKey: "unitPrice", numeric: true },
 ];
 
 const PRE_CLASS =
@@ -68,7 +80,7 @@ type PreviewKind = "html" | "xml" | "text" | "image" | "pdf" | "none";
 // ─── Helpers ────────────────────────────────────────────────────
 
 function formatDate(value: string | null): string {
-  return value ? format(new Date(value), "MMM d yyyy, HH:mm:ss") : " ";
+  return value ? formatLocalDate(value, "dateTime") : " ";
 }
 
 function formatBytes(bytes: number | null): string {
@@ -80,7 +92,7 @@ function formatBytes(bytes: number | null): string {
 
 function displayValue(value: unknown): string {
   if (value === null || value === undefined || value === "") return " ";
-  if (typeof value === "number") return value.toLocaleString();
+  if (typeof value === "number") return formatNumber(value);
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
 }
@@ -90,7 +102,7 @@ function formatMoney(value: unknown, currency?: string): string {
   const num = typeof value === "number" ? value : parseFloat(String(value));
   if (isNaN(num)) return String(value);
 
-  const formattedNum = num.toLocaleString(undefined, {
+  const formattedNum = formatNumber(num, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 4,
   });
@@ -276,6 +288,7 @@ function AttachmentPreview({
   emailId: string;
   attachment: EmailAttachment;
 }) {
+  const { t } = useTranslation("emails");
   const kind = previewKind(attachment);
   const { data: blob, isLoading, isError } = useQuery({
     ...attachmentQuery(emailId, attachment.id),
@@ -305,7 +318,7 @@ function AttachmentPreview({
   if (kind === "none") {
     return (
       <p className="text-sm text-gray-500">
-        Preview isn't available for this file type. Use Download to open it.
+        {t("preview.unavailable")}
       </p>
     );
   }
@@ -314,7 +327,7 @@ function AttachmentPreview({
     return (
       <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
         <AlertCircle className="w-4 h-4 inline mr-1 -mt-0.5" />
-        Could not load this file from storage.
+        {t("preview.couldNotLoad")}
       </div>
     );
   }
@@ -324,12 +337,12 @@ function AttachmentPreview({
     return (
       <div className="flex items-center justify-center py-8 text-sm text-gray-400">
         <RefreshCw className="w-4 h-4 animate-spin mr-2" />
-        Loading file...
+        {t("preview.loading")}
       </div>
     );
   }
 
-  const title = attachment.filename || "Attachment";
+  const title = attachment.filename || t("detail.attachmentFallback");
   if (kind === "html") return <SafeHtmlFrame html={ready} title={title} />;
   if (kind === "image") {
     return <img src={ready} alt={title} className="max-w-full rounded-lg border border-gray-200" />;
@@ -343,6 +356,7 @@ function AttachmentPreview({
 }
 
 function ParsedDataSection({ data }: { data: ParsedData }) {
+  const { t } = useTranslation("emails");
   const raw = data.raw_extracted ?? {};
   const lineItems = Array.isArray(raw.line_items)
     ? raw.line_items
@@ -351,9 +365,9 @@ function ParsedDataSection({ data }: { data: ParsedData }) {
         )
         .filter((item) => Number(item.quantity ?? item.qty ?? 0) > 0)
     : [];
-  const fields = PO_FIELDS.map(({ key, label, fallbackKey }) => {
+  const fields = PO_FIELDS.map(({ key, label, labelKey, fallbackKey }) => {
     const val = raw[key] ?? (fallbackKey ? raw[fallbackKey] : undefined);
-    return { key, label, value: val };
+    return { key, label, displayLabel: labelKey ? t(`parsed.${labelKey}`) : label, value: val };
   }).filter(
     ({ value }) => value !== undefined && value !== null && value !== ""
   );
@@ -368,12 +382,12 @@ function ParsedDataSection({ data }: { data: ParsedData }) {
         {data.po_number_extracted && (
           <span className="text-sm font-medium text-gray-900">PO {data.po_number_extracted}</span>
         )}
-        <span className="text-xs text-gray-500">Parsed {formatDate(data.created_at)}</span>
+        <span className="text-xs text-gray-500">{t("parsed.parsedAt", { date: formatDate(data.created_at) })}</span>
       </div>
 
       {fields.length > 0 && (
         <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-3 text-sm">
-          {fields.map(({ key, label, value }) => {
+          {fields.map(({ key, label, displayLabel, value }) => {
             const isMoney = key === "total_value";
             const isLink =
               (key === "order_url" || String(label).toLowerCase().includes("link")) &&
@@ -382,7 +396,7 @@ function ParsedDataSection({ data }: { data: ParsedData }) {
             const currency = String(raw.currency || "USD");
             return (
               <div key={key} className="min-w-0">
-                <dt className="text-gray-500">{label}</dt>
+                <dt className="text-gray-500">{displayLabel}</dt>
                 <dd className={`break-words ${isMoney ? "text-gray-950 font-bold" : "text-gray-900"}`}>
                   {isMoney ? (
                     formatMoney(value, currency)
@@ -393,7 +407,7 @@ function ParsedDataSection({ data }: { data: ParsedData }) {
                       rel="noopener noreferrer"
                       className="text-blue-600 hover:text-blue-800 hover:underline font-medium inline-flex items-center gap-1 text-xs"
                     >
-                      <span>Open in IUNGO</span>
+                      <span>{t("parsed.openInIungo")}</span>
                       <ExternalLink className="w-3 h-3" />
                     </a>
                   ) : (
@@ -416,7 +430,7 @@ function ParsedDataSection({ data }: { data: ParsedData }) {
 
       {lineItems.length > 0 && (
         <div>
-          <h4 className="text-sm font-medium text-gray-500 mb-2">Line Items ({lineItems.length})</h4>
+          <h4 className="text-sm font-medium text-gray-500 mb-2">{t("parsed.lineItems", { count: lineItems.length })}</h4>
           <div className="overflow-x-auto border border-gray-200 rounded-lg">
             <table className="w-full text-sm">
               <thead>
@@ -424,7 +438,9 @@ function ParsedDataSection({ data }: { data: ParsedData }) {
                   {LINE_ITEM_COLUMNS.map((col) => {
                     const label =
                       col.key === "unit_price" && raw.currency
-                        ? `Unit Price (${raw.currency})`
+                        ? t("parsed.unitPriceCurrency", { currency: String(raw.currency) })
+                        : col.labelKey
+                        ? t(`parsed.${col.labelKey}`)
                         : col.label;
                     return (
                       <th
@@ -464,7 +480,7 @@ function ParsedDataSection({ data }: { data: ParsedData }) {
       )}
 
       <details className="text-sm">
-        <summary className="cursor-pointer text-gray-500 hover:text-gray-700">Raw extracted JSON</summary>
+        <summary className="cursor-pointer text-gray-500 hover:text-gray-700">{t("parsed.rawJson")}</summary>
         <pre className={`${PRE_CLASS} mt-2`}>{JSON.stringify(data.raw_extracted, null, 2)}</pre>
       </details>
     </div>
@@ -474,6 +490,7 @@ function ParsedDataSection({ data }: { data: ParsedData }) {
 // ─── Page ───────────────────────────────────────────────────────
 
 export default function EmailDetailPage() {
+  const { t } = useTranslation("emails");
   const { emailId = "" } = useParams<{ emailId: string }>();
   const queryClient = useQueryClient();
   const [bodyTab, setBodyTab] = useState<BodyTab | null>(null);
@@ -503,7 +520,7 @@ export default function EmailDetailPage() {
       const blob = await queryClient.fetchQuery(attachmentQuery(emailId, attachment.id));
       saveBlob(blob, attachment.filename || "attachment");
     } catch {
-      setDownloadError(`Could not download ${attachment.filename || "the file"} from storage.`);
+      setDownloadError(t("detail.downloadError", { file: attachment.filename || t("detail.fileFallback") }));
     }
   };
 
@@ -512,10 +529,10 @@ export default function EmailDetailPage() {
       <Link
         to="/emails"
         className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 hover:text-blue-700 active:scale-95 rounded-lg border border-gray-200 transition-all shadow-xs"
-        title="Return to Email Processing Queue"
+        title={t("detail.backTitle")}
       >
         <ArrowLeft className="w-4 h-4" />
-        Back to emails
+        {t("detail.back")}
       </Link>
       {email && (
         <span className="text-xs font-medium text-gray-500 truncate max-w-md hidden sm:inline-block">
@@ -531,7 +548,7 @@ export default function EmailDetailPage() {
         {backBar}
         <div className="flex items-center justify-center py-20 text-gray-400">
           <RefreshCw className="w-6 h-6 animate-spin mr-2" />
-          Loading email...
+          {t("detail.loading")}
         </div>
       </div>
     );
@@ -543,7 +560,7 @@ export default function EmailDetailPage() {
         {backBar}
         <div className="flex flex-col items-center justify-center py-20 text-gray-400">
           <Mail className="w-12 h-12 mb-3" />
-          <p className="text-lg">Email not found</p>
+          <p className="text-lg">{t("detail.notFound")}</p>
         </div>
       </div>
     );
@@ -554,15 +571,15 @@ export default function EmailDetailPage() {
 
   const tabs: { key: BodyTab; label: string }[] = [];
   if (email.body_html) tabs.push({ key: "html", label: "HTML" });
-  if (email.body_text) tabs.push({ key: "text", label: "Plain Text" });
-  if (original) tabs.push({ key: "source", label: "Original Source" });
-  const activeBodyTab = tabs.some((t) => t.key === bodyTab) ? bodyTab : tabs[0]?.key;
+  if (email.body_text) tabs.push({ key: "text", label: t("tabs.text") });
+  if (original) tabs.push({ key: "source", label: t("tabs.original") });
+  const activeBodyTab = tabs.some((tab) => tab.key === bodyTab) ? bodyTab : tabs[0]?.key;
 
   const details: { label: string; value: unknown }[] = [
-    { label: "From", value: email.from_address },
-    { label: "To", value: email.to_address },
-    { label: "Received", value: formatDate(email.received_at) },
-    { label: "Fetched", value: formatDate(email.fetched_at) },
+    { label: t("fields.from"), value: email.from_address },
+    { label: t("fields.to"), value: email.to_address },
+    { label: t("fields.received"), value: formatDate(email.received_at) },
+    { label: t("fields.fetched"), value: formatDate(email.fetched_at) },
     { label: "LegalName", value: email.xml_legal_name },
     { label: "EDIEmailAddress", value: email.xml_iungo_email_address },
     { label: "TransmissionDate", value: email.xml_transmission_date },
@@ -578,7 +595,7 @@ export default function EmailDetailPage() {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0 space-y-2">
             <h1 className="text-2xl font-semibold text-gray-900 break-words">
-              {email.subject || "No subject"}
+              {email.subject || t("detail.noSubject")}
             </h1>
             <div className="flex flex-wrap items-center gap-2">
               {email.email_type && (
@@ -596,7 +613,7 @@ export default function EmailDetailPage() {
                 className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
               >
                 <Download className="w-4 h-4" />
-                Download .eml
+                {t("detail.downloadEml")}
               </button>
             )}
             {email.status === "ERROR" && (
@@ -606,7 +623,7 @@ export default function EmailDetailPage() {
                 className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700 disabled:opacity-50"
               >
                 <RotateCcw className="w-4 h-4" />
-                Reprocess
+                {t("detail.reprocess")}
               </button>
             )}
           </div>
@@ -637,7 +654,7 @@ export default function EmailDetailPage() {
 
       {/* Details */}
       <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5">
-        <h2 className={`${SECTION_TITLE_CLASS} mb-3`}>Details</h2>
+        <h2 className={`${SECTION_TITLE_CLASS} mb-3`}>{t("detail.details")}</h2>
         <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-3 text-sm">
           {details.map((d) => (
             <div key={d.label} className="min-w-0">
@@ -659,7 +676,7 @@ export default function EmailDetailPage() {
         <div className="flex flex-wrap items-end justify-between gap-2 px-5 pt-4 border-b border-gray-200">
           <h2 className={`${SECTION_TITLE_CLASS} pb-3`}>
             <Mail className="w-4 h-4" />
-            Message
+            {t("detail.message")}
           </h2>
           <nav className="flex gap-1">
             {tabs.map((tab) => (
@@ -679,7 +696,7 @@ export default function EmailDetailPage() {
         </div>
         <div className="p-5">
           {activeBodyTab === "html" && email.body_html && (
-            <SafeHtmlFrame html={email.body_html} title="Email body" />
+            <SafeHtmlFrame html={email.body_html} title={t("detail.bodyFrameTitle")} />
           )}
           {activeBodyTab === "text" && email.body_text && (
             <pre className={PRE_CLASS}>{email.body_text}</pre>
@@ -688,7 +705,7 @@ export default function EmailDetailPage() {
             <AttachmentPreview emailId={emailId} attachment={original} />
           )}
           {!activeBodyTab && (
-            <p className="text-sm text-gray-500">No message body was stored for this email.</p>
+            <p className="text-sm text-gray-500">{t("detail.noBody")}</p>
           )}
         </div>
       </div>
@@ -697,10 +714,10 @@ export default function EmailDetailPage() {
       <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
         <h2 className={`${SECTION_TITLE_CLASS} px-5 py-4 border-b border-gray-200`}>
           <Paperclip className="w-4 h-4" />
-          Attachments ({files.length})
+          {t("detail.attachments", { count: files.length })}
         </h2>
         {files.length === 0 ? (
-          <p className="px-5 py-4 text-sm text-gray-500">No attachments were stored for this email.</p>
+          <p className="px-5 py-4 text-sm text-gray-500">{t("detail.noAttachments")}</p>
         ) : (
           <ul className="divide-y divide-gray-100">
             {files.map((attachment) => {
@@ -715,10 +732,10 @@ export default function EmailDetailPage() {
                       <Icon className="w-5 h-5 text-gray-400 shrink-0" />
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-gray-900 break-all">
-                          {attachment.filename || "unnamed"}
+                          {attachment.filename || t("detail.unnamed")}
                         </p>
                         <p className="text-xs text-gray-500">
-                          {attachment.content_type || "unknown type"} · {formatBytes(attachment.file_size)}
+                          {attachment.content_type || t("detail.unknownType")} · {formatBytes(attachment.file_size)}
                         </p>
                       </div>
                     </div>
@@ -731,7 +748,7 @@ export default function EmailDetailPage() {
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
                         >
                           {isOpen ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                          {isOpen ? "Hide" : "View"}
+                          {isOpen ? t("detail.hide") : t("detail.view")}
                         </button>
                       )}
                       <button
@@ -739,7 +756,7 @@ export default function EmailDetailPage() {
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
                       >
                         <Download className="w-4 h-4" />
-                        Download
+                        {t("detail.download")}
                       </button>
                     </div>
                   </div>
@@ -753,8 +770,7 @@ export default function EmailDetailPage() {
         )}
         {!original && (
           <p className="px-5 py-3 text-xs text-gray-500 border-t border-gray-100 bg-gray-50">
-            The original message isn't stored for this email. Emails received from now on keep a
-            full copy you can view and download.
+            {t("detail.noOriginal")}
           </p>
         )}
       </div>
@@ -763,11 +779,11 @@ export default function EmailDetailPage() {
       <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
         <h2 className={`${SECTION_TITLE_CLASS} px-5 py-4 border-b border-gray-200`}>
           <FileText className="w-4 h-4" />
-          Parsed Data ({email.parsed_data.length})
+          {t("detail.parsedData", { count: email.parsed_data.length })}
         </h2>
         {email.parsed_data.length === 0 ? (
           <p className="px-5 py-4 text-sm text-gray-500">
-            No purchase order data was extracted from this email.
+            {t("detail.noParsed")}
           </p>
         ) : (
           <div className="divide-y divide-gray-100">

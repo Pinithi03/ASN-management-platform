@@ -23,6 +23,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import CodedHTTPException
 from app.db.session import get_db
 from app.models.asn import ASNRecord
 from app.models.company import Company
@@ -109,7 +110,7 @@ async def update_dispatch_settings(
     """Update the configured IUNGO / EDI dispatch recipient email (Admin setting)."""
     recipient = (payload.get("recipient_email") or "").strip()
     if not recipient:
-        raise HTTPException(status_code=400, detail="Recipient email cannot be empty")
+        raise CodedHTTPException(code="RECIPIENT_EMAIL_REQUIRED", status_code=400, detail="Recipient email cannot be empty")
 
     stmt = select(Company)
     res = await db.execute(stmt)
@@ -139,7 +140,7 @@ async def get_asn_detail(
         res = await db.execute(stmt)
         r = res.scalar_one_or_none()
         if not r:
-            raise HTTPException(status_code=404, detail="ASN record not found")
+            raise CodedHTTPException(code="ASN_NOT_FOUND", status_code=404, detail="ASN record not found")
 
         # Get linked shipment
         shipment_num = None
@@ -205,7 +206,7 @@ async def preview_asn_xml(
     res = await db.execute(stmt)
     r = res.scalar_one_or_none()
     if not r:
-        raise HTTPException(status_code=404, detail="ASN record not found")
+        raise CodedHTTPException(code="ASN_NOT_FOUND", status_code=404, detail="ASN record not found")
 
     supp_code = "0000018194"
     if r.supplier_id:
@@ -241,7 +242,7 @@ async def download_asn_xml(
     res = await db.execute(stmt)
     r = res.scalar_one_or_none()
     if not r:
-        raise HTTPException(status_code=404, detail="ASN record not found")
+        raise CodedHTTPException(code="ASN_NOT_FOUND", status_code=404, detail="ASN record not found")
 
     supp_code = "0000018194"
     if r.supplier_id:
@@ -282,7 +283,7 @@ async def revalidate_asn_xml(
     res = await db.execute(stmt)
     r = res.scalar_one_or_none()
     if not r:
-        raise HTTPException(status_code=404, detail="ASN record not found")
+        raise CodedHTTPException(code="ASN_NOT_FOUND", status_code=404, detail="ASN record not found")
 
     supp_code = "0000018194"
     if r.supplier_id:
@@ -322,7 +323,7 @@ async def send_asn_xml(
     res = await db.execute(stmt)
     r = res.scalar_one_or_none()
     if not r:
-        raise HTTPException(status_code=404, detail="ASN record not found")
+        raise CodedHTTPException(code="ASN_NOT_FOUND", status_code=404, detail="ASN record not found")
 
     supp_code = "0000018194"
     supp_name = "COATS THREAD EXPORTS (PVT) LTD"

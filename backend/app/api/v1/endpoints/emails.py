@@ -32,6 +32,7 @@ from sqlalchemy import func, select, case, desc, cast, String, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.exceptions import CodedHTTPException
 from app.api.v1.deps import CurrentUser, get_current_user
 from app.db.session import get_db
 from app.models.email_attachment import EmailAttachment
@@ -606,12 +607,12 @@ async def get_email(
     )
     record = result.scalar_one_or_none()
     if not record:
-        raise HTTPException(status_code=404, detail="Email not found")
+        raise CodedHTTPException(code="EMAIL_NOT_FOUND", status_code=404, detail="Email not found")
 
     if current_user.role == UserRole.SUPPLIER:
         # Verify supplier owns this email
         if record.supplier_id and current_user.supplier_id and record.supplier_id != current_user.supplier_id:
-            raise HTTPException(status_code=403, detail="Access denied to this email")
+            raise CodedHTTPException(code="EMAIL_ACCESS_DENIED", status_code=403, detail="Access denied to this email")
 
     pd_result = await db.execute(
         select(ParsedData)
@@ -707,7 +708,7 @@ async def download_email_attachment(
     )
     attachment = result.scalar_one_or_none()
     if not attachment or not attachment.minio_key:
-        raise HTTPException(status_code=404, detail="Attachment not found")
+        raise CodedHTTPException(code="ATTACHMENT_NOT_FOUND", status_code=404, detail="Attachment not found")
 
     try:
         content = await run_in_threadpool(
@@ -715,7 +716,7 @@ async def download_email_attachment(
         )
     except Exception as e:
         logger.error("Failed to read attachment %s from MinIO: %s", attachment_id, e)
-        raise HTTPException(
+        raise CodedHTTPException(code="ATTACHMENT_READ_FAILED",
             status_code=502, detail="Could not read attachment from storage"
         )
 
@@ -746,7 +747,7 @@ async def update_email(
     )
     record = result.scalar_one_or_none()
     if not record:
-        raise HTTPException(status_code=404, detail="Email not found")
+        raise CodedHTTPException(code="EMAIL_NOT_FOUND", status_code=404, detail="Email not found")
 
     if body.status is not None:
         record.status = body.status.upper()
@@ -774,7 +775,7 @@ async def reprocess_email(
     )
     record = result.scalar_one_or_none()
     if not record:
-        raise HTTPException(status_code=404, detail="Email not found")
+        raise CodedHTTPException(code="EMAIL_NOT_FOUND", status_code=404, detail="Email not found")
 
     record.status = "QUEUED"
     record.error_message = None

@@ -1,0 +1,55 @@
+{
+  "detail": {
+    "buyerContact": "Buyer Contact: <strong>{{contact}}</strong>",
+    "completedOn": "Completed On",
+    "destinationPlant": "Destination Plant",
+    "fulfilledLineFallback": "Fulfilled Order Line",
+    "lineItems": "Fulfilled Line Items ({{count}})",
+    "loading": "Loading fulfillment details...",
+    "revisionHistory": "Order Audit & Revision History",
+    "subtitle": "Fulfilled Order Summary & Audit Trail",
+    "totalShipped": "Total Shipped",
+    "totalShippedValue": "{{quantity}} units"
+  },
+  "detailTable": {
+    "description": "Description",
+    "material": "Material",
+    "ordered": "Ordered",
+    "poLine": "PO / Line",
+    "shipped": "Shipped"
+  },
+  "empty": {
+    "resetFilters": "Reset Filters",
+    "text": "Once all line items of a Purchase Order are 100% shipped, the order automatically moves here to keep your active workspaces clean.",
+    "title": "No completed orders yet"
+  },
+  "filters": {
+    "allPlants": "All Factory Plants (5)",
+    "plantTitle": "Filter Completed Orders by Plant"
+  },
+  "header": {
+    "archive": "Completed Archive ({{total}})",
+    "subtitle": "Fully shipped and completed Purchase Orders separated from active dispatch workspaces",
+    "title": "Order History"
+  },
+  "loading": "Loading completed order history...",
+  "search": {
+    "addAnother": "Add another completed PO number...",
+    "clear": "Clear search",
+    "placeholder": "Search completed PO number, style, description, or paste comma-separated POs..."
+  },
+  "status": {
+    "completed": "COMPLETED"
+  },
+  "table": {
+    "completedDate": "Completed Date",
+    "copyPo": "Copy PO Number",
+    "deliveryDate": "Delivery Date",
+    "description": "Description / Style",
+    "fulfilledQty": "Fulfilled Qty",
+    "orderDate": "Order Date",
+    "plantStore": "Plant & Store",
+    "poNumber": "PO Number",
+    "status": "Status"
+  }
+}

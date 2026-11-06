@@ -10,7 +10,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
-from app.core.exceptions import AppException, app_exception_handler
+from app.core.exceptions import (
+    AppException,
+    CodedHTTPException,
+    app_exception_handler,
+    coded_http_exception_handler,
+)
 from app.core.middleware import RequestIDMiddleware, LoggingMiddleware
 from app.api.v1.router import api_router
 
@@ -161,6 +166,7 @@ def create_app() -> FastAPI:
 
     # Exception handlers
     app.add_exception_handler(AppException, app_exception_handler)
+    app.add_exception_handler(CodedHTTPException, coded_http_exception_handler)
 
     # Middleware (order matters — outermost first)
     app.add_middleware(

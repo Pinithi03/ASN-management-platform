@@ -1,0 +1,102 @@
+{
+  "deadlines": {
+    "bucketCritical": "Critical (≤3d)",
+    "bucketDue7": "Due in 7d",
+    "bucketOnTrack": "On Track (>7d)",
+    "bucketOverdue": "Overdue",
+    "seriesOrders": "Orders Count",
+    "subtitle": "Schedule of orders to pack and dispatch to avoid plant penalties",
+    "targetDates": "Target Dispatch Dates",
+    "tileDue3": "Due ≤ 3 Days",
+    "tileDue7": "Due in 7 Days",
+    "tileOnTrack": "On Track",
+    "tileOverdue": "Overdue",
+    "title": "Upcoming Delivery Deadlines"
+  },
+  "dueSoon": {
+    "allOnSchedule": "All assigned orders are on schedule",
+    "daysLeft": "{{days}}d left",
+    "dueToday": "Due Today",
+    "dueTomorrow": "Due Tomorrow",
+    "overdue": "Overdue ({{days}}d)",
+    "packNow": "Pack Now",
+    "partial": "Partial",
+    "target": "Target: {{date}} · Quantity:",
+    "title": "Deliveries Due Soon",
+    "unnamedPo": "Unnamed PO"
+  },
+  "fallback": {
+    "apparelItem": "Apparel Item",
+    "noDate": "No Date"
+  },
+  "header": {
+    "orderHistory": "Order History ({{count}})",
+    "subtitle": "Real-time dispatch throughput, active order readiness, and plant fulfillment metrics",
+    "title": "Overview"
+  },
+  "kpi": {
+    "dispatchedVolume": {
+      "badge": "Dispatched",
+      "label": "Dispatched Volume",
+      "subtitle": "{{cartons}} cartons · {{dispatches}} dispatches",
+      "value": "{{pieces}} pcs"
+    },
+    "dueSoon": {
+      "badgeApproaching": "Approaching",
+      "badgeAttention": "Attention",
+      "label": "Deliveries Due Soon",
+      "subtitle": "{{urgent}} urgent (≤3d)",
+      "subtitleWithOverdue": "{{overdue}} overdue · {{urgent}} urgent (≤3d)",
+      "value": "{{count}} Orders"
+    },
+    "partial": {
+      "badge": "{{percent}}% Split",
+      "label": "Partial Fulfillment",
+      "subtitle": "{{percent}}% completed overall",
+      "value": "{{count}} POs"
+    },
+    "unprocessed": {
+      "badge": "Open",
+      "label": "Unprocessed Orders",
+      "subtitle": "{{percent}}% of assigned POs",
+      "value": "{{count}} POs"
+    }
+  },
+  "lifecycle": {
+    "assignedPos": "Assigned POs",
+    "cancelled": "Cancelled",
+    "completedBadge": "{{percent}}% Completed",
+    "completedShipped": "Completed & Shipped",
+    "partial": "Partial Fulfillment",
+    "subtitle": "My assigned orders across packaging states",
+    "title": "Order Fulfillment Status",
+    "unprocessed": "Unprocessed (New)",
+    "updated": "Updated / In Review"
+  },
+  "links": {
+    "allOrders": "All Orders",
+    "allShipments": "All Shipments"
+  },
+  "loading": "Loading supplier dispatch analytics...",
+  "monthly": {
+    "legendCartons": "Cartons",
+    "legendPieces": "Pieces",
+    "seriesCartons": "Carton Boxes",
+    "seriesPieces": "Pieces Shipped",
+    "thisMonth": "This Month: <strong>{{value}} pcs</strong>",
+    "title": "Monthly Dispatch Throughput"
+  },
+  "plants": {
+    "assigned": "Assigned Plants",
+    "cartons": "({{count}} cartons)",
+    "footer": "Standard DTD XML & 20-digit SSCC labels",
+    "pieces": "{{value}} pcs",
+    "title": "Manufacturing Destinations",
+    "validated": "Plant Validated"
+  },
+  "recent": {
+    "none": "No shipments dispatched yet",
+    "plantLine": "Plant: {{plant}} · {{cartons}} cartons · {{pieces}} pcs",
+    "title": "Recent Dispatches"
+  }
+}

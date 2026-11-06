@@ -8,6 +8,10 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { Trans, useTranslation } from "react-i18next";
+import i18n from "@/i18n";
+import { formatDate, formatNumber } from "@/i18n/format";
+import { getErrorMessage } from "@/services/apiError";
 import {
   Search,
   Download,
@@ -65,6 +69,15 @@ const statusColor: Record<string, string> = {
   DISPATCHED: "bg-emerald-50 text-emerald-700 border-emerald-200",
   DELIVERED: "bg-emerald-50 text-emerald-700 border-emerald-200",
 };
+
+const SHIPMENT_STATUSES = Object.keys(statusColor);
+type ShipmentStatus = "DRAFT" | "PACKING" | "PACKED" | "XML_SENT" | "RECEIVED" | "ACCEPTED" | "REJECTED" | "DISPATCHED" | "DELIVERED";
+
+/** Display label for a shipment status code; unknown codes are shown as before. */
+const shipmentStatusLabel = (status: string): string =>
+  SHIPMENT_STATUSES.includes(status)
+    ? i18n.t(`shipments:status.${status as ShipmentStatus}`)
+    : status.replace(/_/g, " ");
 
 export const PLANT_NAMES: Record<string, string> = {
   PPA1: "Omega Line Ltd (PPA1)",
@@ -195,6 +208,7 @@ type PackedItem = POLineItem & {
 };
 
 export default function Shipments() {
+  const { t } = useTranslation("shipments");
   const user = useAuthStore((s) => s.user);
   const isSupplier = user?.role === "SUPPLIER";
   const navigate = useNavigate();
@@ -321,7 +335,7 @@ export default function Shipments() {
       }
       setTimeout(() => window.URL.revokeObjectURL(url), 60000);
     } catch (e: any) {
-      alert(`Failed to download labels: ${e?.response?.data?.detail || e.message || e}`);
+      alert(t("labels.downloadFailed", { error: getErrorMessage(e, String(e)) }));
     } finally {
       setActionLoadingId(null);
     }
@@ -334,7 +348,7 @@ export default function Shipments() {
       if (shipment.asn?.xml_content) {
         setXmlModalData({
           open: true,
-          title: `ASN XML — Shipment ${shipment.shipment_number}`,
+          title: t("xml.title", { number: shipment.shipment_number }),
           xmlContent: shipment.asn.xml_content,
           asnId: shipment.asn?.id,
           validated: shipment.asn.xml_validated ?? true,
@@ -346,16 +360,16 @@ export default function Shipments() {
         const data = await shipmentService.getASNXmlPreview(asnId);
         setXmlModalData({
           open: true,
-          title: `ASN XML — Shipment ${shipment.shipment_number}`,
+          title: t("xml.title", { number: shipment.shipment_number }),
           xmlContent: data.xml_content,
           asnId: asnId,
           validated: data.xml_validated,
         });
       } else {
-        alert("This shipment does not have a generated ASN XML yet. Finalize packing to generate the ASN.");
+        alert(t("xml.noXml"));
       }
     } catch (err: any) {
-      alert(`Failed to load ASN XML: ${err?.response?.data?.detail || err?.message || "Unknown error"}`);
+      alert(t("xml.loadFailed", { error: getErrorMessage(err, t("xml.unknownError")) }));
     } finally {
       setActionLoadingId(null);
     }
@@ -386,7 +400,7 @@ export default function Shipments() {
       {!isCreating ? (
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-xl font-semibold text-slate-900">Shipments</h1>
+            <h1 className="text-xl font-semibold text-slate-900">{t("list.title")}</h1>
           </div>
         </div>
       ) : creationMethod === "excel" ? (
@@ -406,13 +420,13 @@ export default function Shipments() {
             <ArrowLeft className="w-4 h-4" />{" "}
             {poQuery
               ? searchParams.get("source") === "lines" || searchParams.get("lines")
-                ? "Back to Purchase Order Lines"
-                : "Back to Purchase Orders"
-              : "Back to Shipments"}
+                ? t("creation.backToLines")
+                : t("creation.backToPos")
+              : t("creation.backToShipments")}
           </button>
           <div className="flex items-center gap-3">
             <span className="text-xs font-bold text-gray-800 uppercase tracking-wide">
-              Excel Packing List Dispatch
+              {t("creation.excelTitle")}
             </span>
             <button
               onClick={() => {
@@ -431,7 +445,7 @@ export default function Shipments() {
                 isSupplier ? "text-emerald-600 hover:text-emerald-700" : "text-blue-600 hover:text-blue-700"
               )}
             >
-              Switch to Web Workbench →
+              {t("creation.switchToWeb")}
             </button>
           </div>
         </div>
@@ -452,7 +466,7 @@ export default function Shipments() {
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search shipment #, plant..."
+                placeholder={t("list.searchPlaceholder")}
                 className="w-full pl-10 pr-4 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 shadow-xs"
               />
             </div>
@@ -461,13 +475,13 @@ export default function Shipments() {
               onChange={(e) => setStatusFilter(e.target.value)}
               className="px-3.5 py-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 shadow-xs cursor-pointer"
             >
-              <option value="ALL">All Statuses</option>
-              <option value="DRAFT">Draft</option>
-              <option value="PACKING">Packing</option>
-              <option value="PACKED">Packed</option>
-              <option value="XML_SENT">XML Sent</option>
-              <option value="DISPATCHED">Dispatched</option>
-              <option value="DELIVERED">Delivered</option>
+              <option value="ALL">{t("list.filter.all")}</option>
+              <option value="DRAFT">{t("list.filter.draft")}</option>
+              <option value="PACKING">{t("list.filter.packing")}</option>
+              <option value="PACKED">{t("list.filter.packed")}</option>
+              <option value="XML_SENT">{t("list.filter.xmlSent")}</option>
+              <option value="DISPATCHED">{t("list.filter.dispatched")}</option>
+              <option value="DELIVERED">{t("list.filter.delivered")}</option>
             </select>
           </div>
 
@@ -476,14 +490,14 @@ export default function Shipments() {
               <table className="w-full text-xs border-collapse">
                 <thead className="sticky top-0 z-10 bg-zinc-700 shadow-xs">
                   <tr className="border-b border-zinc-800 bg-zinc-700 text-left text-xs font-semibold uppercase tracking-wider text-white">
-                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Packing Slip No</th>
-                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">PO Number</th>
-                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Destination Plant</th>
-                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Cartons / Rolls</th>
-                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Total Quantity</th>
-                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Status</th>
-                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Ship Date</th>
-                    <th className="py-1.5 px-2 text-right whitespace-nowrap">Actions</th>
+                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("list.table.packingSlip")}</th>
+                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("list.table.poNumber")}</th>
+                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("list.table.destination")}</th>
+                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("list.table.cartons")}</th>
+                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("list.table.totalQty")}</th>
+                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("list.table.status")}</th>
+                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("list.table.shipDate")}</th>
+                    <th className="py-1.5 px-2 text-right whitespace-nowrap">{t("list.table.actions")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -533,12 +547,12 @@ export default function Shipments() {
                         </td>
                         <td className="py-1 px-2 whitespace-nowrap border-r border-gray-200">
                           <span className="font-semibold text-gray-800 font-mono text-xs">
-                            {s.total_boxes} {s.total_boxes === 1 ? "Carton" : "Cartons"}
+                            {t("cartons", { count: s.total_boxes })}
                           </span>
                         </td>
                         <td className="py-1 px-2 whitespace-nowrap border-r border-gray-200">
                           <span className="text-gray-900 font-bold font-mono text-xs">
-                            {s.total_pieces?.toLocaleString()}
+                            {formatNumber(s.total_pieces)}
                           </span>{" "}
                           <span className="text-gray-500 text-xs font-medium">{uomLabel}</span>
                         </td>
@@ -549,11 +563,11 @@ export default function Shipments() {
                               statusColor[s.status] || "bg-gray-50 text-gray-700 border-gray-200"
                             )}
                           >
-                            {s.status.replace(/_/g, " ")}
+                            {shipmentStatusLabel(s.status)}
                           </span>
                         </td>
                         <td className="whitespace-nowrap py-1 px-2 text-gray-600 text-xs border-r border-gray-200">
-                          {s.ship_date ? new Date(s.ship_date).toLocaleDateString("en-GB") : " "}
+                          {s.ship_date ? formatDate(s.ship_date, "numeric") : " "}
                         </td>
                         <td className="whitespace-nowrap py-1 px-2 text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1">
@@ -568,7 +582,7 @@ export default function Shipments() {
                                 })
                               }
                               disabled={actionLoadingId === `labels-${s.id}`}
-                              title="Print or Download Barcode Labels"
+                              title={t("list.labelsTitle")}
                               className="inline-flex items-center gap-1 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50 cursor-pointer"
                             >
                               {actionLoadingId === `labels-${s.id}` ? (
@@ -576,13 +590,13 @@ export default function Shipments() {
                               ) : (
                                 <Printer className="h-3 w-3 text-slate-500" />
                               )}
-                              Labels
+                              {t("list.actionsLabels")}
                             </button>
 
                             <button
                               onClick={() => handlePreviewXml(s)}
                               disabled={actionLoadingId === `xml-${s.id}`}
-                              title="View SdDataSlice EDI XML"
+                              title={t("list.xmlTitle")}
                               className="inline-flex items-center gap-1 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50 cursor-pointer"
                             >
                               {actionLoadingId === `xml-${s.id}` ? (
@@ -590,7 +604,7 @@ export default function Shipments() {
                               ) : (
                                 <FileCode className="h-3 w-3 text-slate-500" />
                               )}
-                              ASN XML
+                              {t("list.actionsXml")}
                             </button>
                           </div>
                         </td>
@@ -601,16 +615,16 @@ export default function Shipments() {
                     <tr>
                       <td colSpan={8} className="px-5 py-16 text-center text-gray-400">
                         <Loader2 className="mx-auto h-7 w-7 animate-spin text-blue-500 mb-3" />
-                        <p className="font-medium text-gray-600">Loading shipments…</p>
+                        <p className="font-medium text-gray-600">{t("list.loading")}</p>
                       </td>
                     </tr>
                   ) : filteredShipments.length === 0 ? (
                     <tr>
                       <td colSpan={8} className="px-5 py-16 text-center text-gray-400">
                         <Box className="w-12 h-12 mx-auto text-gray-200 mb-3" />
-                        <p className="font-semibold text-gray-700 text-base">No shipments found</p>
+                        <p className="font-semibold text-gray-700 text-base">{t("list.empty")}</p>
                         <p className="text-xs text-gray-400 mt-1">
-                          Create a shipment using the Web Wizard or upload an Excel Packing List.
+                          {t("list.emptyHint")}
                         </p>
                       </td>
                     </tr>
@@ -696,6 +710,7 @@ function WebPackingWizard({
   onSuccess: () => void;
   onOpenLabelModal?: (id: string, num: string, count?: number) => void;
 }) {
+  const { t } = useTranslation(["shipments", "common"]);
   const user = useAuthStore((s) => s.user);
   const isSupplier = user?.role === "SUPPLIER";
   const navigate = useNavigate();
@@ -1152,17 +1167,17 @@ function WebPackingWizard({
 
   const handleDispatchASN = async () => {
     if (!isOnline) {
-      alert("You are currently offline. Please reconnect to the internet before sending the ASN to IUNGO.");
+      alert(t("wizard.alerts.offline"));
       return;
     }
     const trimmedPs = packingSlipNumber.trim();
     if (!trimmedPs) {
-      alert("Please enter Packing Slip / Delivery Note Number before dispatching.");
+      alert(t("wizard.alerts.needPackingSlip"));
       return;
     }
     const trimmedDate = deliveryDate.trim();
     if (!trimmedDate) {
-      alert("Please enter or select Delivery Date before dispatching.");
+      alert(t("wizard.alerts.needDeliveryDate"));
       return;
     }
     setIsSubmitting(true);
@@ -1222,7 +1237,11 @@ function WebPackingWizard({
       clearManualDraft(activeSupplierCode, poNumbers);
       clearExcelDraft(activeSupplierCode, poNumbers);
     } catch (err: any) {
-      alert("Submission error: " + (err?.response?.data?.detail || err?.message || "Failed to create shipment"));
+      alert(
+        t("wizard.alerts.submissionError", {
+          error: getErrorMessage(err, t("wizard.alerts.createFailed")),
+        })
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -1279,13 +1298,13 @@ function WebPackingWizard({
     );
   };
 
-  const formatSummary = useMemo(() => {
-    if (items.length === 0) return "All Boxes";
+  const formatSummary = useMemo((): "mixed" | "rolls" | "boxes" => {
+    if (items.length === 0) return "boxes";
     const hasRolls = items.some((i) => i.packaging_type === "ROLL");
     const hasBoxes = items.some((i) => (i.packaging_type || "BOX") === "BOX");
-    if (hasRolls && hasBoxes) return "Mixed (Box & Roll)";
-    if (hasRolls) return "All Rolls";
-    return "All Boxes";
+    if (hasRolls && hasBoxes) return "mixed";
+    if (hasRolls) return "rolls";
+    return "boxes";
   }, [items]);
 
   const handleShippingNowChange = (id: string, val: number) => {
@@ -1300,21 +1319,26 @@ function WebPackingWizard({
   const handleProceedToPacking = () => {
     const toPack = items.filter((i) => (i.shipping_now || 0) > 0);
     if (toPack.length === 0) {
-      alert("Please enter a shipping quantity for at least one item.");
+      alert(t("wizard.alerts.noQuantity"));
       return;
     }
 
     const overBalanceItems = toPack.filter((i) => (i.shipping_now || 0) > (i.remaining_qty || 0));
     if (overBalanceItems.length > 0) {
       alert(
-        `Shipping quantity exceeds current open balance for:\n\n` +
-          overBalanceItems
-            .map(
-              (it) =>
-                `• PO ${it.po_number} Item ${it.po_item}: Requested ${it.shipping_now} ${it.uom}, but current open balance is only ${it.remaining_qty} ${it.uom}`
+        t("wizard.alerts.overBalance", {
+          lines: overBalanceItems
+            .map((it) =>
+              t("wizard.alerts.overBalanceLine", {
+                po: it.po_number,
+                item: it.po_item,
+                requested: it.shipping_now,
+                balance: it.remaining_qty,
+                uom: it.uom,
+              })
             )
-            .join("\n") +
-          `\n\nPlease adjust the shipping quantity to not exceed the current available balance.`
+            .join("\n"),
+        })
       );
       return;
     }
@@ -1413,13 +1437,13 @@ function WebPackingWizard({
     const rawVal = parseFloat(config.value);
 
     if (isNaN(rawVal) || rawVal <= 0) {
-      alert("Please enter a valid positive number greater than 0 to split.");
+      alert(t("wizard.alerts.invalidSplit"));
       return;
     }
 
     const totalQty = item.shipping_now || 0;
     if (totalQty <= 0) {
-      alert("Shipping quantity is 0. Please set shipping quantity first.");
+      alert(t("wizard.alerts.zeroShipping"));
       return;
     }
 
@@ -1428,7 +1452,7 @@ function WebPackingWizard({
     } else {
       const count = Math.round(rawVal);
       if (count < 1) {
-        alert("Please enter at least 1 carton.");
+        alert(t("wizard.alerts.minOneCarton"));
         return;
       }
       handleSplitByCount(item.id, count);
@@ -1533,14 +1557,15 @@ function WebPackingWizard({
       const boxTotal = item.boxes.reduce((acc, b) => acc + (Number(b.qty) || 0), 0);
       if (boxTotal !== item.shipping_now) {
         alert(
-          `Item ${item.item_code} carton quantities total (${boxTotal}) does not match shipping quantity (${item.shipping_now}). Please balance carton quantities.`
+          t("wizard.alerts.unbalanced", { item: item.item_code, total: boxTotal, shipping: item.shipping_now })
         );
         return;
       }
       for (let bIdx = 0; bIdx < item.boxes.length; bIdx++) {
         const box = item.boxes[bIdx];
+        const cartonRef = { carton: bIdx + 1, item: item.item_code };
         if (!box.qty || box.qty <= 0) {
-          alert(`Carton ${bIdx + 1} for item ${item.item_code} has 0 or invalid quantity.`);
+          alert(t("wizard.alerts.invalidQty", cartonRef));
           return;
         }
         // Batch / Lot is optional (defaults to DEFAULT in payload if omitted)
@@ -1548,17 +1573,15 @@ function WebPackingWizard({
         const nw = box.net_weight != null && !isNaN(Number(box.net_weight)) ? Number(box.net_weight) : null;
 
         if (nw === null || nw <= 0) {
-          alert(`Carton ${bIdx + 1} for item ${item.item_code}: Net Weight (kg) is mandatory and must be greater than 0.`);
+          alert(t("wizard.alerts.nwRequired", cartonRef));
           return;
         }
         if (gw === null || gw <= 0) {
-          alert(`Carton ${bIdx + 1} for item ${item.item_code}: Gross Weight (kg) is mandatory and must be greater than 0.`);
+          alert(t("wizard.alerts.gwRequired", cartonRef));
           return;
         }
         if (gw <= nw) {
-          alert(
-            `Carton ${bIdx + 1} for item ${item.item_code}: Gross Weight (${gw} kg) must be strictly greater than Net Weight (${nw} kg).`
-          );
+          alert(t("wizard.alerts.gwNotGreater", { ...cartonRef, gw, nw }));
           return;
         }
       }
@@ -1573,11 +1596,13 @@ function WebPackingWizard({
           <div className="flex items-center gap-2.5">
             <Clock className="h-4 w-4 text-amber-600 shrink-0" />
             <span className="text-xs font-semibold">
-              Unsaved draft recovered: Packing Slip{" "}
-              <strong className="font-mono text-amber-800">
-                {unresumedDraft.packingSlipNumber || "(In Progress)"}
-              </strong>{" "}
-              ({unresumedDraft.packedItems?.length || 0} items)
+              <Trans
+                t={t}
+                i18nKey="wizard.draft.recovered"
+                count={unresumedDraft.packedItems?.length || 0}
+                values={{ slip: unresumedDraft.packingSlipNumber || t("wizard.draft.inProgress") }}
+                components={{ strong: <strong className="font-mono text-amber-800" /> }}
+              />
             </span>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -1586,14 +1611,14 @@ function WebPackingWizard({
               onClick={restoreDraft}
               className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg shadow-sm cursor-pointer transition-colors"
             >
-              Restore Draft
+              {t("wizard.draft.restore")}
             </button>
             <button
               type="button"
               onClick={discardDraft}
               className="px-2.5 py-1 text-gray-500 hover:text-gray-800 text-xs font-medium cursor-pointer"
             >
-              Discard
+              {t("wizard.draft.discard")}
             </button>
           </div>
         </div>
@@ -1616,26 +1641,32 @@ function WebPackingWizard({
                 }
               }}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 rounded-lg border border-gray-300 shadow-xs transition-colors cursor-pointer"
-              title={step === 1 ? (poNumbers.length > 0 ? "Return to Order Workspace" : "Return to previous screen") : "Return to previous step"}
+              title={
+                step === 1
+                  ? poNumbers.length > 0
+                    ? t("wizard.toolbar.returnWorkspace")
+                    : t("wizard.toolbar.returnPrevScreen")
+                  : t("wizard.toolbar.returnPrevStep")
+              }
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               {step === 1
                 ? poNumbers.length > 0
                   ? fromLinesView
-                    ? "Back to Order Lines"
-                    : "Back to Purchase Orders"
-                  : "Exit Workbench"
-                : "Back"}
+                    ? t("wizard.toolbar.backToLines")
+                    : t("wizard.toolbar.backToPos")
+                  : t("wizard.toolbar.exit")
+                : t("wizard.toolbar.back")}
             </button>
 
             <button
               type="button"
               onClick={handleManualSaveDraft}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 rounded-lg border border-gray-300 shadow-2xs transition-colors cursor-pointer"
-              title="Save current progress to Drafts in the sidebar"
+              title={t("wizard.draft.saveTitle")}
             >
               <FileEdit className="w-3.5 h-3.5 text-blue-600" />
-              {draftSavedToast ? "Saved to Drafts!" : "Save Draft"}
+              {draftSavedToast ? t("wizard.draft.saved") : t("wizard.draft.save")}
             </button>
           </div>
 
@@ -1653,7 +1684,7 @@ function WebPackingWizard({
                   : "text-gray-600 hover:text-gray-900"
               )}
             >
-              1. Item Quantities
+              {t("wizard.toolbar.step1")}
             </button>
             <span className="text-gray-400 px-1">›</span>
             <button
@@ -1671,7 +1702,7 @@ function WebPackingWizard({
                   : "text-gray-600 hover:text-gray-900 disabled:opacity-40"
               )}
             >
-              2. Carton Packing & HUs
+              {t("wizard.toolbar.step2")}
             </button>
             <span className="text-gray-400 px-1">›</span>
             <button
@@ -1689,7 +1720,7 @@ function WebPackingWizard({
                   : "text-gray-600 hover:text-gray-900 disabled:opacity-40"
               )}
             >
-              3. Review & Transmit
+              {t("wizard.toolbar.step3")}
             </button>
           </div>
 
@@ -1704,14 +1735,18 @@ function WebPackingWizard({
                   isSupplier ? "bg-emerald-600 hover:bg-emerald-700" : "bg-blue-600 hover:bg-blue-700"
                 )}
               >
-                Proceed to Packing <ChevronRight className="w-3.5 h-3.5" />
+                {t("wizard.toolbar.proceedPacking")} <ChevronRight className="w-3.5 h-3.5" />
               </button>
             )}
 
             {step === 2 && (
               <div className="flex items-center gap-2">
                 <span className="hidden lg:inline-flex items-center px-2.5 py-1 text-[11px] font-mono text-gray-700 bg-gray-100 rounded-lg border border-gray-200">
-                  Cartons: {packedItems.reduce((acc, curr) => acc + curr.boxes.length, 0)} | Qty: {packedItems.reduce((acc, curr) => acc + (curr.shipping_now || 0), 0)} {packedItems[0]?.uom || "M"}
+                  {t("wizard.toolbar.summary", {
+                    cartons: packedItems.reduce((acc, curr) => acc + curr.boxes.length, 0),
+                    qty: packedItems.reduce((acc, curr) => acc + (curr.shipping_now || 0), 0),
+                    uom: packedItems[0]?.uom || "M",
+                  })}
                 </span>
                 <button
                   type="button"
@@ -1721,7 +1756,7 @@ function WebPackingWizard({
                     isSupplier ? "bg-emerald-600 hover:bg-emerald-700" : "bg-blue-600 hover:bg-blue-700"
                   )}
                 >
-                  Review Shipment <ChevronRight className="w-3.5 h-3.5" />
+                  {t("wizard.toolbar.reviewShipment")} <ChevronRight className="w-3.5 h-3.5" />
                 </button>
               </div>
             )}
@@ -1733,12 +1768,12 @@ function WebPackingWizard({
                     type="button"
                     onClick={() => setPreviewXmlModal(buildLiveXmlPreview())}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg shadow-2xs transition-colors cursor-pointer"
-                    title="Preview official SdDataSlice XML"
+                    title={t("wizard.toolbar.previewXmlTitle")}
                   >
-                    <Eye className="w-3.5 h-3.5 text-blue-600" /> Preview XML
+                    <Eye className="w-3.5 h-3.5 text-blue-600" /> {t("wizard.toolbar.previewXml")}
                   </button>
                   <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 text-emerald-800 rounded-lg text-xs font-bold border border-emerald-200">
-                    <Check className="w-3.5 h-3.5 stroke-[2.5]" /> Sent to IUNGO
+                    <Check className="w-3.5 h-3.5 stroke-[2.5]" /> {t("xml.sent")}
                   </span>
                 </div>
               ) : (
@@ -1747,15 +1782,15 @@ function WebPackingWizard({
                     type="button"
                     onClick={() => setPreviewXmlModal(buildLiveXmlPreview())}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg shadow-2xs transition-colors cursor-pointer"
-                    title="Preview official SdDataSlice XML before sending"
+                    title={t("wizard.toolbar.previewXmlBeforeTitle")}
                   >
-                    <Eye className="w-3.5 h-3.5 text-blue-600" /> Preview XML
+                    <Eye className="w-3.5 h-3.5 text-blue-600" /> {t("wizard.toolbar.previewXml")}
                   </button>
                   <button
                     type="button"
                     onClick={() => {
                       if (!isOnline) {
-                        alert("You are currently offline. Please reconnect to the internet before sending the ASN to IUNGO.");
+                        alert(t("wizard.alerts.offline"));
                         return;
                       }
                       setAttemptedSubmit(true);
@@ -1767,12 +1802,12 @@ function WebPackingWizard({
                         return;
                       }
                       if (!trimmedPs) {
-                        alert("Please enter Packing Slip / Delivery Note Number before dispatching.");
+                        alert(t("wizard.alerts.needPackingSlip"));
                         document.getElementById("wizard-ps-number")?.focus();
                         return;
                       }
                       if (!trimmedDate) {
-                        alert("Please select Delivery Date before dispatching.");
+                        alert(t("wizard.alerts.needDeliveryDate"));
                         document.getElementById("wizard-delivery-date")?.focus();
                         return;
                       }
@@ -1780,15 +1815,15 @@ function WebPackingWizard({
                     }}
                     disabled={isSubmitting}
                     className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
-                    title="Send to IUNGO"
+                    title={t("xml.sendButton")}
                   >
                     {isSubmitting ? (
                       <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Sending to IUNGO...
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("wizard.toolbar.sending")}
                       </>
                     ) : (
                       <>
-                        <Send className="w-3.5 h-3.5" /> Send to IUNGO
+                        <Send className="w-3.5 h-3.5" /> {t("xml.sendButton")}
                       </>
                     )}
                   </button>
@@ -1805,28 +1840,28 @@ function WebPackingWizard({
           <div className="border-b border-gray-100 pb-2 flex flex-wrap items-center justify-between gap-2">
             <div>
               <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wide">
-                Purchase Order Line Item Allocation
+                {t("wizard.step1.title")}
               </h2>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-gray-500">Format:</span>
+              <span className="text-xs font-semibold text-gray-500">{t("wizard.step1.format")}</span>
               <span
                 className={cn(
                   "inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-bold shadow-xs border",
-                  formatSummary.includes("Roll") && !formatSummary.includes("Mixed")
+                  formatSummary === "rolls"
                     ? "bg-amber-50 text-amber-800 border-amber-200"
-                    : formatSummary.includes("Mixed")
+                    : formatSummary === "mixed"
                     ? "bg-purple-50 text-purple-800 border-purple-200"
                     : isSupplier
                     ? "bg-emerald-50 text-emerald-800 border-emerald-200"
                     : "bg-blue-50 text-blue-800 border-blue-200"
                 )}
               >
-                {formatSummary.includes("Mixed")
-                  ? "Mixed (Box & Roll)"
-                  : formatSummary === "All Rolls"
-                  ? "All Rolls"
-                  : "All Boxes"}
+                {formatSummary === "mixed"
+                  ? t("wizard.step1.formatMixed")
+                  : formatSummary === "rolls"
+                  ? t("wizard.step1.formatRolls")
+                  : t("wizard.step1.formatBoxes")}
               </span>
             </div>
           </div>
@@ -1837,7 +1872,7 @@ function WebPackingWizard({
             </div>
           ) : items.length === 0 ? (
             <div className="py-12 text-center text-gray-400">
-              <p className="text-xs">No line items found for the selected orders.</p>
+              <p className="text-xs">{t("wizard.step1.noLines")}</p>
               <button
                 onClick={() => navigate("/purchase-orders")}
                 className={cn(
@@ -1845,7 +1880,7 @@ function WebPackingWizard({
                   isSupplier ? "text-emerald-600" : "text-blue-600"
                 )}
               >
-                Select orders from Purchase Orders page
+                {t("wizard.step1.selectOrders")}
               </button>
             </div>
           ) : (
@@ -1860,18 +1895,20 @@ function WebPackingWizard({
                     <div className="flex items-center justify-between bg-gray-100/90 px-3 py-1.5 border-b border-gray-300">
                       <div className="flex items-center gap-2">
                         <span className="font-mono font-bold text-xs text-gray-900">PO {poNo}</span>
-                        <span className="text-[11px] text-gray-500 font-medium font-mono">({poItems.length} {poItems.length === 1 ? "line" : "lines"})</span>
+                        <span className="text-[11px] text-gray-500 font-medium font-mono">
+                          {t("wizard.step1.lines", { count: poItems.length })}
+                        </span>
                       </div>
 
                       <div className="flex items-center gap-2">
-                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Pack Type</label>
+                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t("wizard.step1.packType")}</label>
                         <select
                           value={poPackType}
                           onChange={(e) => handleSetPoPackagingType(poNo, e.target.value as "BOX" | "ROLL")}
                           className="text-xs font-bold bg-white border border-gray-300 rounded px-2 py-0.5 outline-none focus:border-emerald-500 shadow-2xs cursor-pointer"
                         >
-                          <option value="BOX">Box</option>
-                          <option value="ROLL">Roll</option>
+                          <option value="BOX">{t("wizard.step1.box")}</option>
+                          <option value="ROLL">{t("wizard.step1.roll")}</option>
                         </select>
                       </div>
                     </div>
@@ -1881,13 +1918,13 @@ function WebPackingWizard({
                       <table className="w-full text-xs text-left border-collapse">
                         <thead className="sticky top-0 z-10 bg-zinc-700 shadow-xs">
                           <tr className="bg-zinc-700 text-white text-xs font-semibold uppercase tracking-wider border-b border-zinc-800">
-                            <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Item</th>
-                            <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Material Code</th>
-                            <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Description</th>
-                            <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">Ordered</th>
-                            <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">Shipped</th>
-                            <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">Open Balance</th>
-                            <th className="py-1.5 px-2 text-right w-40 whitespace-nowrap">Shipping Qty</th>
+                            <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("wizard.step1.table.item")}</th>
+                            <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("wizard.step1.table.material")}</th>
+                            <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("wizard.step1.table.description")}</th>
+                            <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">{t("wizard.step1.table.ordered")}</th>
+                            <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">{t("wizard.step1.table.shipped")}</th>
+                            <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">{t("wizard.step1.table.openBalance")}</th>
+                            <th className="py-1.5 px-2 text-right w-40 whitespace-nowrap">{t("wizard.step1.table.shippingQty")}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1911,7 +1948,7 @@ function WebPackingWizard({
                                 {item.remaining_qty <= 0 ? (
                                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                                     <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                    Fulfilled
+                                    {t("wizard.step1.fulfilled")}
                                   </span>
                                 ) : (
                                   <div className="flex items-center justify-end gap-1">
@@ -1938,7 +1975,7 @@ function WebPackingWizard({
                                           : "text-blue-700 bg-blue-50/80 border-blue-300 hover:bg-blue-100"
                                       )}
                                     >
-                                      Max
+                                      {t("wizard.step1.max")}
                                     </button>
                                   </div>
                                 )}
@@ -1963,7 +2000,7 @@ function WebPackingWizard({
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1">
             <div className="flex items-center gap-3 flex-wrap">
               <h2 className="text-xs font-bold text-gray-800 uppercase tracking-wide">
-                Carton Packaging & Handling Unit Assignment
+                {t("wizard.step2.title")}
               </h2>
 
               {/* Optional Columns Dropdown */}
@@ -1972,10 +2009,10 @@ function WebPackingWizard({
                   type="button"
                   onClick={() => setShowColumnMenu((v) => !v)}
                   className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white hover:bg-gray-50 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 shadow-xs transition-colors cursor-pointer"
-                  title="Toggle optional packing columns from Excel (Batch/Lot, Supplier Ref, Width, Pack No)"
+                  title={t("wizard.step2.optionalColumnsTitle")}
                 >
                   <SlidersHorizontal className="w-3.5 h-3.5 text-gray-500" />
-                  <span>Optional Columns</span>
+                  <span>{t("wizard.step2.optionalColumns")}</span>
                   <span className="px-1.5 py-0.2 bg-gray-100 text-gray-700 text-[10px] rounded-full font-mono font-bold">
                     {Object.values(visibleColumns).filter(Boolean).length}/3
                   </span>
@@ -1984,7 +2021,7 @@ function WebPackingWizard({
                 {showColumnMenu && (
                   <div className="absolute left-0 mt-1.5 w-64 bg-white border border-gray-200 rounded-xl shadow-xl z-50 p-2.5 text-xs space-y-1">
                     <div className="px-2 py-1 font-bold text-gray-500 text-[10px] uppercase tracking-wider border-b border-gray-100 flex items-center justify-between">
-                      <span>Toggle Optional Columns</span>
+                      <span>{t("wizard.step2.toggleOptional")}</span>
                       <button
                         type="button"
                         onClick={() => setShowColumnMenu(false)}
@@ -1994,9 +2031,9 @@ function WebPackingWizard({
                       </button>
                     </div>
                     {[
-                      { key: "supplier_ref", label: "Supplier Carton Ref", desc: "Supplier internal ref / barcode" },
-                      { key: "width", label: "Width", desc: "Material / roll width" },
-                      { key: "pack_no", label: "Packing Slip No.", desc: "Per-carton custom delivery note override" },
+                      { key: "supplier_ref", label: t("wizard.step2.col.supplierRef"), desc: t("wizard.step2.col.supplierRefDesc") },
+                      { key: "width", label: t("wizard.step2.col.width"), desc: t("wizard.step2.col.widthDesc") },
+                      { key: "pack_no", label: t("wizard.step2.col.packNo"), desc: t("wizard.step2.col.packNoDesc") },
                     ].map((col) => (
                       <label
                         key={col.key}
@@ -2047,7 +2084,7 @@ function WebPackingWizard({
                           ? "bg-amber-50 text-amber-800 border-amber-200"
                           : "bg-blue-50 text-blue-800 border-blue-200"
                       )}>
-                        {isRoll ? "Roll Packing" : "Box Packing"}
+                        {isRoll ? t("wizard.step2.rollPacking") : t("wizard.step2.boxPacking")}
                       </span>
                     </div>
 
@@ -2058,19 +2095,16 @@ function WebPackingWizard({
                         const valNum = parseFloat(cfg.value || "0");
                         let previewInfo = "";
                         if (valNum > 0 && item.shipping_now) {
-                          if (cfg.mode === "qty") {
-                            const c = Math.ceil(item.shipping_now / valNum);
-                            previewInfo = `→ ${c} ${c === 1 ? (isRoll ? "roll" : "box") : (isRoll ? "rolls" : "boxes")}`;
-                          } else {
-                            const c = Math.round(valNum);
-                            previewInfo = `→ ${c} ${c === 1 ? (isRoll ? "roll" : "box") : (isRoll ? "rolls" : "boxes")}`;
-                          }
+                          const c = cfg.mode === "qty" ? Math.ceil(item.shipping_now / valNum) : Math.round(valNum);
+                          previewInfo = isRoll
+                            ? t("wizard.step2.previewRolls", { count: c })
+                            : t("wizard.step2.previewBoxes", { count: c });
                         }
 
                         return (
                           <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-md p-0.5 shadow-2xs">
                             <span className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider pl-1">
-                              Split:
+                              {t("wizard.step2.split")}
                             </span>
 
                             {/* Mode Segmented Switch */}
@@ -2092,9 +2126,9 @@ function WebPackingWizard({
                                     ? "bg-white text-blue-700 font-bold shadow-2xs"
                                     : "text-gray-600 hover:text-gray-900"
                                 )}
-                                title={`Split by quantity per ${isRoll ? "roll" : "carton"}`}
+                                title={isRoll ? t("wizard.step2.splitByQtyRollTitle") : t("wizard.step2.splitByQtyBoxTitle")}
                               >
-                                Qty / {isRoll ? "Roll" : "Box"}
+                                {isRoll ? t("wizard.step2.qtyPerRoll") : t("wizard.step2.qtyPerBox")}
                               </button>
                               <button
                                 type="button"
@@ -2113,9 +2147,9 @@ function WebPackingWizard({
                                     ? "bg-white text-blue-700 font-bold shadow-2xs"
                                     : "text-gray-600 hover:text-gray-900"
                                 )}
-                                title={`Split into total number of ${isRoll ? "rolls" : "cartons"}`}
+                                title={isRoll ? t("wizard.step2.splitCountRollTitle") : t("wizard.step2.splitCountBoxTitle")}
                               >
-                                # of {isRoll ? "Rolls" : "Boxes"}
+                                {isRoll ? t("wizard.step2.numRolls") : t("wizard.step2.numBoxes")}
                               </button>
                             </div>
 
@@ -2143,14 +2177,20 @@ function WebPackingWizard({
                               }}
                               placeholder={
                                 cfg.mode === "count"
-                                  ? "Count"
-                                  : `Per ${isRoll ? "roll" : "box"}`
+                                  ? t("wizard.step2.countPlaceholder")
+                                  : isRoll
+                                  ? t("wizard.step2.perRollPlaceholder")
+                                  : t("wizard.step2.perBoxPlaceholder")
                               }
                               className="w-16 h-6 px-1.5 text-xs font-mono bg-white border border-gray-300 rounded text-gray-900 placeholder:text-gray-400 focus:outline-hidden focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                               title={
                                 cfg.mode === "count"
-                                  ? `Enter number of ${isRoll ? "rolls" : "cartons"} to divide into`
-                                  : `Enter quantity packed per ${isRoll ? "roll" : "carton"}`
+                                  ? isRoll
+                                    ? t("wizard.step2.countRollInputTitle")
+                                    : t("wizard.step2.countBoxInputTitle")
+                                  : isRoll
+                                  ? t("wizard.step2.qtyRollInputTitle")
+                                  : t("wizard.step2.qtyBoxInputTitle")
                               }
                             />
 
@@ -2166,9 +2206,9 @@ function WebPackingWizard({
                               type="button"
                               onClick={() => handleApplySplit(item)}
                               className="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded text-[11px] font-medium transition-colors cursor-pointer shadow-2xs"
-                              title="Click or press Enter to split cartons"
+                              title={t("wizard.step2.splitButtonTitle")}
                             >
-                              Split
+                              {t("wizard.step2.splitButton")}
                             </button>
                           </div>
                         );
@@ -2179,7 +2219,7 @@ function WebPackingWizard({
                         onClick={() => addBox(item.id)}
                         className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-white hover:bg-gray-50 border border-gray-300 rounded text-gray-700 text-xs font-medium shadow-2xs transition-colors cursor-pointer shrink-0"
                       >
-                        + Add {isRoll ? "Roll" : "Carton"}
+                        {isRoll ? t("wizard.step2.addRoll") : t("wizard.step2.addCarton")}
                       </button>
                     </div>
                   </div>
@@ -2189,18 +2229,22 @@ function WebPackingWizard({
                     <table className="w-full text-xs text-left border-collapse">
                       <thead className="sticky top-0 z-10 bg-zinc-700 shadow-xs">
                         <tr className="bg-zinc-700 text-white text-xs font-semibold uppercase tracking-wider border-b border-zinc-800">
-                          <th className="py-1.5 px-2 text-center w-24 whitespace-nowrap border-r border-zinc-600" title="Carton sequence and EDI Line Reference">{isRoll ? "Roll" : "Carton"}</th>
-                          <th className="py-1.5 px-2 min-w-[170px] whitespace-nowrap border-r border-zinc-600">20-digit HU Number</th>
-                          <th className="py-1.5 px-2 text-right w-24 whitespace-nowrap border-r border-zinc-600">Qty ({item.uom || "M"})</th>
-                          <th className="py-1.5 px-2 text-left w-36 whitespace-nowrap border-r border-zinc-600">
-                            Batch / Lot
+                          <th className="py-1.5 px-2 text-center w-24 whitespace-nowrap border-r border-zinc-600" title={t("wizard.step2.table.cartonTitle")}>
+                            {isRoll ? t("wizard.step2.table.roll") : t("wizard.step2.table.carton")}
                           </th>
-                          <th className="py-1.5 px-2 text-left w-36 whitespace-nowrap border-r border-zinc-600">Gross Wt (kg)</th>
-                          <th className="py-1.5 px-2 text-left w-36 whitespace-nowrap border-r border-zinc-600">Net Wt (kg)</th>
-                          {visibleColumns.supplier_ref && <th className="py-1.5 px-2 w-32 whitespace-nowrap border-r border-zinc-600">Supplier Carton Ref</th>}
-                          {visibleColumns.width && <th className="py-1.5 px-2 text-right w-24 whitespace-nowrap border-r border-zinc-600">Width</th>}
-                          {visibleColumns.pack_no && <th className="py-1.5 px-2 w-28 whitespace-nowrap border-r border-zinc-600">Packing Slip No.</th>}
-                          <th className="py-1.5 px-2 text-center w-12 whitespace-nowrap">Action</th>
+                          <th className="py-1.5 px-2 min-w-[170px] whitespace-nowrap border-r border-zinc-600">{t("wizard.step2.table.hu")}</th>
+                          <th className="py-1.5 px-2 text-right w-24 whitespace-nowrap border-r border-zinc-600">
+                            {t("wizard.step2.table.qty", { uom: item.uom || "M" })}
+                          </th>
+                          <th className="py-1.5 px-2 text-left w-36 whitespace-nowrap border-r border-zinc-600">
+                            {t("wizard.step2.table.lot").replace(/<req>.*?<\/req>/g, "").trim()}
+                          </th>
+                          <th className="py-1.5 px-2 text-left w-36 whitespace-nowrap border-r border-zinc-600">{t("wizard.step2.table.gw")}</th>
+                          <th className="py-1.5 px-2 text-left w-36 whitespace-nowrap border-r border-zinc-600">{t("wizard.step2.table.nw")}</th>
+                          {visibleColumns.supplier_ref && <th className="py-1.5 px-2 w-32 whitespace-nowrap border-r border-zinc-600">{t("wizard.step2.col.supplierRef")}</th>}
+                          {visibleColumns.width && <th className="py-1.5 px-2 text-right w-24 whitespace-nowrap border-r border-zinc-600">{t("wizard.step2.col.width")}</th>}
+                          {visibleColumns.pack_no && <th className="py-1.5 px-2 w-28 whitespace-nowrap border-r border-zinc-600">{t("wizard.step2.col.packNo")}</th>}
+                          <th className="py-1.5 px-2 text-center w-12 whitespace-nowrap">{t("wizard.step2.table.action")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -2209,7 +2253,7 @@ function WebPackingWizard({
                             {/* 1. Carton # and Line Reference: e.g. 1 (1-1) */}
                             <td className="py-1 px-2 font-mono text-center text-xs whitespace-nowrap border-r border-gray-200">
                               <span className="font-bold text-gray-800">{idx + 1}</span>
-                              <span className="text-[11px] text-gray-500 font-medium ml-1" title="EDI Line Reference (Item-Carton)">
+                              <span className="text-[11px] text-gray-500 font-medium ml-1" title={t("wizard.step2.ediRefTitle")}>
                                 ({itemIdx + 1}-{idx + 1})
                               </span>
                             </td>
@@ -2253,9 +2297,9 @@ function WebPackingWizard({
                                     type="button"
                                     onClick={() => copyBatchToAllCartons(item.id, box.batch_code)}
                                     className="px-1.5 py-0.5 text-[10px] bg-gray-100 hover:bg-blue-50 text-gray-600 hover:text-blue-700 rounded border border-gray-200 transition-colors cursor-pointer shrink-0 font-medium"
-                                    title="Copy this batch to all cartons of this line item"
+                                    title={t("wizard.step2.copyBatchTitle")}
                                   >
-                                    All ↓
+                                    {t("wizard.step2.copyBatch")}
                                   </button>
                                 )}
                               </div>
@@ -2322,7 +2366,7 @@ function WebPackingWizard({
                                 )}
                               </div>
                               {typeof box.gross_weight === "number" && typeof box.net_weight === "number" && box.gross_weight <= box.net_weight && (
-                                <span className="text-[10px] text-red-600 font-bold block mt-0.5">GW &le; NW!</span>
+                                <span className="text-[10px] text-red-600 font-bold block mt-0.5">{t("wizard.step2.gwLeNw")}</span>
                               )}
                             </td>
 
@@ -2334,7 +2378,7 @@ function WebPackingWizard({
                                   value={box.supplier_carton_ref || ""}
                                   onChange={(e) => updateBox(item.id, idx, { supplier_carton_ref: e.target.value })}
                                   className="w-28 h-6 px-1.5 text-xs bg-white border border-gray-300 rounded font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
-                                  placeholder="Optional"
+                                  placeholder={t("wizard.step2.optional")}
                                 />
                               </td>
                             )}
@@ -2353,7 +2397,7 @@ function WebPackingWizard({
                                     })
                                   }
                                   className="w-20 h-6 px-1.5 text-xs text-right bg-white border border-gray-300 rounded font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
-                                  placeholder="Optional"
+                                  placeholder={t("wizard.step2.optional")}
                                 />
                               </td>
                             )}
@@ -2366,7 +2410,7 @@ function WebPackingWizard({
                                   value={box.pack_number || packingSlipNumber || ""}
                                   onChange={(e) => updateBox(item.id, idx, { pack_number: e.target.value })}
                                   className="w-24 h-6 px-1.5 text-xs bg-white border border-gray-300 rounded font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
-                                  placeholder={packingSlipNumber || "Required *"}
+                                  placeholder={packingSlipNumber || t("wizard.step2.required")}
                                 />
                               </td>
                             )}
@@ -2378,7 +2422,7 @@ function WebPackingWizard({
                                   type="button"
                                   onClick={() => removeBox(item.id, idx)}
                                   className="text-gray-400 hover:text-red-600 p-0.5 rounded hover:bg-gray-100 transition-colors cursor-pointer"
-                                  title="Remove carton"
+                                  title={t("wizard.step2.removeCarton")}
                                 >
                                   <X className="w-3.5 h-3.5" />
                                 </button>
@@ -2393,17 +2437,29 @@ function WebPackingWizard({
                   {/* Summary row */}
                   <div className="flex items-center justify-between text-xs px-1">
                     <span className="text-gray-500 font-medium">
-                      Cartons in line: <strong className="text-gray-900 font-mono">{item.boxes.length}</strong>
+                      <Trans
+                        t={t}
+                        i18nKey="wizard.step2.cartonsInLine"
+                        values={{ count: item.boxes.length }}
+                        components={{ strong: <strong className="text-gray-900 font-mono" /> }}
+                      />
                     </span>
                     <div className="flex items-center gap-2 font-mono">
-                      <span className="text-gray-700">Total Packed: <strong>{packedQtySum}</strong> / {item.shipping_now} {item.uom || "M"}</span>
+                      <span className="text-gray-700">
+                        <Trans
+                          t={t}
+                          i18nKey="wizard.step2.totalPacked"
+                          values={{ packed: packedQtySum, shipping: item.shipping_now, uom: item.uom || "M" }}
+                          components={{ strong: <strong /> }}
+                        />
+                      </span>
                       {isBalanced ? (
                         <span className="text-emerald-700 font-semibold font-sans bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                          Balanced
+                          {t("wizard.step2.balanced")}
                         </span>
                       ) : (
                         <span className="text-red-700 font-semibold font-sans bg-red-50 px-2 py-0.5 rounded border border-red-200">
-                          Discrepancy: {packedQtySum - (item.shipping_now || 0)}
+                          {t("wizard.step2.discrepancy", { diff: packedQtySum - (item.shipping_now || 0) })}
                         </span>
                       )}
                     </div>
@@ -2428,10 +2484,12 @@ function WebPackingWizard({
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-bold text-emerald-950">
-                      Shipment {submitSuccessResult.shipment?.shipment_number || packingSlipNumber} Created & Sent to IUNGO
+                      {t("wizard.step3.created", {
+                        number: submitSuccessResult.shipment?.shipment_number || packingSlipNumber,
+                      })}
                     </span>
                     <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-200 text-emerald-900 px-1.5 py-0.5 rounded">
-                      Transmitted
+                      {t("wizard.step3.transmitted")}
                     </span>
                   </div>
                   <p className="text-[11px] text-emerald-800 mt-0.5 font-mono">
@@ -2445,14 +2503,14 @@ function WebPackingWizard({
                   onClick={handlePrintLabels}
                   className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-semibold shadow-xs flex items-center gap-1.5 cursor-pointer"
                 >
-                  <Printer className="w-3.5 h-3.5" /> Print Labels
+                  <Printer className="w-3.5 h-3.5" /> {t("wizard.step3.printLabels")}
                 </button>
                 <button
                   type="button"
                   onClick={handleDownloadXml}
                   className="px-2.5 py-1 border border-emerald-300 bg-white hover:bg-emerald-50 text-emerald-900 rounded text-xs font-semibold shadow-xs flex items-center gap-1.5 cursor-pointer"
                 >
-                  <Download className="w-3.5 h-3.5" /> Download XML
+                  <Download className="w-3.5 h-3.5" /> {t("wizard.step3.downloadXml")}
                 </button>
                 {poNumbers.length > 0 && (
                   <button
@@ -2460,7 +2518,7 @@ function WebPackingWizard({
                     onClick={() => navigate("/purchase-orders/manual")}
                     className="px-2.5 py-1 border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 rounded text-xs font-semibold shadow-xs transition-all cursor-pointer"
                   >
-                    Return to POs
+                    {t("wizard.step3.returnToPos")}
                   </button>
                 )}
               </div>
@@ -2471,14 +2529,14 @@ function WebPackingWizard({
           <div className="bg-slate-50/70 border border-slate-200 rounded-lg p-2 flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
               <label htmlFor="wizard-ps-number" className="text-xs font-bold text-slate-700 whitespace-nowrap">
-                Packing Slip No <span className="text-red-500">*</span>:
+                <Trans t={t} i18nKey="wizard.step3.packingSlip" components={{ req: <span className="text-red-500" /> }} />
               </label>
               <input
                 id="wizard-ps-number"
                 type="text"
                 required
                 disabled={Boolean(submitSuccessResult)}
-                placeholder="e.g. 01007907"
+                placeholder={t("wizard.step3.psPlaceholder")}
                 value={packingSlipNumber}
                 onChange={(e) => setPackingSlipNumber(e.target.value)}
                 className={cn(
@@ -2494,7 +2552,7 @@ function WebPackingWizard({
 
             <div className="flex items-center gap-2">
               <label htmlFor="wizard-delivery-date" className="text-xs font-bold text-slate-700 whitespace-nowrap">
-                Delivery Date <span className="text-red-500">*</span>:
+                <Trans t={t} i18nKey="wizard.step3.deliveryDate" components={{ req: <span className="text-red-500" /> }} />
               </label>
               <input
                 id="wizard-delivery-date"
@@ -2519,18 +2577,39 @@ function WebPackingWizard({
               <div className="flex items-center gap-2">
                 <Layers className="w-3.5 h-3.5 text-emerald-600" />
                 <span className="text-xs font-bold text-gray-800 uppercase tracking-wider">
-                  Handling Units & Packing Breakdown
+                  {t("wizard.step3.breakdown")}
                 </span>
                 <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100/70 border border-emerald-200 px-2 py-0.5 rounded-full">
-                  {allCartonsList.length} Cartons/Rolls
+                  {t("wizard.step3.cartonsRolls", { count: allCartonsList.length })}
                 </span>
               </div>
               <div className="flex items-center gap-3 text-xs text-gray-600">
-                <span>Total Qty: <strong className="font-mono text-gray-900">{totalShippedUnits.toLocaleString()} {packedItems[0]?.uom || "M"}</strong></span>
+                <span>
+                  <Trans
+                    t={t}
+                    i18nKey="wizard.step3.totalQty"
+                    values={{ qty: formatNumber(totalShippedUnits), uom: packedItems[0]?.uom || "M" }}
+                    components={{ strong: <strong className="font-mono text-gray-900" /> }}
+                  />
+                </span>
                 <span className="text-gray-300">|</span>
-                <span>GW: <strong className="font-mono text-gray-900">{totalGw.toFixed(2)} kg</strong></span>
+                <span>
+                  <Trans
+                    t={t}
+                    i18nKey="wizard.step3.gw"
+                    values={{ value: totalGw.toFixed(2) }}
+                    components={{ strong: <strong className="font-mono text-gray-900" /> }}
+                  />
+                </span>
                 <span className="text-gray-300">|</span>
-                <span>NW: <strong className="font-mono text-gray-900">{totalNw.toFixed(2)} kg</strong></span>
+                <span>
+                  <Trans
+                    t={t}
+                    i18nKey="wizard.step3.nw"
+                    values={{ value: totalNw.toFixed(2) }}
+                    components={{ strong: <strong className="font-mono text-gray-900" /> }}
+                  />
+                </span>
               </div>
             </div>
 
@@ -2538,14 +2617,14 @@ function WebPackingWizard({
               <table className="w-full text-left text-xs border-collapse">
                 <thead className="bg-zinc-700 text-white text-xs font-semibold uppercase tracking-wider sticky top-0 z-10 border-b border-zinc-800">
                   <tr>
-                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Ctn</th>
-                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Handling Unit (SSCC-20)</th>
-                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">PO & Line</th>
-                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Product Code</th>
-                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Quantity</th>
-                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Gross Wt (kg)</th>
-                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Net Wt (kg)</th>
-                    <th className="py-1.5 px-2 whitespace-nowrap">Lot / Batch</th>
+                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("wizard.step3.table.ctn")}</th>
+                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("wizard.step3.table.hu")}</th>
+                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("wizard.step3.table.poLine")}</th>
+                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("wizard.step3.table.productCode")}</th>
+                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("wizard.step3.table.quantity")}</th>
+                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("wizard.step3.table.gw")}</th>
+                    <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("wizard.step3.table.nw")}</th>
+                    <th className="py-1.5 px-2 whitespace-nowrap">{t("wizard.step3.table.lot")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2563,7 +2642,7 @@ function WebPackingWizard({
                               setTimeout(() => setCopiedHu(null), 1500);
                             }}
                             className="text-slate-400 hover:text-emerald-600 transition-colors p-0.5 cursor-pointer"
-                            title="Copy HU"
+                            title={t("wizard.step3.copyHu")}
                           >
                             {copiedHu === c.hu_number ? (
                               <Check className="w-3 h-3 text-emerald-600" />
@@ -2597,7 +2676,7 @@ function WebPackingWizard({
                 <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gray-50/80">
                   <div className="flex items-center gap-2">
                     <FileText className="w-4 h-4 text-blue-600" />
-                    <span className="font-bold text-gray-900 text-sm">Official SdDataSlice XML</span>
+                    <span className="font-bold text-gray-900 text-sm">{t("wizard.step3.xmlTitle")}</span>
                   </div>
                   <button
                     onClick={() => setPreviewXmlModal(null)}
@@ -2615,22 +2694,22 @@ function WebPackingWizard({
                     className="px-3.5 py-1.5 text-xs font-semibold border border-gray-300 rounded-lg hover:bg-white text-gray-700 cursor-pointer inline-flex items-center gap-1.5"
                   >
                     <Download className="w-3.5 h-3.5" />
-                    Download XML
+                    {t("wizard.step3.downloadXml")}
                   </button>
                   <button
                     onClick={() => {
                       navigator.clipboard.writeText(previewXmlModal);
-                      alert("XML copied to clipboard!");
+                      alert(t("wizard.alerts.xmlCopied"));
                     }}
                     className="px-3.5 py-1.5 text-xs font-semibold border border-gray-300 rounded-lg hover:bg-white text-gray-700 cursor-pointer"
                   >
-                    Copy XML
+                    {t("xml.copy")}
                   </button>
                   <button
                     onClick={() => setPreviewXmlModal(null)}
                     className="px-4 py-1.5 text-xs font-semibold bg-gray-900 text-white rounded-lg hover:bg-gray-800 cursor-pointer"
                   >
-                    Close
+                    {t("detail.close")}
                   </button>
                 </div>
               </div>
@@ -2656,15 +2735,15 @@ function WebPackingWizard({
                 <Send className="w-5 h-5" />
               </div>
               <h3 className="text-lg font-bold text-gray-900">
-                Send ASN to IUNGO?
+                {t("shipments:xml.confirm.title")}
               </h3>
               <p className="mt-2 text-sm text-gray-500 leading-relaxed">
-                Are you sure you want to dispatch this Advance Shipping Notice (ASN) to IUNGO? Once sent, this transmission cannot be undone.
+                {t("shipments:xml.confirm.message")}
               </p>
 
               <div className="mt-3">
                 <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                  Recipient Email
+                  {t("shipments:xml.confirm.recipient")}
                 </label>
                 <div className="px-3 py-2 bg-slate-50 border border-slate-200 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 focus-within:bg-white rounded-xl text-xs text-slate-700 flex items-center gap-2 transition-all">
                   <Mail className="w-4 h-4 text-slate-400 shrink-0" />
@@ -2685,7 +2764,7 @@ function WebPackingWizard({
                   onClick={() => setShowConfirmDispatch(false)}
                   className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
                 >
-                  Cancel
+                  {t("common:actions.cancel")}
                 </button>
                 <button
                   type="button"
@@ -2697,7 +2776,7 @@ function WebPackingWizard({
                   className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 active:bg-emerald-800 transition-colors cursor-pointer flex items-center gap-1.5"
                 >
                   {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                  {isSubmitting ? "Sending..." : "Yes, Send ASN"}
+                  {isSubmitting ? t("xml.confirm.sending") : t("xml.confirm.send")}
                 </button>
               </div>
             </div>
@@ -2722,6 +2801,7 @@ function ExcelPackingWorkflow({
   onSuccess: () => void;
   onOpenLabelModal?: (id: string, num: string, count?: number) => void;
 }) {
+  const { t } = useTranslation(["shipments", "common"]);
   const user = useAuthStore((s) => s.user);
   const [dragActive, setDragActive] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -3022,7 +3102,7 @@ function ExcelPackingWorkflow({
       };
 
       if (payload.configs.length === 0) {
-        alert("Please select at least one line item before downloading template.");
+        alert(t("excel.alerts.selectLine"));
         setDownloadingTailored(false);
         return;
       }
@@ -3049,7 +3129,7 @@ function ExcelPackingWorkflow({
         fileName: downloadFilename,
       });
     } catch (err: any) {
-      alert("Failed to download tailored template: " + (err.message || err));
+      alert(t("excel.alerts.templateFailed", { error: err.message || err }));
     } finally {
       setDownloadingTailored(false);
     }
@@ -3057,7 +3137,7 @@ function ExcelPackingWorkflow({
 
   const processFile = async (file: File) => {
     if (!file.name.endsWith(".xlsx") && !file.name.endsWith(".xls")) {
-      alert("Please upload an Excel spreadsheet (.xlsx or .xls)");
+      alert(t("excel.alerts.notExcel"));
       return;
     }
     setSelectedFile(file);
@@ -3155,11 +3235,11 @@ function ExcelPackingWorkflow({
 
   const handleCreateShipment = async () => {
     if (!isOnline) {
-      alert("You are currently offline. Please reconnect to the network before sending the ASN to IUNGO.");
+      alert(t("excel.alerts.offline"));
       return;
     }
     if (!selectedFile) {
-      alert("Please upload or select the validated Excel file before creating the shipment.");
+      alert(t("excel.alerts.noFile"));
       return;
     }
 
@@ -3167,17 +3247,17 @@ function ExcelPackingWorkflow({
     if (isMultiSlip) {
       const missing = detectedPackingSlips.filter((ps) => !packingSlipDates[ps]?.trim());
       if (missing.length > 0) {
-        alert(`Please select a Delivery Date for Packing Slip(s): ${missing.join(", ")}`);
+        alert(t("excel.alerts.missingDates", { slips: missing.join(", ") }));
         return;
       }
     } else {
       const singleDate = estimatedArrival?.trim() || (detectedPackingSlips[0] ? packingSlipDates[detectedPackingSlips[0]]?.trim() : "");
       if (!singleDate) {
-        alert("Please select a Delivery Date before creating the shipment.");
+        alert(t("excel.alerts.needDate"));
         return;
       }
       if (!packingSlipNumber.trim() && detectedPackingSlips.length === 0) {
-        alert("Please enter a Packing Slip Number before creating the shipment.");
+        alert(t("excel.alerts.needSlip"));
         return;
       }
     }
@@ -3228,8 +3308,15 @@ function ExcelPackingWorkflow({
     } catch (e: any) {
       console.error("Create shipment error:", e);
       const detail = e?.response?.data?.detail;
-      let msg = "Failed to create shipment";
-      if (typeof detail === "string") {
+      const errorCode = e?.response?.data?.code;
+      let msg = t("wizard.alerts.createFailed");
+      if (typeof errorCode === "string" && i18n.exists(`errors:${errorCode}`)) {
+        // Translated message for the coded error, plus any row-level details from the server
+        msg = getErrorMessage(e);
+        if (detail && typeof detail === "object" && Array.isArray(detail.errors) && detail.errors.length > 0) {
+          msg += ": " + detail.errors.join("; ");
+        }
+      } else if (typeof detail === "string") {
         msg = detail;
       } else if (detail && typeof detail === "object") {
         if (detail.message) {
@@ -3249,7 +3336,7 @@ function ExcelPackingWorkflow({
       } else if (e?.message) {
         msg = e.message;
       }
-      alert(`Error creating shipment: ${msg}`);
+      alert(t("excel.alerts.createError", { error: msg }));
     } finally {
       setSubmitting(false);
     }
@@ -3269,7 +3356,7 @@ function ExcelPackingWorkflow({
       a.remove();
       window.URL.revokeObjectURL(url);
     } catch (err: any) {
-      alert(`Failed to download labels PDF: ${err?.response?.data?.detail || err.message || err}`);
+      alert(t("excel.alerts.labelsFailed", { error: getErrorMessage(err, String(err)) }));
     } finally {
       setDownloadingLabels(false);
     }
@@ -3310,7 +3397,7 @@ function ExcelPackingWorkflow({
         }
       }
     } catch (err: any) {
-      alert(`Failed to download ASN XML: ${err?.response?.data?.detail || err.message || err}`);
+      alert(t("excel.alerts.xmlFailed", { error: getErrorMessage(err, String(err)) }));
     } finally {
       setDownloadingXml(false);
     }
@@ -3353,10 +3440,10 @@ function ExcelPackingWorkflow({
                   ? "bg-emerald-100 text-emerald-800 border border-emerald-300 hover:bg-emerald-200"
                   : "bg-emerald-600 text-white hover:bg-emerald-700"
               )}
-              title={selectedFile ? "Click to re-upload / replace file" : "Upload Excel List"}
+              title={selectedFile ? t("excel.header.reupload") : t("excel.header.upload")}
             >
               <UploadCloud className="w-3.5 h-3.5" />
-              <span>{selectedFile ? selectedFile.name : "Upload Excel List"}</span>
+              <span>{selectedFile ? selectedFile.name : t("excel.header.upload")}</span>
             </button>
           </div>
 
@@ -3369,13 +3456,13 @@ function ExcelPackingWorkflow({
                 <div className="flex items-center gap-2">
                   <span className="px-2.5 py-1 bg-blue-50 border border-blue-200 text-blue-800 rounded-md font-bold text-xs flex items-center gap-1.5 shadow-2xs">
                     <Layers className="w-3.5 h-3.5 text-blue-600" />
-                    <span>{detectedPackingSlips.length} Packing Slips</span>
+                    <span>{t("excel.header.slipsCount", { count: detectedPackingSlips.length })}</span>
                   </span>
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
                   <label htmlFor="excel-ps-number" className="text-xs font-bold text-slate-700 whitespace-nowrap">
-                    Packing Slip No <span className="text-red-500">*</span>:
+                    <Trans t={t} i18nKey="wizard.step3.packingSlip" components={{ req: <span className="text-red-500" /> }} />
                   </label>
                   <input
                     id="excel-ps-number"
@@ -3392,7 +3479,7 @@ function ExcelPackingWorkflow({
                         }));
                       }
                     }}
-                    placeholder="e.g. 01007907"
+                    placeholder={t("wizard.step3.psPlaceholder")}
                     className={cn(
                       "h-8 px-2.5 text-xs font-mono font-bold rounded-lg border bg-white outline-none shadow-2xs w-36 disabled:bg-slate-100 disabled:text-slate-500 transition-all",
                       attemptedSubmit && !packingSlipNumber.trim() && detectedPackingSlips.length === 0
@@ -3408,7 +3495,7 @@ function ExcelPackingWorkflow({
                   <div className="w-px h-6 bg-gray-300 hidden sm:block" />
                   <div className="flex items-center gap-2">
                     <label htmlFor="excel-delivery-date" className="text-xs font-bold text-slate-700 whitespace-nowrap">
-                      Delivery Date <span className="text-red-500">*</span>:
+                      <Trans t={t} i18nKey="wizard.step3.deliveryDate" components={{ req: <span className="text-red-500" /> }} />
                     </label>
                     <input
                       id="excel-delivery-date"
@@ -3446,15 +3533,15 @@ function ExcelPackingWorkflow({
               disabled={downloadingTailored}
               onClick={handleDownloadTailoredTemplate}
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer disabled:opacity-50"
-              title="Download Tailored Excel Template for selected POs"
+              title={t("excel.header.downloadTemplateTitle")}
             >
               {downloadingTailored ? (
                 <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Preparing Template...
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("excel.header.preparing")}
                 </>
               ) : (
                 <>
-                  <Download className="w-3.5 h-3.5" /> Download Tailored Template
+                  <Download className="w-3.5 h-3.5" /> {t("excel.header.downloadTemplate")}
                 </>
               )}
             </button>
@@ -3463,7 +3550,7 @@ function ExcelPackingWorkflow({
           {validationResult && (
             createdResponse ? (
               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 text-emerald-800 rounded-lg text-xs font-bold border border-emerald-200">
-                <Check className="w-3.5 h-3.5 stroke-[2.5]" /> Sent to IUNGO
+                <Check className="w-3.5 h-3.5 stroke-[2.5]" /> {t("xml.sent")}
               </span>
             ) : (
               <button
@@ -3471,11 +3558,11 @@ function ExcelPackingWorkflow({
                 disabled={submitting || (validationResult && !validationResult.is_valid)}
                 onClick={() => {
                   if (!isOnline) {
-                    alert("You are currently offline. Please reconnect to the network before sending the ASN to IUNGO.");
+                    alert(t("excel.alerts.offline"));
                     return;
                   }
                   if (!selectedFile) {
-                    alert("Please upload or select the validated Excel file before creating the shipment.");
+                    alert(t("excel.alerts.noFile"));
                     return;
                   }
                   if (!validationResult.is_valid) {
@@ -3487,24 +3574,24 @@ function ExcelPackingWorkflow({
                   if (isMultiSlip) {
                     const missing = detectedPackingSlips.filter((ps) => !packingSlipDates[ps]?.trim());
                     if (missing.length > 0) {
-                      alert(`Please select a Delivery Date for Packing Slip(s): ${missing.join(", ")}`);
+                      alert(t("excel.alerts.missingDates", { slips: missing.join(", ") }));
                       return;
                     }
                   } else {
                     const singleDate = estimatedArrival?.trim() || (detectedPackingSlips[0] ? packingSlipDates[detectedPackingSlips[0]]?.trim() : "");
                     const singlePs = packingSlipNumber.trim() || (detectedPackingSlips[0] ? detectedPackingSlips[0] : "");
                     if (!singlePs && !singleDate) {
-                      alert("Please enter Packing Slip Number and select Delivery Date before creating the shipment.");
+                      alert(t("excel.alerts.needDate"));
                       document.getElementById("excel-ps-number")?.focus();
                       return;
                     }
                     if (!singlePs) {
-                      alert("Please enter a Packing Slip Number before creating the shipment.");
+                      alert(t("excel.alerts.needSlip"));
                       document.getElementById("excel-ps-number")?.focus();
                       return;
                     }
                     if (!singleDate) {
-                      alert("Please select a Delivery Date before creating the shipment.");
+                      alert(t("excel.alerts.needDate"));
                       document.getElementById("excel-delivery-date")?.focus();
                       return;
                     }
@@ -3514,17 +3601,17 @@ function ExcelPackingWorkflow({
                 className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
                 title={
                   !validationResult.is_valid
-                    ? "Please fix Excel validation errors before sending"
-                    : "Send to IUNGO"
+                    ? t("excel.header.fixErrors")
+                    : t("xml.sendButton")
                 }
               >
                 {submitting ? (
                   <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Sending to IUNGO...
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("wizard.toolbar.sending")}
                   </>
                 ) : (
                   <>
-                    <Send className="w-3.5 h-3.5" /> Send to IUNGO
+                    <Send className="w-3.5 h-3.5" /> {t("xml.sendButton")}
                   </>
                 )}
               </button>
@@ -3538,8 +3625,8 @@ function ExcelPackingWorkflow({
         {validating ? (
           <div className="flex-1 flex flex-col items-center justify-center rounded-xl border border-gray-200 bg-white p-8 text-sm text-gray-500 shadow-xs">
             <Loader2 className="h-8 w-8 animate-spin text-emerald-600 mb-3" />
-            <p className="font-semibold text-gray-700">Verifying Excel lines...</p>
-            <p className="text-xs mt-1 text-gray-400">Validating quantities and DTD weight rules (GW &ge; NW &gt; 0)</p>
+            <p className="font-semibold text-gray-700">{t("excel.validating.title")}</p>
+            <p className="text-xs mt-1 text-gray-400">{t("excel.validating.hint")}</p>
           </div>
         ) : validationResult ? (
           <div className="flex-1 flex flex-col space-y-3 overflow-hidden">
@@ -3554,15 +3641,20 @@ function ExcelPackingWorkflow({
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-bold text-emerald-950">
                         {createdResponse.shipments && createdResponse.shipments.length > 1
-                          ? `${createdResponse.shipments.length} Shipments Processed & Sent to IUNGO`
-                          : `Shipment ${createdResponse.shipment?.shipment_number || packingSlipNumber} Created & Sent to IUNGO`}
+                          ? t("excel.success.multi", { count: createdResponse.shipments.length })
+                          : t("wizard.step3.created", {
+                              number: createdResponse.shipment?.shipment_number || packingSlipNumber,
+                            })}
                       </span>
                       <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded">
-                        Transmitted
+                        {t("wizard.step3.transmitted")}
                       </span>
                     </div>
                     <p className="text-[11px] text-emerald-800 mt-0.5 font-mono">
-                      ASN {createdResponse.asn?.asn_number || `ASN-${packingSlipNumber}`} • {createdResponse.shipment?.total_boxes || validationResult.rows.length} Cartons/Rolls
+                      {t("excel.success.asnLine", {
+                        asn: createdResponse.asn?.asn_number || `ASN-${packingSlipNumber}`,
+                        count: createdResponse.shipment?.total_boxes || validationResult.rows.length,
+                      })}
                     </p>
                   </div>
                 </div>
@@ -3587,7 +3679,7 @@ function ExcelPackingWorkflow({
                     ) : (
                       <Printer className="w-3.5 h-3.5" />
                     )}
-                    <span>Print Labels</span>
+                    <span>{t("wizard.step3.printLabels")}</span>
                   </button>
                   <button
                     type="button"
@@ -3600,7 +3692,7 @@ function ExcelPackingWorkflow({
                     ) : (
                       <Download className="w-3.5 h-3.5" />
                     )}
-                    <span>Download XML</span>
+                    <span>{t("wizard.step3.downloadXml")}</span>
                   </button>
                   <button
                     type="button"
@@ -3614,14 +3706,14 @@ function ExcelPackingWorkflow({
                     }}
                     className="px-3 py-1.5 border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 rounded-lg text-xs font-semibold shadow-xs flex items-center gap-1.5 cursor-pointer"
                   >
-                    <RotateCcw className="w-3.5 h-3.5" /> Upload Another
+                    <RotateCcw className="w-3.5 h-3.5" /> {t("excel.success.uploadAnother")}
                   </button>
                   <button
                     type="button"
                     onClick={onSuccess}
                     className="px-3 py-1.5 border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 rounded-lg text-xs font-semibold shadow-xs transition-all cursor-pointer"
                   >
-                    Close & View in List
+                    {t("excel.success.closeView")}
                   </button>
                 </div>
               </div>
@@ -3634,9 +3726,9 @@ function ExcelPackingWorkflow({
               <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl space-y-2 text-xs shrink-0">
                 <div className="flex items-center gap-2 text-red-800 font-bold">
                   <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
-                  <span>Validation Errors Detected in Excel Sheet</span>
+                  <span>{t("excel.errors.title")}</span>
                   <span className="text-[10px] bg-red-200 text-red-900 px-1.5 py-0.5 rounded font-mono">
-                    Action Required
+                    {t("excel.errors.actionRequired")}
                   </span>
                 </div>
                 
@@ -3654,17 +3746,26 @@ function ExcelPackingWorkflow({
                   return (
                     <div className="mt-1 pt-2 border-t border-red-100">
                       <p className="font-semibold text-red-800 mb-1">
-                        {errorRows.length} {errorRows.length === 1 ? "row has" : "rows have"} invalid data:
+                        {t("excel.errors.rowsInvalid", { count: errorRows.length })}
                       </p>
                       <div className="max-h-28 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
                         {errorRows.slice(0, 10).map((r, idx) => (
                           <div key={idx} className="bg-white/80 p-1.5 rounded border border-red-200 text-red-900 font-mono text-[11px] flex items-center justify-between gap-2">
-                            <span>Row {r.row_index} (PO {r.po_number || "—"}, Line {r.po_item || "—"}, Ctn {String(r.carton_number).replace(/^#+/, "")})</span>
+                            <span>
+                              {t("excel.errors.rowRef", {
+                                row: r.row_index,
+                                po: r.po_number || "—",
+                                line: r.po_item || "—",
+                                ctn: String(r.carton_number).replace(/^#+/, ""),
+                              })}
+                            </span>
                             <span className="font-semibold text-red-600 truncate max-w-md">{r.errors.join(", ")}</span>
                           </div>
                         ))}
                         {errorRows.length > 10 && (
-                          <p className="text-[10px] text-red-500 italic">...and {errorRows.length - 10} more rows with errors.</p>
+                          <p className="text-[10px] text-red-500 italic">
+                            {t("excel.errors.more", { count: errorRows.length - 10 })}
+                          </p>
                         )}
                       </div>
                     </div>
@@ -3672,7 +3773,7 @@ function ExcelPackingWorkflow({
                 })()}
 
                 <p className="text-[11px] text-red-600 font-medium pt-0.5">
-                  Please correct the values in your Excel file and upload again using the button above.
+                  {t("excel.errors.fixHint")}
                 </p>
               </div>
             )}
@@ -3683,23 +3784,41 @@ function ExcelPackingWorkflow({
                 <div className="flex items-center gap-2">
                   <Layers className="w-3.5 h-3.5 text-emerald-600" />
                   <span className="text-xs font-bold text-gray-800 uppercase tracking-wider">
-                    Handling Units & Packing Breakdown
+                    {t("wizard.step3.breakdown")}
                   </span>
                   <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100/70 border border-emerald-200 px-2 py-0.5 rounded-full">
-                    {validationResult.rows.length} Cartons/Rolls
+                    {t("wizard.step3.cartonsRolls", { count: validationResult.rows.length })}
                   </span>
                 </div>
                 <div className="flex items-center gap-3 text-xs text-gray-600">
                   <span>
-                    Total Qty: <strong className="font-mono text-gray-900">{validationResult.total_quantity.toLocaleString()} {validationResult.rows[0]?.uom || "M"}</strong>
+                    <Trans
+                      t={t}
+                      i18nKey="wizard.step3.totalQty"
+                      values={{
+                        qty: formatNumber(validationResult.total_quantity),
+                        uom: validationResult.rows[0]?.uom || "M",
+                      }}
+                      components={{ strong: <strong className="font-mono text-gray-900" /> }}
+                    />
                   </span>
                   <span className="text-gray-300">|</span>
                   <span>
-                    GW: <strong className="font-mono text-gray-900">{validationResult.total_gross_weight.toFixed(2)} kg</strong>
+                    <Trans
+                      t={t}
+                      i18nKey="wizard.step3.gw"
+                      values={{ value: validationResult.total_gross_weight.toFixed(2) }}
+                      components={{ strong: <strong className="font-mono text-gray-900" /> }}
+                    />
                   </span>
                   <span className="text-gray-300">|</span>
                   <span>
-                    NW: <strong className="font-mono text-gray-900">{validationResult.total_net_weight.toFixed(2)} kg</strong>
+                    <Trans
+                      t={t}
+                      i18nKey="wizard.step3.nw"
+                      values={{ value: validationResult.total_net_weight.toFixed(2) }}
+                      components={{ strong: <strong className="font-mono text-gray-900" /> }}
+                    />
                   </span>
                 </div>
               </div>
@@ -3708,16 +3827,16 @@ function ExcelPackingWorkflow({
                 <table className="w-full text-left text-xs border-collapse">
                   <thead className="bg-zinc-700 text-white text-xs font-semibold uppercase tracking-wider sticky top-0 z-10 border-b border-zinc-800">
                     <tr>
-                      <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Ctn</th>
-                      <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Packing Slip No.</th>
-                      <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Delivery Date</th>
-                      <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Handling Unit (SSCC-20)</th>
-                      <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">PO & Line</th>
-                      <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Product Code</th>
-                      <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">Quantity</th>
-                      <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">Gross Wt (kg)</th>
-                      <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">Net Wt (kg)</th>
-                      <th className="py-1.5 px-2 whitespace-nowrap">Lot / Batch</th>
+                      <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("wizard.step3.table.ctn")}</th>
+                      <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("excel.table.packingSlip")}</th>
+                      <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("excel.table.deliveryDate")}</th>
+                      <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("wizard.step3.table.hu")}</th>
+                      <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("wizard.step3.table.poLine")}</th>
+                      <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("wizard.step3.table.productCode")}</th>
+                      <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">{t("wizard.step3.table.quantity")}</th>
+                      <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">{t("wizard.step3.table.gw")}</th>
+                      <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">{t("wizard.step3.table.nw")}</th>
+                      <th className="py-1.5 px-2 whitespace-nowrap">{t("wizard.step3.table.lot")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -3800,7 +3919,11 @@ function ExcelPackingWorkflow({
                                     ? "border-amber-400 bg-amber-50/60 text-amber-900 focus:border-amber-500 focus:ring-amber-400"
                                     : "border-slate-300 text-slate-800 focus:border-emerald-500 focus:ring-emerald-400"
                                 )}
-                                title={rowDate ? `Delivery date for ${rowPs}: ${rowDate}` : `Please select delivery date for ${rowPs}`}
+                                title={
+                                  rowDate
+                                    ? t("excel.table.dateTitle", { slip: rowPs, date: rowDate })
+                                    : t("excel.table.dateMissingTitle", { slip: rowPs })
+                                }
                               />
                             ) : null}
                           </td>
@@ -3817,7 +3940,7 @@ function ExcelPackingWorkflow({
                                   setTimeout(() => setCopiedHu(null), 1500);
                                 }}
                                 className="text-slate-400 hover:text-slate-700 p-0.5 rounded hover:bg-slate-200 transition-colors cursor-pointer"
-                                title="Copy SSCC-20 HU"
+                                title={t("excel.table.copyHu")}
                               >
                                 {copiedHu === generatedHu ? (
                                   <Check className="w-3 h-3 text-emerald-600" />
@@ -3842,7 +3965,7 @@ function ExcelPackingWorkflow({
 
                           {/* Quantity */}
                           <td className="py-1 px-2 text-right font-mono font-bold text-gray-900 whitespace-nowrap border-r border-gray-200">
-                            {Number(r.quantity).toLocaleString()} {r.uom || "M"}
+                            {formatNumber(Number(r.quantity))} {r.uom || "M"}
                           </td>
 
                           {/* Gross Wt */}
@@ -3871,8 +3994,10 @@ function ExcelPackingWorkflow({
           <div className="flex-1 flex flex-col rounded-xl border border-gray-300 bg-white shadow-xs p-3 overflow-hidden">
             <div className="w-full h-full flex flex-col">
               <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider mb-2.5 flex items-center justify-between border-b border-gray-200 pb-2 shrink-0">
-                <span>Purchase Orders & Lines Selection</span>
-                <span className="text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-600 font-mono">{activePos.length} Selected</span>
+                <span>{t("excel.selection.title")}</span>
+                <span className="text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-600 font-mono">
+                  {t("excel.selection.selected", { count: activePos.length })}
+                </span>
               </h3>
               
               <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar space-y-2.5">
@@ -3893,10 +4018,10 @@ function ExcelPackingWorkflow({
                             className="w-3.5 h-3.5 text-emerald-600 rounded border-gray-300 cursor-pointer" 
                           />
                           <span className="font-mono font-bold text-xs text-gray-900">PO {po}</span>
-                          <span className="text-[11px] text-gray-500 font-mono">({lines.length} {lines.length === 1 ? "line" : "lines"})</span>
+                          <span className="text-[11px] text-gray-500 font-mono">{t("wizard.step1.lines", { count: lines.length })}</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <label className="text-[10px] font-bold text-gray-500 uppercase">Pack Type</label>
+                          <label className="text-[10px] font-bold text-gray-500 uppercase">{t("wizard.step1.packType")}</label>
                           <select
                             value={poConfigs[po] || "BOX"}
                             onChange={(e) => setPoConfigs(prev => ({ ...prev, [po]: e.target.value as "BOX"|"ROLL" }))}
@@ -3912,12 +4037,12 @@ function ExcelPackingWorkflow({
                         <table className="w-full text-xs text-left border-collapse">
                           <thead className="sticky top-0 z-10 bg-zinc-700 shadow-xs">
                             <tr className="bg-zinc-700 text-white text-xs font-semibold uppercase tracking-wider border-b border-zinc-800">
-                              <th className="py-1.5 px-2 w-8 text-center border-r border-zinc-600">Sel</th>
-                              <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Line</th>
-                              <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Material Code</th>
-                              <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Description</th>
-                              <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">Remaining Qty</th>
-                              <th className="py-1.5 px-2 text-right w-32 whitespace-nowrap">Cartons / Rolls</th>
+                              <th className="py-1.5 px-2 w-8 text-center border-r border-zinc-600">{t("excel.selection.table.sel")}</th>
+                              <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("excel.selection.table.line")}</th>
+                              <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("wizard.step1.table.material")}</th>
+                              <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("wizard.step1.table.description")}</th>
+                              <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">{t("excel.selection.table.remaining")}</th>
+                              <th className="py-1.5 px-2 text-right w-32 whitespace-nowrap">{t("excel.selection.table.cartons")}</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -3954,7 +4079,11 @@ function ExcelPackingWorkflow({
                                   </td>
                                   <td className="py-1 px-2 font-mono font-bold text-gray-800 whitespace-nowrap border-r border-gray-200">
                                     {l.po_item}
-                                    {isClosed && <span className="ml-1.5 text-[10px] bg-red-100 text-red-700 px-1.5 py-0.2 rounded font-bold">Fulfilled</span>}
+                                    {isClosed && (
+                                      <span className="ml-1.5 text-[10px] bg-red-100 text-red-700 px-1.5 py-0.2 rounded font-bold">
+                                        {t("wizard.step1.fulfilled")}
+                                      </span>
+                                    )}
                                   </td>
                                   <td className="py-1 px-2 font-mono font-semibold text-gray-900 whitespace-nowrap border-r border-gray-200">
                                     {l.material_code || l.item_code}
@@ -3963,7 +4092,7 @@ function ExcelPackingWorkflow({
                                     {l.description}
                                   </td>
                                   <td className="py-1 px-2 text-right font-mono font-bold text-gray-800 whitespace-nowrap border-r border-gray-200">
-                                    {Number(l.remaining_qty ?? l.ordered_qty).toLocaleString()} {l.uom}
+                                    {formatNumber(Number(l.remaining_qty ?? l.ordered_qty))} {l.uom}
                                   </td>
                                   <td className="py-1 px-2 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                     {!isClosed && isChecked ? (
@@ -3977,7 +4106,7 @@ function ExcelPackingWorkflow({
                                           setLineCartonCounts(prev => ({ ...prev, [`${po}|${l.po_item}`]: val }));
                                         }}
                                         className="w-14 h-6 px-1.5 text-xs text-center font-mono font-bold border border-gray-300 rounded bg-white focus:outline-emerald-500"
-                                        title="Number of carton/roll rows to generate for this line item in Excel"
+                                        title={t("excel.selection.cartonCountTitle")}
                                       />
                                     ) : (
                                       <span className="text-gray-400 font-mono">—</span>
@@ -3988,7 +4117,7 @@ function ExcelPackingWorkflow({
                             })}
                             {lines.length === 0 && (
                               <tr>
-                                <td colSpan={6} className="py-2 px-3 text-xs text-gray-400 italic">No line items found.</td>
+                                <td colSpan={6} className="py-2 px-3 text-xs text-gray-400 italic">{t("excel.selection.noLines")}</td>
                               </tr>
                             )}
                           </tbody>
@@ -4000,15 +4129,15 @@ function ExcelPackingWorkflow({
                 
                 {activePos.length === 0 && (
                   <div className="flex flex-col items-center justify-center h-32 text-gray-400">
-                    <p className="text-sm font-semibold">No Purchase Orders selected.</p>
-                    <p className="text-xs">Please go back and select POs first.</p>
+                    <p className="text-sm font-semibold">{t("excel.selection.noPos")}</p>
+                    <p className="text-xs">{t("excel.selection.goBack")}</p>
                   </div>
                 )}
               </div>
               
               <div className="mt-2.5 pt-2 border-t border-gray-200 shrink-0">
                 <p className="text-[11px] text-gray-500 text-center">
-                  Uncheck the lines you do not wish to include in the Tailored Sheet. Configure the Pack Type for each PO, download the template, fill it locally, and upload it above.
+                  {t("excel.selection.hint")}
                 </p>
               </div>
             </div>
@@ -4033,15 +4162,15 @@ function ExcelPackingWorkflow({
                 <Send className="w-5 h-5" />
               </div>
               <h3 className="text-lg font-bold text-gray-900">
-                Send ASN to IUNGO?
+                {t("shipments:xml.confirm.title")}
               </h3>
               <p className="mt-2 text-sm text-gray-500 leading-relaxed">
-                Are you sure you want to dispatch this Advance Shipping Notice (ASN) to IUNGO? Once sent, this transmission cannot be undone.
+                {t("shipments:xml.confirm.message")}
               </p>
 
               <div className="mt-3">
                 <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                  Recipient Email
+                  {t("shipments:xml.confirm.recipient")}
                 </label>
                 <div className="px-3 py-2 bg-slate-50 border border-slate-200 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 focus-within:bg-white rounded-xl text-xs text-slate-700 flex items-center gap-2 transition-all">
                   <Mail className="w-4 h-4 text-slate-400 shrink-0" />
@@ -4062,7 +4191,7 @@ function ExcelPackingWorkflow({
                   onClick={() => setShowConfirmExcelDispatch(false)}
                   className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
                 >
-                  Cancel
+                  {t("common:actions.cancel")}
                 </button>
                 <button
                   type="button"
@@ -4074,7 +4203,7 @@ function ExcelPackingWorkflow({
                   className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 active:bg-emerald-800 transition-colors cursor-pointer flex items-center gap-1.5"
                 >
                   {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                  {submitting ? "Sending..." : "Yes, Send ASN"}
+                  {submitting ? t("xml.confirm.sending") : t("xml.confirm.send")}
                 </button>
               </div>
             </div>
@@ -4100,6 +4229,7 @@ function XmlPreviewModal({
   };
   onClose: () => void;
 }) {
+  const { t } = useTranslation(["shipments", "common"]);
   const [copied, setCopied] = useState(false);
   const [sending, setSending] = useState(false);
   const [sentSuccess, setSentSuccess] = useState(false);
@@ -4154,7 +4284,7 @@ function XmlPreviewModal({
               <div className="flex items-center gap-2 text-xs text-gray-500">
                 <span className="font-mono">DOCTYPE: SdDataSlice SYSTEM "m2Data_Partner.dtd"</span>
                 <span>•</span>
-                <span className="text-emerald-600 font-semibold">✓ EDI Validated</span>
+                <span className="text-emerald-600 font-semibold">{t("shipments:xml.validated")}</span>
               </div>
             </div>
           </div>
@@ -4176,20 +4306,20 @@ function XmlPreviewModal({
               className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 shadow-xs cursor-pointer transition-colors"
             >
               {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : null}
-              {copied ? "Copied to clipboard" : "Copy XML"}
+              {copied ? t("shipments:xml.copied") : t("shipments:xml.copy")}
             </button>
             <button
               onClick={handleDownload}
               className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 shadow-xs cursor-pointer transition-colors"
             >
-              <Download className="h-3.5 w-3.5" /> Download .xml File
+              <Download className="h-3.5 w-3.5" /> {t("shipments:xml.download")}
             </button>
           </div>
 
           <div className="flex items-center gap-3">
             {sentSuccess ? (
               <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200">
-                <Check className="h-4 w-4" /> Sent to IUNGO
+                <Check className="h-4 w-4" /> {t("shipments:xml.sent")}
               </span>
             ) : (
               <button
@@ -4198,7 +4328,7 @@ function XmlPreviewModal({
                 className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 cursor-pointer transition-colors"
               >
                 {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                Send to IUNGO
+                {t("shipments:xml.sendButton")}
               </button>
             )}
           </div>
@@ -4222,15 +4352,15 @@ function XmlPreviewModal({
                 <Send className="w-5 h-5" />
               </div>
               <h3 className="text-lg font-bold text-gray-900">
-                Send ASN to IUNGO?
+                {t("shipments:xml.confirm.title")}
               </h3>
               <p className="mt-2 text-sm text-gray-500 leading-relaxed">
-                Are you sure you want to dispatch this Advance Shipping Notice (ASN) to IUNGO? Once sent, this transmission cannot be undone.
+                {t("shipments:xml.confirm.message")}
               </p>
 
               <div className="mt-3">
                 <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                  Recipient Email
+                  {t("shipments:xml.confirm.recipient")}
                 </label>
                 <div className="px-3 py-2 bg-slate-50 border border-slate-200 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:bg-white rounded-xl text-xs text-slate-700 flex items-center gap-2 transition-all">
                   <Mail className="w-4 h-4 text-slate-400 shrink-0" />
@@ -4251,7 +4381,7 @@ function XmlPreviewModal({
                   onClick={() => setShowConfirmXmlSend(false)}
                   className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
                 >
-                  Cancel
+                  {t("common:actions.cancel")}
                 </button>
                 <button
                   type="button"
@@ -4263,7 +4393,7 @@ function XmlPreviewModal({
                   className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 active:bg-blue-800 transition-colors cursor-pointer flex items-center gap-1.5"
                 >
                   {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                  {sending ? "Sending..." : "Yes, Send ASN"}
+                  {sending ? t("shipments:xml.confirm.sending") : t("shipments:xml.confirm.send")}
                 </button>
               </div>
             </div>
@@ -4288,6 +4418,7 @@ function ShipmentDetailModal({
   onDownloadLabels: (id: string, num: string, count?: number) => void;
   onPreviewXml: (shipment: any) => void;
 }) {
+  const { t } = useTranslation("shipments");
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -4302,7 +4433,7 @@ function ShipmentDetailModal({
         if (active) setData(res);
       })
       .catch((err) => {
-        if (active) setError(err?.response?.data?.detail || err?.message || "Failed to load shipment details");
+        if (active) setError(getErrorMessage(err, t("detail.loadFailed")));
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -4332,7 +4463,7 @@ function ShipmentDetailModal({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-bold text-gray-900">
-                  Shipment {data?.shipment_number || "..."}
+                  {t("detail.title", { number: data?.shipment_number || "..." })}
                 </h2>
                 {data?.status && (
                   <span
@@ -4341,14 +4472,27 @@ function ShipmentDetailModal({
                       statusColor[data.status] || "bg-gray-100 text-gray-700 border-gray-200"
                     )}
                   >
-                    {data.status.replace(/_/g, " ")}
+                    {shipmentStatusLabel(data.status)}
                   </span>
                 )}
               </div>
               <p className="text-xs text-gray-500 mt-0.5">
-                Destination: <strong className="text-gray-800">{plantName}</strong>
+                <Trans
+                  t={t}
+                  i18nKey="detail.destination"
+                  values={{ plant: plantName }}
+                  components={{ strong: <strong className="text-gray-800" /> }}
+                />
                 {data?.ship_date && (
-                  <> • Ship Date: <strong className="text-gray-800">{new Date(data.ship_date).toLocaleDateString("en-GB")}</strong></>
+                  <>
+                    {" • "}
+                    <Trans
+                      t={t}
+                      i18nKey="detail.shipDate"
+                      values={{ date: formatDate(data.ship_date, "numeric") }}
+                      components={{ strong: <strong className="text-gray-800" /> }}
+                    />
+                  </>
                 )}
               </p>
             </div>
@@ -4366,7 +4510,7 @@ function ShipmentDetailModal({
           {loading ? (
             <div className="py-20 text-center text-gray-500">
               <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-3" />
-              <p className="font-semibold text-sm">Loading carton details...</p>
+              <p className="font-semibold text-sm">{t("detail.loading")}</p>
             </div>
           ) : error ? (
             <div className="py-12 text-center text-red-600 bg-red-50 rounded-xl border border-red-200">
@@ -4379,24 +4523,24 @@ function ShipmentDetailModal({
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">
-                    Carton & Handling Unit Breakdown ({data.cartons?.length || 0})
+                    {t("detail.breakdown", { count: data.cartons?.length || 0 })}
                   </h3>
                   <span className="text-xs text-gray-400">
-                    Click HU to copy
+                    {t("detail.clickToCopy")}
                   </span>
                 </div>
                 <div className="overflow-auto max-h-[62vh] border border-gray-300 shadow-2xs">
                   <table className="w-full text-left text-xs border-collapse">
                     <thead className="sticky top-0 z-10 bg-zinc-700 text-white text-xs font-semibold uppercase tracking-wider border-b border-zinc-800 shadow-xs">
                       <tr>
-                        <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Box</th>
-                        <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Handling Unit (20-digit HU)</th>
-                        <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">PO / Line Item</th>
-                        <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Product Code</th>
-                        <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">Lot / Batch</th>
-                        <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">Quantity</th>
-                        <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">GW (kg)</th>
-                        <th className="py-1.5 px-2 text-right whitespace-nowrap">NW (kg)</th>
+                        <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("detail.table.box")}</th>
+                        <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("detail.table.hu")}</th>
+                        <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("detail.table.poLine")}</th>
+                        <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("detail.table.productCode")}</th>
+                        <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("detail.table.lot")}</th>
+                        <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">{t("detail.table.quantity")}</th>
+                        <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">{t("detail.table.gw")}</th>
+                        <th className="py-1.5 px-2 text-right whitespace-nowrap">{t("detail.table.nw")}</th>
                       </tr>
                     </thead>
                     <tbody className="font-mono">
@@ -4409,7 +4553,7 @@ function ShipmentDetailModal({
                               <button
                                 type="button"
                                 onClick={() => handleCopyHu(c.hu_number)}
-                                title="Click to copy 20-digit HU"
+                                title={t("detail.copyHuTitle")}
                                 className="inline-flex items-center gap-1.5 text-gray-800 hover:text-blue-700 cursor-pointer font-bold transition-colors"
                               >
                                 {c.hu_number}
@@ -4428,7 +4572,7 @@ function ShipmentDetailModal({
                               {meta.lot_number || " "}
                             </td>
                             <td className="py-1 px-2 text-right font-bold text-blue-700 whitespace-nowrap border-r border-gray-200">
-                              {meta.quantity?.toLocaleString() || meta.quantity || 0} {meta.uom || data.uom || "M"}
+                              {meta.quantity != null ? formatNumber(meta.quantity) : 0} {meta.uom || data.uom || "M"}
                             </td>
                             <td className="py-1 px-2 text-right text-gray-800 whitespace-nowrap border-r border-gray-200">
                               {c.gross_weight?.toFixed(2) || "0.00"}
@@ -4453,7 +4597,7 @@ function ShipmentDetailModal({
             onClick={onClose}
             className="px-4 py-2 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 transition-colors cursor-pointer"
           >
-            Close
+            {t("detail.close")}
           </button>
 
           {data && (
@@ -4465,7 +4609,7 @@ function ShipmentDetailModal({
                 className="inline-flex items-center gap-1.5 px-4 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
               >
                 <FileCode className="w-3.5 h-3.5 text-slate-500" />
-                View ASN XML
+                {t("detail.viewXml")}
               </button>
 
               <button
@@ -4473,7 +4617,7 @@ function ShipmentDetailModal({
                 className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
               >
                 <Printer className="w-3.5 h-3.5" />
-                Print / Download Labels
+                {t("detail.printLabels")}
               </button>
             </div>
           )}
@@ -4502,6 +4646,7 @@ function LabelPrintModal({
   onDownload: (size: string, autoPrint: boolean) => void;
   isLoading?: boolean;
 }) {
+  const { t } = useTranslation(["shipments", "common"]);
   const [selectedSize, setSelectedSize] = useState<string>(() => {
     return localStorage.getItem("asn_preferred_label_size") || "6x4";
   });
@@ -4512,10 +4657,10 @@ function LabelPrintModal({
   };
 
   const SIZES = [
-    { id: "6x4", title: '6" × 4" Landscape' },
-    { id: "4x6", title: '4" × 6" Portrait' },
-    { id: "4x3", title: '4" × 3" Compact' },
-    { id: "a4", title: 'A4 Sheet (4 Labels / Page)' },
+    { id: "6x4", title: t("shipments:labels.sizes.landscape") },
+    { id: "4x6", title: t("shipments:labels.sizes.portrait") },
+    { id: "4x3", title: t("shipments:labels.sizes.compact") },
+    { id: "a4", title: t("shipments:labels.sizes.a4") },
   ];
 
   return (
@@ -4524,9 +4669,9 @@ function LabelPrintModal({
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
           <div>
-            <h2 className="text-base font-semibold text-gray-900">Print & Download Barcode Labels</h2>
+            <h2 className="text-base font-semibold text-gray-900">{t("shipments:labels.title")}</h2>
             <p className="text-xs text-gray-500 font-mono mt-0.5">
-              {data.shipmentNumber} • {data.totalBoxes ?? 1} {data.totalBoxes === 1 ? "Carton" : "Cartons"}
+              {data.shipmentNumber} • {t("shipments:cartons", { count: data.totalBoxes ?? 1 })}
             </p>
           </div>
           <button
@@ -4540,7 +4685,7 @@ function LabelPrintModal({
         {/* Content */}
         <div className="p-6 space-y-3">
           <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider block">
-            Select Label Size
+            {t("shipments:labels.selectSize")}
           </label>
           <div className="space-y-2">
             {SIZES.map((s) => {
@@ -4577,7 +4722,7 @@ function LabelPrintModal({
             onClick={onClose}
             className="px-4 py-2 border border-gray-200 rounded-lg text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors cursor-pointer"
           >
-            Cancel
+            {t("common:actions.cancel")}
           </button>
 
           <div className="flex items-center gap-2">
@@ -4586,10 +4731,10 @@ function LabelPrintModal({
               disabled={isLoading}
               onClick={() => onDownload(selectedSize, true)}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 rounded-lg text-xs font-medium transition-colors cursor-pointer disabled:opacity-50"
-              title="Open print preview directly in browser"
+              title={t("shipments:labels.printDirectlyTitle")}
             >
               {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              Print Directly
+              {t("shipments:labels.printDirectly")}
             </button>
 
             <button
@@ -4599,7 +4744,7 @@ function LabelPrintModal({
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
             >
               {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              Download PDF
+              {t("shipments:labels.downloadPdf")}
             </button>
           </div>
         </div>

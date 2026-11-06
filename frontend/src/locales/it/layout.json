@@ -1,0 +1,61 @@
+{
+  "auth": {
+    "couldNotConnect": "Impossibile connettersi al server di accesso.",
+    "redirectingToLogin": "Reindirizzamento all'accesso…",
+    "signingIn": "Accesso in corso…",
+    "unableToSignIn": "Impossibile accedere"
+  },
+  "language": {
+    "change": "Cambia lingua"
+  },
+  "lockout": {
+    "accountRevoked": "Account revocato",
+    "accountSuspended": "Account sospeso",
+    "contact": "Contatta l'amministrazione all'indirizzo <link>{{email}}</link> per risolvere lo stato del tuo account.",
+    "revokedMessage": "Questo account fornitore è stato rimosso. L'accesso alla piattaforma è stato disattivato.",
+    "revokedTitle": "Accesso all'account revocato",
+    "suspendedMessage": "Il tuo account partner fornitore è attualmente sospeso dall'amministrazione centrale.",
+    "suspendedTitle": "Account temporaneamente sospeso"
+  },
+  "nav": {
+    "account": "Account",
+    "drafts": "Bozze",
+    "excelDrop": "Caricamento Excel",
+    "main": "Principale",
+    "manualProcess": "Processo manuale",
+    "myEmails": "Le mie email",
+    "orderHistory": "Storico ordini",
+    "overview": "Panoramica",
+    "profile": "Profilo",
+    "purchaseOrderLines": "Righe ordine d'acquisto",
+    "purchaseOrders": "Ordini d'acquisto",
+    "shipments": "Spedizioni"
+  },
+  "notifications": {
+    "alerts": "Avvisi",
+    "markAllRead": "Segna tutto come letto",
+    "markAsRead": "Segna come letto",
+    "newCount": "{{count}} nuovi",
+    "newPoAssigned": "Nuovo ordine d'acquisto assegnato",
+    "newPoAssignedDesc": "Ordine d'acquisto {{poNumber}} assegnato al tuo account ({{quantity}} unità)",
+    "noUnread": "Nessuna notifica non letta",
+    "orderFallback": "Ordine",
+    "recently": "Di recente",
+    "title": "Notifiche",
+    "viewMyOrders": "Visualizza i miei ordini"
+  },
+  "sidebar": {
+    "collapse": "Comprimi barra laterale",
+    "expand": "Espandi barra laterale",
+    "supplierPortal": "Portale fornitori",
+    "toggleMenu": "Mostra/nascondi menu"
+  },
+  "signOut": {
+    "confirmMessage": "Vuoi davvero terminare la sessione corrente?",
+    "title": "Esci"
+  },
+  "user": {
+    "supplier": "Fornitore",
+    "supplierPartner": "Partner fornitore"
+  }
+}

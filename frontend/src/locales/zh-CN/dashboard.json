@@ -1,0 +1,102 @@
+{
+  "deadlines": {
+    "bucketCritical": "紧急（≤3天）",
+    "bucketDue7": "7天内到期",
+    "bucketOnTrack": "正常（>7天）",
+    "bucketOverdue": "已逾期",
+    "seriesOrders": "订单数量",
+    "subtitle": "需要包装并发运的订单计划，以避免工厂罚款",
+    "targetDates": "目标发运日期",
+    "tileDue3": "≤3天内到期",
+    "tileDue7": "7天内到期",
+    "tileOnTrack": "正常",
+    "tileOverdue": "已逾期",
+    "title": "即将到来的交货期限"
+  },
+  "dueSoon": {
+    "allOnSchedule": "所有已分配订单均按计划进行",
+    "daysLeft": "剩余 {{days}} 天",
+    "dueToday": "今天到期",
+    "dueTomorrow": "明天到期",
+    "overdue": "已逾期（{{days}} 天）",
+    "packNow": "立即装箱",
+    "partial": "部分",
+    "target": "目标日期：{{date}} · 数量：",
+    "title": "即将到期的交货",
+    "unnamedPo": "未命名采购订单"
+  },
+  "fallback": {
+    "apparelItem": "服装物品",
+    "noDate": "无日期"
+  },
+  "header": {
+    "orderHistory": "订单历史（{{count}}）",
+    "subtitle": "实时发运量、活动订单准备情况及工厂履约指标",
+    "title": "概览"
+  },
+  "kpi": {
+    "dispatchedVolume": {
+      "badge": "已发运",
+      "label": "发运量",
+      "subtitle": "{{cartons}} 箱 · {{dispatches}} 次发运",
+      "value": "{{pieces}} 件"
+    },
+    "dueSoon": {
+      "badgeApproaching": "临近",
+      "badgeAttention": "需关注",
+      "label": "即将到期的交货",
+      "subtitle": "{{urgent}} 个紧急（≤3天）",
+      "subtitleWithOverdue": "{{overdue}} 个逾期 · {{urgent}} 个紧急（≤3天）",
+      "value": "{{count}} 个订单"
+    },
+    "partial": {
+      "badge": "{{percent}}% 分批",
+      "label": "部分履约",
+      "subtitle": "总体完成 {{percent}}%",
+      "value": "{{count}} 个采购订单"
+    },
+    "unprocessed": {
+      "badge": "未处理",
+      "label": "未处理订单",
+      "subtitle": "占已分配采购订单的 {{percent}}%",
+      "value": "{{count}} 个采购订单"
+    }
+  },
+  "lifecycle": {
+    "assignedPos": "已分配订单",
+    "cancelled": "已取消",
+    "completedBadge": "已完成 {{percent}}%",
+    "completedShipped": "已完成并发运",
+    "partial": "部分履约",
+    "subtitle": "我已分配的订单在各包装状态的分布",
+    "title": "订单履约状态",
+    "unprocessed": "未处理（新）",
+    "updated": "已更新 / 审核中"
+  },
+  "links": {
+    "allOrders": "全部订单",
+    "allShipments": "全部发运"
+  },
+  "loading": "正在加载供应商发运分析...",
+  "monthly": {
+    "legendCartons": "箱数",
+    "legendPieces": "件数",
+    "seriesCartons": "纸箱",
+    "seriesPieces": "已发运件数",
+    "thisMonth": "本月：<strong>{{value}} 件</strong>",
+    "title": "每月发运量"
+  },
+  "plants": {
+    "assigned": "已分配工厂",
+    "cartons": "（{{count}} 箱）",
+    "footer": "标准 DTD XML 及 20 位 SSCC 标签",
+    "pieces": "{{value}} 件",
+    "title": "生产目的地",
+    "validated": "工厂已验证"
+  },
+  "recent": {
+    "none": "尚无已发运的货物",
+    "plantLine": "工厂：{{plant}} · {{cartons}} 箱 · {{pieces}} 件",
+    "title": "最近发运"
+  }
+}

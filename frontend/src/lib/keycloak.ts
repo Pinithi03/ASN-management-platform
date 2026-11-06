@@ -8,6 +8,7 @@
  */
 
 import Keycloak from "keycloak-js";
+import i18n, { toKeycloakLocale } from "@/i18n";
 
 export const keycloak = new Keycloak({
   url: import.meta.env.VITE_KEYCLOAK_URL || "http://localhost:8080/auth",
@@ -30,11 +31,16 @@ export function initKeycloak(): Promise<boolean> {
   return initPromise!;
 }
 
+/** Redirect to the Keycloak login page, shown in the app's current language. */
+export function login(): Promise<void> {
+  return keycloak.login({ locale: toKeycloakLocale(i18n.language) });
+}
+
 // Silently refresh the token when it's about to expire.
 keycloak.onTokenExpired = () => {
   keycloak.updateToken(30).catch(() => {
     // Refresh token is also expired — back to login.
-    keycloak.login();
+    login();
   });
 };
 

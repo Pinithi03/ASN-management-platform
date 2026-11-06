@@ -1,0 +1,148 @@
+{
+  "crossWarning": {
+    "clearAndSelect": "Clear & Select {{po}}",
+    "dismiss": "Dismiss warning",
+    "location": "Location {{code}}",
+    "message": "<b>Cannot Mix Plants or Storage Locations: </b>Your current selection is for <u>{{current}}</u>. Orders for <u>{{target}}</u> (e.g. {{po}}) must be dispatched in a separate delivery."
+  },
+  "empty": {
+    "clearDate": "Clear Delivery Date",
+    "filtered": "No purchase orders match the selected factory plant, storage location, or delivery date.",
+    "hint": "Try adjusting your search or filters",
+    "resetPlant": "Reset Plant & Location Filters",
+    "title": "No purchase orders found"
+  },
+  "gateway": {
+    "activeOrders": "Active Orders",
+    "badgeUnit_one": "PO",
+    "badgeUnit_other": "POs",
+    "cta": "{{label}} ({{count}})",
+    "ctaDefault": "View Plant Orders",
+    "deliveryStores": "Delivery Stores",
+    "destinationFactory": "Destination Factory",
+    "directHub": "Direct Dispatch Hub",
+    "locationCountry": "{{location}}, Sri Lanka",
+    "locations": "locations",
+    "locked": "Locked",
+    "lockedCta": "Locked — No POs Assigned",
+    "lockedTitle": "{{plant}} — Locked (Unlocks automatically when a PO is received from this plant)",
+    "mobileCount_one": "{{count}} POs",
+    "mobileCount_other": "{{count}} POs",
+    "openTitle": "Open {{plant}} ({{count}} Active POs)",
+    "plantLocked": "Plant Locked",
+    "posUnit": "POs",
+    "readyOrders": "Ready Orders",
+    "storeTitle": "View {{plant}} - Store {{store}}",
+    "stores": "Stores:",
+    "toDispatch": "to dispatch",
+    "zeroPos": "0 POs"
+  },
+  "header": {
+    "title": "Purchase Orders"
+  },
+  "history": {
+    "qty": "Qty: {{old}} → {{new}}",
+    "source": "Source: {{source}}",
+    "title": "Revision & Update History",
+    "version": "Version {{version}}"
+  },
+  "lineStatus": {
+    "fulfilled": "Fulfilled",
+    "partial": "Partial",
+    "pending": "Pending"
+  },
+  "loading": "Loading purchase orders...",
+  "modal": {
+    "addToBatch": "Add to Batch Selection",
+    "cancelledPo": "Cancelled PO",
+    "close": "Close",
+    "closeTitle": "Close modal",
+    "contact": "Contact: <strong>{{name}}</strong>",
+    "copied": "Copied",
+    "copyPo": "Copy PO Number",
+    "excelTitle": "Prepare Outbound Delivery using Excel drop",
+    "fullyFulfilled": "Fully Fulfilled (Completed)",
+    "lineItems": "Line Items & Quantities",
+    "notation": "Notation: <value>{{notation}}</value>",
+    "openPlantToSelect": "Open a plant to select POs",
+    "original": "v1 Original",
+    "plant": "Plant:",
+    "primaryLineFallback": "Primary Line Item",
+    "proceedExcel": "Proceed with Excel Drop",
+    "proceedManual": "Proceed with Manual Delivery",
+    "refreshing": "Refreshing lines...",
+    "revision": "v{{version}} Revision",
+    "selectedForBatch": "Selected for Batch Delivery",
+    "sourceEmail": "Source Email Ingestion:",
+    "totals_one": "Totals ({{count}} lines):",
+    "totals_other": "Totals ({{count}} lines):"
+  },
+  "modalTable": {
+    "color": "Color",
+    "description": "Description",
+    "item": "Item / Material Code",
+    "no": "No.",
+    "openBalance": "Open Balance",
+    "ordered": "Ordered",
+    "partner": "Partner Code",
+    "shipped": "Shipped",
+    "status": "Status",
+    "subtotal": "Subtotal",
+    "unitPrice": "Unit Price",
+    "uom": "UOM"
+  },
+  "row": {
+    "cancelled": "This PO is cancelled",
+    "completed": "This PO is fully fulfilled (Completed)",
+    "conflict": "Cannot mix: Belongs to {{plant}} (Store {{store}}). Current batch is for Store {{current}}.",
+    "revised": "Order revised/amended by customer (Version {{version}})",
+    "select": "Select PO"
+  },
+  "search": {
+    "addAnother": "Add another PO number...",
+    "default": "Search PO number or paste comma-separated POs...",
+    "escHint": "Esc to close",
+    "found": "Found {{found}} of {{total}}",
+    "inPlant": "Search PO in {{plant}}...",
+    "inPlantLocation": "Search PO in {{plant}} ({{location}})...",
+    "notFound": "Not found:",
+    "notFoundIn": "Not found in {{plant}}:",
+    "pasteHint": "Paste comma-separated POs to search multiple",
+    "selectHint": "Select ↵"
+  },
+  "selection": {
+    "clear": "Clear Selection",
+    "selected_one": "{{count}} Purchase Order Selected",
+    "selected_other": "{{count}} Purchase Orders Selected"
+  },
+  "shared": {
+    "breadcrumb": "Factory Plants",
+    "clearDeliveryDate": "Clear delivery date filter",
+    "clearSearch": "Clear search",
+    "createDelivery": "+ Create Delivery",
+    "excelDropDelivery": "Excel Drop Delivery",
+    "filterDeliveryDate": "Filter by Delivery Date",
+    "keysHint": "Use ↑ ↓ & Enter",
+    "removeChip": "Remove {{chip}}",
+    "store": "Store {{code}}",
+    "storeTitle": "Store {{code}} ({{count}} available POs)",
+    "suggested": "Suggested PO Numbers",
+    "switchPlant": "Switch factory plant"
+  },
+  "statusFilter": {
+    "active": "Active",
+    "all": "All Active Statuses",
+    "partial": "Partial",
+    "updated": "Updated"
+  },
+  "table": {
+    "contact": "Contact",
+    "deliveryDate": "Delivery Date",
+    "notation": "Notation",
+    "orderDate": "Order Date",
+    "poNumber": "PO Number",
+    "quantity": "Quantity",
+    "selectAll": "Select all",
+    "status": "Status"
+  }
+}

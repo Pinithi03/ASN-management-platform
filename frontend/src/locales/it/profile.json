@@ -1,0 +1,70 @@
+{
+  "avatar": {
+    "change": "Cambia",
+    "changeLogo": "Cambia logo",
+    "changePhoto": "Cambia foto",
+    "clickToUpload": "Fai clic per caricare o cambiare il logo",
+    "invalidType": "Seleziona un file immagine valido (PNG, JPG o WebP).",
+    "loadFailed": "Impossibile caricare il file immagine.",
+    "processing": "Elaborazione...",
+    "readFailed": "Impossibile leggere il file immagine.",
+    "remove": "Rimuovi",
+    "removeFailed": "Impossibile rimuovere l'immagine del profilo.",
+    "removed": "Immagine del profilo rimossa correttamente.",
+    "tooLarge": "Il file immagine deve essere inferiore a 10 MB.",
+    "upload": "Carica logo",
+    "uploadFailed": "Impossibile caricare l'immagine del profilo.",
+    "uploaded": "Immagine del profilo caricata e salvata correttamente!"
+  },
+  "cache": {
+    "clear": "Cancella bozze locali",
+    "cleared_many": "Cache offline cancellata correttamente! ({{count}} bozze eliminate)",
+    "cleared_one": "Cache offline cancellata correttamente! ({{count}} bozza eliminata)",
+    "cleared_other": "Cache offline cancellata correttamente! ({{count}} bozze eliminate)",
+    "clearing": "Cancellazione...",
+    "confirm": "Vuoi davvero cancellare le bozze offline locali e le configurazioni di imballaggio memorizzate? I progressi delle bozze non inviate su questo dispositivo andranno persi.",
+    "draftBadge_many": "{{count}} bozze",
+    "draftBadge_one": "{{count}} bozza",
+    "draftBadge_other": "{{count}} bozze",
+    "storageInfo": "{{items}} elementi salvati • {{sizeKb}} KB di memoria del browser usati su questo dispositivo",
+    "title": "Cache locale e bozze offline"
+  },
+  "fallback": {
+    "contactName": "Referente del partner",
+    "initialized": "Inizializzato",
+    "representative": "Referente",
+    "supplierName": "Partner fornitore"
+  },
+  "header": {
+    "active": "Partner attivo",
+    "inactive": "Inattivo"
+  },
+  "hu": {
+    "edit": "Modifica",
+    "initialLabel": "Ultimo numero HU utilizzato (iniziale)",
+    "lastUsed": "Ultimo numero HU utilizzato",
+    "lock": "Blocca sequenza",
+    "locked": "Bloccata",
+    "lockedNote": "La sequenza è bloccata per preservare l'integrità EDI Calzedonia. Contatta l'amministratore di sistema per eventuali modifiche.",
+    "nextCarton": "Il codice a barre del prossimo cartone sarà generato da questo numero + 1.",
+    "overrideLabel": "Sovrascrivi sequenza HU",
+    "placeholder": "es. 0 (se inizi da zero) o ultimo seriale",
+    "saveFailed": "Impossibile configurare il numero HU.",
+    "saved": "Numero di sequenza Handling Unit (HU) salvato e bloccato correttamente.",
+    "setupNeeded": "Configurazione richiesta",
+    "subtitle": "Tracciamento con codice a barre SSCC-20 per i cartoni in spedizione",
+    "synchronized": "Sincronizzato",
+    "title": "Sequenza Handling Unit (HU)",
+    "update": "Aggiorna"
+  },
+  "registry": {
+    "changesNote": "Per richiedere modifiche alla ragione sociale o ai dati di fatturazione, contatta l'amministrazione centrale (HQ).",
+    "companyName": "Ragione sociale",
+    "contactPerson": "Referente",
+    "country": "Paese / Regione",
+    "partnerCode": "Codice partner",
+    "subtitle": "Dati aziendali ufficiali dal database dello stabilimento",
+    "title": "Dati anagrafici aziendali",
+    "verified": "ID verificato"
+  }
+}

@@ -1,0 +1,106 @@
+{
+  "deadlines": {
+    "bucketCritical": "Critici (≤3 gg)",
+    "bucketDue7": "Entro 7 gg",
+    "bucketOnTrack": "In linea (>7 gg)",
+    "bucketOverdue": "In ritardo",
+    "seriesOrders": "Numero ordini",
+    "subtitle": "Pianificazione degli ordini da imballare e spedire per evitare penali dello stabilimento",
+    "targetDates": "Date di spedizione previste",
+    "tileDue3": "Scadenza ≤ 3 giorni",
+    "tileDue7": "Scadenza entro 7 giorni",
+    "tileOnTrack": "In linea",
+    "tileOverdue": "In ritardo",
+    "title": "Prossime scadenze di consegna"
+  },
+  "dueSoon": {
+    "allOnSchedule": "Tutti gli ordini assegnati sono nei tempi",
+    "daysLeft": "{{days}} gg rimanenti",
+    "dueToday": "Scadenza oggi",
+    "dueTomorrow": "Scadenza domani",
+    "overdue": "In ritardo ({{days}} gg)",
+    "packNow": "Imballa ora",
+    "partial": "Parziale",
+    "target": "Prevista: {{date}} · Quantità:",
+    "title": "Consegne in scadenza",
+    "unnamedPo": "Ordine senza nome"
+  },
+  "fallback": {
+    "apparelItem": "Articolo di abbigliamento",
+    "noDate": "Nessuna data"
+  },
+  "header": {
+    "orderHistory": "Storico ordini ({{count}})",
+    "subtitle": "Volume di spedizioni in tempo reale, preparazione degli ordini attivi e metriche di evasione per stabilimento",
+    "title": "Panoramica"
+  },
+  "kpi": {
+    "dispatchedVolume": {
+      "badge": "Spedito",
+      "label": "Volume spedito",
+      "subtitle": "{{cartons}} cartoni · {{dispatches}} spedizioni",
+      "value": "{{pieces}} pz"
+    },
+    "dueSoon": {
+      "badgeApproaching": "In avvicinamento",
+      "badgeAttention": "Attenzione",
+      "label": "Consegne in scadenza",
+      "subtitle": "{{urgent}} urgenti (≤3 gg)",
+      "subtitleWithOverdue": "{{overdue}} in ritardo · {{urgent}} urgenti (≤3 gg)",
+      "value": "{{count}} ordini"
+    },
+    "partial": {
+      "badge": "{{percent}}% suddiviso",
+      "label": "Evasione parziale",
+      "subtitle": "{{percent}}% completato in totale",
+      "value_one": "{{count}} ordine",
+      "value_many": "{{count}} ordini",
+      "value_other": "{{count}} ordini"
+    },
+    "unprocessed": {
+      "badge": "Aperti",
+      "label": "Ordini da elaborare",
+      "subtitle": "{{percent}}% degli ordini assegnati",
+      "value_one": "{{count}} ordine",
+      "value_many": "{{count}} ordini",
+      "value_other": "{{count}} ordini"
+    }
+  },
+  "lifecycle": {
+    "assignedPos": "Ordini assegnati",
+    "cancelled": "Annullati",
+    "completedBadge": "{{percent}}% completati",
+    "completedShipped": "Completati e spediti",
+    "partial": "Evasione parziale",
+    "subtitle": "I miei ordini assegnati per stato di imballaggio",
+    "title": "Stato di evasione degli ordini",
+    "unprocessed": "Da elaborare (nuovi)",
+    "updated": "Aggiornati / In revisione"
+  },
+  "links": {
+    "allOrders": "Tutti gli ordini",
+    "allShipments": "Tutte le spedizioni"
+  },
+  "loading": "Caricamento analisi spedizioni fornitore...",
+  "monthly": {
+    "legendCartons": "Cartoni",
+    "legendPieces": "Pezzi",
+    "seriesCartons": "Cartoni",
+    "seriesPieces": "Pezzi spediti",
+    "thisMonth": "Questo mese: <strong>{{value}} pz</strong>",
+    "title": "Volume di spedizioni mensile"
+  },
+  "plants": {
+    "assigned": "Stabilimenti assegnati",
+    "cartons": "({{count}} cartoni)",
+    "footer": "XML DTD standard ed etichette SSCC a 20 cifre",
+    "pieces": "{{value}} pz",
+    "title": "Destinazioni di produzione",
+    "validated": "Stabilimento verificato"
+  },
+  "recent": {
+    "none": "Nessuna spedizione ancora inviata",
+    "plantLine": "Stabilimento: {{plant}} · {{cartons}} cartoni · {{pieces}} pz",
+    "title": "Spedizioni recenti"
+  }
+}
