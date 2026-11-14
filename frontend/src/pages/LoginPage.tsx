@@ -36,7 +36,7 @@ export default function LoginPage() {
           {/* Logo/Brand */}
           <div className="mb-2 text-center">
             <h1 className="text-3xl font-bold text-white mb-1">ASN Platform</h1>
-            <p className="text-sm text-gray-300">Advanced Shipment Notifications</p>
+            <p className="text-sm text-gray-300">Advanced Shipping Note</p>
           </div>
 
           <div className="h-px bg-white/10 my-6" />
