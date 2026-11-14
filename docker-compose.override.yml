@@ -34,6 +34,17 @@ services:
     command: ["start-dev", "--import-realm"]
     ports:
       - "8080:8080"      # Keycloak (login pages + admin console at /auth)
+    environment:
+      # Edit a file in docker/keycloak/themes and a browser refresh shows it.
+      KC_SPI_THEME_CACHE_THEMES: "false"
+      KC_SPI_THEME_CACHE_TEMPLATES: "false"
+    # Keycloak gzips theme resources into data/tmp/kc-gzip-cache and keys them
+    # by path only, ignoring any ?v= query. An edited CSS file therefore keeps
+    # serving its old .gz to browsers (which all send Accept-Encoding: gzip)
+    # while curl without compression sees the new one. A tmpfs is wiped on
+    # every container start, so `docker compose restart keycloak` is enough.
+    tmpfs:
+      - /opt/keycloak/data/tmp
 
   # Catches every email Keycloak sends in dev (setup, reset password).
   # Web UI: http://localhost:8025

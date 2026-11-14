@@ -136,6 +136,7 @@ services:
       SMTP_SECRET: ${KEYCLOAK_SMTP_SECRET:-}
     volumes:
       - ./docker/keycloak/realm-oniverse.json:/opt/keycloak/data/import/realm-oniverse.json:ro
+      - ./docker/keycloak/themes:/opt/keycloak/themes:ro
     depends_on:
       postgres:
         condition: service_healthy
