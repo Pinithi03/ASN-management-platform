@@ -1,0 +1,516 @@
+/* ==========================================================================
+   Glassmorphic login theme for the ASN Platform (Keycloak login pages)
+   Markup comes from ../../template.ftl and ../../login.ftl.
+   ========================================================================== */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+.kc-body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+               Ubuntu, Cantarell, sans-serif;
+  color: #fff;
+  background: #0a0e27 url("../images/network-bg.jpg") center / cover no-repeat fixed;
+}
+
+/* Dark veil so the form stays readable over the photo */
+.kc-body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 14, 39, 0.55);
+  z-index: 0;
+}
+
+.kc-page {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 16px;
+}
+
+/* ───────── Brand ───────── */
+.kc-header-title { text-align: center; margin-bottom: 32px; }
+
+.kc-brand-text {
+  margin: 0;
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-shadow: 0 2px 20px rgba(0, 200, 255, 0.35);
+}
+
+.kc-brand-subtitle {
+  margin: 8px 0 0;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* ───────── Glass card ───────── */
+.kc-glass-card {
+  width: 100%;
+  max-width: 420px;
+  padding: 36px 32px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 8px 32px rgba(10, 14, 39, 0.45),
+              inset 0 1px 1px rgba(255, 255, 255, 0.18);
+  animation: kc-slide-up 0.45s ease-out;
+}
+
+@keyframes kc-slide-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kc-glass-card { animation: none; }
+}
+
+.kc-card-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.kc-divider {
+  height: 1px;
+  margin: 18px 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.18), transparent);
+}
+
+/* ───────── Language links ───────── */
+.kc-locale {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-bottom: 14px;
+  font-size: 12px;
+}
+
+.kc-locale-link {
+  color: rgba(255, 255, 255, 0.6);
+  text-decoration: none;
+}
+
+.kc-locale-link:hover { color: #fff; }
+.kc-locale-active { color: #00c8ff; font-weight: 600; }
+
+/* ───────── Form ───────── */
+.kc-form { display: block; }
+
+.kc-form-group { margin-bottom: 18px; }
+
+.kc-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.kc-input {
+  display: block;
+  width: 100%;
+  padding: 12px 14px;
+  font-size: 14px;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.kc-input::placeholder { color: rgba(255, 255, 255, 0.4); }
+
+.kc-input:focus {
+  outline: none;
+  background: rgba(255, 255, 255, 0.13);
+  border-color: rgba(0, 200, 255, 0.55);
+  box-shadow: 0 0 0 3px rgba(0, 200, 255, 0.15);
+}
+
+/* Chrome paints autofilled fields solid white otherwise */
+.kc-input:-webkit-autofill,
+.kc-input:-webkit-autofill:hover,
+.kc-input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px rgba(32, 40, 72, 0.95) inset;
+  -webkit-text-fill-color: #fff;
+}
+
+.kc-field-error {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #ff9c9c;
+}
+
+.kc-form-options {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 4px 0 22px;
+  font-size: 13px;
+}
+
+.kc-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+  user-select: none;
+}
+
+.kc-checkbox input { accent-color: #00c8ff; cursor: pointer; }
+
+.kc-link {
+  color: #00c8ff;
+  text-decoration: none;
+}
+
+.kc-link:hover { color: #7ae7ff; text-decoration: underline; }
+
+/* ───────── Buttons ───────── */
+.kc-button {
+  display: inline-block;
+  padding: 12px 24px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  text-align: center;
+  text-decoration: none;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.kc-button-block { display: block; width: 100%; }
+
+.kc-button-primary {
+  color: #fff;
+  background: linear-gradient(135deg, #00c8ff, #0099cc);
+  box-shadow: 0 4px 15px rgba(0, 200, 255, 0.3);
+}
+
+.kc-button-primary:hover {
+  background: linear-gradient(135deg, #22d6ff, #00aadd);
+  box-shadow: 0 6px 22px rgba(0, 200, 255, 0.45);
+  transform: translateY(-1px);
+}
+
+.kc-button-primary:active { transform: translateY(0); }
+
+.kc-button-social {
+  margin-top: 10px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.kc-button-social:hover { background: rgba(255, 255, 255, 0.18); }
+
+.kc-button-link {
+  padding: 8px 0;
+  color: #00c8ff;
+  background: transparent;
+}
+
+.kc-button-link:hover { color: #7ae7ff; text-decoration: underline; }
+
+.kc-another-way { margin-top: 10px; text-align: center; }
+
+/* ───────── Messages, info, footer ───────── */
+.kc-feedback-text {
+  margin-bottom: 18px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  border-radius: 10px;
+}
+
+.kc-feedback-error {
+  color: #ffb3b3;
+  background: rgba(255, 73, 73, 0.14);
+  border: 1px solid rgba(255, 73, 73, 0.32);
+}
+
+.kc-feedback-warning {
+  color: #ffd79a;
+  background: rgba(255, 170, 0, 0.14);
+  border: 1px solid rgba(255, 170, 0, 0.3);
+}
+
+.kc-feedback-success {
+  color: #9af5bf;
+  background: rgba(0, 220, 120, 0.14);
+  border: 1px solid rgba(0, 220, 120, 0.3);
+}
+
+.kc-feedback-info {
+  color: #bfe6ff;
+  background: rgba(0, 160, 255, 0.14);
+  border: 1px solid rgba(0, 160, 255, 0.3);
+}
+
+.kc-info, .kc-footer-text, .kc-required-hint {
+  margin: 18px 0 0;
+  font-size: 12.5px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.kc-required { color: #ff9c9c; }
+
+/* ───────── Small screens ───────── */
+@media (max-width: 480px) {
+  .kc-glass-card { padding: 26px 18px; border-radius: 16px; }
+  .kc-brand-text { font-size: 26px; letter-spacing: 1px; }
+  .kc-form-options { flex-direction: column; align-items: flex-start; }
+}
+
+/* ==========================================================================
+   Pages inherited from the base theme (OTP, update password, verify email,
+   authenticator picker, recovery codes, errors). Their markup is Keycloak's;
+   the class names below are mapped to it in ../../theme.properties.
+   ========================================================================== */
+
+.kc-card-header { margin-bottom: 4px; }
+
+/* Base pages nest plain text in the header section; the heading lives in
+   template.ftl so every page gets the same title treatment. */
+.kc-card-title { font-size: 20px; font-weight: 600; margin: 0; }
+
+.kc-content-wrapper, .kc-label-wrapper, .kc-input-wrapper { display: block; }
+
+.kc-form-buttons { margin-top: 20px; }
+
+.kc-form-options-wrapper { display: flex; align-items: center; gap: 12px; }
+
+.kc-mt { margin-top: 16px; }
+
+.kc-helper-text {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.kc-button-secondary {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+.kc-button-secondary:hover { background: rgba(255, 255, 255, 0.18); }
+
+.kc-button-disabled { opacity: 0.5; pointer-events: none; }
+
+/* Base renders submit controls as <input type="submit">, which ignores the
+   flex/inline-block rules written for <button>. */
+input.kc-button { -webkit-appearance: none; appearance: none; }
+
+.kc-check { accent-color: #00c8ff; cursor: pointer; }
+
+.kc-check-label {
+  margin-left: 8px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.78);
+  cursor: pointer;
+}
+
+.kc-check-label-disabled { color: rgba(255, 255, 255, 0.4); cursor: default; }
+
+/* Show / hide password toggle — base ships icon <i> elements with no glyph
+   of their own once PatternFly's icon font is gone. */
+.kc-input-group { position: relative; display: block; }
+
+.kc-input-group .kc-input { padding-right: 46px; }
+
+.kc-pw-toggle {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  /* appearance:none so the browser's own button chrome never shows through */
+  -webkit-appearance: none;
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  line-height: 0;
+  color: rgba(255, 255, 255, 0.7);
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.kc-pw-toggle:hover { color: #fff; background: rgba(255, 255, 255, 0.1); }
+
+/* Eye / eye-with-slash drawn as CSS masks so they inherit the button colour
+   and need no icon font or external file. passwordVisibility.js swaps the class. */
+.kc-pw-icon-show,
+.kc-pw-icon-hide {
+  display: block;
+  width: 20px;
+  height: 20px;
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: 20px 20px;
+  mask-size: 20px 20px;
+}
+
+.kc-pw-icon-show {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E");
+}
+
+.kc-pw-icon-hide {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24'/%3E%3Cline x1='1' y1='1' x2='23' y2='23'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24'/%3E%3Cline x1='1' y1='1' x2='23' y2='23'/%3E%3C/svg%3E");
+}
+
+.kc-pw-toggle i { pointer-events: none; }
+
+/* Authenticator picker ("Try another way") */
+.kc-select-auth-list { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+
+.kc-select-auth-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  color: inherit;
+  text-decoration: none;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.kc-select-auth-item:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(0, 200, 255, 0.4);
+}
+
+.kc-select-auth-item-fill { flex: 1; }
+.kc-select-auth-item-heading { font-size: 14px; font-weight: 600; }
+.kc-select-auth-item-desc { font-size: 12px; color: rgba(255, 255, 255, 0.6); }
+.kc-select-auth-item-arrow { color: rgba(255, 255, 255, 0.5); }
+
+/* Picking between several registered OTP devices */
+.kc-otp-radio { position: absolute; opacity: 0; }
+
+.kc-otp-item {
+  display: block;
+  margin-bottom: 10px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+}
+
+.kc-otp-radio:checked + .kc-otp-item {
+  border-color: rgba(0, 200, 255, 0.55);
+  background: rgba(0, 200, 255, 0.12);
+}
+
+.kc-otp-item-header { display: flex; align-items: center; gap: 10px; }
+.kc-otp-item-title { font-size: 14px; }
+
+/* Recovery codes */
+.kc-recovery-codes {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px 16px;
+  margin: 12px 0;
+  padding: 14px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  list-style-position: inside;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Identity providers */
+.kc-social-list { list-style: none; margin: 0; padding: 0; }
+.kc-social-list li { margin-top: 10px; }
+.kc-social-list-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.kc-social-grid-item { margin-top: 0; }
+.kc-social-name { font-size: 13px; }
+.kc-idp-logo { margin-right: 8px; }
+
+.kc-alert-title { display: block; font-weight: 600; margin-bottom: 4px; }
+
+.kc-webauthn-icon { margin-right: 8px; }
+
+/* Safety net: any control a base page renders without a mapped class still
+   has to look like it belongs on the card. */
+.kc-glass-card input[type="text"],
+.kc-glass-card input[type="password"],
+.kc-glass-card input[type="email"],
+.kc-glass-card input[type="tel"],
+.kc-glass-card input[type="number"],
+.kc-glass-card select,
+.kc-glass-card textarea {
+  display: block;
+  width: 100%;
+  padding: 12px 14px;
+  font-size: 14px;
+  font-family: inherit;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.kc-glass-card input[type="text"]:focus,
+.kc-glass-card input[type="password"]:focus,
+.kc-glass-card input[type="email"]:focus,
+.kc-glass-card input[type="tel"]:focus,
+.kc-glass-card input[type="number"]:focus,
+.kc-glass-card select:focus,
+.kc-glass-card textarea:focus {
+  outline: none;
+  background: rgba(255, 255, 255, 0.13);
+  border-color: rgba(0, 200, 255, 0.55);
+  box-shadow: 0 0 0 3px rgba(0, 200, 255, 0.15);
+}
+
+.kc-glass-card input[type="submit"],
+.kc-glass-card button[type="submit"] {
+  font-family: inherit;
+}
+
+.kc-glass-card a { color: #00c8ff; }
+.kc-glass-card a:hover { color: #7ae7ff; }
+
+/* The OTP field is a short code, not a sentence */
+.kc-glass-card input#otp {
+  letter-spacing: 6px;
+  text-align: center;
+  font-size: 18px;
+}

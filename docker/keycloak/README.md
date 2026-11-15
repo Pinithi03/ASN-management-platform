@@ -1,4 +1,4 @@
-# Keycloak — ANS Portal login
+# Keycloak — ASN Portal login
 
 Keycloak 26.8.0 handles every login for the portal: about 500 suppliers and a few
 internal admins. The backend never sees passwords; it only checks the signed token
@@ -129,3 +129,101 @@ imported). To change them later, use Realm settings → Email in the admin conso
   assign `SUPPLIER`; it cannot change realm settings.
 - Compose health check, the Keycloak DB script (twice, plus missing-password case),
   Nginx config syntax, and the seed script (twice, plus production guard).
+
+## Login theme (`ans-glass`)
+
+The login pages use our own theme instead of Keycloak's built-in one: a dark
+"network" photo background with a frosted-glass card.
+
+| What | Where |
+| --- | --- |
+| Theme files | `docker/keycloak/themes/ans-glass/login/` |
+| Mounted into the container at | `/opt/keycloak/themes` (read-only, see `docker-compose.yml`) |
+| Turned on by | `"loginTheme": "ans-glass"` in `realm-oniverse.json` |
+
+Inside the theme:
+
+- `theme.properties` — must sit in the **`login/` folder**, not the theme root, or
+  Keycloak ignores the whole file (you then get raw message keys like `loginTitle`
+  and no stylesheet). It sets `parent=base`, loads the stylesheet, and maps
+  Keycloak's `kc*` class hooks onto our class names.
+- `template.ftl` — the page shell every login page shares: brand heading, glass
+  card, language links, message banner.
+- `login.ftl` — the sign-in page itself (username, password with a show/hide eye,
+  remember me, forgot password).
+- `resources/css/glass-style.css` — all the styling.
+- `resources/images/network-bg.jpg` — the background.
+
+Everything else in the login flow (one-time code, update password, verify email,
+error pages) comes from Keycloak's `base` theme and is styled through the class
+mapping in `theme.properties`. There is no file to write for those pages; if a new
+one looks unstyled, find the `${properties.kc...Class!}` names it uses and map them.
+
+### Setting it up on another machine
+
+If you are starting from an **empty** Postgres volume, there is nothing to do —
+`--import-realm` reads `realm-oniverse.json` and the theme is already selected.
+Just `docker compose up -d` and open the portal.
+
+If Keycloak's database **already exists** on your machine (the usual case), the
+import is skipped (`Realm 'oniverse' already exists. Import skipped` in the log),
+so the realm in your database still points at the old theme. Do this once:
+
+```
+git pull                                     # get docker/keycloak/themes/
+docker compose up -d --force-recreate keycloak
+docker exec ans-keycloak ls /opt/keycloak/themes      # must list: ans-glass
+```
+
+`--force-recreate` matters: a container started before the themes mount was added
+keeps its old configuration, and Keycloak can only offer themes it can see on disk.
+
+Then pick the theme, either in the admin console —
+**Realm settings → Themes → Login theme → `ans-glass` → Save** — or from the CLI:
+
+```
+docker exec ans-keycloak /opt/keycloak/bin/kcadm.sh config credentials \
+  --server http://localhost:8080/auth --realm master \
+  --user <KC_BOOTSTRAP_ADMIN_USERNAME> --password <KC_BOOTSTRAP_ADMIN_PASSWORD>
+docker exec ans-keycloak /opt/keycloak/bin/kcadm.sh update realms/oniverse -s loginTheme=ans-glass
+```
+
+Open the portal and hard-refresh (Ctrl+Shift+R / Cmd+Shift+R).
+
+### Editing the theme
+
+In dev, save a file and refresh the browser. `docker-compose.override.yml` turns
+theme and template caching off and mounts `/opt/keycloak/data/tmp` as a tmpfs, so
+`docker compose restart keycloak` is enough for anything a refresh misses (a
+`theme.properties` change, for example).
+
+That tmpfs is not cosmetic. Keycloak pre-compresses theme resources into
+`data/tmp/kc-gzip-cache` and keys each `.gz` by **path only** — the `?v=` on the
+stylesheet is ignored. Once that cache is warm, every browser (they all send
+`Accept-Encoding: gzip`) keeps getting the old file, while `curl` without
+compression gets the new one, so the server looks fine from the terminal while the
+page is visibly stale. The tmpfs is wiped on every container start. If you ever hit
+this on a container without it:
+
+```
+docker exec ans-keycloak rm -rf /opt/keycloak/data/tmp/kc-gzip-cache
+docker compose restart keycloak
+```
+
+To check what a browser really gets, ask for it compressed:
+
+```
+curl -s -H 'Accept-Encoding: gzip' \
+  'http://localhost:8080/auth/resources/<ver>/login/ans-glass/css/glass-style.css' | gunzip -c | tail
+```
+
+### If it does not work
+
+| Symptom | Cause |
+| --- | --- |
+| `ans-glass` missing from the Login theme dropdown | the container predates the themes mount — `docker compose up -d --force-recreate keycloak` |
+| Page shows `loginTitle`, `doLogIn` instead of words | `theme.properties` is not in the `login/` folder |
+| No background, plain white form | the stylesheet 404s — check `theme.properties` has `styles=css/glass-style.css` |
+| Blank page | a FreeMarker error — `docker compose logs --tail=80 keycloak` |
+| A CSS change does not show up, even after a hard refresh | the stale `kc-gzip-cache` above |
+| Theme folder empty inside the container | Docker Desktop is not sharing the folder the repo is in (Settings → Resources → File sharing) |
