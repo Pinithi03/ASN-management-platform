@@ -204,7 +204,7 @@ async def download_packing_template(
                         "po_number": po.po_number,
                         "po_item": str(item.get("order_line_number") or item.get("line_number", "1")).strip(),
                         "pack_number": "PACK-01",
-                        "carton_number": f"1 ({it_idx}-1)",
+                        "carton_number": "1",
                         "supplier_carton_ref": "",
                         "product_code": item.get("material_code", "ELST1K 000615"),
                         "lot_number": "LOT-01",
@@ -319,7 +319,7 @@ async def download_configured_packing_template(
 
             for box_idx in range(1, carton_count + 1):
                 carton_ref = f"{ref_prefix}-{str(running_carton_idx).zfill(2)}"
-                carton_no_formatted = f"{box_idx} ({line_item_seq}-{box_idx})"
+                carton_no_formatted = str(box_idx)
                 sample_lines.append({
                     "po_number": po.po_number,
                     "po_item": norm_key,
@@ -858,7 +858,11 @@ async def create_shipment_from_excel(
             "status": first["asn"].status,
             "xml_validated": first["asn"].xml_validated,
             "xml_filename": get_asn_xml_filename(first["shipment"].shipment_number, actual_supp_code),
-            "email_subject": get_asn_email_subject(first["shipment"].shipment_number, shipment_date, actual_supp_code),
+            "email_subject": get_asn_email_subject(
+                first["shipment"].shipment_number,
+                first["shipment"].estimated_arrival or shipment_date,
+                actual_supp_code,
+            ),
         },
         "handling_units": hu_numbers,
         "xml_validation": first["val_xml"].to_dict(),
@@ -1297,7 +1301,11 @@ async def create_direct_shipment(
             "status": asn_record.status,
             "xml_validated": asn_record.xml_validated,
             "xml_filename": get_asn_xml_filename(shipment_number, actual_supp_code),
-            "email_subject": get_asn_email_subject(shipment_number, shipment_date, actual_supp_code),
+            "email_subject": get_asn_email_subject(
+                shipment_number,
+                est_arrival_date or shipment_date,
+                actual_supp_code,
+            ),
             "xml_content": xml_content,
         },
         "handling_units": hu_numbers,

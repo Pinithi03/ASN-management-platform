@@ -89,6 +89,7 @@ class Settings(BaseSettings):
     SMTP_HOST: str = "mailpit"
     SMTP_PORT: int = 1025
     SMTP_USER: str = ""
+    SMTP_USERNAME: str = ""
     SMTP_PASSWORD: str = ""
     SMTP_FROM_EMAIL: str = "ASN Platform <no-reply@asnplatform.local>"
     SMTP_USE_TLS: bool = False

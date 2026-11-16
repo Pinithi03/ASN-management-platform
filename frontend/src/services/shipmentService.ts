@@ -302,18 +302,40 @@ export const shipmentService = {
   },
 
   /**
-   * Get configured IUNGO / EDI dispatch recipient email.
+   * Get configured IUNGO / EDI dispatch recipient email and outbound SMTP settings.
    */
-  async getDispatchSettings(): Promise<{ recipient_email: string; default_email: string }> {
+  async getDispatchSettings(): Promise<{
+    recipient_email: string;
+    default_email: string;
+    smtp_host?: string;
+    smtp_port?: number;
+    smtp_username?: string;
+    smtp_from_address?: string;
+    smtp_use_tls?: boolean;
+    smtp_password_set?: boolean;
+  }> {
     const res = await api.get("/asn/dispatch-settings");
     return res.data;
   },
 
   /**
-   * Update configured IUNGO / EDI dispatch recipient email.
+   * Update configured IUNGO / EDI dispatch recipient email and optional outbound SMTP settings.
    */
-  async updateDispatchSettings(recipient_email: string): Promise<{ success: boolean; message: string; recipient_email: string }> {
-    const res = await api.post("/asn/dispatch-settings", { recipient_email });
+  async updateDispatchSettings(
+    payload:
+      | string
+      | {
+          recipient_email: string;
+          smtp_host?: string;
+          smtp_port?: number | string;
+          smtp_username?: string;
+          smtp_password?: string;
+          smtp_from_address?: string;
+          smtp_use_tls?: boolean;
+        }
+  ): Promise<{ success: boolean; message: string; recipient_email: string }> {
+    const body = typeof payload === "string" ? { recipient_email: payload } : payload;
+    const res = await api.post("/asn/dispatch-settings", body);
     return res.data;
   },
 

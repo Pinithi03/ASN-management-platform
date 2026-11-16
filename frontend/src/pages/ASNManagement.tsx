@@ -36,11 +36,16 @@ export default function ASNManagement(){
   const [sel, setSel] = useState<ASNRecord | null>(null);
   const [showConfirmSend, setShowConfirmSend] = useState(false);
   const [sendingAsn, setSendingAsn] = useState(false);
-  const [dispatchEmail, setDispatchEmail] = useState<string>("edi@orders.buyer.org");
+  const [dispatchEmail, setDispatchEmail] = useState<string>(
+    () => localStorage.getItem("asn_iungo_dispatch_recipient") || "edi@orders.buyer.org"
+  );
 
   useEffect(() => {
     shipmentService.getDispatchSettings().then((s) => {
-      if (s?.recipient_email) setDispatchEmail(s.recipient_email);
+      if (s?.recipient_email) {
+        setDispatchEmail(s.recipient_email);
+        localStorage.setItem("asn_iungo_dispatch_recipient", s.recipient_email);
+      }
     }).catch(() => {});
   }, []);
 
@@ -264,9 +269,10 @@ export default function ASNManagement(){
                   <input
                     type="email"
                     value={dispatchEmail}
+                    readOnly={!isAdmin}
                     onChange={(e) => setDispatchEmail(e.target.value)}
                     placeholder="edi@orders.buyer.org"
-                    className="w-full bg-transparent text-slate-800 font-mono font-semibold text-xs focus:outline-none"
+                    className="w-full bg-transparent text-slate-800 font-mono font-semibold text-xs focus:outline-none read-only:cursor-default"
                   />
                 </div>
               </div>

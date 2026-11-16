@@ -157,11 +157,11 @@ const supplierMainNav: NavItem[] = [
   { to: "/shipments", icon: PackagePlus, label: "Shipments", labelKey: "shipments" },
   { to: "/order-history", icon: History, label: "Order History", labelKey: "orderHistory" },
   { to: "/overview", icon: LayoutDashboard, label: "Overview", labelKey: "overview" },
-  { to: "/emails", icon: Mail, label: "My Emails", labelKey: "myEmails" },
 ];
 
 const supplierSettingsNav: NavItem[] = [
   { to: "/profile", icon: UserCircle, label: "Profile", labelKey: "profile" },
+  { to: "/emails", icon: Mail, label: "My Emails", labelKey: "myEmails" },
 ];
 
 function matchesBasePath(pathname: string, basePath: string): boolean {

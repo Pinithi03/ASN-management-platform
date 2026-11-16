@@ -27,11 +27,11 @@ from app.core.exceptions import CodedHTTPException
 from app.db.session import get_db
 from app.models.asn import ASNRecord
 from app.models.company import Company
-from app.models.email_message import EmailRecord
 from app.models.enums import ASNStatus, ShipmentStatus
 from app.models.shipment import Shipment
 from app.models.supplier import Supplier
 from app.services.asn_xml_generator_service import (
+    extract_asn_xml_metadata,
     get_asn_email_subject,
     get_asn_xml_filename,
     validate_asn_xml,
@@ -91,7 +91,7 @@ async def list_asns(
 async def get_dispatch_settings(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    """Get the configured IUNGO / EDI dispatch recipient email."""
+    """Get the configured IUNGO / EDI dispatch recipient email and outbound SMTP settings."""
     stmt = select(Company).limit(1)
     res = await db.execute(stmt)
     comp = res.scalar_one_or_none()
@@ -99,6 +99,12 @@ async def get_dispatch_settings(
     return {
         "recipient_email": recipient or "edi@orders.buyer.org",
         "default_email": "edi@orders.buyer.org",
+        "smtp_host": (comp.smtp_host if comp else None) or "",
+        "smtp_port": (comp.smtp_port if comp and comp.smtp_port else 587),
+        "smtp_username": (comp.smtp_username if comp else None) or "",
+        "smtp_from_address": (comp.smtp_from_address if comp else None) or "",
+        "smtp_use_tls": comp.smtp_use_tls if (comp and comp.smtp_use_tls is not None) else True,
+        "smtp_password_set": bool(comp and comp.smtp_password),
     }
 
 
@@ -107,7 +113,7 @@ async def update_dispatch_settings(
     payload: dict[str, Any],
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    """Update the configured IUNGO / EDI dispatch recipient email (Admin setting)."""
+    """Update the configured IUNGO / EDI dispatch recipient email and optional outbound SMTP settings (Admin setting)."""
     recipient = (payload.get("recipient_email") or "").strip()
     if not recipient:
         raise CodedHTTPException(code="RECIPIENT_EMAIL_REQUIRED", status_code=400, detail="Recipient email cannot be empty")
@@ -119,6 +125,22 @@ async def update_dispatch_settings(
         current_settings = dict(comp.settings or {})
         current_settings["iungo_dispatch_email"] = recipient
         comp.settings = current_settings
+
+        if "smtp_host" in payload and payload.get("smtp_host") is not None:
+            comp.smtp_host = str(payload.get("smtp_host") or "").strip() or None
+        if "smtp_port" in payload and payload.get("smtp_port"):
+            try:
+                comp.smtp_port = int(payload["smtp_port"])
+            except (ValueError, TypeError):
+                pass
+        if "smtp_username" in payload and payload.get("smtp_username") is not None:
+            comp.smtp_username = str(payload.get("smtp_username") or "").strip() or None
+        if "smtp_password" in payload and payload.get("smtp_password"):
+            comp.smtp_password = str(payload.get("smtp_password")).strip()
+        if "smtp_from_address" in payload and payload.get("smtp_from_address") is not None:
+            comp.smtp_from_address = str(payload.get("smtp_from_address") or "").strip() or None
+        if "smtp_use_tls" in payload and payload.get("smtp_use_tls") is not None:
+            comp.smtp_use_tls = bool(payload.get("smtp_use_tls"))
 
     await db.commit()
     logger.info("Updated IUNGO EDI dispatch email to: %s", recipient)
@@ -146,6 +168,7 @@ async def get_asn_detail(
         shipment_num = None
         plant_code = None
         boxes_count = 0
+        shp = None
         if r.shipment_id:
             shp_stmt = select(Shipment).where(Shipment.id == r.shipment_id)
             shp_res = await db.execute(shp_stmt)
@@ -166,6 +189,18 @@ async def get_asn_detail(
                 supp_code = supp.supplier_code
                 supp_name = supp.name
 
+        xml_meta = extract_asn_xml_metadata(r.xml_content or "")
+        effective_ps_num = xml_meta.get("packing_slip_number") or shipment_num or "01000000"
+        effective_supp_code = xml_meta.get("partner_id") or supp_code
+        effective_deliv_date = (
+            xml_meta.get("delivery_date")
+            or (shp.estimated_arrival if shp and shp.estimated_arrival else None)
+            or xml_meta.get("packing_slip_date")
+            or (shp.ship_date if shp and shp.ship_date else None)
+            or r.created_at
+            or datetime.now()
+        )
+
         return {
             "id": str(r.id),
             "asn_number": r.asn_number,
@@ -178,11 +213,11 @@ async def get_asn_detail(
             "supplier_code": supp_code,
             "status": r.status,
             "xml_validated": r.xml_validated,
-            "xml_filename": get_asn_xml_filename(shipment_num or "01000000", supp_code),
+            "xml_filename": get_asn_xml_filename(effective_ps_num, effective_supp_code),
             "email_subject": get_asn_email_subject(
-                shipment_num or "01000000",
-                r.created_at or datetime.now(),
-                supp_code,
+                effective_ps_num,
+                effective_deliv_date,
+                effective_supp_code,
             ),
             "sent_at": r.sent_at.isoformat() if r.sent_at else None,
             "accepted_at": r.accepted_at.isoformat() if r.accepted_at else None,
@@ -224,11 +259,15 @@ async def preview_asn_xml(
         if shp:
             shipment_num = shp.shipment_number
 
+    xml_meta = extract_asn_xml_metadata(r.xml_content or "")
+    effective_ps_num = xml_meta.get("packing_slip_number") or shipment_num
+    effective_supp_code = xml_meta.get("partner_id") or supp_code
+
     return {
         "asn_number": r.asn_number,
         "xml_content": r.xml_content or "",
         "xml_validated": r.xml_validated,
-        "xml_filename": get_asn_xml_filename(shipment_num, supp_code),
+        "xml_filename": get_asn_xml_filename(effective_ps_num, effective_supp_code),
     }
 
 
@@ -260,7 +299,11 @@ async def download_asn_xml(
         if shp:
             shipment_num = shp.shipment_number
 
-    filename = get_asn_xml_filename(shipment_num, supp_code)
+    xml_meta = extract_asn_xml_metadata(r.xml_content or "")
+    effective_ps_num = xml_meta.get("packing_slip_number") or shipment_num
+    effective_supp_code = xml_meta.get("partner_id") or supp_code
+
+    filename = get_asn_xml_filename(effective_ps_num, effective_supp_code)
     xml_data = (r.xml_content or "").encode("utf-8")
 
     return Response(
@@ -317,7 +360,7 @@ async def send_asn_xml(
     """
     Dispatch ASN XML to Calzedonia EDI / IUNGO.
     Updates ASN status to XML_SENT and marks shipment as XML_SENT.
-    Sends real outbound email via SMTP with XML attachment and logs to EmailRecord.
+    Sends real outbound email via SMTP with XML attachment (without writing to Email Inbox).
     """
     stmt = select(ASNRecord).where(ASNRecord.id == id)
     res = await db.execute(stmt)
@@ -327,6 +370,7 @@ async def send_asn_xml(
 
     supp_code = "0000018194"
     supp_name = "COATS THREAD EXPORTS (PVT) LTD"
+    supp_email = None
     if r.supplier_id:
         supp_stmt = select(Supplier).where(Supplier.id == r.supplier_id)
         supp_res = await db.execute(supp_stmt)
@@ -334,8 +378,10 @@ async def send_asn_xml(
         if supp:
             supp_code = supp.supplier_code
             supp_name = supp.name or supp_name
+            supp_email = supp.email
 
     shipment_num = "01000000"
+    shp = None
     if r.shipment_id:
         shp_stmt = select(Shipment).where(Shipment.id == r.shipment_id)
         shp_res = await db.execute(shp_stmt)
@@ -344,8 +390,8 @@ async def send_asn_xml(
             shipment_num = shp.shipment_number
             shp.status = ShipmentStatus.XML_SENT.value
 
-    # Look up configured recipient email from Company settings if not passed
-    to_email = recipient_email
+    # Look up configured recipient email and optional SMTP config from Company settings
+    to_email = (recipient_email or "").strip() or None
     comp_stmt = select(Company).where(Company.id == r.company_id)
     comp_res = await db.execute(comp_stmt)
     comp = comp_res.scalar_one_or_none()
@@ -359,47 +405,54 @@ async def send_asn_xml(
         else:
             to_email = "edi@orders.buyer.org"
 
-    filename = get_asn_xml_filename(shipment_num, supp_code)
-    email_subject = get_asn_email_subject(shipment_num, r.created_at or datetime.now(), supp_code)
+    # Extract PackingSlipNumber, DeliveryDate, and PartnerId directly from the XML being dispatched
+    xml_meta = extract_asn_xml_metadata(r.xml_content or "")
+    effective_ps_num = xml_meta.get("packing_slip_number") or shipment_num
+    effective_supp_code = xml_meta.get("partner_id") or supp_code
+    effective_deliv_date = (
+        xml_meta.get("delivery_date")
+        or (shp.estimated_arrival if shp and shp.estimated_arrival else None)
+        or xml_meta.get("packing_slip_date")
+        or (shp.ship_date if shp and shp.ship_date else None)
+        or r.created_at
+        or datetime.now()
+    )
+
+    filename = get_asn_xml_filename(effective_ps_num, effective_supp_code)
+    email_subject = get_asn_email_subject(effective_ps_num, effective_deliv_date, effective_supp_code)
 
     now_utc = datetime.utcnow()
     r.status = ASNStatus.XML_SENT.value
     r.sent_at = now_utc
 
-    # 1. Send the actual email via SMTP with XML attachment
+    smtp_cfg = None
+    if comp and comp.smtp_host:
+        smtp_cfg = {
+            "smtp_host": comp.smtp_host,
+            "smtp_port": comp.smtp_port,
+            "smtp_username": comp.smtp_username,
+            "smtp_password": comp.smtp_password,
+            "smtp_from_address": comp.smtp_from_address,
+            "smtp_use_tls": comp.smtp_use_tls,
+        }
+
+    # Send the actual email via SMTP with XML attachment (isolated from EmailRecord inbox)
     email_dispatched = False
     try:
         email_dispatched = send_asn_dispatch_email(
             to_email=to_email,
             asn_number=r.asn_number,
-            shipment_number=shipment_num,
-            supplier_code=supp_code,
+            shipment_number=effective_ps_num,
+            supplier_code=effective_supp_code,
             supplier_name=supp_name,
             xml_content=r.xml_content or "",
             xml_filename=filename,
             email_subject=email_subject,
+            reply_to_email=supp_email,
+            smtp_config=smtp_cfg,
         )
     except Exception as em_err:
         logger.error("Failed to send ASN email via SMTP: %s", em_err)
-
-    # 2. Record outbound EmailRecord in PostgreSQL database
-    try:
-        outbound_rec = EmailRecord(
-            company_id=r.company_id or (comp.id if comp else None),
-            supplier_id=r.supplier_id,
-            message_id=f"asn-{r.asn_number}-{uuid.uuid4().hex[:8]}@asn-platform.local",
-            from_address="ASN Portal <no-reply@asnplatform.local>",
-            to_address=to_email,
-            subject=email_subject,
-            body_text=f"ASN {r.asn_number} for Shipment #{shipment_num} dispatched to IUNGO EDI recipient {to_email}.",
-            direction="OUTBOUND",
-            status="SENT" if email_dispatched else "FAILED",
-            email_type="ASN_DISPATCH",
-            processed_at=now_utc,
-        )
-        db.add(outbound_rec)
-    except Exception as rec_err:
-        logger.warning("Failed to save outbound EmailRecord: %s", rec_err)
 
     try:
         await db.commit()

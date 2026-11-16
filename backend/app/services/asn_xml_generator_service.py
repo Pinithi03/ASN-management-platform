@@ -392,6 +392,46 @@ def validate_asn_xml(xml_content: str | bytes, supplier_code: str) -> Validation
     return result
 
 
+def extract_asn_xml_metadata(xml_content: str) -> dict[str, Optional[str]]:
+    """
+    Extract PackingSlipNumber, DeliveryDate, PackingSlipDate, and PartnerId
+    directly from the <SdPackingSlip> element of an ASN XML document.
+    """
+    meta: dict[str, Optional[str]] = {
+        "packing_slip_number": None,
+        "delivery_date": None,
+        "packing_slip_date": None,
+        "partner_id": None,
+    }
+    if not xml_content or not xml_content.strip():
+        return meta
+
+    try:
+        parser = etree.XMLParser(resolve_entities=False, no_network=True, recover=True)
+        root = etree.fromstring(xml_content.encode("utf-8"), parser=parser)
+        ps = root.find("SdPackingSlip") if root is not None else None
+        if ps is not None:
+            meta["packing_slip_number"] = (ps.findtext("PackingSlipNumber") or "").strip() or None
+            meta["delivery_date"] = (ps.findtext("DeliveryDate") or "").strip() or None
+            meta["packing_slip_date"] = (ps.findtext("PackingSlipDate") or "").strip() or None
+            meta["partner_id"] = (ps.findtext("PartnerId") or "").strip() or None
+            return meta
+    except Exception:
+        pass
+
+    tag_map = {
+        "packing_slip_number": "PackingSlipNumber",
+        "delivery_date": "DeliveryDate",
+        "packing_slip_date": "PackingSlipDate",
+        "partner_id": "PartnerId",
+    }
+    for key, tag in tag_map.items():
+        m = re.search(rf"<{tag}>\s*(.*?)\s*</{tag}>", xml_content, re.IGNORECASE | re.DOTALL)
+        if m and m.group(1).strip():
+            meta[key] = m.group(1).strip()
+    return meta
+
+
 def get_asn_xml_filename(packing_slip_number: str, supplier_code: str) -> str:
     """Generate standard filename: PL_{PackingSlipNumber}_[{SupplierCode10}].xml"""
     ps_clean = str(packing_slip_number).strip().zfill(8)
@@ -399,18 +439,32 @@ def get_asn_xml_filename(packing_slip_number: str, supplier_code: str) -> str:
     return f"PL_{ps_clean}_[{supp_clean}].xml"
 
 
-def get_asn_email_subject(packing_slip_number: str, packing_slip_date: date | datetime | str, supplier_code: str) -> str:
-    """Generate email subject: Packing List {Number} of {DD-MM-YYYY} - {SupplierCode10}"""
-    if isinstance(packing_slip_date, (datetime, date)):
-        date_str = packing_slip_date.strftime("%d-%m-%Y")
+def get_asn_email_subject(packing_slip_number: str, delivery_date: date | datetime | str, supplier_code: str) -> str:
+    """Generate email subject: Packing List {PackingSlipNumber} of {DD-MM-YYYY} - {PartnerId}"""
+    if isinstance(delivery_date, (datetime, date)):
+        date_str = delivery_date.strftime("%d-%m-%Y")
     else:
-        date_str = str(packing_slip_date).strip()
-        if re.match(r"^\d{4}-\d{2}-\d{2}", date_str):
-            parts = date_str[:10].split("-")
+        date_str = str(delivery_date or "").strip()
+        if "T" in date_str:
+            date_str = date_str.split("T")[0].strip()
+        elif " " in date_str and ("-" in date_str or "/" in date_str):
+            date_str = date_str.split(" ")[0].strip()
+
+        if re.match(r"^\d{2}-\d{2}-\d{4}$", date_str):
+            pass
+        elif re.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
+            parts = date_str.split("-")
             date_str = f"{parts[2]}-{parts[1]}-{parts[0]}"
-        elif re.match(r"^\d{4}/\d{2}/\d{2}", date_str):
-            parts = date_str[:10].split("/")
+        elif re.match(r"^\d{4}/\d{2}/\d{2}$", date_str):
+            parts = date_str.split("/")
             date_str = f"{parts[2]}-{parts[1]}-{parts[0]}"
+        elif re.match(r"^\d{2}/\d{2}/\d{4}$", date_str):
+            parts = date_str.split("/")
+            date_str = f"{parts[0]}-{parts[1]}-{parts[2]}"
+        elif re.match(r"^\d{2}\.\d{2}\.\d{4}$", date_str):
+            parts = date_str.split(".")
+            date_str = f"{parts[0]}-{parts[1]}-{parts[2]}"
+
     ps_clean = str(packing_slip_number).strip().zfill(8)
     supp_clean = str(supplier_code).strip().lstrip("0").zfill(10)
     return f"Packing List {ps_clean} of {date_str} - {supp_clean}"

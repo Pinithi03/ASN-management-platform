@@ -200,7 +200,10 @@ async def list_emails(
     per_page: int = Query(20, ge=1, le=100),
 ):
     """List emails with optional filters (including PO number and vendor code search) and pagination."""
-    query = select(EmailRecord)
+    query = select(EmailRecord).where(
+        EmailRecord.email_type != "ASN_DISPATCH",
+        EmailRecord.direction != "OUTBOUND",
+    )
 
     # Scoping for supplier role: suppliers only see their own emails
     if current_user.role == UserRole.SUPPLIER:
@@ -352,6 +355,9 @@ async def email_stats(
         func.count().filter(EmailRecord.status == "COMMITTED").label("committed"),
         func.count().filter(EmailRecord.status == "REJECTED").label("rejected"),
         func.count().filter(EmailRecord.status == "ERROR").label("error"),
+    ).where(
+        EmailRecord.email_type != "ASN_DISPATCH",
+        EmailRecord.direction != "OUTBOUND",
     )
 
     if current_user.role == UserRole.SUPPLIER:

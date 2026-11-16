@@ -2750,9 +2750,10 @@ function WebPackingWizard({
                   <input
                     type="email"
                     value={dispatchEmail}
+                    readOnly={user?.role === "SUPPLIER"}
                     onChange={(e) => setDispatchEmail(e.target.value)}
                     placeholder="edi@orders.buyer.org"
-                    className="w-full bg-transparent text-slate-800 font-mono font-semibold text-xs focus:outline-none"
+                    className="w-full bg-transparent text-slate-800 font-mono font-semibold text-xs focus:outline-none read-only:cursor-default"
                   />
                 </div>
               </div>
@@ -2910,11 +2911,16 @@ function ExcelPackingWorkflow({
   const [submitting, setSubmitting] = useState(false);
   const [createdResponse, setCreatedResponse] = useState<CreateShipmentResponse | null>(null);
   const [showConfirmExcelDispatch, setShowConfirmExcelDispatch] = useState(false);
-  const [excelDispatchEmail, setExcelDispatchEmail] = useState<string>("edi@orders.buyer.org");
+  const [excelDispatchEmail, setExcelDispatchEmail] = useState<string>(
+    () => localStorage.getItem("asn_iungo_dispatch_recipient") || "edi@orders.buyer.org"
+  );
 
   useEffect(() => {
     shipmentService.getDispatchSettings().then((s) => {
-      if (s?.recipient_email) setExcelDispatchEmail(s.recipient_email);
+      if (s?.recipient_email) {
+        setExcelDispatchEmail(s.recipient_email);
+        localStorage.setItem("asn_iungo_dispatch_recipient", s.recipient_email);
+      }
     }).catch(() => {});
   }, []);
 
@@ -3566,7 +3572,7 @@ function ExcelPackingWorkflow({
                     return;
                   }
                   if (!validationResult.is_valid) {
-                    alert("Please resolve Excel validation errors before sending to IUNGO.");
+                    alert(t("excel.header.fixErrors"));
                     return;
                   }
                   setAttemptedSubmit(true);
@@ -4177,9 +4183,10 @@ function ExcelPackingWorkflow({
                   <input
                     type="email"
                     value={excelDispatchEmail}
+                    readOnly={user?.role === "SUPPLIER"}
                     onChange={(e) => setExcelDispatchEmail(e.target.value)}
                     placeholder="edi@orders.buyer.org"
-                    className="w-full bg-transparent text-slate-800 font-mono font-semibold text-xs focus:outline-none"
+                    className="w-full bg-transparent text-slate-800 font-mono font-semibold text-xs focus:outline-none read-only:cursor-default"
                   />
                 </div>
               </div>
@@ -4230,15 +4237,21 @@ function XmlPreviewModal({
   onClose: () => void;
 }) {
   const { t } = useTranslation(["shipments", "common"]);
+  const user = useAuthStore((s) => s.user);
   const [copied, setCopied] = useState(false);
   const [sending, setSending] = useState(false);
   const [sentSuccess, setSentSuccess] = useState(false);
   const [showConfirmXmlSend, setShowConfirmXmlSend] = useState(false);
-  const [xmlDispatchEmail, setXmlDispatchEmail] = useState<string>("edi@orders.buyer.org");
+  const [xmlDispatchEmail, setXmlDispatchEmail] = useState<string>(
+    () => localStorage.getItem("asn_iungo_dispatch_recipient") || "edi@orders.buyer.org"
+  );
 
   useEffect(() => {
     shipmentService.getDispatchSettings().then((s) => {
-      if (s?.recipient_email) setXmlDispatchEmail(s.recipient_email);
+      if (s?.recipient_email) {
+        setXmlDispatchEmail(s.recipient_email);
+        localStorage.setItem("asn_iungo_dispatch_recipient", s.recipient_email);
+      }
     }).catch(() => {});
   }, []);
 
@@ -4367,9 +4380,10 @@ function XmlPreviewModal({
                   <input
                     type="email"
                     value={xmlDispatchEmail}
+                    readOnly={user?.role === "SUPPLIER"}
                     onChange={(e) => setXmlDispatchEmail(e.target.value)}
                     placeholder="edi@orders.buyer.org"
-                    className="w-full bg-transparent text-slate-800 font-mono font-semibold text-xs focus:outline-none"
+                    className="w-full bg-transparent text-slate-800 font-mono font-semibold text-xs focus:outline-none read-only:cursor-default"
                   />
                 </div>
               </div>
