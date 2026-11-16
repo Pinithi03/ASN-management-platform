@@ -1,8 +1,6 @@
 import { useState, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  Building2,
-  ShieldCheck,
   Boxes,
   Lock,
   AlertCircle,
@@ -11,18 +9,11 @@ import {
   Upload,
   Trash2,
   Loader2,
-  HardDrive,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { SupplierItem } from "@/pages/Suppliers";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supplierApi } from "@/services/supplierApi";
-import {
-  useDraftCount,
-  getDraftStorageEstimate,
-  clearAllSupplierDrafts,
-} from "@/utils/draftStorage";
-import { cn } from "@/utils/cn";
 import { getErrorMessage } from "@/services/apiError";
 
 export default function Profile() {
@@ -40,30 +31,6 @@ export default function Profile() {
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
   const [avatarSuccess, setAvatarSuccess] = useState<string | null>(null);
-
-  // Offline storage & cache clearing state (Supplier-only)
-  const [isClearingCache, setIsClearingCache] = useState(false);
-  const [cacheSuccessMsg, setCacheSuccessMsg] = useState<string | null>(null);
-  const draftCount = useDraftCount(user?.role === "SUPPLIER" ? (user.supplier_code || undefined) : undefined);
-  const draftStorageInfo = getDraftStorageEstimate(user?.role === "SUPPLIER" ? (user.supplier_code || undefined) : undefined);
-
-  const handleClearCache = async () => {
-    if (!window.confirm(t("profile:cache.confirm"))) {
-      return;
-    }
-    setIsClearingCache(true);
-    setCacheSuccessMsg(null);
-    try {
-      const suppCode = user?.role === "SUPPLIER" ? (user.supplier_code || undefined) : undefined;
-      const res = await clearAllSupplierDrafts(suppCode);
-      setCacheSuccessMsg(t("profile:cache.cleared", { count: res.clearedDrafts }));
-      setTimeout(() => setCacheSuccessMsg(null), 4000);
-    } catch (err: any) {
-      console.warn("Failed to clear offline cache:", err);
-    } finally {
-      setIsClearingCache(false);
-    }
-  };
 
   // Live query directly from PostgreSQL backend API (/api/v1/suppliers)
   const { data: serverSuppliers } = useQuery({
@@ -359,222 +326,115 @@ export default function Profile() {
         </div>
       </div>
 
-      {/* ─── 2. CORE DETAILS: HANDLING UNIT (HU) & REGISTRY DETAILS (2-COL GRID) ─── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* Left: Handling Unit Sequence Card */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-2xs flex flex-col justify-between space-y-4">
-          <div>
-            <div className="flex items-center justify-between gap-3 pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 shrink-0">
-                  <Boxes className="w-4 h-4" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-bold text-slate-900">{t("profile:hu.title")}</h2>
-                  <p className="text-[11px] text-slate-500">{t("profile:hu.subtitle")}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {isHuLocked ? (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
-                    <Lock className="w-3 h-3 text-amber-600" />
-                    {t("profile:hu.locked")}
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
-                    <AlertCircle className="w-3 h-3 text-rose-600" />
-                    {t("profile:hu.setupNeeded")}
-                  </span>
-                )}
-                {isAdmin && isHuLocked && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsAdminEditOpen(!isAdminEditOpen);
-                      if (!isAdminEditOpen) setHuInput(matchedSupplier.current_hu_number || "");
-                    }}
-                    className="text-[11px] font-semibold px-2 py-0.5 rounded-md border border-slate-200 hover:bg-slate-50 text-slate-700 transition-colors cursor-pointer"
-                  >
-                    {isAdminEditOpen ? t("common:actions.cancel") : t("profile:hu.edit")}
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Status alerts */}
-            {huSuccess && (
-              <div className="mt-3 p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center gap-2 text-xs text-emerald-800">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>{huSuccess}</span>
-              </div>
-            )}
-
-            {huError && (
-              <div className="mt-3 p-2.5 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-xs text-red-800">
-                <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
-                <span>{huError}</span>
-              </div>
-            )}
-
-            {/* Locked or input state */}
-            <div className="pt-3">
-              {isHuLocked && !isAdminEditOpen ? (
-                <div className="space-y-3">
-                  <div className="p-3.5 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-between gap-3">
-                    <div>
-                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-                        {t("profile:hu.lastUsed")}
-                      </span>
-                      <span className="font-mono text-base sm:text-lg font-bold text-slate-900 block mt-0.5">
-                        {matchedSupplier.current_hu_number || t("profile:fallback.initialized")}
-                      </span>
-                    </div>
-                    <span className="text-[11px] font-medium text-slate-600 bg-white border border-slate-200 px-2.5 py-1 rounded shadow-2xs">
-                      {t("profile:hu.synchronized")}
-                    </span>
-                  </div>
-
-                  <p className="text-[11px] text-slate-500">
-                    {t("profile:hu.lockedNote")}
-                  </p>
-                </div>
-              ) : (
-                <form onSubmit={handleSaveHu} className="space-y-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      {isAdminEditOpen ? t("profile:hu.overrideLabel") : t("profile:hu.initialLabel")}
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={huInput}
-                        onChange={(e) => setHuInput(e.target.value)}
-                        placeholder={t("profile:hu.placeholder")}
-                        className="flex-1 h-9 px-3 text-xs font-mono rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400 outline-none"
-                        disabled={isSavingHu}
-                        required
-                      />
-                      <button
-                        type="submit"
-                        disabled={isSavingHu || !huInput.trim()}
-                        className="h-9 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors flex items-center gap-1.5 shadow-2xs disabled:opacity-50 cursor-pointer"
-                      >
-                        {isSavingHu ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Lock className="w-3.5 h-3.5" />}
-                        <span>{isAdminEditOpen ? t("profile:hu.update") : t("profile:hu.lock")}</span>
-                      </button>
-                    </div>
-                  </div>
-                  <p className="text-[11px] text-slate-500">{t("profile:hu.nextCarton")}</p>
-                </form>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Right: Company Registry Details Card */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-2xs space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+      {/* ─── 2. HANDLING UNIT (HU) SEQUENCE ─── */}
+      <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-2xs flex flex-col justify-between space-y-4">
+        <div>
+          <div className="flex items-center justify-between gap-3 pb-3 border-b border-slate-100">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-700 shrink-0">
-                <Building2 className="w-4 h-4" />
+              <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 shrink-0">
+                <Boxes className="w-4 h-4" />
               </div>
               <div>
-                <h2 className="text-sm font-bold text-slate-900">{t("profile:registry.title")}</h2>
-                <p className="text-[11px] text-slate-500">{t("profile:registry.subtitle")}</p>
+                <h2 className="text-sm font-bold text-slate-900">{t("profile:hu.title")}</h2>
+                <p className="text-[11px] text-slate-500">{t("profile:hu.subtitle")}</p>
               </div>
             </div>
-            <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
-              <ShieldCheck className="w-3 h-3" /> {t("profile:registry.verified")}
-            </span>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 text-xs pt-1">
-            <div className="p-2.5 rounded-lg border border-slate-100 bg-slate-50/80">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">{t("profile:registry.companyName")}</span>
-              <span className="font-semibold text-slate-900 truncate block mt-0.5">{matchedSupplier.name}</span>
-            </div>
-
-            <div className="p-2.5 rounded-lg border border-slate-100 bg-slate-50/80">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">{t("profile:registry.partnerCode")}</span>
-              <span className="font-mono font-bold text-slate-900 block mt-0.5">{matchedSupplier.supplier_code}</span>
-            </div>
-
-            <div className="p-2.5 rounded-lg border border-slate-100 bg-slate-50/80">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">{t("profile:registry.contactPerson")}</span>
-              <span className="font-medium text-slate-800 block mt-0.5">
-                {matchedSupplier.contact_name || user?.name || t("profile:fallback.representative")}
-              </span>
-            </div>
-
-            <div className="p-2.5 rounded-lg border border-slate-100 bg-slate-50/80">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">{t("profile:registry.country")}</span>
-              <span className="font-medium text-slate-800 block mt-0.5">{matchedSupplier.country || "Sri Lanka"}</span>
+            <div className="flex items-center gap-2">
+              {isHuLocked ? (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                  <Lock className="w-3 h-3 text-amber-600" />
+                  {t("profile:hu.locked")}
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                  <AlertCircle className="w-3 h-3 text-rose-600" />
+                  {t("profile:hu.setupNeeded")}
+                </span>
+              )}
+              {isAdmin && isHuLocked && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAdminEditOpen(!isAdminEditOpen);
+                    if (!isAdminEditOpen) setHuInput(matchedSupplier.current_hu_number || "");
+                  }}
+                  className="text-[11px] font-semibold px-2 py-0.5 rounded-md border border-slate-200 hover:bg-slate-50 text-slate-700 transition-colors cursor-pointer"
+                >
+                  {isAdminEditOpen ? t("common:actions.cancel") : t("profile:hu.edit")}
+                </button>
+              )}
             </div>
           </div>
 
-          <p className="text-[11px] text-slate-500 pt-1">
-            {t("profile:registry.changesNote")}
-          </p>
+          {/* Status alerts */}
+          {huSuccess && (
+            <div className="mt-3 p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center gap-2 text-xs text-emerald-800">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{huSuccess}</span>
+            </div>
+          )}
+
+          {huError && (
+            <div className="mt-3 p-2.5 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-xs text-red-800">
+              <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+              <span>{huError}</span>
+            </div>
+          )}
+
+          {/* Locked or input state */}
+          <div className="pt-3">
+            {isHuLocked && !isAdminEditOpen ? (
+              <div className="space-y-3">
+                <div className="p-3.5 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-between gap-3">
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                      {t("profile:hu.lastUsed")}
+                    </span>
+                    <span className="font-mono text-base sm:text-lg font-bold text-slate-900 block mt-0.5">
+                      {matchedSupplier.current_hu_number || t("profile:fallback.initialized")}
+                    </span>
+                  </div>
+                  <span className="text-[11px] font-medium text-slate-600 bg-white border border-slate-200 px-2.5 py-1 rounded shadow-2xs">
+                    {t("profile:hu.synchronized")}
+                  </span>
+                </div>
+
+                <p className="text-[11px] text-slate-500">
+                  {t("profile:hu.lockedNote")}
+                </p>
+              </div>
+            ) : (
+              <form onSubmit={handleSaveHu} className="space-y-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    {isAdminEditOpen ? t("profile:hu.overrideLabel") : t("profile:hu.initialLabel")}
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={huInput}
+                      onChange={(e) => setHuInput(e.target.value)}
+                      placeholder={t("profile:hu.placeholder")}
+                      className="flex-1 h-9 px-3 text-xs font-mono rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400 outline-none"
+                      disabled={isSavingHu}
+                      required
+                    />
+                    <button
+                      type="submit"
+                      disabled={isSavingHu || !huInput.trim()}
+                      className="h-9 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors flex items-center gap-1.5 shadow-2xs disabled:opacity-50 cursor-pointer"
+                    >
+                      {isSavingHu ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Lock className="w-3.5 h-3.5" />}
+                      <span>{isAdminEditOpen ? t("profile:hu.update") : t("profile:hu.lock")}</span>
+                    </button>
+                  </div>
+                </div>
+                <p className="text-[11px] text-slate-500">{t("profile:hu.nextCarton")}</p>
+              </form>
+            )}
+          </div>
         </div>
       </div>
-
-      {/* ─── 3. LOCAL CACHE & OFFLINE STORAGE (COMPACT FOOTER BAR FOR SUPPLIERS) ─── */}
-      {!isAdmin && (
-        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 shrink-0">
-              <HardDrive className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-xs font-bold text-slate-900">{t("profile:cache.title")}</h3>
-                {draftCount > 0 && (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-                    {t("profile:cache.draftBadge", { count: draftCount })}
-                  </span>
-                )}
-              </div>
-              <p className="text-[11px] text-slate-500 mt-0.5">
-                {t("profile:cache.storageInfo", {
-                  items: draftStorageInfo.draftCount,
-                  sizeKb: draftStorageInfo.approxSizeKb,
-                })}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
-            {cacheSuccessMsg && (
-              <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-md animate-in fade-in">
-                {cacheSuccessMsg}
-              </span>
-            )}
-            <button
-              type="button"
-              disabled={isClearingCache || draftStorageInfo.draftCount === 0}
-              onClick={handleClearCache}
-              className={cn(
-                "px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors flex items-center gap-1.5 cursor-pointer",
-                draftStorageInfo.draftCount === 0
-                  ? "bg-slate-50 text-slate-300 border-slate-200 cursor-not-allowed"
-                  : "bg-white text-red-600 border-slate-200 hover:bg-red-50 hover:border-red-200"
-              )}
-            >
-              {isClearingCache ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>{t("profile:cache.clearing")}</span>
-                </>
-              ) : (
-                <>
-                  <Trash2 className="w-3.5 h-3.5 text-red-600" />
-                  <span>{t("profile:cache.clear")}</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
