@@ -172,13 +172,14 @@ def send_supplier_welcome_email(
     try:
         host = settings.SMTP_HOST or "mailpit"
         port = settings.SMTP_PORT or 1025
+        smtp_user = settings.SMTP_USER or settings.SMTP_USERNAME
         logger.info("Connecting to SMTP %s:%s to send credentials for %s", host, port, supplier_code)
 
         with smtplib.SMTP(host=host, port=port, timeout=10.0) as server:
             if settings.SMTP_USE_TLS:
                 server.starttls()
-            if settings.SMTP_USER and settings.SMTP_PASSWORD:
-                server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+            if smtp_user and settings.SMTP_PASSWORD:
+                server.login(smtp_user, settings.SMTP_PASSWORD)
             server.send_message(msg)
 
         logger.info("Credentials email sent successfully to %s for supplier #%s", recipient, supplier_code)
@@ -197,6 +198,8 @@ def send_asn_dispatch_email(
     xml_content: str,
     xml_filename: str,
     email_subject: str,
+    reply_to_email: Optional[str] = None,
+    smtp_config: Optional[dict] = None,
 ) -> bool:
     """
     Dispatch an ASN SdDataSlice XML email to the configured EDI / IUNGO inbox.
@@ -208,7 +211,31 @@ def send_asn_dispatch_email(
         logger.warning("Skipping ASN dispatch email: no recipient provided for ASN %s", asn_number)
         return False
 
-    sender = settings.SMTP_FROM_EMAIL or "ASN Dispatch <no-reply@asn-platform.local>"
+    cfg = smtp_config or {}
+    host = (cfg.get("smtp_host") or "").strip() or settings.SMTP_HOST or "mailpit"
+    port = int(cfg.get("smtp_port") or settings.SMTP_PORT or 1025)
+    smtp_user = (cfg.get("smtp_username") or "").strip() or settings.SMTP_USER or settings.SMTP_USERNAME
+    smtp_pass = cfg.get("smtp_password") or settings.SMTP_PASSWORD
+    use_tls = cfg.get("smtp_use_tls") if cfg.get("smtp_use_tls") is not None else settings.SMTP_USE_TLS
+
+    # If SMTP is still at default mailpit without credentials, fall back to configured Gmail credentials in env
+    if host in ("", "mailpit") and not smtp_user:
+        import os
+        fallback_user = os.environ.get("SMTP_USERNAME") or os.environ.get("SMTP_USER") or os.environ.get("IMAP_USERNAME") or ""
+        fallback_pass = os.environ.get("SMTP_PASSWORD") or os.environ.get("IMAP_PASSWORD") or ""
+        if fallback_user and fallback_pass:
+            host = os.environ.get("SMTP_HOST") or "smtp.gmail.com"
+            port = int(os.environ.get("SMTP_PORT") or 587)
+            smtp_user = fallback_user.strip()
+            smtp_pass = fallback_pass.strip()
+            use_tls = True
+
+    configured_from = (cfg.get("smtp_from_address") or "").strip() or settings.SMTP_FROM_EMAIL
+    if smtp_user and (not configured_from or "asnplatform.local" in configured_from or "asn-platform.local" in configured_from):
+        sender = f"ASN Platform <{smtp_user}>"
+    else:
+        sender = configured_from or "ASN Dispatch <no-reply@asn-platform.local>"
+
     from email.mime.application import MIMEApplication
     from datetime import datetime
 
@@ -216,6 +243,8 @@ def send_asn_dispatch_email(
     msg["Subject"] = email_subject
     msg["From"] = sender
     msg["To"] = recipient
+    if reply_to_email and reply_to_email.strip():
+        msg["Reply-To"] = reply_to_email.strip()
 
     now_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
 
@@ -282,16 +311,20 @@ This is an automated transmission dispatched via the ASN Management Platform.
         msg.attach(attachment)
 
     try:
-        host = settings.SMTP_HOST or "mailpit"
-        port = settings.SMTP_PORT or 1025
         logger.info("Connecting to SMTP %s:%s to dispatch ASN %s to %s", host, port, asn_number, recipient)
 
-        with smtplib.SMTP(host=host, port=port, timeout=10.0) as server:
-            if settings.SMTP_USE_TLS:
-                server.starttls()
-            if settings.SMTP_USER and settings.SMTP_PASSWORD:
-                server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
-            server.send_message(msg)
+        if port == 465:
+            with smtplib.SMTP_SSL(host=host, port=port, timeout=15.0) as server:
+                if smtp_user and smtp_pass:
+                    server.login(smtp_user, smtp_pass)
+                server.send_message(msg)
+        else:
+            with smtplib.SMTP(host=host, port=port, timeout=15.0) as server:
+                if use_tls:
+                    server.starttls()
+                if smtp_user and smtp_pass:
+                    server.login(smtp_user, smtp_pass)
+                server.send_message(msg)
 
         logger.info("ASN XML email successfully dispatched to %s for ASN %s", recipient, asn_number)
         return True

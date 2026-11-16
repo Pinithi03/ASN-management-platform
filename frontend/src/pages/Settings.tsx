@@ -44,6 +44,13 @@ export default function Settings() {
   const [pollingInterval, setPollingInterval] = useState("5");
   const [defaultParser, setDefaultParser] = useState("iungo_html");
   const [iungoDispatchEmail, setIungoDispatchEmail] = useState("edi@orders.buyer.org");
+  const [smtpHost, setSmtpHost] = useState("");
+  const [smtpPort, setSmtpPort] = useState("587");
+  const [smtpUsername, setSmtpUsername] = useState("");
+  const [smtpPassword, setSmtpPassword] = useState("");
+  const [smtpFromAddress, setSmtpFromAddress] = useState("");
+  const [smtpUseTls, setSmtpUseTls] = useState(true);
+  const [smtpPasswordSet, setSmtpPasswordSet] = useState(false);
 
   // ASN & Storage state
   const [huPrefix, setHuPrefix] = useState("0000001122");
@@ -67,6 +74,12 @@ export default function Settings() {
           setIungoDispatchEmail(res.recipient_email);
           localStorage.setItem("asn_iungo_dispatch_recipient", res.recipient_email);
         }
+        if (res?.smtp_host !== undefined) setSmtpHost(res.smtp_host || "");
+        if (res?.smtp_port !== undefined) setSmtpPort(String(res.smtp_port || 587));
+        if (res?.smtp_username !== undefined) setSmtpUsername(res.smtp_username || "");
+        if (res?.smtp_from_address !== undefined) setSmtpFromAddress(res.smtp_from_address || "");
+        if (res?.smtp_use_tls !== undefined) setSmtpUseTls(Boolean(res.smtp_use_tls));
+        if (res?.smtp_password_set !== undefined) setSmtpPasswordSet(Boolean(res.smtp_password_set));
       })
       .catch((err) => {
         console.warn("Failed to load dispatch settings:", err);
@@ -78,7 +91,19 @@ export default function Settings() {
     setSavedSuccess(false);
     try {
       localStorage.setItem("asn_iungo_dispatch_recipient", iungoDispatchEmail.trim());
-      await shipmentService.updateDispatchSettings(iungoDispatchEmail.trim());
+      await shipmentService.updateDispatchSettings({
+        recipient_email: iungoDispatchEmail.trim(),
+        smtp_host: smtpHost.trim(),
+        smtp_port: Number(smtpPort) || 587,
+        smtp_username: smtpUsername.trim(),
+        ...(smtpPassword.trim() ? { smtp_password: smtpPassword.trim() } : {}),
+        smtp_from_address: smtpFromAddress.trim(),
+        smtp_use_tls: smtpUseTls,
+      });
+      if (smtpPassword.trim()) {
+        setSmtpPasswordSet(true);
+        setSmtpPassword("");
+      }
     } catch (e) {
       console.warn("Failed to persist to backend, stored in local storage:", e);
     }
@@ -321,8 +346,79 @@ export default function Settings() {
                   />
                 </div>
                 <p className="text-[11px] text-gray-400 mt-1">
-                  Default EDI Inbox: <code className="bg-gray-100 px-1 py-0.5 rounded text-gray-600">edi@orders.buyer.org</code> (or live Calzedonia/Oniverse ingestion mailbox)
+                  Default EDI Inbox: <code className="bg-gray-100 px-1 py-0.5 rounded text-gray-600">edi@orders.buyer.org</code> (or live IUNGO ingestion mailbox, e.g. <code className="bg-gray-100 px-1 py-0.5 rounded text-gray-600">benji@iungomail.com</code>)
                 </p>
+              </div>
+
+              <div className="sm:col-span-2 pt-3 border-t border-slate-100">
+                <p className="text-xs font-bold text-slate-700 mb-2">
+                  Outbound SMTP Sender Configuration (Optional — overrides .env SMTP settings)
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">SMTP Host</label>
+                    <input
+                      type="text"
+                      value={smtpHost}
+                      onChange={(e) => setSmtpHost(e.target.value)}
+                      placeholder="smtp.gmail.com"
+                      className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm font-mono text-gray-900 focus:bg-white focus:border-emerald-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">SMTP Port</label>
+                    <input
+                      type="text"
+                      value={smtpPort}
+                      onChange={(e) => setSmtpPort(e.target.value)}
+                      placeholder="587"
+                      className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm font-mono text-gray-900 focus:bg-white focus:border-emerald-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">Sender Email / SMTP Username</label>
+                    <input
+                      type="email"
+                      value={smtpUsername}
+                      onChange={(e) => setSmtpUsername(e.target.value)}
+                      placeholder="integration@company.com"
+                      className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm font-mono text-gray-900 focus:bg-white focus:border-emerald-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">
+                      SMTP Password / App Password {smtpPasswordSet && <span className="text-emerald-600 font-normal">(Saved)</span>}
+                    </label>
+                    <input
+                      type="password"
+                      value={smtpPassword}
+                      onChange={(e) => setSmtpPassword(e.target.value)}
+                      placeholder={smtpPasswordSet ? "•••••••••••• (leave blank to keep)" : "Enter SMTP / App Password"}
+                      className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm font-mono text-gray-900 focus:bg-white focus:border-emerald-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">From Display Name & Email (Optional)</label>
+                    <input
+                      type="text"
+                      value={smtpFromAddress}
+                      onChange={(e) => setSmtpFromAddress(e.target.value)}
+                      placeholder="Omegaline Integration <integration@company.com>"
+                      className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm font-mono text-gray-900 focus:bg-white focus:border-emerald-500 focus:outline-none"
+                    />
+                  </div>
+                  <div className="flex items-center pt-5">
+                    <label className="flex items-center gap-2 text-xs font-semibold text-gray-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={smtpUseTls}
+                        onChange={(e) => setSmtpUseTls(e.target.checked)}
+                        className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                      />
+                      Use STARTTLS (Port 587)
+                    </label>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

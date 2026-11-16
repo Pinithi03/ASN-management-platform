@@ -22,6 +22,7 @@ import hashlib
 import hmac
 import io
 import logging
+import math
 import re
 import uuid
 from dataclasses import dataclass, field
@@ -166,11 +167,33 @@ def _clean_str(val: Any) -> str:
 
 
 def _parse_float(val: Any) -> float:
-    if val is None:
+    """Parse numeric or locale-formatted string (e.g. '1.250,50' or '1,250.50') into float."""
+    if val is None or isinstance(val, bool):
         return 0.0
-    val_str = str(val).strip().replace(",", ".")
+    if isinstance(val, (int, float)):
+        f = float(val)
+        return 0.0 if (math.isnan(f) or math.isinf(f)) else f
+
+    val_str = str(val).strip().replace("\u00a0", "").replace(" ", "")
+    if not val_str:
+        return 0.0
+
+    has_dot = "." in val_str
+    has_comma = "," in val_str
+    if has_dot and has_comma:
+        # Whichever separator appears last is the decimal separator; the other is thousands grouping.
+        if val_str.rfind(",") > val_str.rfind("."):
+            val_str = val_str.replace(".", "").replace(",", ".")
+        else:
+            val_str = val_str.replace(",", "")
+    elif has_comma:
+        val_str = val_str.replace(",", "") if val_str.count(",") > 1 else val_str.replace(",", ".")
+    elif has_dot and val_str.count(".") > 1:
+        val_str = val_str.replace(".", "")
+
     try:
-        return float(val_str)
+        f = float(val_str)
+        return 0.0 if (math.isnan(f) or math.isinf(f)) else f
     except ValueError:
         return 0.0
 
@@ -854,7 +877,7 @@ def generate_packing_template(
                 "po_number": "2001297727",
                 "po_item": "00100",
                 "pack_number": "PACK-001",
-                "carton_number": "1 (1-1)",
+                "carton_number": "1",
                 "supplier_carton_ref": "",
                 "product_code": "ELST1K 000615",
                 "lot_number": "LOT-2025-01",
@@ -868,7 +891,7 @@ def generate_packing_template(
                 "po_number": "2001297727",
                 "po_item": "00100",
                 "pack_number": "PACK-001",
-                "carton_number": "2 (1-2)",
+                "carton_number": "2",
                 "supplier_carton_ref": "",
                 "product_code": "ELST1K 000615",
                 "lot_number": "LOT-2025-01",

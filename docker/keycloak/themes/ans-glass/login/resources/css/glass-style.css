@@ -5,7 +5,7 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 
-html, body { height: 100%; }
+html, body { height: 100%; color-scheme: dark; }
 
 .kc-body {
   margin: 0;
@@ -126,28 +126,40 @@ html, body { height: 100%; }
   width: 100%;
   padding: 12px 14px;
   font-size: 14px;
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+  caret-color: #00c8ff;
+  color-scheme: dark;
+  border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.08);
-  transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+  background-color: rgba(15, 23, 48, 0.78);
+  transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.kc-input::placeholder { color: rgba(255, 255, 255, 0.4); }
+.kc-input::placeholder { color: rgba(255, 255, 255, 0.48); }
 
-.kc-input:focus {
+.kc-input:focus,
+.kc-input:active {
   outline: none;
-  background: rgba(255, 255, 255, 0.13);
-  border-color: rgba(0, 200, 255, 0.55);
-  box-shadow: 0 0 0 3px rgba(0, 200, 255, 0.15);
+  color: #ffffff;
+  caret-color: #00c8ff;
+  background-color: rgba(15, 23, 48, 0.92);
+  border-color: rgba(0, 200, 255, 0.65);
+  box-shadow: 0 0 0 3px rgba(0, 200, 255, 0.18);
 }
 
-/* Chrome paints autofilled fields solid white otherwise */
+/* Chrome / Edge paint autofilled & clicked fields solid white otherwise */
 .kc-input:-webkit-autofill,
 .kc-input:-webkit-autofill:hover,
-.kc-input:-webkit-autofill:focus {
-  -webkit-box-shadow: 0 0 0 1000px rgba(32, 40, 72, 0.95) inset;
-  -webkit-text-fill-color: #fff;
+.kc-input:-webkit-autofill:focus,
+.kc-input:-webkit-autofill:active,
+.kc-input:autofill {
+  -webkit-box-shadow: 0 0 0 1000px #141d3b inset !important;
+  box-shadow: 0 0 0 1000px #141d3b inset !important;
+  -webkit-text-fill-color: #ffffff !important;
+  color: #ffffff !important;
+  caret-color: #00c8ff !important;
+  background-color: #141d3b !important;
+  transition: background-color 9999s ease-in-out 0s;
 }
 
 .kc-field-error {
@@ -481,23 +493,48 @@ input.kc-button { -webkit-appearance: none; appearance: none; }
   padding: 12px 14px;
   font-size: 14px;
   font-family: inherit;
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+  caret-color: #00c8ff;
+  color-scheme: dark;
+  border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.08);
+  background-color: rgba(15, 23, 48, 0.78);
 }
 
+.kc-glass-card .kc-input-group .kc-input { padding-right: 46px; }
+
 .kc-glass-card input[type="text"]:focus,
+.kc-glass-card input[type="text"]:active,
 .kc-glass-card input[type="password"]:focus,
+.kc-glass-card input[type="password"]:active,
 .kc-glass-card input[type="email"]:focus,
+.kc-glass-card input[type="email"]:active,
 .kc-glass-card input[type="tel"]:focus,
+.kc-glass-card input[type="tel"]:active,
 .kc-glass-card input[type="number"]:focus,
+.kc-glass-card input[type="number"]:active,
 .kc-glass-card select:focus,
 .kc-glass-card textarea:focus {
   outline: none;
-  background: rgba(255, 255, 255, 0.13);
-  border-color: rgba(0, 200, 255, 0.55);
-  box-shadow: 0 0 0 3px rgba(0, 200, 255, 0.15);
+  color: #ffffff;
+  caret-color: #00c8ff;
+  background-color: rgba(15, 23, 48, 0.92);
+  border-color: rgba(0, 200, 255, 0.65);
+  box-shadow: 0 0 0 3px rgba(0, 200, 255, 0.18);
+}
+
+.kc-glass-card input:-webkit-autofill,
+.kc-glass-card input:-webkit-autofill:hover,
+.kc-glass-card input:-webkit-autofill:focus,
+.kc-glass-card input:-webkit-autofill:active,
+.kc-glass-card input:autofill {
+  -webkit-box-shadow: 0 0 0 1000px #141d3b inset !important;
+  box-shadow: 0 0 0 1000px #141d3b inset !important;
+  -webkit-text-fill-color: #ffffff !important;
+  color: #ffffff !important;
+  caret-color: #00c8ff !important;
+  background-color: #141d3b !important;
+  transition: background-color 9999s ease-in-out 0s;
 }
 
 .kc-glass-card input[type="submit"],

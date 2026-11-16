@@ -725,6 +725,7 @@ function WebPackingWizard({
   const [startingSeq, setStartingSeq] = useState<number>(1);
   const [packingSlipNumber, setPackingSlipNumber] = useState("");
   const [deliveryDate, setDeliveryDate] = useState("");
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const [copiedHu, setCopiedHu] = useState<string | null>(null);
 
   const [splitConfigs, setSplitConfigs] = useState<Record<string, { mode: "qty" | "count"; value: string }>>({});
@@ -1282,16 +1283,8 @@ function WebPackingWizard({
         }));
       });
 
-      // Default Delivery Date from PO XML delivery_date if not set from draft
-      setDeliveryDate((prev) => {
-        if (prev) return prev;
-        const rawDate = openLinesData.find((l) => l.delivery_date)?.delivery_date;
-        if (rawDate) {
-          const formatted = rawDate.includes("T") ? rawDate.split("T")[0] : rawDate;
-          if (/^\d{4}-\d{2}-\d{2}$/.test(formatted)) return formatted;
-        }
-        return new Date(Date.now() + 86400000).toISOString().split("T")[0];
-      });
+      // Do not default Delivery Date from PO - supplier must pick the delivery date
+      setDeliveryDate((prev) => prev || "");
     }
   }, [openLinesData]);
 
@@ -1525,6 +1518,32 @@ function WebPackingWizard({
     );
   };
 
+  const copyGrossWeightToAllCartons = (itemId: string, grossWeight: number) => {
+    if (grossWeight == null || isNaN(grossWeight) || grossWeight <= 0) return;
+    setPackedItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== itemId) return item;
+        return {
+          ...item,
+          boxes: item.boxes.map((b) => ({ ...b, gross_weight: grossWeight })),
+        };
+      })
+    );
+  };
+
+  const copyNetWeightToAllCartons = (itemId: string, netWeight: number) => {
+    if (netWeight == null || isNaN(netWeight) || netWeight <= 0) return;
+    setPackedItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== itemId) return item;
+        return {
+          ...item,
+          boxes: item.boxes.map((b) => ({ ...b, net_weight: netWeight })),
+        };
+      })
+    );
+  };
+
   const handleProceedToReview = () => {
     // If packingSlipNumber is empty, look for the first carton pack_number entered in table
     if (!packingSlipNumber.trim()) {
@@ -1549,10 +1568,7 @@ function WebPackingWizard({
           alert(t("wizard.alerts.invalidQty", cartonRef));
           return;
         }
-        if (!box.batch_code || !box.batch_code.trim()) {
-          alert(t("wizard.alerts.lotRequired", cartonRef));
-          return;
-        }
+        // Batch / Lot is optional (defaults to DEFAULT in payload if omitted)
         const gw = box.gross_weight != null && !isNaN(Number(box.gross_weight)) ? Number(box.gross_weight) : null;
         const nw = box.net_weight != null && !isNaN(Number(box.net_weight)) ? Number(box.net_weight) : null;
 
@@ -1777,27 +1793,29 @@ function WebPackingWizard({
                         alert(t("wizard.alerts.offline"));
                         return;
                       }
+                      setAttemptedSubmit(true);
                       const trimmedPs = packingSlipNumber.trim();
-                      if (!trimmedPs) {
-                        alert(t("wizard.alerts.needPackingSlip"));
+                      const trimmedDate = deliveryDate.trim();
+                      if (!trimmedPs && !trimmedDate) {
+                        alert("Please enter Packing Slip Number and select Delivery Date before sending to IUNGO.");
+                        document.getElementById("wizard-ps-number")?.focus();
                         return;
                       }
-                      const trimmedDate = deliveryDate.trim();
+                      if (!trimmedPs) {
+                        alert(t("wizard.alerts.needPackingSlip"));
+                        document.getElementById("wizard-ps-number")?.focus();
+                        return;
+                      }
                       if (!trimmedDate) {
                         alert(t("wizard.alerts.needDeliveryDate"));
+                        document.getElementById("wizard-delivery-date")?.focus();
                         return;
                       }
                       setShowConfirmDispatch(true);
                     }}
-                    disabled={isSubmitting || !packingSlipNumber.trim() || !deliveryDate.trim()}
+                    disabled={isSubmitting}
                     className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
-                    title={
-                      !packingSlipNumber.trim()
-                        ? t("wizard.toolbar.needSlipTitle")
-                        : !deliveryDate.trim()
-                        ? t("wizard.toolbar.needDateTitle")
-                        : t("xml.sendButton")
-                    }
+                    title={t("xml.sendButton")}
                   >
                     {isSubmitting ? (
                       <>
@@ -2219,10 +2237,10 @@ function WebPackingWizard({
                             {t("wizard.step2.table.qty", { uom: item.uom || "M" })}
                           </th>
                           <th className="py-1.5 px-2 text-left w-36 whitespace-nowrap border-r border-zinc-600">
-                            <Trans t={t} i18nKey="wizard.step2.table.lot" components={{ req: <span className="text-red-400" /> }} />
+                            {t("wizard.step2.table.lot").replace(/<req>.*?<\/req>/g, "").trim()}
                           </th>
-                          <th className="py-1.5 px-2 text-right w-28 whitespace-nowrap border-r border-zinc-600">{t("wizard.step2.table.gw")}</th>
-                          <th className="py-1.5 px-2 text-right w-28 whitespace-nowrap border-r border-zinc-600">{t("wizard.step2.table.nw")}</th>
+                          <th className="py-1.5 px-2 text-left w-36 whitespace-nowrap border-r border-zinc-600">{t("wizard.step2.table.gw")}</th>
+                          <th className="py-1.5 px-2 text-left w-36 whitespace-nowrap border-r border-zinc-600">{t("wizard.step2.table.nw")}</th>
                           {visibleColumns.supplier_ref && <th className="py-1.5 px-2 w-32 whitespace-nowrap border-r border-zinc-600">{t("wizard.step2.col.supplierRef")}</th>}
                           {visibleColumns.width && <th className="py-1.5 px-2 text-right w-24 whitespace-nowrap border-r border-zinc-600">{t("wizard.step2.col.width")}</th>}
                           {visibleColumns.pack_no && <th className="py-1.5 px-2 w-28 whitespace-nowrap border-r border-zinc-600">{t("wizard.step2.col.packNo")}</th>}
@@ -2288,41 +2306,65 @@ function WebPackingWizard({
                             </td>
 
                             {/* 5. Gross Weight (Mandatory) */}
-                            <td className="py-1 px-2 text-right whitespace-nowrap border-r border-gray-200">
-                              <input
-                                type="number"
-                                step="0.01"
-                                min="0.01"
-                                value={box.gross_weight !== null && box.gross_weight !== undefined ? box.gross_weight : ""}
-                                onChange={(e) =>
-                                  updateBox(item.id, idx, {
-                                    gross_weight: e.target.value === "" ? null : parseFloat(e.target.value) || 0,
-                                  })
-                                }
-                                placeholder="0.00"
-                                className={`w-24 h-6 px-1.5 text-xs text-right bg-white border rounded font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none ${
-                                  typeof box.gross_weight === "number" && typeof box.net_weight === "number" && box.gross_weight <= box.net_weight
-                                    ? "border-red-400 bg-red-50 text-red-700"
-                                    : "border-gray-300"
-                                }`}
-                              />
+                            <td className="py-1 px-2 whitespace-nowrap border-r border-gray-200">
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0.01"
+                                  value={box.gross_weight !== null && box.gross_weight !== undefined ? box.gross_weight : ""}
+                                  onChange={(e) =>
+                                    updateBox(item.id, idx, {
+                                      gross_weight: e.target.value === "" ? null : parseFloat(e.target.value) || 0,
+                                    })
+                                  }
+                                  placeholder="0.00"
+                                  className={`w-20 h-6 px-1.5 text-xs text-right bg-white border rounded font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none ${
+                                    typeof box.gross_weight === "number" && typeof box.net_weight === "number" && box.gross_weight <= box.net_weight
+                                      ? "border-red-400 bg-red-50 text-red-700"
+                                      : "border-gray-300"
+                                  }`}
+                                />
+                                {item.boxes.length > 1 && idx === 0 && box.gross_weight != null && !isNaN(Number(box.gross_weight)) && Number(box.gross_weight) > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => copyGrossWeightToAllCartons(item.id, Number(box.gross_weight))}
+                                    className="px-1.5 py-0.5 text-[10px] bg-gray-100 hover:bg-blue-50 text-gray-600 hover:text-blue-700 rounded border border-gray-200 transition-colors cursor-pointer shrink-0 font-medium"
+                                    title="Copy this gross weight to all cartons of this line item"
+                                  >
+                                    All ↓
+                                  </button>
+                                )}
+                              </div>
                             </td>
 
                             {/* 6. Net Weight (Mandatory) */}
-                            <td className="py-1 px-2 text-right whitespace-nowrap border-r border-gray-200">
-                              <input
-                                type="number"
-                                step="0.01"
-                                min="0.01"
-                                value={box.net_weight !== null && box.net_weight !== undefined ? box.net_weight : ""}
-                                onChange={(e) =>
-                                  updateBox(item.id, idx, {
-                                    net_weight: e.target.value === "" ? null : parseFloat(e.target.value) || 0,
-                                  })
-                                }
-                                placeholder="0.00"
-                                className="w-24 h-6 px-1.5 text-xs text-right bg-white border border-gray-300 rounded font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
-                              />
+                            <td className="py-1 px-2 whitespace-nowrap border-r border-gray-200">
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0.01"
+                                  value={box.net_weight !== null && box.net_weight !== undefined ? box.net_weight : ""}
+                                  onChange={(e) =>
+                                    updateBox(item.id, idx, {
+                                      net_weight: e.target.value === "" ? null : parseFloat(e.target.value) || 0,
+                                    })
+                                  }
+                                  placeholder="0.00"
+                                  className="w-20 h-6 px-1.5 text-xs text-right bg-white border border-gray-300 rounded font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                                />
+                                {item.boxes.length > 1 && idx === 0 && box.net_weight != null && !isNaN(Number(box.net_weight)) && Number(box.net_weight) > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => copyNetWeightToAllCartons(item.id, Number(box.net_weight))}
+                                    className="px-1.5 py-0.5 text-[10px] bg-gray-100 hover:bg-blue-50 text-gray-600 hover:text-blue-700 rounded border border-gray-200 transition-colors cursor-pointer shrink-0 font-medium"
+                                    title="Copy this net weight to all cartons of this line item"
+                                  >
+                                    All ↓
+                                  </button>
+                                )}
+                              </div>
                               {typeof box.gross_weight === "number" && typeof box.net_weight === "number" && box.gross_weight <= box.net_weight && (
                                 <span className="text-[10px] text-red-600 font-bold block mt-0.5">{t("wizard.step2.gwLeNw")}</span>
                               )}
@@ -2497,7 +2539,12 @@ function WebPackingWizard({
                 placeholder={t("wizard.step3.psPlaceholder")}
                 value={packingSlipNumber}
                 onChange={(e) => setPackingSlipNumber(e.target.value)}
-                className="h-7 px-2 text-xs font-mono font-bold rounded border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400 outline-none shadow-2xs w-36"
+                className={cn(
+                  "h-7 px-2 text-xs font-mono font-bold rounded border bg-white outline-none shadow-2xs w-36 transition-all",
+                  attemptedSubmit && !packingSlipNumber.trim()
+                    ? "border-red-500 ring-2 ring-red-200 bg-red-50/40"
+                    : "border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400"
+                )}
               />
             </div>
 
@@ -2514,7 +2561,12 @@ function WebPackingWizard({
                 disabled={Boolean(submitSuccessResult)}
                 value={deliveryDate}
                 onChange={(e) => setDeliveryDate(e.target.value)}
-                className="h-7 px-2 text-xs font-mono font-bold rounded border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400 outline-none shadow-2xs cursor-pointer"
+                className={cn(
+                  "h-7 px-2 text-xs font-mono font-bold rounded border bg-white outline-none shadow-2xs cursor-pointer transition-all",
+                  attemptedSubmit && !deliveryDate.trim()
+                    ? "border-red-500 ring-2 ring-red-200 bg-red-50/40"
+                    : "border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400"
+                )}
               />
             </div>
           </div>
@@ -2698,9 +2750,10 @@ function WebPackingWizard({
                   <input
                     type="email"
                     value={dispatchEmail}
+                    readOnly={user?.role === "SUPPLIER"}
                     onChange={(e) => setDispatchEmail(e.target.value)}
                     placeholder="edi@orders.buyer.org"
-                    className="w-full bg-transparent text-slate-800 font-mono font-semibold text-xs focus:outline-none"
+                    className="w-full bg-transparent text-slate-800 font-mono font-semibold text-xs focus:outline-none read-only:cursor-default"
                   />
                 </div>
               </div>
@@ -2762,6 +2815,7 @@ function ExcelPackingWorkflow({
   const [estimatedArrival, setEstimatedArrival] = useState("");
   const [packingSlipNumber, setPackingSlipNumber] = useState("");
   const [packingSlipDates, setPackingSlipDates] = useState<Record<string, string>>({});
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const [startingSeq, setStartingSeq] = useState<number>(1);
 
   // Synchronize next sequential HU sequence for supplier
@@ -2857,11 +2911,16 @@ function ExcelPackingWorkflow({
   const [submitting, setSubmitting] = useState(false);
   const [createdResponse, setCreatedResponse] = useState<CreateShipmentResponse | null>(null);
   const [showConfirmExcelDispatch, setShowConfirmExcelDispatch] = useState(false);
-  const [excelDispatchEmail, setExcelDispatchEmail] = useState<string>("edi@orders.buyer.org");
+  const [excelDispatchEmail, setExcelDispatchEmail] = useState<string>(
+    () => localStorage.getItem("asn_iungo_dispatch_recipient") || "edi@orders.buyer.org"
+  );
 
   useEffect(() => {
     shipmentService.getDispatchSettings().then((s) => {
-      if (s?.recipient_email) setExcelDispatchEmail(s.recipient_email);
+      if (s?.recipient_email) {
+        setExcelDispatchEmail(s.recipient_email);
+        localStorage.setItem("asn_iungo_dispatch_recipient", s.recipient_email);
+      }
     }).catch(() => {});
   }, []);
 
@@ -3009,7 +3068,7 @@ function ExcelPackingWorkflow({
       setPoLines(fetchedLines);
       setPoConfigs(newConfigs);
       setSelectedLines(newSelected);
-      if (minDate && !estimatedArrival) setEstimatedArrival(minDate);
+      // Do not default Delivery Date from PO - supplier must pick or Excel provides it
       if (pCode && !plantCode) setPlantCode(pCode);
     };
 
@@ -3350,15 +3409,6 @@ function ExcelPackingWorkflow({
     }
   };
 
-  const isDatesComplete = useMemo(() => {
-    if (detectedPackingSlips.length > 1) {
-      return detectedPackingSlips.every((ps) => Boolean(packingSlipDates[ps]?.trim()));
-    }
-    const singleDate = estimatedArrival?.trim() || (detectedPackingSlips[0] ? packingSlipDates[detectedPackingSlips[0]]?.trim() : "");
-    const singlePs = packingSlipNumber.trim() || (detectedPackingSlips[0] ? detectedPackingSlips[0] : "");
-    return Boolean(singleDate && singlePs);
-  }, [detectedPackingSlips, packingSlipDates, estimatedArrival, packingSlipNumber]);
-
   return (
     <div
       onDragEnter={!createdResponse && !validationResult ? handleDrag : undefined}
@@ -3436,7 +3486,12 @@ function ExcelPackingWorkflow({
                       }
                     }}
                     placeholder={t("wizard.step3.psPlaceholder")}
-                    className="h-8 px-2.5 text-xs font-mono font-bold rounded-lg border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400 outline-none shadow-2xs w-36 disabled:bg-slate-100 disabled:text-slate-500"
+                    className={cn(
+                      "h-8 px-2.5 text-xs font-mono font-bold rounded-lg border bg-white outline-none shadow-2xs w-36 disabled:bg-slate-100 disabled:text-slate-500 transition-all",
+                      attemptedSubmit && !packingSlipNumber.trim() && detectedPackingSlips.length === 0
+                        ? "border-red-500 ring-2 ring-red-200 bg-red-50/40"
+                        : "border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400"
+                    )}
                   />
                 </div>
               )}
@@ -3462,7 +3517,12 @@ function ExcelPackingWorkflow({
                           [targetKey]: val,
                         }));
                       }}
-                      className="h-8 px-2.5 text-xs font-mono font-bold rounded-lg border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400 outline-none shadow-2xs cursor-pointer disabled:bg-slate-100 disabled:text-slate-500"
+                      className={cn(
+                        "h-8 px-2.5 text-xs font-mono font-bold rounded-lg border bg-white outline-none shadow-2xs cursor-pointer disabled:bg-slate-100 disabled:text-slate-500 transition-all",
+                        attemptedSubmit && !(estimatedArrival?.trim() || (detectedPackingSlips[0] ? packingSlipDates[detectedPackingSlips[0]]?.trim() : ""))
+                          ? "border-red-500 ring-2 ring-red-200 bg-red-50/40"
+                          : "border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400"
+                      )}
                     />
                   </div>
                 </>
@@ -3501,7 +3561,7 @@ function ExcelPackingWorkflow({
             ) : (
               <button
                 type="button"
-                disabled={submitting || !validationResult.is_valid || !isDatesComplete}
+                disabled={submitting || (validationResult && !validationResult.is_valid)}
                 onClick={() => {
                   if (!isOnline) {
                     alert(t("excel.alerts.offline"));
@@ -3511,6 +3571,11 @@ function ExcelPackingWorkflow({
                     alert(t("excel.alerts.noFile"));
                     return;
                   }
+                  if (!validationResult.is_valid) {
+                    alert(t("excel.header.fixErrors"));
+                    return;
+                  }
+                  setAttemptedSubmit(true);
                   const isMultiSlip = detectedPackingSlips.length > 1;
                   if (isMultiSlip) {
                     const missing = detectedPackingSlips.filter((ps) => !packingSlipDates[ps]?.trim());
@@ -3520,12 +3585,20 @@ function ExcelPackingWorkflow({
                     }
                   } else {
                     const singleDate = estimatedArrival?.trim() || (detectedPackingSlips[0] ? packingSlipDates[detectedPackingSlips[0]]?.trim() : "");
-                    if (!singleDate) {
+                    const singlePs = packingSlipNumber.trim() || (detectedPackingSlips[0] ? detectedPackingSlips[0] : "");
+                    if (!singlePs && !singleDate) {
                       alert(t("excel.alerts.needDate"));
+                      document.getElementById("excel-ps-number")?.focus();
                       return;
                     }
-                    if (!packingSlipNumber.trim() && detectedPackingSlips.length === 0) {
+                    if (!singlePs) {
                       alert(t("excel.alerts.needSlip"));
+                      document.getElementById("excel-ps-number")?.focus();
+                      return;
+                    }
+                    if (!singleDate) {
+                      alert(t("excel.alerts.needDate"));
+                      document.getElementById("excel-delivery-date")?.focus();
                       return;
                     }
                   }
@@ -3535,12 +3608,6 @@ function ExcelPackingWorkflow({
                 title={
                   !validationResult.is_valid
                     ? t("excel.header.fixErrors")
-                    : detectedPackingSlips.length > 1 && !isDatesComplete
-                    ? t("excel.header.dateEachSlip")
-                    : !packingSlipNumber.trim() && detectedPackingSlips.length === 0
-                    ? t("wizard.toolbar.needSlipTitle")
-                    : !estimatedArrival.trim()
-                    ? t("wizard.toolbar.needDateTitle")
                     : t("xml.sendButton")
                 }
               >
@@ -3851,8 +3918,10 @@ function ExcelPackingWorkflow({
                                   }));
                                 }}
                                 className={cn(
-                                  "h-6 px-1.5 text-xs font-mono font-bold rounded border bg-white focus:outline-none focus:ring-1 cursor-pointer disabled:bg-slate-100 disabled:text-slate-500 w-30 shadow-2xs",
-                                  !rowDate && !createdResponse
+                                  "h-6 px-1.5 text-xs font-mono font-bold rounded border bg-white focus:outline-none focus:ring-1 cursor-pointer disabled:bg-slate-100 disabled:text-slate-500 w-30 shadow-2xs transition-all",
+                                  attemptedSubmit && !rowDate
+                                    ? "border-red-500 ring-2 ring-red-200 bg-red-50/40 text-red-900 focus:border-red-500 focus:ring-red-400"
+                                    : !rowDate && !createdResponse
                                     ? "border-amber-400 bg-amber-50/60 text-amber-900 focus:border-amber-500 focus:ring-amber-400"
                                     : "border-slate-300 text-slate-800 focus:border-emerald-500 focus:ring-emerald-400"
                                 )}
@@ -4114,9 +4183,10 @@ function ExcelPackingWorkflow({
                   <input
                     type="email"
                     value={excelDispatchEmail}
+                    readOnly={user?.role === "SUPPLIER"}
                     onChange={(e) => setExcelDispatchEmail(e.target.value)}
                     placeholder="edi@orders.buyer.org"
-                    className="w-full bg-transparent text-slate-800 font-mono font-semibold text-xs focus:outline-none"
+                    className="w-full bg-transparent text-slate-800 font-mono font-semibold text-xs focus:outline-none read-only:cursor-default"
                   />
                 </div>
               </div>
@@ -4167,15 +4237,21 @@ function XmlPreviewModal({
   onClose: () => void;
 }) {
   const { t } = useTranslation(["shipments", "common"]);
+  const user = useAuthStore((s) => s.user);
   const [copied, setCopied] = useState(false);
   const [sending, setSending] = useState(false);
   const [sentSuccess, setSentSuccess] = useState(false);
   const [showConfirmXmlSend, setShowConfirmXmlSend] = useState(false);
-  const [xmlDispatchEmail, setXmlDispatchEmail] = useState<string>("edi@orders.buyer.org");
+  const [xmlDispatchEmail, setXmlDispatchEmail] = useState<string>(
+    () => localStorage.getItem("asn_iungo_dispatch_recipient") || "edi@orders.buyer.org"
+  );
 
   useEffect(() => {
     shipmentService.getDispatchSettings().then((s) => {
-      if (s?.recipient_email) setXmlDispatchEmail(s.recipient_email);
+      if (s?.recipient_email) {
+        setXmlDispatchEmail(s.recipient_email);
+        localStorage.setItem("asn_iungo_dispatch_recipient", s.recipient_email);
+      }
     }).catch(() => {});
   }, []);
 
@@ -4304,9 +4380,10 @@ function XmlPreviewModal({
                   <input
                     type="email"
                     value={xmlDispatchEmail}
+                    readOnly={user?.role === "SUPPLIER"}
                     onChange={(e) => setXmlDispatchEmail(e.target.value)}
                     placeholder="edi@orders.buyer.org"
-                    className="w-full bg-transparent text-slate-800 font-mono font-semibold text-xs focus:outline-none"
+                    className="w-full bg-transparent text-slate-800 font-mono font-semibold text-xs focus:outline-none read-only:cursor-default"
                   />
                 </div>
               </div>
