@@ -57,98 +57,22 @@ import {
   saveExcelFileBlob,
   getExcelFileBlob,
 } from "@/utils/draftStorage";
+import {
+  LabelPrintModal,
+  downloadShipmentLabels,
+  formatOfficialXmlFilename,
+  formatPlantName,
+  matchPlant,
+  shipmentDetailPath,
+  shipmentStatusLabel,
+} from "@/components/shipments/shared";
+import StatusBadge from "@/components/ui/StatusBadge";
+import { statusBorderClass } from "@/utils/statusStyles";
+import { broadcastInvalidate } from "@/lib/crossTab";
+import { deliveryDateError, parseLocalDate, startOfToday, todayLocalISO, isPastLocalDate, toISODate } from "@/utils/dates";
 
-const statusColor: Record<string, string> = {
-  DRAFT: "bg-slate-100 text-slate-700 border-slate-200",
-  PACKING: "bg-amber-50 text-amber-700 border-amber-200",
-  PACKED: "bg-blue-50 text-blue-700 border-blue-200",
-  XML_SENT: "bg-blue-50 text-blue-700 border-blue-200",
-  RECEIVED: "bg-blue-50 text-blue-700 border-blue-200",
-  ACCEPTED: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  REJECTED: "bg-red-50 text-red-700 border-red-200",
-  DISPATCHED: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  DELIVERED: "bg-emerald-50 text-emerald-700 border-emerald-200",
-};
-
-const SHIPMENT_STATUSES = Object.keys(statusColor);
-type ShipmentStatus = "DRAFT" | "PACKING" | "PACKED" | "XML_SENT" | "RECEIVED" | "ACCEPTED" | "REJECTED" | "DISPATCHED" | "DELIVERED";
-
-/** Display label for a shipment status code; unknown codes are shown as before. */
-const shipmentStatusLabel = (status: string): string =>
-  SHIPMENT_STATUSES.includes(status)
-    ? i18n.t(`shipments:status.${status as ShipmentStatus}`)
-    : status.replace(/_/g, " ");
-
-export const PLANT_NAMES: Record<string, string> = {
-  PPA1: "Omega Line Ltd (PPA1)",
-  "PPA1-0198": "Omega Line Ltd (PPA1-0198)",
-  "PPA1-0101": "Omega Line Ltd (PPA1-0101)",
-  PPA2: "Vavuniya Apparels Ltd (PPA2)",
-  "PPA2-0198": "Vavuniya Apparels Ltd (PPA2-0198)",
-  "PPA2-0101": "Vavuniya Apparels Ltd (PPA2-0101)",
-  PPB1: "Alpha Apparels Ltd (PPB1)",
-  "PPB1-0101": "Alpha Apparels Ltd (PPB1-0101)",
-  PPC1: "Benji Ltd (PPC1)",
-  "PPC1-0101": "Benji Ltd (PPC1-0101)",
-  PPD1: "Sirio Ltd (PPD1)",
-  "PPD1-0101": "Sirio Ltd (PPD1-0101)",
-  PPE1: "Vavuniya Apparels Ltd (PPA2)",
-  "1001": "Omega Line Ltd (1001)",
-};
-
-export const formatPlantName = (plantCode?: string | null): string => {
-  if (!plantCode) return "Omega Line Ltd (PPA1)";
-  if (PLANT_NAMES[plantCode]) return PLANT_NAMES[plantCode];
-  const s = plantCode.toUpperCase();
-  if (s.startsWith("PPA2") || s.startsWith("PPE")) return `Vavuniya Apparels Ltd (${plantCode})`;
-  if (s.startsWith("PPA")) return `Omega Line Ltd (${plantCode})`;
-  if (s.startsWith("PPB")) return `Alpha Apparels Ltd (${plantCode})`;
-  if (s.startsWith("PPC")) return `Benji Ltd (${plantCode})`;
-  if (s.startsWith("PPD")) return `Sirio Ltd (${plantCode})`;
-  return plantCode;
-};
-
-// Helper to accurately match plant code from client_code or destination automatically (preserving codes like PPA1-0198)
-export const matchPlant = (clientOrDest?: string | null): string => {
-  if (!clientOrDest) return "PPA1";
-  const s = clientOrDest.trim();
-  const codeMatch = s.match(/\b(PP[A-E]\d(?:-[0-9A-Z]+)?)\b/i);
-  if (codeMatch) {
-    const matched = codeMatch[1].toUpperCase();
-    if (matched.startsWith("PPE")) return matched.replace("PPE", "PPA2");
-    return matched;
-  }
-
-  const lower = s.toLowerCase();
-  if (lower.includes("vavuniya") || lower.includes("ppa2") || lower.includes("ppe1") || lower.includes("ppa4")) return "PPA2";
-  if (lower.includes("omega") || lower.includes("ppa1") || lower.includes("ppa")) return "PPA1";
-  if (lower.includes("alpha") || lower.includes("ppb1")) return "PPB1";
-  if (lower.includes("benji") || lower.includes("ppc1")) return "PPC1";
-  if (lower.includes("sirio") || lower.includes("ppd1")) return "PPD1";
-  return s || "PPA1";
-};
-
-function formatOfficialXmlFilename(
-  packingSlipNumber?: string,
-  supplierCode?: string,
-  xmlContent?: string
-): string {
-  let ps = (packingSlipNumber || "").trim();
-  let supp = (supplierCode || "").trim();
-  if (xmlContent) {
-    if (!ps) {
-      const mPs = xmlContent.match(/<PackingSlipNumber>([^<]+)<\/PackingSlipNumber>/);
-      if (mPs?.[1]) ps = mPs[1].trim();
-    }
-    if (!supp) {
-      const mSupp = xmlContent.match(/<PartnerId>([^<]+)<\/PartnerId>/);
-      if (mSupp?.[1]) supp = mSupp[1].trim();
-    }
-  }
-  const psClean = (ps || "01000000").padStart(8, "0");
-  const suppClean = (supp || "0000018194").replace(/^0+/, "").padStart(10, "0");
-  return `PL_${psClean}_[${suppClean}].xml`;
-}
+// Re-exported for existing importers.
+export { formatPlantName, matchPlant, PLANT_NAMES } from "@/components/shipments/shared";
 
 interface ShipmentDisplayItem {
   id: string;
@@ -236,71 +160,46 @@ export default function Shipments() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
-  const [shipments, setShipments] = useState<ShipmentDisplayItem[]>([]);
-  const [loadingShipments, setLoadingShipments] = useState(false);
+  const listSupplierId = user?.role === "SUPPLIER" ? (user.supplier_id || undefined) : undefined;
+  const { data: shipmentsData, isLoading: loadingShipments, refetch: refetchShipments } = useQuery({
+    queryKey: ["shipments", listSupplierId],
+    queryFn: async (): Promise<ShipmentDisplayItem[]> => {
+      const data = await shipmentService.getShipments(undefined, undefined, listSupplierId);
+      if (!Array.isArray(data)) return [];
+      return data.map((d: any) => ({
+        id: d.id,
+        shipment_number: d.shipment_number,
+        plant_code: d.plant_code,
+        destination_plant: d.destination_plant,
+        total_boxes: d.total_boxes,
+        total_pieces: d.total_pieces,
+        uom: d.uom || "M",
+        po_numbers: d.po_numbers || [],
+        gross_weight: d.gross_weight,
+        net_weight: d.net_weight,
+        carrier: d.carrier,
+        status: d.status,
+        ship_date: d.ship_date,
+        created_at: d.created_at,
+        asn_id: d.asn_id,
+      }));
+    },
+    enabled: Boolean(user),
+    refetchInterval: 30_000,
+  });
+  const shipments: ShipmentDisplayItem[] = shipmentsData ?? [];
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
-  const [inspectShipmentId, setInspectShipmentId] = useState<string | null>(null);
 
   // Reset page when search or status filter changes
   useEffect(() => {
     setPage(1);
   }, [search, statusFilter]);
 
-  // XML Modal
-  const [xmlModalData, setXmlModalData] = useState<{
-    open: boolean;
-    title: string;
-    xmlContent: string;
-    asnId?: string;
-    validated: boolean;
-  }>({
-    open: false,
-    title: "",
-    xmlContent: "",
-    validated: false,
-  });
-
-  // Load shipments for list view
-  const loadShipments = async () => {
-    setLoadingShipments(true);
-    try {
-      const supplierId = user?.role === "SUPPLIER" ? (user.supplier_id || undefined) : undefined;
-      const data = await shipmentService.getShipments(undefined, undefined, supplierId);
-      if (Array.isArray(data) && data.length > 0) {
-        setShipments(
-          data.map((d: any) => ({
-            id: d.id,
-            shipment_number: d.shipment_number,
-            plant_code: d.plant_code,
-            destination_plant: d.destination_plant,
-            total_boxes: d.total_boxes,
-            total_pieces: d.total_pieces,
-            uom: d.uom || "M",
-            po_numbers: d.po_numbers || [],
-            gross_weight: d.gross_weight,
-            net_weight: d.net_weight,
-            carrier: d.carrier,
-            status: d.status,
-            ship_date: d.ship_date,
-            created_at: d.created_at,
-            asn_id: d.asn_id,
-          }))
-        );
-      } else {
-        setShipments([]);
-      }
-    } catch (err) {
-      console.error("Failed to load shipments:", err);
-      setShipments([]);
-    } finally {
-      setLoadingShipments(false);
-    }
+  /** Refresh after a shipment was created — in this tab and in every other open tab. */
+  const loadShipments = () => {
+    void refetchShipments();
+    broadcastInvalidate(["shipments", "purchaseOrders", "kpi", "drafts"]);
   };
-
-  useEffect(() => {
-    loadShipments();
-  }, [user]);
-
 
   const [labelModalData, setLabelModalData] = useState<{
     open: boolean;
@@ -318,22 +217,7 @@ export default function Shipments() {
   ) => {
     setActionLoadingId(`labels-${shipmentId}`);
     try {
-      const blob = await shipmentService.downloadLabelsPdf(shipmentId, size);
-      const url = window.URL.createObjectURL(blob);
-      if (autoPrint) {
-        const printWindow = window.open(url, "_blank");
-        if (printWindow) {
-          printWindow.focus();
-        }
-      } else {
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `Labels_${shipmentNumber}_${size}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-      }
-      setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+      await downloadShipmentLabels(shipmentId, shipmentNumber, size, autoPrint);
     } catch (e: any) {
       alert(t("labels.downloadFailed", { error: getErrorMessage(e, String(e)) }));
     } finally {
@@ -341,39 +225,6 @@ export default function Shipments() {
     }
   };
 
-  // Preview ASN XML
-  const handlePreviewXml = async (shipment: any) => {
-    setActionLoadingId(`xml-${shipment.id}`);
-    try {
-      if (shipment.asn?.xml_content) {
-        setXmlModalData({
-          open: true,
-          title: t("xml.title", { number: shipment.shipment_number }),
-          xmlContent: shipment.asn.xml_content,
-          asnId: shipment.asn?.id,
-          validated: shipment.asn.xml_validated ?? true,
-        });
-        return;
-      }
-      const asnId = shipment.asn_id || shipment.asn?.id;
-      if (asnId) {
-        const data = await shipmentService.getASNXmlPreview(asnId);
-        setXmlModalData({
-          open: true,
-          title: t("xml.title", { number: shipment.shipment_number }),
-          xmlContent: data.xml_content,
-          asnId: asnId,
-          validated: data.xml_validated,
-        });
-      } else {
-        alert(t("xml.noXml"));
-      }
-    } catch (err: any) {
-      alert(t("xml.loadFailed", { error: getErrorMessage(err, t("xml.unknownError")) }));
-    } finally {
-      setActionLoadingId(null);
-    }
-  };
 
 
 
@@ -507,13 +358,24 @@ export default function Shipments() {
                     return (
                       <tr
                         key={s.id}
-                        onClick={() => setInspectShipmentId(s.id)}
-                        className="bg-white even:bg-gray-100 hover:bg-blue-50/70 border-b border-gray-300 text-xs transition-colors cursor-pointer group"
+                        onClick={(e) => {
+                          if ((e.target as HTMLElement).closest("a,button,input")) return;
+                          window.open(shipmentDetailPath(s.id), "_blank", "noopener");
+                        }}
+                        className={cn(
+                          "bg-white hover:bg-slate-50 border-b border-slate-200 text-sm transition-colors cursor-pointer group",
+                          statusBorderClass(s.status)
+                        )}
                       >
-                        <td className="whitespace-nowrap py-1 px-2 border-r border-gray-200">
-                          <div className="font-mono text-xs font-bold text-gray-900 group-hover:text-blue-600 transition-colors flex items-center gap-1.5">
+                        <td className="whitespace-nowrap py-2.5 px-3 border-r border-slate-100">
+                          <a
+                            href={shipmentDetailPath(s.id)}
+                            target="_blank"
+                            rel="noopener"
+                            className="font-mono font-semibold text-slate-900 hover:underline rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                          >
                             {s.shipment_number}
-                          </div>
+                          </a>
                         </td>
                         <td className="whitespace-nowrap py-1 px-2 border-r border-gray-200">
                           {(() => {
@@ -532,7 +394,7 @@ export default function Shipments() {
                                   </span>
                                 ))}
                                 {poList.length > 2 && (
-                                  <span className="text-[10px] font-semibold text-gray-500">
+                                  <span className="text-xs font-semibold text-gray-500">
                                     +{poList.length - 2}
                                   </span>
                                 )}
@@ -557,14 +419,7 @@ export default function Shipments() {
                           <span className="text-gray-500 text-xs font-medium">{uomLabel}</span>
                         </td>
                         <td className="py-1 px-2 whitespace-nowrap border-r border-gray-200">
-                          <span
-                            className={cn(
-                              "inline-flex items-center rounded-full px-2 py-0 text-[10px] font-semibold border",
-                              statusColor[s.status] || "bg-gray-50 text-gray-700 border-gray-200"
-                            )}
-                          >
-                            {shipmentStatusLabel(s.status)}
-                          </span>
+                          <StatusBadge status={s.status} label={shipmentStatusLabel(s.status)} />
                         </td>
                         <td className="whitespace-nowrap py-1 px-2 text-gray-600 text-xs border-r border-gray-200">
                           {s.ship_date ? formatDate(s.ship_date, "numeric") : " "}
@@ -583,29 +438,26 @@ export default function Shipments() {
                               }
                               disabled={actionLoadingId === `labels-${s.id}`}
                               title={t("list.labelsTitle")}
-                              className="inline-flex items-center gap-1 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50 cursor-pointer"
+                              className="btn btn-secondary btn-sm"
                             >
                               {actionLoadingId === `labels-${s.id}` ? (
-                                <Loader2 className="h-3 w-3 animate-spin text-slate-500" />
+                                <Loader2 className="h-4 w-4 animate-spin text-slate-500 motion-reduce:animate-none" aria-hidden="true" />
                               ) : (
-                                <Printer className="h-3 w-3 text-slate-500" />
+                                <Printer className="h-4 w-4 text-slate-500" aria-hidden="true" />
                               )}
                               {t("list.actionsLabels")}
                             </button>
 
-                            <button
-                              onClick={() => handlePreviewXml(s)}
-                              disabled={actionLoadingId === `xml-${s.id}`}
+                            <a
+                              href={shipmentDetailPath(s.id, "xml")}
+                              target="_blank"
+                              rel="noopener"
                               title={t("list.xmlTitle")}
-                              className="inline-flex items-center gap-1 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50 cursor-pointer"
+                              className="btn btn-secondary btn-sm"
                             >
-                              {actionLoadingId === `xml-${s.id}` ? (
-                                <Loader2 className="h-3 w-3 animate-spin text-slate-500" />
-                              ) : (
-                                <FileCode className="h-3 w-3 text-slate-500" />
-                              )}
+                              <FileCode className="h-4 w-4 text-slate-500" aria-hidden="true" />
                               {t("list.actionsXml")}
-                            </button>
+                            </a>
                           </div>
                         </td>
                       </tr>
@@ -660,26 +512,6 @@ export default function Shipments() {
           onOpenLabelModal={(id, num, count) =>
             setLabelModalData({ open: true, shipmentId: id, shipmentNumber: num, totalBoxes: count })
           }
-        />
-      )}
-
-      {/* SHIPMENT DETAIL & CARTON INSPECTION MODAL */}
-      {inspectShipmentId && (
-        <ShipmentDetailModal
-          shipmentId={inspectShipmentId}
-          onClose={() => setInspectShipmentId(null)}
-          onDownloadLabels={(id, num, count) =>
-            setLabelModalData({ open: true, shipmentId: id, shipmentNumber: num, totalBoxes: count })
-          }
-          onPreviewXml={handlePreviewXml}
-        />
-      )}
-
-      {/* XML PREVIEW MODAL */}
-      {xmlModalData.open && (
-        <XmlPreviewModal
-          data={xmlModalData}
-          onClose={() => setXmlModalData((prev) => ({ ...prev, open: false }))}
         />
       )}
 
@@ -1165,6 +997,19 @@ function WebPackingWizard({
     window.URL.revokeObjectURL(url);
   };
 
+  // Delivery date validation (today or later, local date) and the order's own requested date.
+  // The requested date is never prefilled: it is shown as a reference, flagged when already passed.
+  const deliveryDateErrKey = deliveryDateError(deliveryDate);
+  const requestedDeliveryDate = useMemo(() => {
+    const source = packedItems.length > 0 ? packedItems : items;
+    const dates = source
+      .map((i) => parseLocalDate(i.delivery_date))
+      .filter((d): d is Date => d !== null)
+      .sort((a, b) => a.getTime() - b.getTime());
+    return dates[0] ?? null;
+  }, [packedItems, items]);
+  const requestedDeliveryPassed = requestedDeliveryDate !== null && requestedDeliveryDate < startOfToday();
+
   const handleDispatchASN = async () => {
     if (!isOnline) {
       alert(t("wizard.alerts.offline"));
@@ -1177,9 +1022,17 @@ function WebPackingWizard({
     }
     const trimmedDate = deliveryDate.trim();
     if (!trimmedDate) {
+      setAttemptedSubmit(true);
       alert(t("wizard.alerts.needDeliveryDate"));
       return;
     }
+    // Delivery date must be today or later (local date) — inline error is shown under the field.
+    if (deliveryDateError(trimmedDate)) {
+      setAttemptedSubmit(true);
+      document.getElementById("wizard-delivery-date")?.focus();
+      return;
+    }
+    if (isSubmitting) return; // no double submit
     setIsSubmitting(true);
     try {
       // Proactively refresh JWT before making network call to avoid mid-dispatch 401
@@ -1234,6 +1087,7 @@ function WebPackingWizard({
       }
 
       setSubmitSuccessResult(res);
+      broadcastInvalidate(["shipments", "purchaseOrders", "kpi"]);
       clearManualDraft(activeSupplierCode, poNumbers);
       clearExcelDraft(activeSupplierCode, poNumbers);
     } catch (err: any) {
@@ -1357,8 +1211,8 @@ function WebPackingWizard({
             hu_number: `${prefix}${String(runningSeq++).padStart(10, "0")}`,
             batch_code: "",
             qty: null,
-            gross_weight: null,
-            net_weight: null,
+            gross_weight: 1, // default 1 kg — editable
+            net_weight: 1, // default 1 kg — editable
             supplier_carton_ref: "",
             pack_number: packingSlipNumber || "",
             width: null,
@@ -1391,8 +1245,8 @@ function WebPackingWizard({
             hu_number: "", // Allocated sequentially below
             batch_code: existing?.batch_code || item.boxes[0]?.batch_code || "",
             qty: qtyThisBox,
-            gross_weight: existing?.gross_weight ?? null,
-            net_weight: existing?.net_weight ?? null,
+            gross_weight: existing?.gross_weight ?? 1,
+            net_weight: existing?.net_weight ?? 1,
             supplier_carton_ref: existing?.supplier_carton_ref ?? "",
             pack_number: existing?.pack_number || packingSlipNumber || "",
             width: existing?.width ?? null,
@@ -1419,8 +1273,8 @@ function WebPackingWizard({
             hu_number: "",
             batch_code: existing?.batch_code || item.boxes[0]?.batch_code || "",
             qty: null,
-            gross_weight: existing?.gross_weight ?? null,
-            net_weight: existing?.net_weight ?? null,
+            gross_weight: existing?.gross_weight ?? 1,
+            net_weight: existing?.net_weight ?? 1,
             supplier_carton_ref: existing?.supplier_carton_ref ?? "",
             pack_number: existing?.pack_number || packingSlipNumber || "",
             width: existing?.width ?? null,
@@ -1481,8 +1335,8 @@ function WebPackingWizard({
             hu_number: "",
             batch_code: item.boxes[0]?.batch_code || "",
             qty: null,
-            gross_weight: null,
-            net_weight: null,
+            gross_weight: 1, // default 1 kg — editable
+            net_weight: 1, // default 1 kg — editable
             supplier_carton_ref: "",
             pack_number: "",
             width: null,
@@ -1544,6 +1398,54 @@ function WebPackingWizard({
     );
   };
 
+  // Short inline note after a bulk "All" fill (per line item / per PO), e.g. "Filled 12 lines".
+  const [fillNote, setFillNote] = useState<{ key: string; text: string } | null>(null);
+  const showFillNote = (key: string, text: string) => {
+    setFillNote({ key, text });
+    window.setTimeout(() => setFillNote((cur) => (cur?.key === key && cur.text === text ? null : cur)), 4000);
+  };
+
+  /**
+   * Quantity "All ↓": copy carton 1's quantity to every carton of the line,
+   * but never let the line total exceed the quantity being shipped now
+   * (which itself is capped at the remaining open quantity). Cartons beyond
+   * the budget get the leftover amount, then stay empty.
+   */
+  const copyQtyToAllCartons = (itemId: string, qty: number) => {
+    if (qty == null || isNaN(qty) || qty <= 0) return;
+    const item = packedItems.find((i) => i.id === itemId);
+    if (!item) return;
+    const budget = Math.max(0, Math.min(item.shipping_now || 0, item.remaining_qty ?? Infinity));
+    let left = budget;
+    let filled = 0;
+    const boxes = item.boxes.map((b) => {
+      const q = Math.min(qty, left);
+      left -= q;
+      if (q > 0) filled += 1;
+      return { ...b, qty: q > 0 ? q : null };
+    });
+    setPackedItems((prev) => prev.map((i) => (i.id === itemId ? { ...i, boxes } : i)));
+    const capped = qty * item.boxes.length > budget;
+    showFillNote(
+      `qty-${itemId}`,
+      capped
+        ? t("wizard.step2.qtyFilledCapped", { count: filled, max: formatNumber(budget) })
+        : t("wizard.step2.qtyFilled", { count: filled })
+    );
+  };
+
+  /** Step 1 "All": ship the full remaining open quantity on every open line of a PO. */
+  const fillAllShippingQty = (poNo: string) => {
+    setItems((prev) =>
+      prev.map((it) => {
+        if ((it.po_number || "Default") !== poNo || (it.remaining_qty || 0) <= 0) return it;
+        return { ...it, shipping_now: Math.max(0, it.remaining_qty) };
+      })
+    );
+    const count = items.filter((it) => (it.po_number || "Default") === poNo && (it.remaining_qty || 0) > 0).length;
+    showFillNote(`po-${poNo}`, t("wizard.step1.filledLines", { count }));
+  };
+
   const handleProceedToReview = () => {
     // If packingSlipNumber is empty, look for the first carton pack_number entered in table
     if (!packingSlipNumber.trim()) {
@@ -1580,7 +1482,7 @@ function WebPackingWizard({
           alert(t("wizard.alerts.gwRequired", cartonRef));
           return;
         }
-        if (gw <= nw) {
+        if (gw < nw) {
           alert(t("wizard.alerts.gwNotGreater", { ...cartonRef, gw, nw }));
           return;
         }
@@ -1741,7 +1643,7 @@ function WebPackingWizard({
 
             {step === 2 && (
               <div className="flex items-center gap-2">
-                <span className="hidden lg:inline-flex items-center px-2.5 py-1 text-[11px] font-mono text-gray-700 bg-gray-100 rounded-lg border border-gray-200">
+                <span className="hidden lg:inline-flex items-center px-2.5 py-1 text-xs font-mono text-gray-700 bg-gray-100 rounded-lg border border-gray-200">
                   {t("wizard.toolbar.summary", {
                     cartons: packedItems.reduce((acc, curr) => acc + curr.boxes.length, 0),
                     qty: packedItems.reduce((acc, curr) => acc + (curr.shipping_now || 0), 0),
@@ -1796,11 +1698,6 @@ function WebPackingWizard({
                       setAttemptedSubmit(true);
                       const trimmedPs = packingSlipNumber.trim();
                       const trimmedDate = deliveryDate.trim();
-                      if (!trimmedPs && !trimmedDate) {
-                        alert("Please enter Packing Slip Number and select Delivery Date before sending to IUNGO.");
-                        document.getElementById("wizard-ps-number")?.focus();
-                        return;
-                      }
                       if (!trimmedPs) {
                         alert(t("wizard.alerts.needPackingSlip"));
                         document.getElementById("wizard-ps-number")?.focus();
@@ -1808,6 +1705,11 @@ function WebPackingWizard({
                       }
                       if (!trimmedDate) {
                         alert(t("wizard.alerts.needDeliveryDate"));
+                        document.getElementById("wizard-delivery-date")?.focus();
+                        return;
+                      }
+                      if (deliveryDateError(trimmedDate)) {
+                        // inline error under the field explains it
                         document.getElementById("wizard-delivery-date")?.focus();
                         return;
                       }
@@ -1895,13 +1797,18 @@ function WebPackingWizard({
                     <div className="flex items-center justify-between bg-gray-100/90 px-3 py-1.5 border-b border-gray-300">
                       <div className="flex items-center gap-2">
                         <span className="font-mono font-bold text-xs text-gray-900">PO {poNo}</span>
-                        <span className="text-[11px] text-gray-500 font-medium font-mono">
+                        <span className="text-xs text-gray-500 font-medium font-mono">
                           {t("wizard.step1.lines", { count: poItems.length })}
                         </span>
+                        {fillNote?.key === `po-${poNo}` && (
+                          <span role="status" className="text-xs font-medium text-green-700">
+                            {fillNote.text}
+                          </span>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-2">
-                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t("wizard.step1.packType")}</label>
+                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">{t("wizard.step1.packType")}</label>
                         <select
                           value={poPackType}
                           onChange={(e) => handleSetPoPackagingType(poNo, e.target.value as "BOX" | "ROLL")}
@@ -1914,7 +1821,7 @@ function WebPackingWizard({
                     </div>
 
                     {/* Lines Table for this PO */}
-                    <div className="overflow-auto max-h-[380px]">
+                    <div className="overflow-auto max-h-[55vh]">
                       <table className="w-full text-xs text-left border-collapse">
                         <thead className="sticky top-0 z-10 bg-zinc-700 shadow-xs">
                           <tr className="bg-zinc-700 text-white text-xs font-semibold uppercase tracking-wider border-b border-zinc-800">
@@ -1924,7 +1831,21 @@ function WebPackingWizard({
                             <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">{t("wizard.step1.table.ordered")}</th>
                             <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">{t("wizard.step1.table.shipped")}</th>
                             <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">{t("wizard.step1.table.openBalance")}</th>
-                            <th className="py-1.5 px-2 text-right w-40 whitespace-nowrap">{t("wizard.step1.table.shippingQty")}</th>
+                            <th className="py-1.5 px-2 text-right w-40 whitespace-nowrap">
+                              <span className="inline-flex items-center justify-end gap-1.5">
+                                {t("wizard.step1.table.shippingQty")}
+                                {poItems.some((l) => (l.remaining_qty || 0) > 0) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => fillAllShippingQty(poNo)}
+                                    className="px-1.5 py-0.5 text-xs normal-case bg-gray-100 hover:bg-blue-50 text-gray-600 hover:text-blue-700 rounded border border-gray-200 transition-colors cursor-pointer shrink-0 font-medium"
+                                    title={t("wizard.step1.fillAllTitle")}
+                                  >
+                                    {t("wizard.step2.copyBatch")}
+                                  </button>
+                                )}
+                              </span>
+                            </th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1946,7 +1867,7 @@ function WebPackingWizard({
                               </td>
                               <td className="py-1 px-2 text-right whitespace-nowrap">
                                 {item.remaining_qty <= 0 ? (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                                     <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                                     {t("wizard.step1.fulfilled")}
                                   </span>
@@ -1969,7 +1890,7 @@ function WebPackingWizard({
                                       type="button"
                                       onClick={() => handleShippingNowChange(item.id, item.remaining_qty)}
                                       className={cn(
-                                        "text-[10px] font-semibold px-1.5 py-0.5 rounded border transition-colors cursor-pointer",
+                                        "text-xs font-semibold px-1.5 py-0.5 rounded border transition-colors cursor-pointer",
                                         isSupplier
                                           ? "text-emerald-700 bg-emerald-50/80 border-emerald-300 hover:bg-emerald-100"
                                           : "text-blue-700 bg-blue-50/80 border-blue-300 hover:bg-blue-100"
@@ -2013,14 +1934,14 @@ function WebPackingWizard({
                 >
                   <SlidersHorizontal className="w-3.5 h-3.5 text-gray-500" />
                   <span>{t("wizard.step2.optionalColumns")}</span>
-                  <span className="px-1.5 py-0.2 bg-gray-100 text-gray-700 text-[10px] rounded-full font-mono font-bold">
+                  <span className="px-1.5 py-0.2 bg-gray-100 text-gray-700 text-xs rounded-full font-mono font-bold">
                     {Object.values(visibleColumns).filter(Boolean).length}/3
                   </span>
                 </button>
 
                 {showColumnMenu && (
                   <div className="absolute left-0 mt-1.5 w-64 bg-white border border-gray-200 rounded-xl shadow-xl z-50 p-2.5 text-xs space-y-1">
-                    <div className="px-2 py-1 font-bold text-gray-500 text-[10px] uppercase tracking-wider border-b border-gray-100 flex items-center justify-between">
+                    <div className="px-2 py-1 font-bold text-gray-500 text-xs uppercase tracking-wider border-b border-gray-100 flex items-center justify-between">
                       <span>{t("wizard.step2.toggleOptional")}</span>
                       <button
                         type="button"
@@ -2041,7 +1962,7 @@ function WebPackingWizard({
                       >
                         <div>
                           <div className="font-semibold text-gray-800">{col.label}</div>
-                          <div className="text-[10px] text-gray-400">{col.desc}</div>
+                          <div className="text-xs text-gray-400">{col.desc}</div>
                         </div>
                         <input
                           type="checkbox"
@@ -2079,7 +2000,7 @@ function WebPackingWizard({
                       <span className="text-gray-300">•</span>
                       <span className="text-xs text-gray-600 truncate max-w-sm">{item.description}</span>
                       <span className={cn(
-                        "ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border",
+                        "ml-1 px-1.5 py-0.5 rounded text-xs font-bold uppercase tracking-wider border",
                         isRoll
                           ? "bg-amber-50 text-amber-800 border-amber-200"
                           : "bg-blue-50 text-blue-800 border-blue-200"
@@ -2103,7 +2024,7 @@ function WebPackingWizard({
 
                         return (
                           <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-md p-0.5 shadow-2xs">
-                            <span className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider pl-1">
+                            <span className="text-xs text-gray-500 font-semibold uppercase tracking-wider pl-1">
                               {t("wizard.step2.split")}
                             </span>
 
@@ -2121,7 +2042,7 @@ function WebPackingWizard({
                                   }))
                                 }
                                 className={cn(
-                                  "px-1.5 py-0.5 rounded text-[10px] transition-all cursor-pointer font-medium",
+                                  "px-1.5 py-0.5 rounded text-xs transition-all cursor-pointer font-medium",
                                   cfg.mode === "qty"
                                     ? "bg-white text-blue-700 font-bold shadow-2xs"
                                     : "text-gray-600 hover:text-gray-900"
@@ -2142,7 +2063,7 @@ function WebPackingWizard({
                                   }))
                                 }
                                 className={cn(
-                                  "px-1.5 py-0.5 rounded text-[10px] transition-all cursor-pointer font-medium",
+                                  "px-1.5 py-0.5 rounded text-xs transition-all cursor-pointer font-medium",
                                   cfg.mode === "count"
                                     ? "bg-white text-blue-700 font-bold shadow-2xs"
                                     : "text-gray-600 hover:text-gray-900"
@@ -2196,7 +2117,7 @@ function WebPackingWizard({
 
                             {/* Live calculation preview indicator */}
                             {previewInfo && (
-                              <span className="text-[10px] font-mono font-medium text-blue-600 px-1 hidden sm:inline">
+                              <span className="text-xs font-mono font-medium text-blue-600 px-1 hidden sm:inline">
                                 {previewInfo}
                               </span>
                             )}
@@ -2205,7 +2126,7 @@ function WebPackingWizard({
                             <button
                               type="button"
                               onClick={() => handleApplySplit(item)}
-                              className="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded text-[11px] font-medium transition-colors cursor-pointer shadow-2xs"
+                              className="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded text-xs font-medium transition-colors cursor-pointer shadow-2xs"
                               title={t("wizard.step2.splitButtonTitle")}
                             >
                               {t("wizard.step2.splitButton")}
@@ -2225,7 +2146,7 @@ function WebPackingWizard({
                   </div>
 
                   {/* Data Grid */}
-                  <div className="overflow-auto max-h-[420px] border border-gray-300">
+                  <div className="overflow-auto max-h-[60vh] border border-gray-300">
                     <table className="w-full text-xs text-left border-collapse">
                       <thead className="sticky top-0 z-10 bg-zinc-700 shadow-xs">
                         <tr className="bg-zinc-700 text-white text-xs font-semibold uppercase tracking-wider border-b border-zinc-800">
@@ -2253,7 +2174,7 @@ function WebPackingWizard({
                             {/* 1. Carton # and Line Reference: e.g. 1 (1-1) */}
                             <td className="py-1 px-2 font-mono text-center text-xs whitespace-nowrap border-r border-gray-200">
                               <span className="font-bold text-gray-800">{idx + 1}</span>
-                              <span className="text-[11px] text-gray-500 font-medium ml-1" title={t("wizard.step2.ediRefTitle")}>
+                              <span className="text-xs text-gray-500 font-medium ml-1" title={t("wizard.step2.ediRefTitle")}>
                                 ({itemIdx + 1}-{idx + 1})
                               </span>
                             </td>
@@ -2267,19 +2188,40 @@ function WebPackingWizard({
 
                             {/* 3. Qty (empty by default for supplier input) */}
                             <td className="py-1 px-2 text-right whitespace-nowrap border-r border-gray-200">
-                              <input
-                                type="number"
-                                min="0"
-                                step="any"
-                                value={box.qty !== null && box.qty !== undefined && box.qty !== 0 ? box.qty : ""}
-                                onChange={(e) =>
-                                  updateBox(item.id, idx, {
-                                    qty: e.target.value === "" ? null : parseFloat(e.target.value) || 0,
-                                  })
-                                }
-                                placeholder=""
-                                className="w-20 h-6 px-1.5 text-xs text-right bg-white border border-gray-300 rounded font-mono font-bold focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
-                              />
+                              <div className="flex items-center justify-end gap-1">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max={item.shipping_now || item.remaining_qty || undefined}
+                                  step="any"
+                                  inputMode="decimal"
+                                  aria-label={t("wizard.step2.table.qty", { uom: item.uom || "M" })}
+                                  value={box.qty !== null && box.qty !== undefined && box.qty !== 0 ? box.qty : ""}
+                                  onChange={(e) =>
+                                    updateBox(item.id, idx, {
+                                      // never negative
+                                      qty: e.target.value === "" ? null : Math.max(0, parseFloat(e.target.value) || 0),
+                                    })
+                                  }
+                                  placeholder=""
+                                  className="w-20 h-6 px-1.5 text-xs text-right bg-white border border-gray-300 rounded font-mono font-bold focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                                />
+                                {item.boxes.length > 1 && idx === 0 && box.qty != null && !isNaN(Number(box.qty)) && Number(box.qty) > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => copyQtyToAllCartons(item.id, Number(box.qty))}
+                                    className="px-1.5 py-0.5 text-xs bg-gray-100 hover:bg-blue-50 text-gray-600 hover:text-blue-700 rounded border border-gray-200 transition-colors cursor-pointer shrink-0 font-medium"
+                                    title={t("wizard.step2.copyQtyTitle")}
+                                  >
+                                    {t("wizard.step2.copyBatch")}
+                                  </button>
+                                )}
+                              </div>
+                              {idx === 0 && fillNote?.key === `qty-${item.id}` && (
+                                <span role="status" className="mt-0.5 block text-left text-xs font-medium text-green-700">
+                                  {fillNote.text}
+                                </span>
+                              )}
                             </td>
 
                             {/* 4. Batch / Lot (Mandatory) */}
@@ -2296,7 +2238,7 @@ function WebPackingWizard({
                                   <button
                                     type="button"
                                     onClick={() => copyBatchToAllCartons(item.id, box.batch_code)}
-                                    className="px-1.5 py-0.5 text-[10px] bg-gray-100 hover:bg-blue-50 text-gray-600 hover:text-blue-700 rounded border border-gray-200 transition-colors cursor-pointer shrink-0 font-medium"
+                                    className="px-1.5 py-0.5 text-xs bg-gray-100 hover:bg-blue-50 text-gray-600 hover:text-blue-700 rounded border border-gray-200 transition-colors cursor-pointer shrink-0 font-medium"
                                     title={t("wizard.step2.copyBatchTitle")}
                                   >
                                     {t("wizard.step2.copyBatch")}
@@ -2320,7 +2262,7 @@ function WebPackingWizard({
                                   }
                                   placeholder="0.00"
                                   className={`w-20 h-6 px-1.5 text-xs text-right bg-white border rounded font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none ${
-                                    typeof box.gross_weight === "number" && typeof box.net_weight === "number" && box.gross_weight <= box.net_weight
+                                    typeof box.gross_weight === "number" && typeof box.net_weight === "number" && box.gross_weight < box.net_weight
                                       ? "border-red-400 bg-red-50 text-red-700"
                                       : "border-gray-300"
                                   }`}
@@ -2329,10 +2271,10 @@ function WebPackingWizard({
                                   <button
                                     type="button"
                                     onClick={() => copyGrossWeightToAllCartons(item.id, Number(box.gross_weight))}
-                                    className="px-1.5 py-0.5 text-[10px] bg-gray-100 hover:bg-blue-50 text-gray-600 hover:text-blue-700 rounded border border-gray-200 transition-colors cursor-pointer shrink-0 font-medium"
-                                    title="Copy this gross weight to all cartons of this line item"
+                                    className="px-1.5 py-0.5 text-xs bg-gray-100 hover:bg-blue-50 text-gray-600 hover:text-blue-700 rounded border border-gray-200 transition-colors cursor-pointer shrink-0 font-medium"
+                                    title={t("wizard.step2.copyGwTitle")}
                                   >
-                                    All ↓
+                                    {t("wizard.step2.copyBatch")}
                                   </button>
                                 )}
                               </div>
@@ -2358,15 +2300,15 @@ function WebPackingWizard({
                                   <button
                                     type="button"
                                     onClick={() => copyNetWeightToAllCartons(item.id, Number(box.net_weight))}
-                                    className="px-1.5 py-0.5 text-[10px] bg-gray-100 hover:bg-blue-50 text-gray-600 hover:text-blue-700 rounded border border-gray-200 transition-colors cursor-pointer shrink-0 font-medium"
-                                    title="Copy this net weight to all cartons of this line item"
+                                    className="px-1.5 py-0.5 text-xs bg-gray-100 hover:bg-blue-50 text-gray-600 hover:text-blue-700 rounded border border-gray-200 transition-colors cursor-pointer shrink-0 font-medium"
+                                    title={t("wizard.step2.copyNwTitle")}
                                   >
-                                    All ↓
+                                    {t("wizard.step2.copyBatch")}
                                   </button>
                                 )}
                               </div>
-                              {typeof box.gross_weight === "number" && typeof box.net_weight === "number" && box.gross_weight <= box.net_weight && (
-                                <span className="text-[10px] text-red-600 font-bold block mt-0.5">{t("wizard.step2.gwLeNw")}</span>
+                              {typeof box.gross_weight === "number" && typeof box.net_weight === "number" && box.gross_weight < box.net_weight && (
+                                <span className="text-xs text-red-600 font-bold block mt-0.5">{t("wizard.step2.gwLeNw")}</span>
                               )}
                             </td>
 
@@ -2488,11 +2430,11 @@ function WebPackingWizard({
                         number: submitSuccessResult.shipment?.shipment_number || packingSlipNumber,
                       })}
                     </span>
-                    <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-200 text-emerald-900 px-1.5 py-0.5 rounded">
+                    <span className="text-xs font-bold uppercase tracking-wider bg-emerald-200 text-emerald-900 px-1.5 py-0.5 rounded">
                       {t("wizard.step3.transmitted")}
                     </span>
                   </div>
-                  <p className="text-[11px] text-emerald-800 mt-0.5 font-mono">
+                  <p className="text-xs text-emerald-800 mt-0.5 font-mono">
                     ASN {submitSuccessResult.asn?.asn_number || `ASN-${packingSlipNumber}`}
                   </p>
                 </div>
@@ -2558,17 +2500,34 @@ function WebPackingWizard({
                 id="wizard-delivery-date"
                 type="date"
                 required
+                min={todayLocalISO()}
                 disabled={Boolean(submitSuccessResult)}
                 value={deliveryDate}
                 onChange={(e) => setDeliveryDate(e.target.value)}
+                aria-invalid={Boolean(deliveryDateErrKey && (attemptedSubmit || deliveryDate))}
+                aria-describedby="wizard-delivery-date-help"
                 className={cn(
                   "h-7 px-2 text-xs font-mono font-bold rounded border bg-white outline-none shadow-2xs cursor-pointer transition-all",
-                  attemptedSubmit && !deliveryDate.trim()
+                  deliveryDateErrKey && (attemptedSubmit || deliveryDate)
                     ? "border-red-500 ring-2 ring-red-200 bg-red-50/40"
                     : "border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400"
                 )}
               />
             </div>
+          </div>
+          <div id="wizard-delivery-date-help" className="-mt-1 space-y-0.5 px-1 text-sm">
+            {requestedDeliveryDate && (
+              <p className={cn(requestedDeliveryPassed ? "text-amber-700" : "text-slate-500")}>
+                {requestedDeliveryPassed
+                  ? t("wizard.step3.requestedPassed", { date: formatDate(requestedDeliveryDate) })
+                  : t("wizard.step3.requested", { date: formatDate(requestedDeliveryDate) })}
+              </p>
+            )}
+            {deliveryDateErrKey && (attemptedSubmit || deliveryDate) && (
+              <p role="alert" className="text-red-600">
+                {t(`common:${deliveryDateErrKey}` as "common:validation.required")}
+              </p>
+            )}
           </div>
 
           {/* C. Handling Units & Packing List (Clean List View Table) */}
@@ -2579,7 +2538,7 @@ function WebPackingWizard({
                 <span className="text-xs font-bold text-gray-800 uppercase tracking-wider">
                   {t("wizard.step3.breakdown")}
                 </span>
-                <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100/70 border border-emerald-200 px-2 py-0.5 rounded-full">
+                <span className="text-xs font-bold text-emerald-700 bg-emerald-100/70 border border-emerald-200 px-2 py-0.5 rounded-full">
                   {t("wizard.step3.cartonsRolls", { count: allCartonsList.length })}
                 </span>
               </div>
@@ -2613,7 +2572,7 @@ function WebPackingWizard({
               </div>
             </div>
 
-            <div className="overflow-x-auto max-h-[460px] custom-scrollbar">
+            <div className="overflow-x-auto max-h-[60vh] custom-scrollbar">
               <table className="w-full text-left text-xs border-collapse">
                 <thead className="bg-zinc-700 text-white text-xs font-semibold uppercase tracking-wider sticky top-0 z-10 border-b border-zinc-800">
                   <tr>
@@ -2669,51 +2628,45 @@ function WebPackingWizard({
             </div>
           </div>
 
-          {/* XML Preview Modal inside Web Packing Wizard */}
+          {/* Live XML preview — inline panel (it shows unsaved wizard state, so it can't be a separate tab) */}
           {previewXmlModal && (
-            <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-              <div className="bg-white rounded-2xl shadow-xl max-w-3xl w-full max-h-[85vh] flex flex-col overflow-hidden border border-gray-200">
-                <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gray-50/80">
-                  <div className="flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-blue-600" />
-                    <span className="font-bold text-gray-900 text-sm">{t("wizard.step3.xmlTitle")}</span>
-                  </div>
-                  <button
-                    onClick={() => setPreviewXmlModal(null)}
-                    className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-200 cursor-pointer transition-colors"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
+            <section
+              className="rounded-lg border border-slate-200 bg-white"
+              aria-labelledby="wizard-xml-title"
+              ref={(el) => el?.scrollIntoView({ block: "nearest" })}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-slate-500" aria-hidden="true" />
+                  <h3 id="wizard-xml-title" className="text-sm font-semibold text-slate-900">
+                    {t("wizard.step3.xmlTitle")}
+                  </h3>
                 </div>
-                <div className="p-4 flex-1 overflow-auto bg-gray-950 text-emerald-400 font-mono text-xs leading-relaxed">
-                  <pre>{previewXmlModal}</pre>
-                </div>
-                <div className="p-3 border-t border-gray-200 flex justify-end gap-2 bg-gray-50">
-                  <button
-                    onClick={handleDownloadXml}
-                    className="px-3.5 py-1.5 text-xs font-semibold border border-gray-300 rounded-lg hover:bg-white text-gray-700 cursor-pointer inline-flex items-center gap-1.5"
-                  >
-                    <Download className="w-3.5 h-3.5" />
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={handleDownloadXml} className="btn btn-secondary btn-sm">
+                    <Download className="h-4 w-4" aria-hidden="true" />
                     {t("wizard.step3.downloadXml")}
                   </button>
                   <button
+                    type="button"
                     onClick={() => {
                       navigator.clipboard.writeText(previewXmlModal);
                       alert(t("wizard.alerts.xmlCopied"));
                     }}
-                    className="px-3.5 py-1.5 text-xs font-semibold border border-gray-300 rounded-lg hover:bg-white text-gray-700 cursor-pointer"
+                    className="btn btn-secondary btn-sm"
                   >
                     {t("xml.copy")}
                   </button>
-                  <button
-                    onClick={() => setPreviewXmlModal(null)}
-                    className="px-4 py-1.5 text-xs font-semibold bg-gray-900 text-white rounded-lg hover:bg-gray-800 cursor-pointer"
-                  >
+                  <button type="button" onClick={() => setPreviewXmlModal(null)} className="btn btn-secondary btn-sm">
+                    <X className="h-4 w-4" aria-hidden="true" />
                     {t("detail.close")}
                   </button>
                 </div>
               </div>
-            </div>
+              <div className="max-h-[60vh] overflow-auto bg-slate-950 p-4 font-mono text-sm leading-relaxed text-slate-100">
+                <pre>{previewXmlModal}</pre>
+              </div>
+            </section>
           )}
         </div>
       )}
@@ -2742,7 +2695,7 @@ function WebPackingWizard({
               </p>
 
               <div className="mt-3">
-                <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
                   {t("shipments:xml.confirm.recipient")}
                 </label>
                 <div className="px-3 py-2 bg-slate-50 border border-slate-200 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 focus-within:bg-white rounded-xl text-xs text-slate-700 flex items-center gap-2 transition-all">
@@ -2894,6 +2847,15 @@ function ExcelPackingWorkflow({
   const detectedPackingSlips = useMemo(() => {
     return packingSlipGroups.map((g) => g.slipNumber).filter((s) => s !== "DEFAULT");
   }, [packingSlipGroups]);
+
+  // Single delivery date (one packing slip): required, today or later (local date).
+  const excelSingleDateValue =
+    estimatedArrival || (detectedPackingSlips[0] ? packingSlipDates[detectedPackingSlips[0]] : "") || "";
+  const excelSingleDateErr = excelSingleDateValue
+    ? deliveryDateError(excelSingleDateValue)
+    : attemptedSubmit
+    ? "validation.required"
+    : null;
 
   // Map each packing slip to its first occurrence index in rows
   const firstIndexForSlip = useMemo(() => {
@@ -3162,8 +3124,9 @@ function ExcelPackingWorkflow({
       // Pre-fill delivery dates parsed directly from Excel rows
       res.rows?.forEach((r: any) => {
         const ps = r.pack_number?.trim() || detectedPs[0] || "DEFAULT";
-        if (r.delivery_date && !updatedDates[ps]) {
-          updatedDates[ps] = r.delivery_date;
+        // Never prefill a date that has already passed — the user must pick today or later.
+        if (r.delivery_date && !updatedDates[ps] && !isPastLocalDate(r.delivery_date)) {
+          updatedDates[ps] = toISODate(r.delivery_date) || r.delivery_date;
         }
       });
 
@@ -3256,10 +3219,22 @@ function ExcelPackingWorkflow({
         alert(t("excel.alerts.missingDates", { slips: missing.join(", ") }));
         return;
       }
+      // Same rule as the single date: every packing slip date must be today or later.
+      const past = detectedPackingSlips.filter((ps) => deliveryDateError(packingSlipDates[ps]));
+      if (past.length > 0) {
+        setAttemptedSubmit(true);
+        alert(t("excel.alerts.pastDates", { slips: past.join(", ") }));
+        return;
+      }
     } else {
       const singleDate = estimatedArrival?.trim() || (detectedPackingSlips[0] ? packingSlipDates[detectedPackingSlips[0]]?.trim() : "");
       if (!singleDate) {
         alert(t("excel.alerts.needDate"));
+        return;
+      }
+      if (deliveryDateError(singleDate)) {
+        setAttemptedSubmit(true);
+        document.getElementById("excel-delivery-date")?.focus();
         return;
       }
       if (!packingSlipNumber.trim() && detectedPackingSlips.length === 0) {
@@ -3268,6 +3243,7 @@ function ExcelPackingWorkflow({
       }
     }
 
+    if (submitting) return; // no double submit
     setSubmitting(true);
     try {
       await ensureFreshToken(60);
@@ -3308,6 +3284,7 @@ function ExcelPackingWorkflow({
 
       setCreatedResponse(res);
       setDispatchedSuccess(true);
+      broadcastInvalidate(["shipments", "purchaseOrders", "kpi"]);
       const suppCode = user?.supplier_code || "0000018194";
       clearExcelDraft(suppCode, activePos);
       clearManualDraft(suppCode, activePos);
@@ -3517,13 +3494,21 @@ function ExcelPackingWorkflow({
                           [targetKey]: val,
                         }));
                       }}
+                      min={todayLocalISO()}
+                      aria-invalid={Boolean(excelSingleDateErr)}
+                      aria-describedby="excel-delivery-date-error"
                       className={cn(
                         "h-8 px-2.5 text-xs font-mono font-bold rounded-lg border bg-white outline-none shadow-2xs cursor-pointer disabled:bg-slate-100 disabled:text-slate-500 transition-all",
-                        attemptedSubmit && !(estimatedArrival?.trim() || (detectedPackingSlips[0] ? packingSlipDates[detectedPackingSlips[0]]?.trim() : ""))
+                        excelSingleDateErr
                           ? "border-red-500 ring-2 ring-red-200 bg-red-50/40"
                           : "border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400"
                       )}
                     />
+                    {excelSingleDateErr && (
+                      <span id="excel-delivery-date-error" role="alert" className="text-sm text-red-600">
+                        {t(`common:${excelSingleDateErr}` as "common:validation.required")}
+                      </span>
+                    )}
                   </div>
                 </>
               )}
@@ -3652,11 +3637,11 @@ function ExcelPackingWorkflow({
                               number: createdResponse.shipment?.shipment_number || packingSlipNumber,
                             })}
                       </span>
-                      <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded">
+                      <span className="text-xs font-bold uppercase tracking-wider bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded">
                         {t("wizard.step3.transmitted")}
                       </span>
                     </div>
-                    <p className="text-[11px] text-emerald-800 mt-0.5 font-mono">
+                    <p className="text-xs text-emerald-800 mt-0.5 font-mono">
                       {t("excel.success.asnLine", {
                         asn: createdResponse.asn?.asn_number || `ASN-${packingSlipNumber}`,
                         count: createdResponse.shipment?.total_boxes || validationResult.rows.length,
@@ -3733,7 +3718,7 @@ function ExcelPackingWorkflow({
                 <div className="flex items-center gap-2 text-red-800 font-bold">
                   <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
                   <span>{t("excel.errors.title")}</span>
-                  <span className="text-[10px] bg-red-200 text-red-900 px-1.5 py-0.5 rounded font-mono">
+                  <span className="text-xs bg-red-200 text-red-900 px-1.5 py-0.5 rounded font-mono">
                     {t("excel.errors.actionRequired")}
                   </span>
                 </div>
@@ -3756,7 +3741,7 @@ function ExcelPackingWorkflow({
                       </p>
                       <div className="max-h-28 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
                         {errorRows.slice(0, 10).map((r, idx) => (
-                          <div key={idx} className="bg-white/80 p-1.5 rounded border border-red-200 text-red-900 font-mono text-[11px] flex items-center justify-between gap-2">
+                          <div key={idx} className="bg-white/80 p-1.5 rounded border border-red-200 text-red-900 font-mono text-xs flex items-center justify-between gap-2">
                             <span>
                               {t("excel.errors.rowRef", {
                                 row: r.row_index,
@@ -3769,7 +3754,7 @@ function ExcelPackingWorkflow({
                           </div>
                         ))}
                         {errorRows.length > 10 && (
-                          <p className="text-[10px] text-red-500 italic">
+                          <p className="text-xs text-red-500 italic">
                             {t("excel.errors.more", { count: errorRows.length - 10 })}
                           </p>
                         )}
@@ -3778,7 +3763,7 @@ function ExcelPackingWorkflow({
                   );
                 })()}
 
-                <p className="text-[11px] text-red-600 font-medium pt-0.5">
+                <p className="text-xs text-red-600 font-medium pt-0.5">
                   {t("excel.errors.fixHint")}
                 </p>
               </div>
@@ -3792,7 +3777,7 @@ function ExcelPackingWorkflow({
                   <span className="text-xs font-bold text-gray-800 uppercase tracking-wider">
                     {t("wizard.step3.breakdown")}
                   </span>
-                  <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100/70 border border-emerald-200 px-2 py-0.5 rounded-full">
+                  <span className="text-xs font-bold text-emerald-700 bg-emerald-100/70 border border-emerald-200 px-2 py-0.5 rounded-full">
                     {t("wizard.step3.cartonsRolls", { count: validationResult.rows.length })}
                   </span>
                 </div>
@@ -3854,7 +3839,8 @@ function ExcelPackingWorkflow({
                         formatHu(startingSeq + i);
 
                       const rowPs = (r.pack_number || "").trim() || packingSlipNumber.trim() || "DEFAULT";
-                      const rowDate = packingSlipDates[rowPs] || r.delivery_date || estimatedArrival || "";
+                      const fileDate = r.delivery_date && !isPastLocalDate(r.delivery_date) ? toISODate(r.delivery_date) : "";
+                      const rowDate = packingSlipDates[rowPs] || fileDate || estimatedArrival || "";
 
                       const cleanCtn = (() => {
                         const cnStr = String(r.carton_number || "").trim();
@@ -3863,7 +3849,7 @@ function ExcelPackingWorkflow({
                           return (
                             <span className="inline-flex items-center gap-1">
                               <span className="font-bold text-gray-800">{match[1]}</span>
-                              <span className="text-[11px] text-gray-500 font-medium">{match[2]}</span>
+                              <span className="text-xs text-gray-500 font-medium">{match[2]}</span>
                             </span>
                           );
                         }
@@ -3897,7 +3883,7 @@ function ExcelPackingWorkflow({
                                 {r.pack_number || packingSlipNumber || "—"}
                               </span>
                             ) : (
-                              <span className="font-mono text-[11px] text-slate-400">
+                              <span className="font-mono text-xs text-slate-400">
                                 {r.pack_number || packingSlipNumber || "—"}
                               </span>
                             )}
@@ -3908,8 +3894,10 @@ function ExcelPackingWorkflow({
                             {isFirstOccurrence ? (
                               <input
                                 type="date"
+                                min={todayLocalISO()}
                                 disabled={Boolean(createdResponse)}
                                 value={rowDate}
+                                aria-invalid={Boolean(rowDate && isPastLocalDate(rowDate))}
                                 onChange={(e) => {
                                   const val = e.target.value;
                                   setPackingSlipDates((prev) => ({
@@ -3919,7 +3907,7 @@ function ExcelPackingWorkflow({
                                 }}
                                 className={cn(
                                   "h-6 px-1.5 text-xs font-mono font-bold rounded border bg-white focus:outline-none focus:ring-1 cursor-pointer disabled:bg-slate-100 disabled:text-slate-500 w-30 shadow-2xs transition-all",
-                                  attemptedSubmit && !rowDate
+                                  (attemptedSubmit && !rowDate) || (rowDate && isPastLocalDate(rowDate) && !createdResponse)
                                     ? "border-red-500 ring-2 ring-red-200 bg-red-50/40 text-red-900 focus:border-red-500 focus:ring-red-400"
                                     : !rowDate && !createdResponse
                                     ? "border-amber-400 bg-amber-50/60 text-amber-900 focus:border-amber-500 focus:ring-amber-400"
@@ -4024,10 +4012,10 @@ function ExcelPackingWorkflow({
                             className="w-3.5 h-3.5 text-emerald-600 rounded border-gray-300 cursor-pointer" 
                           />
                           <span className="font-mono font-bold text-xs text-gray-900">PO {po}</span>
-                          <span className="text-[11px] text-gray-500 font-mono">{t("wizard.step1.lines", { count: lines.length })}</span>
+                          <span className="text-xs text-gray-500 font-mono">{t("wizard.step1.lines", { count: lines.length })}</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <label className="text-[10px] font-bold text-gray-500 uppercase">{t("wizard.step1.packType")}</label>
+                          <label className="text-xs font-bold text-gray-500 uppercase">{t("wizard.step1.packType")}</label>
                           <select
                             value={poConfigs[po] || "BOX"}
                             onChange={(e) => setPoConfigs(prev => ({ ...prev, [po]: e.target.value as "BOX"|"ROLL" }))}
@@ -4039,7 +4027,7 @@ function ExcelPackingWorkflow({
                         </div>
                       </div>
 
-                      <div className="overflow-auto max-h-[360px]">
+                      <div className="overflow-auto max-h-[55vh]">
                         <table className="w-full text-xs text-left border-collapse">
                           <thead className="sticky top-0 z-10 bg-zinc-700 shadow-xs">
                             <tr className="bg-zinc-700 text-white text-xs font-semibold uppercase tracking-wider border-b border-zinc-800">
@@ -4086,7 +4074,7 @@ function ExcelPackingWorkflow({
                                   <td className="py-1 px-2 font-mono font-bold text-gray-800 whitespace-nowrap border-r border-gray-200">
                                     {l.po_item}
                                     {isClosed && (
-                                      <span className="ml-1.5 text-[10px] bg-red-100 text-red-700 px-1.5 py-0.2 rounded font-bold">
+                                      <span className="ml-1.5 text-xs bg-red-100 text-red-700 px-1.5 py-0.2 rounded font-bold">
                                         {t("wizard.step1.fulfilled")}
                                       </span>
                                     )}
@@ -4142,7 +4130,7 @@ function ExcelPackingWorkflow({
               </div>
               
               <div className="mt-2.5 pt-2 border-t border-gray-200 shrink-0">
-                <p className="text-[11px] text-gray-500 text-center">
+                <p className="text-xs text-gray-500 text-center">
                   {t("excel.selection.hint")}
                 </p>
               </div>
@@ -4175,7 +4163,7 @@ function ExcelPackingWorkflow({
               </p>
 
               <div className="mt-3">
-                <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
                   {t("shipments:xml.confirm.recipient")}
                 </label>
                 <div className="px-3 py-2 bg-slate-50 border border-slate-200 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 focus-within:bg-white rounded-xl text-xs text-slate-700 flex items-center gap-2 transition-all">
@@ -4220,550 +4208,3 @@ function ExcelPackingWorkflow({
     </div>
   );
 }
-// ───────────────────────────────────────────────────────────────────
-// SUBCOMPONENT C: XML Preview & Dispatch Modal
-// ───────────────────────────────────────────────────────────────────
-function XmlPreviewModal({
-  data,
-  onClose,
-}: {
-  data: {
-    open: boolean;
-    title: string;
-    xmlContent: string;
-    asnId?: string;
-    validated: boolean;
-  };
-  onClose: () => void;
-}) {
-  const { t } = useTranslation(["shipments", "common"]);
-  const user = useAuthStore((s) => s.user);
-  const [copied, setCopied] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [sentSuccess, setSentSuccess] = useState(false);
-  const [showConfirmXmlSend, setShowConfirmXmlSend] = useState(false);
-  const [xmlDispatchEmail, setXmlDispatchEmail] = useState<string>(
-    () => localStorage.getItem("asn_iungo_dispatch_recipient") || "edi@orders.buyer.org"
-  );
-
-  useEffect(() => {
-    shipmentService.getDispatchSettings().then((s) => {
-      if (s?.recipient_email) {
-        setXmlDispatchEmail(s.recipient_email);
-        localStorage.setItem("asn_iungo_dispatch_recipient", s.recipient_email);
-      }
-    }).catch(() => {});
-  }, []);
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(data.xmlContent);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleDownload = () => {
-    const blob = new Blob([data.xmlContent], { type: "application/xml" });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = formatOfficialXmlFilename(undefined, undefined, data.xmlContent);
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    window.URL.revokeObjectURL(url);
-  };
-
-  const handleSend = async () => {
-    if (!data.asnId) return;
-    setSending(true);
-    try {
-      await shipmentService.sendASN(data.asnId, xmlDispatchEmail.trim() || undefined);
-      setSentSuccess(true);
-    } catch (e) {
-      setSentSuccess(true);
-    } finally {
-      setSending(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4 backdrop-blur-sm">
-      <div className="relative w-full max-w-4xl rounded-2xl bg-white p-6 shadow-2xl">
-        <div className="flex items-center justify-between border-b border-gray-200 pb-4">
-          <div className="flex items-center gap-2">
-            <FileCode className="h-5 w-5 text-blue-600" />
-            <div>
-              <h2 className="text-base font-bold text-gray-900">{data.title}</h2>
-              <div className="flex items-center gap-2 text-xs text-gray-500">
-                <span className="font-mono">DOCTYPE: SdDataSlice SYSTEM "m2Data_Partner.dtd"</span>
-                <span>•</span>
-                <span className="text-emerald-600 font-semibold">{t("shipments:xml.validated")}</span>
-              </div>
-            </div>
-          </div>
-          <button onClick={onClose} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 cursor-pointer transition-colors">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <div className="mt-4">
-          <div className="relative max-h-[420px] overflow-auto rounded-xl bg-gray-950 p-4 font-mono text-xs text-gray-100">
-            <pre className="whitespace-pre">{data.xmlContent}</pre>
-          </div>
-        </div>
-
-        <div className="mt-4 flex items-center justify-between border-t border-gray-200 pt-4">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleCopy}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 shadow-xs cursor-pointer transition-colors"
-            >
-              {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : null}
-              {copied ? t("shipments:xml.copied") : t("shipments:xml.copy")}
-            </button>
-            <button
-              onClick={handleDownload}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 shadow-xs cursor-pointer transition-colors"
-            >
-              <Download className="h-3.5 w-3.5" /> {t("shipments:xml.download")}
-            </button>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {sentSuccess ? (
-              <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200">
-                <Check className="h-4 w-4" /> {t("shipments:xml.sent")}
-              </span>
-            ) : (
-              <button
-                onClick={() => setShowConfirmXmlSend(true)}
-                disabled={sending}
-                className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 cursor-pointer transition-colors"
-              >
-                {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                {t("shipments:xml.sendButton")}
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Send Confirmation Modal (Sign-out style popup) */}
-      {showConfirmXmlSend && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
-          <div className="relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl border border-gray-100">
-            <button
-              onClick={() => setShowConfirmXmlSend(false)}
-              disabled={sending}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 rounded-lg p-1 transition-colors cursor-pointer"
-            >
-              <X className="h-5 w-5" />
-            </button>
-
-            <div>
-              <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mb-3">
-                <Send className="w-5 h-5" />
-              </div>
-              <h3 className="text-lg font-bold text-gray-900">
-                {t("shipments:xml.confirm.title")}
-              </h3>
-              <p className="mt-2 text-sm text-gray-500 leading-relaxed">
-                {t("shipments:xml.confirm.message")}
-              </p>
-
-              <div className="mt-3">
-                <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                  {t("shipments:xml.confirm.recipient")}
-                </label>
-                <div className="px-3 py-2 bg-slate-50 border border-slate-200 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:bg-white rounded-xl text-xs text-slate-700 flex items-center gap-2 transition-all">
-                  <Mail className="w-4 h-4 text-slate-400 shrink-0" />
-                  <input
-                    type="email"
-                    value={xmlDispatchEmail}
-                    readOnly={user?.role === "SUPPLIER"}
-                    onChange={(e) => setXmlDispatchEmail(e.target.value)}
-                    placeholder="edi@orders.buyer.org"
-                    className="w-full bg-transparent text-slate-800 font-mono font-semibold text-xs focus:outline-none read-only:cursor-default"
-                  />
-                </div>
-              </div>
-
-              <div className="mt-6 flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  disabled={sending}
-                  onClick={() => setShowConfirmXmlSend(false)}
-                  className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
-                >
-                  {t("common:actions.cancel")}
-                </button>
-                <button
-                  type="button"
-                  disabled={sending}
-                  onClick={async () => {
-                    setShowConfirmXmlSend(false);
-                    await handleSend();
-                  }}
-                  className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 active:bg-blue-800 transition-colors cursor-pointer flex items-center gap-1.5"
-                >
-                  {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                  {sending ? t("shipments:xml.confirm.sending") : t("shipments:xml.confirm.send")}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ───────────────────────────────────────────────────────────────────
-// SUBCOMPONENT D: Full Shipment & Carton Inspection Modal
-// ───────────────────────────────────────────────────────────────────
-function ShipmentDetailModal({
-  shipmentId,
-  onClose,
-  onDownloadLabels,
-  onPreviewXml,
-}: {
-  shipmentId: string;
-  onClose: () => void;
-  onDownloadLabels: (id: string, num: string, count?: number) => void;
-  onPreviewXml: (shipment: any) => void;
-}) {
-  const { t } = useTranslation("shipments");
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [copiedHu, setCopiedHu] = useState<string | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
-    shipmentService
-      .getShipmentDetail(shipmentId)
-      .then((res) => {
-        if (active) setData(res);
-      })
-      .catch((err) => {
-        if (active) setError(getErrorMessage(err, t("detail.loadFailed")));
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [shipmentId]);
-
-  const handleCopyHu = (hu: string) => {
-    navigator.clipboard.writeText(hu);
-    setCopiedHu(hu);
-    setTimeout(() => setCopiedHu(null), 2000);
-  };
-
-  const plantName = (data as any)?.destination_plant || (data?.plant_code ? formatPlantName(data.plant_code) : "N/A");
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4 backdrop-blur-sm">
-      <div className="relative w-full max-w-5xl rounded-2xl bg-white shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[90vh]">
-        {/* Modal Header */}
-        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 bg-gray-50/70">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold shadow-xs">
-              <Box className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold text-gray-900">
-                  {t("detail.title", { number: data?.shipment_number || "..." })}
-                </h2>
-                {data?.status && (
-                  <span
-                    className={cn(
-                      "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold border",
-                      statusColor[data.status] || "bg-gray-100 text-gray-700 border-gray-200"
-                    )}
-                  >
-                    {shipmentStatusLabel(data.status)}
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-gray-500 mt-0.5">
-                <Trans
-                  t={t}
-                  i18nKey="detail.destination"
-                  values={{ plant: plantName }}
-                  components={{ strong: <strong className="text-gray-800" /> }}
-                />
-                {data?.ship_date && (
-                  <>
-                    {" • "}
-                    <Trans
-                      t={t}
-                      i18nKey="detail.shipDate"
-                      values={{ date: formatDate(data.ship_date, "numeric") }}
-                      components={{ strong: <strong className="text-gray-800" /> }}
-                    />
-                  </>
-                )}
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-2 text-gray-400 hover:bg-gray-200 hover:text-gray-700 transition-colors cursor-pointer"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        {/* Modal Body */}
-        <div className="p-6 overflow-y-auto space-y-5 flex-1">
-          {loading ? (
-            <div className="py-20 text-center text-gray-500">
-              <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-3" />
-              <p className="font-semibold text-sm">{t("detail.loading")}</p>
-            </div>
-          ) : error ? (
-            <div className="py-12 text-center text-red-600 bg-red-50 rounded-xl border border-red-200">
-              <AlertTriangle className="w-8 h-8 mx-auto mb-2" />
-              <p className="font-semibold text-sm">{error}</p>
-            </div>
-          ) : data ? (
-            <>
-              {/* Cartons Table */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">
-                    {t("detail.breakdown", { count: data.cartons?.length || 0 })}
-                  </h3>
-                  <span className="text-xs text-gray-400">
-                    {t("detail.clickToCopy")}
-                  </span>
-                </div>
-                <div className="overflow-auto max-h-[62vh] border border-gray-300 shadow-2xs">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead className="sticky top-0 z-10 bg-zinc-700 text-white text-xs font-semibold uppercase tracking-wider border-b border-zinc-800 shadow-xs">
-                      <tr>
-                        <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("detail.table.box")}</th>
-                        <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("detail.table.hu")}</th>
-                        <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("detail.table.poLine")}</th>
-                        <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("detail.table.productCode")}</th>
-                        <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("detail.table.lot")}</th>
-                        <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">{t("detail.table.quantity")}</th>
-                        <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">{t("detail.table.gw")}</th>
-                        <th className="py-1.5 px-2 text-right whitespace-nowrap">{t("detail.table.nw")}</th>
-                      </tr>
-                    </thead>
-                    <tbody className="font-mono">
-                      {(data.cartons || []).map((c: any, idx: number) => {
-                        const meta = c.details || {};
-                        return (
-                          <tr key={idx} className="bg-white even:bg-gray-100 hover:bg-blue-50/70 border-b border-gray-300 text-xs transition-colors">
-                            <td className="py-1 px-2 font-bold text-gray-700 whitespace-nowrap border-r border-gray-200">{c.box_number || idx + 1}</td>
-                            <td className="py-1 px-2 font-bold text-gray-900 whitespace-nowrap border-r border-gray-200">
-                              <button
-                                type="button"
-                                onClick={() => handleCopyHu(c.hu_number)}
-                                title={t("detail.copyHuTitle")}
-                                className="inline-flex items-center gap-1.5 text-gray-800 hover:text-blue-700 cursor-pointer font-bold transition-colors"
-                              >
-                                {c.hu_number}
-                                {copiedHu === c.hu_number ? (
-                                  <Check className="w-3 h-3 text-emerald-600" />
-                                ) : null}
-                              </button>
-                            </td>
-                            <td className="py-1 px-2 text-gray-700 whitespace-nowrap border-r border-gray-200">
-                              {meta.po_number || " "}{meta.po_line ? ` / ${meta.po_line}` : ""}
-                            </td>
-                            <td className="py-1 px-2 font-semibold text-gray-800 whitespace-nowrap border-r border-gray-200">
-                              {meta.product_code || " "}
-                            </td>
-                            <td className="py-1 px-2 text-gray-600 whitespace-nowrap border-r border-gray-200">
-                              {meta.lot_number || " "}
-                            </td>
-                            <td className="py-1 px-2 text-right font-bold text-blue-700 whitespace-nowrap border-r border-gray-200">
-                              {meta.quantity != null ? formatNumber(meta.quantity) : 0} {meta.uom || data.uom || "M"}
-                            </td>
-                            <td className="py-1 px-2 text-right text-gray-800 whitespace-nowrap border-r border-gray-200">
-                              {c.gross_weight?.toFixed(2) || "0.00"}
-                            </td>
-                            <td className="py-1 px-2 text-right text-gray-600 whitespace-nowrap">
-                              {c.net_weight?.toFixed(2) || "0.00"}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </>
-          ) : null}
-        </div>
-
-        {/* Modal Footer Actions */}
-        <div className="flex items-center justify-between border-t border-slate-200 px-6 py-4 bg-slate-50/70">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 transition-colors cursor-pointer"
-          >
-            {t("detail.close")}
-          </button>
-
-          {data && (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => {
-                  onPreviewXml(data);
-                }}
-                className="inline-flex items-center gap-1.5 px-4 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
-              >
-                <FileCode className="w-3.5 h-3.5 text-slate-500" />
-                {t("detail.viewXml")}
-              </button>
-
-              <button
-                onClick={() => onDownloadLabels(data.id, data.shipment_number, data.total_boxes)}
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
-              >
-                <Printer className="w-3.5 h-3.5" />
-                {t("detail.printLabels")}
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ───────────────────────────────────────────────────────────────────
-// SUBCOMPONENT E: Label Print & Size Customization Modal
-// ───────────────────────────────────────────────────────────────────
-function LabelPrintModal({
-  data,
-  onClose,
-  onDownload,
-  isLoading,
-}: {
-  data: {
-    open: boolean;
-    shipmentId: string;
-    shipmentNumber: string;
-    totalBoxes?: number;
-  };
-  onClose: () => void;
-  onDownload: (size: string, autoPrint: boolean) => void;
-  isLoading?: boolean;
-}) {
-  const { t } = useTranslation(["shipments", "common"]);
-  const [selectedSize, setSelectedSize] = useState<string>(() => {
-    return localStorage.getItem("asn_preferred_label_size") || "6x4";
-  });
-
-  const handleSelectSize = (size: string) => {
-    setSelectedSize(size);
-    localStorage.setItem("asn_preferred_label_size", size);
-  };
-
-  const SIZES = [
-    { id: "6x4", title: t("shipments:labels.sizes.landscape") },
-    { id: "4x6", title: t("shipments:labels.sizes.portrait") },
-    { id: "4x3", title: t("shipments:labels.sizes.compact") },
-    { id: "a4", title: t("shipments:labels.sizes.a4") },
-  ];
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4 backdrop-blur-sm animate-in fade-in duration-150">
-      <div className="relative w-full max-w-md rounded-2xl bg-white shadow-xl border border-gray-200 overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-          <div>
-            <h2 className="text-base font-semibold text-gray-900">{t("shipments:labels.title")}</h2>
-            <p className="text-xs text-gray-500 font-mono mt-0.5">
-              {data.shipmentNumber} • {t("shipments:cartons", { count: data.totalBoxes ?? 1 })}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors cursor-pointer"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="p-6 space-y-3">
-          <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider block">
-            {t("shipments:labels.selectSize")}
-          </label>
-          <div className="space-y-2">
-            {SIZES.map((s) => {
-              const isSelected = selectedSize === s.id;
-              return (
-                <label
-                  key={s.id}
-                  onClick={() => handleSelectSize(s.id)}
-                  className={cn(
-                    "flex items-center gap-3 px-4 py-3 rounded-xl border text-sm transition-all cursor-pointer select-none",
-                    isSelected
-                      ? "border-blue-600 bg-blue-50/50 text-blue-950 font-medium shadow-2xs"
-                      : "border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50/60"
-                  )}
-                >
-                  <input
-                    type="radio"
-                    name="labelSize"
-                    checked={isSelected}
-                    onChange={() => handleSelectSize(s.id)}
-                    className="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer"
-                  />
-                  <span>{s.title}</span>
-                </label>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Footer Actions */}
-        <div className="flex items-center justify-between border-t border-gray-100 px-6 py-4 bg-gray-50/60">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 border border-gray-200 rounded-lg text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors cursor-pointer"
-          >
-            {t("common:actions.cancel")}
-          </button>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              disabled={isLoading}
-              onClick={() => onDownload(selectedSize, true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 rounded-lg text-xs font-medium transition-colors cursor-pointer disabled:opacity-50"
-              title={t("shipments:labels.printDirectlyTitle")}
-            >
-              {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              {t("shipments:labels.printDirectly")}
-            </button>
-
-            <button
-              type="button"
-              disabled={isLoading}
-              onClick={() => onDownload(selectedSize, false)}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
-            >
-              {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              {t("shipments:labels.downloadPdf")}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
