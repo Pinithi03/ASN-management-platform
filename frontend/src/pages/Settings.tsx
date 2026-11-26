@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { shipmentService } from "@/services/shipmentService";
+import { getErrorMessage } from "@/services/apiError";
 
 type TabType = "company" | "email" | "asn" | "security" | "health";
 
@@ -86,9 +87,27 @@ export default function Settings() {
       });
   }, []);
 
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const validationErrors: Record<string, string> = {};
+  if (!EMAIL_RE.test(iungoDispatchEmail.trim())) validationErrors.dispatchEmail = "Enter a valid email address.";
+  // "From" may be "Display Name <email@x.com>" or a bare address.
+  const fromEmail = (/<([^>]+)>\s*$/.exec(smtpFromAddress.trim())?.[1] ?? smtpFromAddress).trim();
+  if (smtpFromAddress.trim() && !EMAIL_RE.test(fromEmail)) validationErrors.smtpFrom = "Enter a valid sender address (e.g. Name <name@company.com>).";
+  const portNum = Number(smtpPort);
+  if (smtpPort.trim() && (!Number.isInteger(portNum) || portNum < 1 || portNum > 65535)) validationErrors.smtpPort = "Port must be a whole number from 1 to 65535.";
+  if (smtpHost.trim().length > 255) validationErrors.smtpHost = "Use at most 255 characters.";
+
   const handleSave = async () => {
+    if (saving) return; // no double submit
+    if (Object.keys(validationErrors).length > 0) {
+      setSaveError(`Please fix: ${Object.values(validationErrors).join(" ")}`);
+      setActiveTab("email");
+      return;
+    }
     setSaving(true);
     setSavedSuccess(false);
+    setSaveError(null);
     try {
       localStorage.setItem("asn_iungo_dispatch_recipient", iungoDispatchEmail.trim());
       await shipmentService.updateDispatchSettings({
@@ -104,12 +123,15 @@ export default function Settings() {
         setSmtpPasswordSet(true);
         setSmtpPassword("");
       }
+      setSavedSuccess(true);
+      setTimeout(() => setSavedSuccess(false), 3000);
     } catch (e) {
-      console.warn("Failed to persist to backend, stored in local storage:", e);
+      // Previously this still showed "Settings Saved!" — report the failure instead.
+      console.warn("Failed to persist settings to backend:", e);
+      setSaveError(getErrorMessage(e, "Settings could not be saved. Please try again."));
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 3000);
   };
 
   const handleTestImap = () => {
@@ -131,6 +153,11 @@ export default function Settings() {
 
         {/* Save Button */}
         <div className="flex items-center gap-3">
+          {saveError && (
+            <span role="alert" className="text-sm text-red-700 bg-red-50 px-3 py-1.5 rounded-lg border border-red-200">
+              {saveError}
+            </span>
+          )}
           {savedSuccess && (
             <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200 animate-in fade-in">
               <CheckCircle2 className="w-4 h-4" /> Settings Saved!
@@ -342,10 +369,16 @@ export default function Settings() {
                     value={iungoDispatchEmail}
                     onChange={(e) => setIungoDispatchEmail(e.target.value)}
                     placeholder="edi@orders.buyer.org"
-                    className="w-full pl-10 rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm font-mono font-medium text-gray-900 focus:bg-white focus:border-emerald-500 focus:outline-none"
+                    maxLength={254}
+                    aria-invalid={Boolean(validationErrors.dispatchEmail)}
+                    className={cn(
+                      "w-full pl-10 rounded-lg border bg-slate-50 px-3.5 py-2 text-sm font-mono font-medium text-gray-900 focus:bg-white focus:border-emerald-500 focus:outline-none",
+                      validationErrors.dispatchEmail ? "border-red-400" : "border-slate-200"
+                    )}
                   />
                 </div>
-                <p className="text-[11px] text-gray-400 mt-1">
+                {validationErrors.dispatchEmail && <p className="mt-1 text-sm text-red-600">{validationErrors.dispatchEmail}</p>}
+                <p className="text-xs text-gray-400 mt-1">
                   Default EDI Inbox: <code className="bg-gray-100 px-1 py-0.5 rounded text-gray-600">edi@orders.buyer.org</code> (or live IUNGO ingestion mailbox, e.g. <code className="bg-gray-100 px-1 py-0.5 rounded text-gray-600">benji@iungomail.com</code>)
                 </p>
               </div>
@@ -372,8 +405,15 @@ export default function Settings() {
                       value={smtpPort}
                       onChange={(e) => setSmtpPort(e.target.value)}
                       placeholder="587"
-                      className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm font-mono text-gray-900 focus:bg-white focus:border-emerald-500 focus:outline-none"
+                      inputMode="numeric"
+                      maxLength={5}
+                      aria-invalid={Boolean(validationErrors.smtpPort)}
+                      className={cn(
+                        "w-full rounded-lg border bg-slate-50 px-3.5 py-2 text-sm font-mono text-gray-900 focus:bg-white focus:border-emerald-500 focus:outline-none",
+                        validationErrors.smtpPort ? "border-red-400" : "border-slate-200"
+                      )}
                     />
+                    {validationErrors.smtpPort && <p className="mt-1 text-sm text-red-600">{validationErrors.smtpPort}</p>}
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-gray-600 mb-1">Sender Email / SMTP Username</label>
@@ -404,8 +444,14 @@ export default function Settings() {
                       value={smtpFromAddress}
                       onChange={(e) => setSmtpFromAddress(e.target.value)}
                       placeholder="Omegaline Integration <integration@company.com>"
-                      className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm font-mono text-gray-900 focus:bg-white focus:border-emerald-500 focus:outline-none"
+                      maxLength={320}
+                      aria-invalid={Boolean(validationErrors.smtpFrom)}
+                      className={cn(
+                        "w-full rounded-lg border bg-slate-50 px-3.5 py-2 text-sm font-mono text-gray-900 focus:bg-white focus:border-emerald-500 focus:outline-none",
+                        validationErrors.smtpFrom ? "border-red-400" : "border-slate-200"
+                      )}
                     />
+                    {validationErrors.smtpFrom && <p className="mt-1 text-sm text-red-600">{validationErrors.smtpFrom}</p>}
                   </div>
                   <div className="flex items-center pt-5">
                     <label className="flex items-center gap-2 text-xs font-semibold text-gray-700 cursor-pointer">
@@ -577,7 +623,7 @@ export default function Settings() {
                   />
                   <Lock className="w-4 h-4 text-gray-400 absolute right-3 top-2.5" />
                 </div>
-                <p className="text-[11px] text-gray-400 mt-1">
+                <p className="text-xs text-gray-400 mt-1">
                   Current development password: <code className="font-mono text-emerald-700 font-bold">admin</code>
                 </p>
               </div>
@@ -638,7 +684,7 @@ export default function Settings() {
                       {service.status}
                     </span>
                   </div>
-                  <p className="text-[11px] text-gray-400 mt-2">{service.desc}</p>
+                  <p className="text-xs text-gray-400 mt-2">{service.desc}</p>
                 </div>
               );
             })}
