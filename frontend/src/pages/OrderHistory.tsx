@@ -1,6 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Trans, useTranslation } from "react-i18next";
+import { useTranslation } from "react-i18next";
 import { formatDate, formatNumber } from "@/i18n/format";
 import {
   History,
@@ -11,16 +11,17 @@ import {
   X,
   CheckCircle2,
   Factory,
-  FileText,
   Copy,
   Check,
-  Building,
-  Mail,
 } from "lucide-react";
 import { poApi } from "@/services/poApi";
 import { useAuthStore } from "@/store/authStore";
 import type { PurchaseOrder } from "@/types/email";
 import { KNOWN_PLANTS, resolvePlantAndLocation } from "@/utils/plantResolver";
+import { poDetailPath } from "@/utils/poLineItems";
+import { statusBorderClass } from "@/utils/statusStyles";
+import StatusBadge from "@/components/ui/StatusBadge";
+import { cn } from "@/utils/cn";
 
 const formatDateDisplay = (dateStr?: string | null) => {
   if (!dateStr) return "—";
@@ -39,7 +40,7 @@ const formatDateDisplay = (dateStr?: string | null) => {
 };
 
 export default function OrderHistory() {
-  const { t } = useTranslation("orderHistory");
+  const { t } = useTranslation(["orderHistory", "purchaseOrders"]);
   const user = useAuthStore((s) => s.user);
   const isSupplier = user?.role === "SUPPLIER";
   const supplierId = isSupplier ? (user?.supplier_id || user?.supplier_code || undefined) : undefined;
@@ -49,7 +50,6 @@ export default function OrderHistory() {
   const [plantFilter, setPlantFilter] = useState<string>("ALL");
   const [search, setSearch] = useState("");
   const [poChips, setPoChips] = useState<string[]>([]);
-  const [selectedPO, setSelectedPO] = useState<PurchaseOrder | null>(null);
   const [copiedPO, setCopiedPO] = useState<string | null>(null);
 
   const normalizePO = (value: string) =>
@@ -73,13 +73,6 @@ export default function OrderHistory() {
     refetchInterval: 15000,
   });
 
-  const { data: fullPODetail, isLoading: isLoadingDetail } = useQuery({
-    queryKey: ["completedOrderDetail", selectedPO?.id],
-    queryFn: () => poApi.getById(selectedPO!.id),
-    enabled: Boolean(selectedPO?.id),
-  });
-
-  const activePO: PurchaseOrder | null = fullPODetail || selectedPO;
   const orders: PurchaseOrder[] = data?.items || [];
   const totalOrders = data?.total || 0;
 
@@ -138,31 +131,6 @@ export default function OrderHistory() {
     setCopiedPO(poNum);
     setTimeout(() => setCopiedPO(null), 1800);
   };
-
-  const detailItems = useMemo(() => {
-    if (!activePO) return [];
-    const raw = (activePO.extra_data as any)?.items;
-    if (Array.isArray(raw) && raw.length > 0) {
-      return raw.map((it: any, idx: number) => ({
-        line_number: String(it.order_line_number || it.line_number || idx + 1),
-        item_code: it.item_code || it.material_code || activePO.style_number || "—",
-        description: it.description || it.item_description || activePO.description || "—",
-        ordered: Number(it.quantity || 0),
-        shipped: Number(it.shipped_quantity ?? it.quantity ?? 0),
-        uom: it.uom || it.qty_unit || it.size || "M",
-      }));
-    }
-    return [
-      {
-        line_number: "00100",
-        item_code: activePO.style_number || activePO.item_code || "—",
-        description: activePO.description || t("detail.fulfilledLineFallback"),
-        ordered: Number(activePO.quantity || 0),
-        shipped: Number(activePO.shipped_quantity ?? activePO.quantity ?? 0),
-        uom: "PCS",
-      },
-    ];
-  }, [activePO, t]);
 
   return (
     <div className="h-full flex flex-col overflow-hidden px-4 pt-4 pb-0 sm:px-6 sm:pt-5 sm:pb-0 gap-3">
@@ -301,16 +269,28 @@ export default function OrderHistory() {
                   return (
                     <tr
                       key={po.id}
-                      onClick={() => setSelectedPO(po)}
-                      className="cursor-pointer transition-colors bg-white even:bg-gray-100 hover:bg-blue-50/70 border-b border-gray-300 text-xs group"
+                      onClick={(e) => {
+                        if ((e.target as HTMLElement).closest("a,button,input")) return;
+                        window.open(poDetailPath(po.id), "_blank", "noopener");
+                      }}
+                      className={cn(
+                        "cursor-pointer transition-colors bg-white hover:bg-slate-50 border-b border-slate-200 text-sm group",
+                        statusBorderClass(po.status)
+                      )}
                     >
                       <td className="py-1 px-2 whitespace-nowrap border-r border-gray-200">
                         <div className="flex items-center gap-1.5">
-                          <span className="font-mono font-bold text-xs text-slate-900 group-hover:text-emerald-700">
+                          <a
+                            href={poDetailPath(po.id)}
+                            target="_blank"
+                            rel="noopener"
+                            className="font-mono font-semibold text-slate-900 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-sm"
+                            aria-label={t("purchaseOrders:detail.openInNewTab", { po: po.po_number || "" })}
+                          >
                             {po.po_number || "—"}
-                          </span>
+                          </a>
                           {po.version && po.version > 1 ? (
-                            <span className="px-1 py-0 text-[10px] font-bold bg-amber-100 text-amber-800 rounded border border-amber-200">
+                            <span className="px-1 py-0 text-xs font-bold bg-amber-100 text-amber-800 rounded border border-amber-200">
                               V{po.version}
                             </span>
                           ) : null}
@@ -337,7 +317,7 @@ export default function OrderHistory() {
                       <td className="py-1 px-2 whitespace-nowrap border-r border-gray-200">
                         <div className="flex items-center gap-1.5">
                           <span className="text-xs font-medium text-slate-900">{plant.plantName}</span>
-                          <span className="px-1.5 py-0 text-[10px] font-mono font-semibold bg-slate-100 text-slate-700 border border-slate-200 rounded">
+                          <span className="px-1.5 py-0 text-xs font-mono font-semibold bg-slate-100 text-slate-700 border border-slate-200 rounded">
                             {plant.fullDeliveryAddress}
                           </span>
                         </div>
@@ -369,10 +349,7 @@ export default function OrderHistory() {
                       </td>
 
                       <td className="py-1 px-2 whitespace-nowrap">
-                        <span className="inline-flex items-center gap-1 px-2 py-0 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                          {t("status.completed")}
-                        </span>
+                        <StatusBadge status={po.status || "COMPLETED"} label={t("status.completed")} />
                       </td>
                     </tr>
                   );
@@ -383,165 +360,6 @@ export default function OrderHistory() {
         )}
       </div>
 
-      {/* Completed Order Detail & Fulfillment History Drawer */}
-      {selectedPO && (
-        <div
-          className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-2xs animate-in fade-in duration-200"
-          onClick={() => setSelectedPO(null)}
-        >
-          <div
-            className="w-full max-w-2xl bg-white h-full shadow-2xl border-l border-slate-200 flex flex-col overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-emerald-50/50">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs">
-                  <FileText className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-base font-bold font-mono text-slate-900">
-                      PO {activePO?.po_number}
-                    </h2>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                      {t("status.completed")}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-500">
-                    {t("detail.subtitle")}
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedPO(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              {isLoadingDetail && !fullPODetail ? (
-                <div className="flex items-center justify-center py-16 text-slate-400 text-sm">
-                  <RefreshCw className="w-5 h-5 animate-spin mr-2" />
-                  {t("detail.loading")}
-                </div>
-              ) : (
-                <>
-                  {/* Metadata Grid */}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                      <span className="text-[10px] font-bold uppercase text-slate-400 block">{t("detail.destinationPlant")}</span>
-                      <span className="text-xs font-semibold text-slate-900 mt-1 flex items-center gap-1.5">
-                        <Building className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        {activePO?.plant_name || activePO?.destination || "—"}
-                      </span>
-                    </div>
-                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                      <span className="text-[10px] font-bold uppercase text-slate-400 block">{t("detail.completedOn")}</span>
-                      <span className="text-xs font-semibold text-slate-900 mt-1 block">
-                        {formatDateDisplay(activePO?.updated_at)}
-                      </span>
-                    </div>
-                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 col-span-2 sm:col-span-1">
-                      <span className="text-[10px] font-bold uppercase text-slate-400 block">{t("detail.totalShipped")}</span>
-                      <span className="text-xs font-bold font-mono text-emerald-700 mt-1 block">
-                        {t("detail.totalShippedValue", {
-                          quantity: formatNumber(Math.round(Number(activePO?.shipped_quantity ?? activePO?.quantity ?? 0))),
-                        })}
-                      </span>
-                    </div>
-                  </div>
-
-                  {activePO?.contact_email && (
-                    <div className="flex items-center gap-2 text-xs text-slate-600 bg-slate-50 px-3.5 py-2.5 rounded-xl border border-slate-200">
-                      <Mail className="w-3.5 h-3.5 text-slate-400" />
-                      <span>
-                        <Trans
-                          t={t}
-                          i18nKey="detail.buyerContact"
-                          values={{ contact: activePO.contact_person || activePO.contact_email }}
-                          components={{ strong: <strong className="text-slate-800" /> }}
-                        />
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Fulfilled Line Items */}
-                  <div className="space-y-2.5">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                      {t("detail.lineItems", { count: detailItems.length })}
-                    </h3>
-                    <div className="rounded-xl border border-slate-200 overflow-auto max-h-[55vh]">
-                      <table className="w-full text-xs text-left border-collapse">
-                        <thead className="sticky top-0 z-10 bg-zinc-700 shadow-xs">
-                          <tr className="bg-zinc-700 text-white text-xs font-semibold uppercase tracking-wider border-b border-zinc-800">
-                            <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("detailTable.poLine")}</th>
-                            <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("detailTable.material")}</th>
-                            <th className="py-1.5 px-2 whitespace-nowrap border-r border-zinc-600">{t("detailTable.description")}</th>
-                            <th className="py-1.5 px-2 text-right whitespace-nowrap border-r border-zinc-600">{t("detailTable.ordered")}</th>
-                            <th className="py-1.5 px-2 text-right whitespace-nowrap">{t("detailTable.shipped")}</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {detailItems.map((li) => (
-                            <tr key={li.line_number} className="bg-white even:bg-gray-100 hover:bg-blue-50/70 border-b border-gray-300 text-xs">
-                              <td className="py-1 px-2 font-mono font-semibold text-slate-900 whitespace-nowrap border-r border-gray-200">
-                                {activePO?.po_number} {li.line_number}
-                              </td>
-                              <td className="py-1 px-2 font-mono text-slate-700 whitespace-nowrap border-r border-gray-200">
-                                {li.item_code}
-                              </td>
-                              <td className="py-1 px-2 text-slate-600 max-w-[180px] truncate whitespace-nowrap border-r border-gray-200" title={li.description}>
-                                {li.description}
-                              </td>
-                              <td className="py-1 px-2 text-right font-mono text-slate-600 whitespace-nowrap border-r border-gray-200">
-                                {formatNumber(li.ordered)} {li.uom}
-                              </td>
-                              <td className="py-1 px-2 text-right font-mono font-bold text-emerald-700 whitespace-nowrap">
-                                {formatNumber(li.shipped)} {li.uom}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                  {/* Lifecycle & Revision Audit Log */}
-                  {activePO?.history && activePO.history.length > 0 && (
-                    <div className="space-y-2.5">
-                      <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                        <History className="w-3.5 h-3.5" />
-                        {t("detail.revisionHistory")}
-                      </h3>
-                      <div className="space-y-2">
-                        {activePO.history.map((h) => (
-                          <div
-                            key={h.id}
-                            className="p-3 rounded-xl border border-slate-200 bg-slate-50/60 flex items-center justify-between text-xs"
-                          >
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-slate-800">v{h.version}</span>
-                              <span className="px-2 py-0.5 rounded bg-white border border-slate-200 text-[10px] font-mono text-slate-600">
-                                {h.change_source || "SYSTEM"}
-                              </span>
-                            </div>
-                            <span className="text-slate-500 text-[11px]">
-                              {formatDateDisplay(h.created_at)}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

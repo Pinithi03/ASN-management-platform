@@ -1,11 +1,9 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { format } from "date-fns";
 import { formatDate, formatNumber } from "@/i18n/format";
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { Trans, useTranslation } from "react-i18next";
 import {
-  FileText,
   Search,
   RefreshCw,
   ChevronRight,
@@ -14,16 +12,9 @@ import {
   Square,
   Calendar,
   X,
-  ArrowRight,
-  Copy,
-  Check,
-  Building,
   Mail,
-  History,
   FileSpreadsheet,
   Layers,
-  CheckCircle2,
-  AlertCircle,
   Factory,
   AlertTriangle,
   Warehouse,
@@ -35,7 +26,9 @@ import { cn } from "@/utils/cn";
 import { resolvePlantAndLocation, KNOWN_PLANTS } from "@/utils/plantResolver";
 import PlantAccordionShowcase from "@/components/plants/PlantAccordionShowcase";
 import { usePlantSelection } from "@/hooks/usePlantSelection";
-import { poStatusLabel } from "@/i18n/poStatus";
+import StatusBadge from "@/components/ui/StatusBadge";
+import { statusBorderClass } from "@/utils/statusStyles";
+import { poDetailPath } from "@/utils/poLineItems";
 
 const STATUS_OPTIONS = [
   { labelKey: "all", value: "" },
@@ -43,15 +36,6 @@ const STATUS_OPTIONS = [
   { labelKey: "partial", value: "PARTIAL" },
   { labelKey: "updated", value: "UPDATED" },
 ] as const;
-
-const STATUS_BADGES: Record<string, string> = {
-  ACTIVE: "bg-blue-50 text-blue-700 border border-blue-200",
-  UPDATED: "bg-amber-50 text-amber-700 border border-amber-200",
-  PARTIAL: "bg-orange-50 text-orange-700 border border-orange-200",
-  SHIPPED: "bg-orange-50 text-orange-700 border border-orange-200",
-  COMPLETED: "bg-emerald-50 text-emerald-700 border border-emerald-200",
-  CANCELLED: "bg-red-50 text-red-700 border border-red-200",
-};
 
 const formatDateDisplay = (dateStr?: string | null) => {
   if (!dateStr) return "—";
@@ -68,19 +52,6 @@ const formatDateDisplay = (dateStr?: string | null) => {
     return dateStr;
   }
 };
-
-interface POLineItemRow {
-  line_number: string;
-  item_code: string;
-  partner_item_code?: string;
-  description: string;
-  color?: string;
-  size?: string;
-  quantity: number;
-  shipped_quantity?: number;
-  remaining_quantity?: number;
-  unit_price?: number;
-}
 
 // Plant matcher helper to identify plant code and standard company name
 export const getPlantInfo = (clientOrDest?: string | null) => {
@@ -165,9 +136,6 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
     gatewaySelectPlant(plantId);
   };
 
-  // State for previewing a specific PO
-  const [selectedPOForPreview, setSelectedPOForPreview] = useState<PurchaseOrder | null>(null);
-  const [copiedPO, setCopiedPO] = useState(false);
 
   // Query to fetch overview of all orders (used for live 5-plant accordion unlock state, active metrics & permanent storage locations)
   const { data: allOverviewData } = useQuery({
@@ -199,15 +167,6 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
     refetchInterval: 5000,
     refetchIntervalInBackground: true,
   });
-
-  // Query to fetch complete details for the previewed PO (including history & source email)
-  const { data: fullPODetail, isLoading: isLoadingDetail } = useQuery({
-    queryKey: ["purchaseOrderDetail", selectedPOForPreview?.id],
-    queryFn: () => poApi.getById(selectedPOForPreview!.id),
-    enabled: Boolean(selectedPOForPreview?.id),
-  });
-
-  const activePO: PurchaseOrder | null = fullPODetail || selectedPOForPreview;
 
   const orders: PurchaseOrder[] = data?.items || [];
 
@@ -689,101 +648,6 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
     navigate(`/shipments?pos=${encodeURIComponent(poList)}&mode=${mode}`);
   };
 
-  const handleCopyPONumber = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedPO(true);
-    setTimeout(() => setCopiedPO(false), 2000);
-  };
-
-  // Safely extract line items from extra_data
-  const rawItems = (activePO?.extra_data as any)?.items;
-  const lineItems: POLineItemRow[] = Array.isArray(rawItems) && rawItems.length > 0
-    ? rawItems.map((it: any, idx: number) => {
-      const itemCode = it.item_code || it.material_code || activePO?.style_number || " ";
-      const partnerCode = it.partner_item_code || it.partner_code || "";
-      const desc = it.item_description || it.description || activePO?.description || " ";
-      const qty = Number(it.quantity || 0);
-      const shipped = Number(it.shipped_quantity ?? 0);
-      const remaining = it.remaining_quantity !== undefined ? Number(it.remaining_quantity) : Math.max(0, qty - shipped);
-
-      let unitPrice: number | undefined = undefined;
-      if (it.unit_price !== undefined && it.unit_price !== null && Number(it.unit_price) > 0) {
-        unitPrice = Number(it.unit_price);
-      } else if (activePO?.unit_price && Number(activePO.unit_price) > 0) {
-        unitPrice = Number(activePO.unit_price);
-      }
-
-      return {
-        line_number: String(it.order_line_number || it.line_number || idx + 1),
-        item_code: itemCode,
-        partner_item_code: partnerCode,
-        description: desc,
-        color: it.color || "",
-        size: it.size || it.qty_unit || it.uom || "M",
-        quantity: qty,
-        shipped_quantity: shipped,
-        remaining_quantity: remaining,
-        unit_price: unitPrice,
-      };
-    })
-    : activePO
-      ? [
-        {
-          line_number: "1",
-          item_code: activePO.style_number || " ",
-          partner_item_code: "",
-          description: activePO.description || t("purchaseOrders:modal.primaryLineFallback"),
-          color: "",
-          size: "PCS",
-          quantity: activePO.quantity || 0,
-          shipped_quantity: Number((activePO as any).shipped_quantity || 0),
-          remaining_quantity: (activePO as any).remaining_quantity !== undefined
-            ? Number((activePO as any).remaining_quantity)
-            : Math.max(0, Number(activePO.quantity || 0) - Number((activePO as any).shipped_quantity || 0)),
-          unit_price: activePO.unit_price ? Number(activePO.unit_price) : undefined,
-        },
-      ]
-      : [];
-
-  const totalLineQuantity = lineItems.reduce((acc, item) => acc + (item.quantity || 0), 0);
-  const totalShippedQuantity = (activePO as any)?.shipped_quantity !== undefined
-    ? Number((activePO as any).shipped_quantity)
-    : lineItems.reduce((acc, item) => acc + (item.shipped_quantity || 0), 0);
-  const totalRemainingQuantity = (activePO as any)?.remaining_quantity !== undefined
-    ? Number((activePO as any).remaining_quantity)
-    : Math.max(0, totalLineQuantity - totalShippedQuantity);
-
-  const totalLineValue = lineItems.reduce((acc, item) => {
-    if (item.unit_price && item.quantity) {
-      return acc + item.quantity * item.unit_price;
-    }
-    return acc;
-  }, 0);
-
-  // Check if any line has a distinct partner code to show a dedicated column
-  const hasDistinctPartner = lineItems.some(
-    (li) => li.partner_item_code && li.partner_item_code.trim() !== "" && li.partner_item_code !== li.item_code
-  );
-
-  // Check if pricing is available
-  const hasPricing =
-    lineItems.some((li) => li.unit_price !== undefined && li.unit_price > 0) ||
-    Boolean(activePO?.total_value && activePO.total_value > 0);
-
-  const displayTotalValue =
-    activePO?.total_value && activePO.total_value > 0
-      ? activePO.total_value
-      : totalLineValue;
-
-  // Resolved plant and order info for the active previewed PO
-  const plantInfo = getPlantInfo(
-    activePO?.destination ||
-    (activePO as any)?.delivery_address ||
-    (activePO?.extra_data as any)?.delivery_address ||
-    activePO?.client_code
-  );
-  const colSpanBeforeQty = hasDistinctPartner ? 6 : 5;
-
   return (
     <div
       className={cn(
@@ -876,7 +740,7 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                   {/* Notification badge */}
                   <span
                     className={cn(
-                      "inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full text-[10px] font-extrabold shadow-2xs transition-all",
+                      "inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full text-xs font-extrabold shadow-2xs transition-all",
                       hasCount
                         ? isSelected
                           ? "bg-white text-slate-900 border border-white font-black"
@@ -1105,9 +969,9 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
               {/* Autocomplete Suggestions Dropdown (Clean PO list only) */}
               {isDropdownOpen && suggestions.length > 0 && (
                 <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden divide-y divide-gray-100 animate-in fade-in slide-in-from-top-1 duration-150">
-                  <div className="px-3.5 py-1.5 bg-gray-50/90 text-[11px] font-semibold text-gray-500 uppercase tracking-wider flex items-center justify-between">
+                  <div className="px-3.5 py-1.5 bg-gray-50/90 text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center justify-between">
                     <span>{t("purchaseOrders:shared.suggested")}</span>
-                    <span className="text-[10px] text-gray-400 font-normal">{t("purchaseOrders:shared.keysHint")}</span>
+                    <span className="text-xs text-gray-400 font-normal">{t("purchaseOrders:shared.keysHint")}</span>
                   </div>
                   <div className="max-h-[260px] overflow-y-auto py-1">
                     {suggestions.map((po, idx) => {
@@ -1139,15 +1003,15 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                             </span>
                           </div>
                           {isSelected && (
-                            <span className="text-[10px] text-blue-600 font-sans font-medium">{t("purchaseOrders:search.selectHint")}</span>
+                            <span className="text-xs text-blue-600 font-sans font-medium">{t("purchaseOrders:search.selectHint")}</span>
                           )}
                         </div>
                       );
                     })}
                   </div>
-                  <div className="px-3.5 py-1.5 bg-gray-50/70 text-[11px] text-gray-400 flex items-center justify-between">
+                  <div className="px-3.5 py-1.5 bg-gray-50/70 text-xs text-gray-400 flex items-center justify-between">
                     <span>{t("purchaseOrders:search.pasteHint")}</span>
-                    <span className="font-mono text-[10px]">{t("purchaseOrders:search.escHint")}</span>
+                    <span className="font-mono text-xs">{t("purchaseOrders:search.escHint")}</span>
                   </div>
                 </div>
               )}
@@ -1305,16 +1169,22 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                   return (
                     <tr
                       key={po.id}
-                      onClick={() => setSelectedPOForPreview(po)}
+                      onClick={(e) => {
+                        // A real click on the row opens the PO in a new tab. Clicks on links,
+                        // buttons and inputs inside the row keep their own behaviour.
+                        if ((e.target as HTMLElement).closest("a,button,input,label")) return;
+                        window.open(poDetailPath(po.id, activeMode), "_blank", "noopener");
+                      }}
                       className={cn(
-                        "cursor-pointer transition-colors group border-b border-gray-300 text-xs",
+                        "cursor-pointer transition-colors group border-b border-slate-200 text-sm",
+                        statusBorderClass(po.status),
                         isSelected
                           ? isSupplier
-                            ? "bg-emerald-50/90 hover:bg-emerald-100/80 border-l-4 border-l-emerald-600"
-                            : "bg-blue-50/90 hover:bg-blue-100/80 border-l-4 border-l-blue-600"
+                            ? "bg-emerald-50/90 hover:bg-emerald-100/80"
+                            : "bg-blue-50/90 hover:bg-blue-100/80"
                           : isCrossConflict
-                          ? "bg-white even:bg-gray-100 opacity-60 hover:bg-amber-50/40"
-                          : "bg-white even:bg-gray-100 hover:bg-blue-50/70"
+                          ? "bg-white opacity-60 hover:bg-amber-50/40"
+                          : "bg-white hover:bg-slate-50"
                       )}
                     >
                       {/* Selection Checkbox (only when a plant is selected) */}
@@ -1371,10 +1241,19 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                             isSupplier ? "group-hover:text-emerald-600" : "group-hover:text-blue-600"
                           )}
                         >
-                          <span>{po.po_number || "—"}</span>
+                          <a
+                            href={poDetailPath(po.id, activeMode)}
+                            target="_blank"
+                            rel="noopener"
+                            onClick={(e) => e.stopPropagation()}
+                            className="hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-sm"
+                            aria-label={t("purchaseOrders:detail.openInNewTab", { po: po.po_number || "" })}
+                          >
+                            {po.po_number || "—"}
+                          </a>
                           {po.version && po.version > 1 ? (
                             <span
-                              className="px-1 py-0 text-[10px] font-bold bg-amber-100 text-amber-800 rounded border border-amber-200 inline-flex items-center shadow-2xs font-sans shrink-0 leading-tight"
+                              className="px-1 py-0 text-xs font-bold bg-amber-100 text-amber-800 rounded border border-amber-200 inline-flex items-center shadow-2xs font-sans shrink-0 leading-tight"
                               title={t("purchaseOrders:row.revised", { version: po.version })}
                             >
                               V{po.version}
@@ -1410,7 +1289,7 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                               <a
                                 href={`mailto:${po.contact_email || (po.extra_data as any)?.contact_email}`}
                                 onClick={(e) => e.stopPropagation()}
-                                className="inline-flex items-center gap-0.5 text-[11px] text-blue-600 hover:underline hover:text-blue-700 font-mono tracking-tight truncate select-all"
+                                className="inline-flex items-center gap-0.5 text-xs text-blue-600 hover:underline hover:text-blue-700 font-mono tracking-tight truncate select-all"
                                 title={po.contact_email || (po.extra_data as any)?.contact_email}
                               >
                                 <Mail className="w-3 h-3 text-blue-500 shrink-0" />
@@ -1424,7 +1303,7 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                             <a
                               href={`mailto:${po.contact_email || (po.extra_data as any)?.contact_email}`}
                               onClick={(e) => e.stopPropagation()}
-                              className="text-[11px] text-blue-600 hover:underline hover:text-blue-700 font-mono tracking-tight truncate select-all"
+                              className="text-xs text-blue-600 hover:underline hover:text-blue-700 font-mono tracking-tight truncate select-all"
                               title={po.contact_email || (po.extra_data as any)?.contact_email}
                             >
                               {po.contact_email || (po.extra_data as any)?.contact_email}
@@ -1449,7 +1328,7 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                             <span className="font-bold text-orange-600">
                               {formatNumber(po.remaining_quantity)}
                             </span>
-                            <span className="text-[10px] text-gray-400">
+                            <span className="text-xs text-gray-400">
                               / {formatNumber(po.quantity)}
                             </span>
                           </span>
@@ -1464,12 +1343,7 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
 
                       {/* Status */}
                       <td className="py-1 px-2 whitespace-nowrap text-xs">
-                        <span
-                          className={`px-2 py-0 text-[10px] font-semibold rounded-full inline-flex items-center ${STATUS_BADGES[po.status] || "bg-gray-100 text-gray-700 border border-gray-200"
-                            }`}
-                        >
-                          {poStatusLabel(po.status)}
-                        </span>
+                        <StatusBadge status={po.status} />
                       </td>
 
 
@@ -1484,393 +1358,6 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
     </div>
   )}
 
-  {/* PO Preview & Details Modal */}
-      {activePO && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 sm:p-6 animate-in fade-in">
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl max-w-6xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
-            {/* Modal Header */}
-            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between bg-white shrink-0">
-              <div className="flex items-center gap-3.5">
-                <div className="w-11 h-11 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shadow-2xs">
-                  <FileText className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-xl font-bold font-mono text-gray-900 tracking-tight">
-                      PO {activePO.po_number || " "}
-                    </h2>
-                    {activePO.version && activePO.version > 1 ? (
-                      <span className="px-2 py-0.5 text-xs font-bold bg-amber-100 text-amber-800 rounded-md border border-amber-200">
-                        {t("purchaseOrders:modal.revision", { version: activePO.version })}
-                      </span>
-                    ) : (
-                      <span className="px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-600 rounded-md border border-gray-200">
-                        {t("purchaseOrders:modal.original")}
-                      </span>
-                    )}
-                    {activePO.po_number && (
-                      <button
-                        type="button"
-                        onClick={() => handleCopyPONumber(activePO.po_number!)}
-                        className="text-gray-400 hover:text-gray-700 transition-colors p-1 rounded-md hover:bg-gray-100 flex items-center gap-1 text-xs"
-                        title={t("purchaseOrders:modal.copyPo")}
-                      >
-                        {copiedPO ? (
-                          <>
-                            <Check className="w-3.5 h-3.5 text-emerald-600" />
-                            <span className="text-emerald-600 font-medium">{t("purchaseOrders:modal.copied")}</span>
-                          </>
-                        ) : (
-                          <Copy className="w-3.5 h-3.5" />
-                        )}
-                      </button>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500 mt-2">
-                    <span className="inline-flex items-center gap-1.5">
-                      <Building className="w-3.5 h-3.5 text-blue-600" />
-                      {t("purchaseOrders:modal.plant")}{" "}
-                      <strong className="text-blue-900 font-bold font-mono bg-blue-50 px-2 py-0.5 rounded border border-blue-200 text-xs">
-                        {plantInfo.code}
-                      </strong>
-                      <span className="text-gray-700 font-medium">
-                        ({plantInfo.name})
-                      </span>
-                    </span>
-                    {(activePO.contact_person || (activePO.extra_data as any)?.contact_person) && (
-                      <>
-                        <span className="text-gray-300">•</span>
-                        <span>
-                          <Trans
-                            t={t}
-                            i18nKey="purchaseOrders:modal.contact"
-                            values={{ name: activePO.contact_person || (activePO.extra_data as any)?.contact_person }}
-                            components={{ strong: <strong className="text-gray-800 font-medium" /> }}
-                          />
-                          {(activePO.contact_email || (activePO.extra_data as any)?.contact_email) && (
-                            <span className="text-gray-500 ml-1">({activePO.contact_email || (activePO.extra_data as any)?.contact_email})</span>
-                          )}
-                        </span>
-                      </>
-                    )}
-                    {(activePO.notations || (activePO.extra_data as any)?.notations || (activePO.extra_data as any)?.aux_head8) && (
-                      <>
-                        <span className="text-gray-300">•</span>
-                        <span>
-                          <Trans
-                            t={t}
-                            i18nKey="purchaseOrders:modal.notation"
-                            values={{
-                              notation:
-                                activePO.notations ||
-                                (activePO.extra_data as any)?.notations ||
-                                (activePO.extra_data as any)?.aux_head8,
-                            }}
-                            components={{ value: <span className="text-gray-800 font-medium" /> }}
-                          />
-                        </span>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setSelectedPOForPreview(null)}
-                className="p-2 text-gray-400 hover:text-gray-600 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer"
-                title={t("purchaseOrders:modal.closeTitle")}
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Modal Body - Scrollable */}
-            <div className="p-6 overflow-y-auto space-y-5 flex-1 text-sm">
-
-              {/* Ingestion Source Email (if present) */}
-              {activePO.source_email_subject && (
-                <div className="flex items-center gap-2.5 px-4 py-2.5 bg-blue-50/70 border border-blue-100 rounded-xl text-xs text-blue-950">
-                  <Mail className="w-4 h-4 text-blue-600 shrink-0" />
-                  <span className="font-semibold text-gray-600 shrink-0">{t("purchaseOrders:modal.sourceEmail")}</span>
-                  <span className="truncate font-mono text-blue-900">{activePO.source_email_subject}</span>
-                </div>
-              )}
-
-              {/* Line Items Table */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-bold text-gray-900 text-base">{t("purchaseOrders:modal.lineItems")}</h3>
-                    <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-700 font-semibold rounded-full border border-gray-200">
-                      {lineItems.length}
-                    </span>
-                  </div>
-                  {isLoadingDetail && (
-                    <span className="text-xs text-gray-400 flex items-center gap-1">
-                      <RefreshCw className="w-3 h-3 animate-spin text-blue-500" /> {t("purchaseOrders:modal.refreshing")}
-                    </span>
-                  )}
-                </div>
-
-                <div className="border border-gray-300 rounded-xl overflow-auto max-h-[55vh] shadow-xs bg-white">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead className="sticky top-0 z-10 bg-zinc-700 shadow-xs">
-                      <tr className="bg-zinc-700 text-white font-semibold uppercase tracking-wider text-xs border-b border-zinc-800">
-                        <th className="py-1.5 px-2 w-10 text-center border-r border-zinc-600 whitespace-nowrap">{t("purchaseOrders:modalTable.no")}</th>
-                        <th className="py-1.5 px-2 min-w-[140px] border-r border-zinc-600 whitespace-nowrap">{t("purchaseOrders:modalTable.item")}</th>
-                        {hasDistinctPartner && (
-                          <th className="py-1.5 px-2 min-w-[110px] border-r border-zinc-600 whitespace-nowrap">{t("purchaseOrders:modalTable.partner")}</th>
-                        )}
-                        <th className="py-1.5 px-2 min-w-[160px] border-r border-zinc-600 whitespace-nowrap">{t("purchaseOrders:modalTable.description")}</th>
-                        <th className="py-1.5 px-2 min-w-[70px] border-r border-zinc-600 whitespace-nowrap">{t("purchaseOrders:modalTable.color")}</th>
-                        <th className="py-1.5 px-2 text-center w-16 border-r border-zinc-600 whitespace-nowrap">{t("purchaseOrders:modalTable.uom")}</th>
-                        <th className="py-1.5 px-2 text-right font-semibold min-w-[85px] border-r border-zinc-600 whitespace-nowrap">{t("purchaseOrders:modalTable.ordered")}</th>
-                        <th className="py-1.5 px-2 text-right font-semibold min-w-[85px] border-r border-zinc-600 whitespace-nowrap">{t("purchaseOrders:modalTable.shipped")}</th>
-                        <th className="py-1.5 px-2 text-right font-semibold min-w-[95px] border-r border-zinc-600 whitespace-nowrap">{t("purchaseOrders:modalTable.openBalance")}</th>
-                        <th className="py-1.5 px-2 text-center min-w-[90px] border-r border-zinc-600 last:border-r-0 whitespace-nowrap">{t("purchaseOrders:modalTable.status")}</th>
-                        {hasPricing && (
-                          <th className="py-1.5 px-2 text-right min-w-[90px] border-r border-zinc-600 whitespace-nowrap">{t("purchaseOrders:modalTable.unitPrice")}</th>
-                        )}
-                        {hasPricing && (
-                          <th className="py-1.5 px-2 text-right font-semibold min-w-[100px] whitespace-nowrap">{t("purchaseOrders:modalTable.subtotal")}</th>
-                        )}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {lineItems.map((item, idx) => {
-                        const lineSubtotal = item.unit_price ? item.quantity * item.unit_price : undefined;
-                        const lineRem = item.remaining_quantity !== undefined ? item.remaining_quantity : Math.max(0, item.quantity - (item.shipped_quantity || 0));
-                        const lineShip = item.shipped_quantity || 0;
-                        return (
-                          <tr key={idx} className="bg-white even:bg-gray-100 hover:bg-blue-50/70 transition-colors border-b border-gray-300 text-xs">
-                            <td className="py-1 px-2 text-center font-mono text-gray-500 whitespace-nowrap border-r border-gray-200">
-                              {item.line_number}
-                            </td>
-                            <td className="py-1 px-2 font-mono whitespace-nowrap border-r border-gray-200">
-                              <span className="font-bold text-gray-900">{item.item_code}</span>
-                              {!hasDistinctPartner && item.partner_item_code && item.partner_item_code !== item.item_code && (
-                                <span className="ml-1.5 text-[10px] text-gray-600 bg-gray-100 px-1 py-0 rounded border border-gray-200">
-                                  {item.partner_item_code}
-                                </span>
-                              )}
-                            </td>
-                            {hasDistinctPartner && (
-                              <td className="py-1 px-2 font-mono text-gray-700 font-medium whitespace-nowrap border-r border-gray-200">
-                                {item.partner_item_code || " "}
-                              </td>
-                            )}
-                            <td className="py-1 px-2 text-gray-700 font-medium whitespace-nowrap border-r border-gray-200 max-w-xs truncate" title={item.description}>
-                              {item.description}
-                            </td>
-                            <td className="py-1 px-2 text-gray-700 whitespace-nowrap border-r border-gray-200">
-                              {item.color ? (
-                                <span className="px-1.5 py-0 bg-gray-100 text-gray-800 rounded font-medium text-[10px] border border-gray-200">
-                                  {item.color}
-                                </span>
-                              ) : (
-                                <span className="text-gray-300"> </span>
-                              )}
-                            </td>
-                            <td className="py-1 px-2 text-center font-mono text-gray-700 whitespace-nowrap border-r border-gray-200">
-                              <span className="px-1.5 py-0 bg-gray-100 rounded text-[10px] font-semibold border border-gray-200">
-                                {item.size || "M"}
-                              </span>
-                            </td>
-                            <td className="py-1 px-2 text-right font-mono text-gray-700 whitespace-nowrap border-r border-gray-200">
-                              {formatNumber(item.quantity)}
-                            </td>
-                            <td className="py-1 px-2 text-right font-mono text-emerald-700 font-semibold whitespace-nowrap border-r border-gray-200">
-                              {formatNumber(lineShip)}
-                            </td>
-                            <td className="py-1 px-2 text-right font-mono font-bold text-gray-900 whitespace-nowrap border-r border-gray-200">
-                              {formatNumber(lineRem)}
-                            </td>
-                            <td className="py-1 px-2 text-center whitespace-nowrap border-r border-gray-200 last:border-r-0">
-                              {lineRem <= 0 ? (
-                                <span className="inline-flex items-center gap-1 px-1.5 py-0 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" /> {t("purchaseOrders:lineStatus.fulfilled")}
-                                </span>
-                              ) : lineShip > 0 ? (
-                                <span className="inline-flex items-center gap-1 px-1.5 py-0 rounded-full text-[10px] font-bold bg-orange-50 text-orange-700 border border-orange-200">
-                                  {t("purchaseOrders:lineStatus.partial")}
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 px-1.5 py-0 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                                  {t("purchaseOrders:lineStatus.pending")}
-                                </span>
-                              )}
-                            </td>
-                            {hasPricing && (
-                              <td className="py-1 px-2 text-right font-mono text-gray-600 whitespace-nowrap border-r border-gray-200">
-                                {item.unit_price !== undefined
-                                  ? `${activePO.currency || "USD"} ${formatNumber(item.unit_price, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                                  : " "}
-                              </td>
-                            )}
-                            {hasPricing && (
-                              <td className="py-1 px-2 text-right font-mono font-bold text-gray-900 whitespace-nowrap">
-                                {lineSubtotal !== undefined
-                                  ? `${activePO.currency || "USD"} ${formatNumber(lineSubtotal, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                                  : " "}
-                              </td>
-                            )}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                    <tfoot className="bg-gray-50/90 border-t-2 border-gray-200 font-semibold text-gray-900">
-                      <tr>
-                        <td colSpan={colSpanBeforeQty} className="px-3 py-2.5 text-right text-gray-600 text-xs">
-                          {t("purchaseOrders:modal.totals", { count: lineItems.length })}
-                        </td>
-                        <td className="px-3 py-2.5 text-right font-mono text-xs text-gray-700 whitespace-nowrap">
-                          {formatNumber(totalLineQuantity)}
-                        </td>
-                        <td className="px-3 py-2.5 text-right font-mono text-xs font-bold text-emerald-700 whitespace-nowrap">
-                          {formatNumber(totalShippedQuantity)}
-                        </td>
-                        <td className="px-3 py-2.5 text-right font-mono text-sm font-bold text-blue-600 whitespace-nowrap">
-                          {formatNumber(totalRemainingQuantity)}
-                        </td>
-                        <td className="px-3 py-2.5"></td>
-                        {hasPricing && <td className="px-3 py-2.5"></td>}
-                        {hasPricing && (
-                          <td className="px-3 py-2.5 text-right font-mono text-sm font-bold text-gray-900 whitespace-nowrap">
-                            {activePO?.currency || "USD"}{" "}
-                            {formatNumber(displayTotalValue, {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
-                          </td>
-                        )}
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              </div>
-
-              {/* Revision History (if available) */}
-              {(fullPODetail as any)?.history && (fullPODetail as any).history.length > 0 && (
-                <div className="space-y-2 pt-2 border-t border-gray-100">
-                  <div className="flex items-center gap-2 text-xs font-semibold text-gray-700">
-                    <History className="w-3.5 h-3.5 text-gray-500" />
-                    {t("purchaseOrders:history.title")}
-                  </div>
-                  <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 space-y-2">
-                    {(fullPODetail as any).history.map((h: any, idx: number) => (
-                      <div key={idx} className="flex items-start justify-between text-xs border-b border-gray-100 pb-1.5 last:border-0 last:pb-0">
-                        <div>
-                          <span className="font-semibold text-gray-900">{t("purchaseOrders:history.version", { version: h.version })}</span>
-                          <span className="text-gray-500 ml-2">{t("purchaseOrders:history.source", { source: h.change_source })}</span>
-                          {h.changed_fields?.quantity && (
-                            <span className="ml-2 text-blue-600 font-mono">
-                              {t("purchaseOrders:history.qty", {
-                                old: h.changed_fields.quantity.old,
-                                new: h.changed_fields.quantity.new,
-                              })}
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-gray-400 font-mono">
-                          {h.created_at ? format(new Date(h.created_at), "yyyy-MM-dd HH:mm") : ""}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Modal Sticky Footer Actions */}
-            <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
-              <div className="flex items-center gap-2">
-                {activePO.po_number && activePO.status !== "COMPLETED" && activePO.status !== "CANCELLED" && (
-                  <button
-                    type="button"
-                    onClick={() => togglePOSelection(activePO)}
-                    disabled={!canSelect}
-                    title={canSelect ? undefined : t("purchaseOrders:modal.openPlantToSelect")}
-                    className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white"
-                  >
-                    {activePO.po_number && selectedPOs.has(activePO.po_number) ? (
-                      <>
-                        <CheckSquare className="w-4 h-4 text-blue-600" />
-                        {t("purchaseOrders:modal.selectedForBatch")}
-                      </>
-                    ) : (
-                      <>
-                        <Square className="w-4 h-4 text-gray-400" />
-                        {t("purchaseOrders:modal.addToBatch")}
-                      </>
-                    )}
-                  </button>
-                )}
-              </div>
-
-              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-                <button
-                  type="button"
-                  onClick={() => setSelectedPOForPreview(null)}
-                  className="px-4 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
-                >
-                  {t("purchaseOrders:modal.close")}
-                </button>
-
-                {activePO.status === "COMPLETED" ? (
-                  <div className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>{t("purchaseOrders:modal.fullyFulfilled")}</span>
-                  </div>
-                ) : activePO.status === "CANCELLED" ? (
-                  <div className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-red-50 border border-red-200 text-red-800 text-xs font-semibold">
-                    <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
-                    <span>{t("purchaseOrders:modal.cancelledPo")}</span>
-                  </div>
-                ) : activeMode === "excel" ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const poNum = activePO.po_number || "";
-                      setSelectedPOForPreview(null);
-                      handleCreateShipment("excel", poNum);
-                    }}
-                    className={cn(
-                      "px-5 py-2 text-xs font-semibold text-white rounded-lg shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer",
-                      isSupplier
-                        ? "bg-emerald-600 hover:bg-emerald-700"
-                        : "bg-blue-600 hover:bg-blue-700"
-                    )}
-                    title={t("purchaseOrders:modal.excelTitle")}
-                  >
-                    <FileSpreadsheet className="w-3.5 h-3.5" />
-                    {t("purchaseOrders:modal.proceedExcel")}
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const poNum = activePO.po_number || "";
-                      setSelectedPOForPreview(null);
-                      handleCreateShipment("web", poNum);
-                    }}
-                    className={cn(
-                      "px-5 py-2 text-xs font-semibold text-white rounded-lg shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer",
-                      isSupplier
-                        ? "bg-emerald-600 hover:bg-emerald-700"
-                        : "bg-blue-600 hover:bg-blue-700"
-                    )}
-                  >
-                    {t("purchaseOrders:modal.proceedManual")}
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
