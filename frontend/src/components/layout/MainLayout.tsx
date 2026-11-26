@@ -2,8 +2,9 @@
  * Main Layout — Sidebar, Header & Supplier Security Lockout Check
  */
 
-import { useState } from "react";
-import { Outlet } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Outlet, useLocation } from "react-router-dom";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { Trans, useTranslation } from "react-i18next";
 import Sidebar from "./Sidebar";
 import { useAuthStore } from "@/store/authStore";
@@ -11,9 +12,64 @@ import { useQuery } from "@tanstack/react-query";
 import { supplierApi } from "@/services/supplierApi";
 import { ShieldAlert, Lock, Building2, Menu } from "lucide-react";
 
+const SIDEBAR_PREF_KEY = "ans_sidebar_collapsed";
+
+function readCollapsedPref(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_PREF_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 export default function MainLayout() {
   const { t } = useTranslation(["layout", "common"]);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const location = useLocation();
+
+  /*
+   * Sidebar modes:
+   *   ≥1280 px     full width (user can collapse; choice is remembered)
+   *   768–1279 px  icon-only rail, expands on toggle
+   *   <768 px      hidden; hamburger opens a slide-over
+   */
+  const isDesktop = useMediaQuery("(min-width: 1280px)");
+  const isTablet = useMediaQuery("(min-width: 768px)") && !isDesktop;
+  const isMobile = !isDesktop && !isTablet;
+  const [desktopCollapsed, setDesktopCollapsed] = useState(readCollapsedPref);
+  const [railExpanded, setRailExpanded] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  const sidebarCollapsed = isDesktop ? desktopCollapsed : isTablet ? !railExpanded : false;
+  const toggleSidebar = () => {
+    if (isDesktop) {
+      setDesktopCollapsed((c) => {
+        try {
+          localStorage.setItem(SIDEBAR_PREF_KEY, c ? "0" : "1");
+        } catch {
+          /* storage unavailable */
+        }
+        return !c;
+      });
+    } else if (isTablet) {
+      setRailExpanded((v) => !v);
+    } else {
+      setMobileOpen((v) => !v);
+    }
+  };
+
+  // Close the slide-over / expanded rail after navigating.
+  useEffect(() => {
+    setMobileOpen(false);
+    setRailExpanded(false);
+  }, [location.pathname]);
+
+  // Esc closes the mobile slide-over.
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMobileOpen(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mobileOpen]);
 
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
@@ -50,24 +106,38 @@ export default function MainLayout() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50 text-slate-900 font-sans">
-      <Sidebar
-        collapsed={sidebarCollapsed}
-        onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-      />
+      {isMobile ? (
+        mobileOpen && (
+          <div className="fixed inset-0 z-50 flex" role="dialog" aria-modal="true" aria-label={t("layout:sidebar.toggleMenu")}>
+            <div className="absolute inset-0 bg-slate-900/40 animate-page-fade" onClick={() => setMobileOpen(false)} />
+            <div className="relative h-full shadow-lg">
+              <Sidebar collapsed={false} onToggle={() => setMobileOpen(false)} />
+            </div>
+          </div>
+        )
+      ) : (
+        <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
+      )}
       <div className="flex flex-1 flex-col overflow-hidden min-w-0">
-        {/* Mobile Header (Only visible on small devices < lg; Desktop has 100% full height for system content) */}
-        <div className="flex h-12 items-center justify-between border-b border-slate-200 bg-white px-4 shrink-0 lg:hidden">
-          <button
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 cursor-pointer"
-            title={t("layout:sidebar.toggleMenu")}
-          >
-            <Menu className="h-5 w-5" />
-          </button>
-          <span className="text-xs font-bold text-slate-900">ASN Platform</span>
-          <div className="w-8" />
-        </div>
-        <main className="flex-1 min-h-0 overflow-y-auto flex flex-col">
+        {/* Top bar with hamburger — phones only (<768 px) */}
+        {isMobile && (
+          <div className="flex h-12 items-center justify-between border-b border-slate-200 bg-white px-4 shrink-0">
+            <button
+              type="button"
+              onClick={() => setMobileOpen(true)}
+              className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 cursor-pointer"
+              title={t("layout:sidebar.toggleMenu")}
+              aria-label={t("layout:sidebar.toggleMenu")}
+              aria-expanded={mobileOpen}
+            >
+              <Menu className="h-5 w-5" aria-hidden="true" />
+            </button>
+            <span className="text-sm font-semibold text-slate-900">ANS Portal</span>
+            <div className="w-8" />
+          </div>
+        )}
+        {/* key on the route → quick (150 ms) fade-in of the main content on navigation */}
+        <main key={location.pathname} className="flex-1 min-h-0 overflow-y-auto flex flex-col animate-page-fade">
           {isLockoutActive ? (
             <div className="flex flex-col items-center justify-center min-h-[75vh] p-6 text-center animate-in fade-in">
               <div className="bg-white rounded-3xl border border-red-200 p-8 shadow-xl max-w-lg w-full space-y-5 text-center">

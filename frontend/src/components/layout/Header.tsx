@@ -282,7 +282,7 @@ export default function Header({ onMenuToggle }: HeaderProps) {
             {unreadCount > 0 && (
               <span
                 className={cn(
-                  "absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold text-white",
+                  "absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-xs font-bold text-white",
                   isAdmin ? "bg-blue-600" : "bg-emerald-600"
                 )}
               >
@@ -301,7 +301,7 @@ export default function Header({ onMenuToggle }: HeaderProps) {
                     {isAdmin ? "Notifications" : "Alerts"}
                   </h3>
                   {unreadCount > 0 && (
-                    <span className="px-2 py-0.5 text-[10px] font-bold bg-blue-50 text-blue-600 rounded-full border border-blue-200">
+                    <span className="px-2 py-0.5 text-xs font-bold bg-blue-50 text-blue-600 rounded-full border border-blue-200">
                       {unreadCount} new
                     </span>
                   )}
@@ -340,7 +340,7 @@ export default function Header({ onMenuToggle }: HeaderProps) {
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-1">
                             <p className="text-xs font-semibold text-slate-900 truncate">{item.title}</p>
-                            <span className="text-[10px] text-slate-400 shrink-0 flex items-center gap-0.5 font-mono">
+                            <span className="text-xs text-slate-400 shrink-0 flex items-center gap-0.5 font-mono">
                               <Clock className="w-3 h-3" /> {item.time}
                             </span>
                           </div>
@@ -400,7 +400,7 @@ export default function Header({ onMenuToggle }: HeaderProps) {
             <div className="flex items-center gap-1.5">
               <span
                 className={cn(
-                  "inline-block rounded px-1.5 py-0.5 text-[9px] font-bold uppercase leading-none border",
+                  "inline-block rounded px-1.5 py-0.5 text-xs font-bold uppercase leading-none border",
                   isAdmin
                     ? "bg-blue-50 text-blue-700 border-blue-200"
                     : "bg-emerald-50 text-emerald-700 border-emerald-200"
@@ -410,7 +410,7 @@ export default function Header({ onMenuToggle }: HeaderProps) {
                   ? (user?.role === "SUPER_ADMIN" ? "Super Admin" : "Admin")
                   : "Supplier"}
               </span>
-              <span className="text-[10px] font-mono text-slate-400 truncate">
+              <span className="text-xs font-mono text-slate-400 truncate">
                 {isAdmin ? "HQ" : (user?.supplier_code ? `#${user.supplier_code}` : "")}
               </span>
             </div>
