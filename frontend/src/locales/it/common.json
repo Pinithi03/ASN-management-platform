@@ -2,17 +2,40 @@
   "actions": {
     "cancel": "Annulla",
     "signOut": "Esci",
-    "tryAgain": "Riprova"
+    "tryAgain": "Riprova",
+    "back": "Indietro",
+    "save": "Salva",
+    "saving": "Salvataggio…",
+    "refresh": "Aggiorna"
   },
   "poStatus": {
-    "ACTIVE": "ATTIVO",
-    "CANCELLED": "ANNULLATO",
-    "COMPLETED": "COMPLETATO",
-    "PARTIAL": "PARZIALE",
-    "SHIPPED": "SPEDITO",
-    "UPDATED": "AGGIORNATO"
+    "ACTIVE": "Attivo",
+    "CANCELLED": "Annullato",
+    "COMPLETED": "Completato",
+    "PARTIAL": "Spedito parzialmente",
+    "SHIPPED": "Spedito",
+    "UPDATED": "Aggiornato",
+    "XML_SENT": "XML inviato",
+    "SHIPMENT_RECEIVED": "Spedizione ricevuta"
   },
   "time": {
-    "justNow": "proprio ora"
+    "justNow": "proprio ora",
+    "updatedJustNow": "Aggiornato ora",
+    "updatedSecondsAgo": "Aggiornato {{count}} s fa",
+    "updatedMinutesAgo": "Aggiornato {{count}} min fa"
+  },
+  "validation": {
+    "required": "Questo campo è obbligatorio.",
+    "email": "Inserisci un indirizzo email valido.",
+    "maxLength": "Usa al massimo {{max}} caratteri.",
+    "nonNegative": "Deve essere 0 o superiore.",
+    "positive": "Deve essere maggiore di 0.",
+    "exceedsOpen": "Non può superare la quantità aperta ({{max}}).",
+    "gwBelowNw": "Il peso lordo deve essere almeno pari al peso netto.",
+    "deliveryDatePast": "Scegli oggi o una data futura.",
+    "invalidDate": "Inserisci una data valida.",
+    "passwordMismatch": "Le password non coincidono.",
+    "fixErrors": "Correggi i campi evidenziati.",
+    "digitsOnly": "Usa solo cifre (0 o più)."
   }
 }

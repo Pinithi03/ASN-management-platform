@@ -33,7 +33,9 @@
     "storeTitle": "查看 {{plant}} - 库位 {{store}}",
     "stores": "库位：",
     "toDispatch": "待发运",
-    "zeroPos": "0 个采购订单"
+    "zeroPos": "0 个采购订单",
+    "selectHeading": "选择目的地工厂",
+    "selectHint": "选择一个工厂，然后打开其采购订单。双击卡片可直接打开。"
   },
   "header": {
     "title": "采购订单"
@@ -140,5 +142,10 @@
     "quantity": "数量",
     "selectAll": "全选",
     "status": "状态"
+  },
+  "detail": {
+    "loadError": "无法加载此采购订单。它可能已被删除，或您没有访问权限。",
+    "retry": "重试",
+    "openInNewTab": "在新标签页中打开采购订单 {{po}}"
   }
 }

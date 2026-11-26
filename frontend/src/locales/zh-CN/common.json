@@ -2,17 +2,40 @@
   "actions": {
     "cancel": "取消",
     "signOut": "退出登录",
-    "tryAgain": "重试"
+    "tryAgain": "重试",
+    "back": "返回",
+    "save": "保存",
+    "saving": "正在保存…",
+    "refresh": "刷新"
   },
   "poStatus": {
     "ACTIVE": "活动",
     "CANCELLED": "已取消",
     "COMPLETED": "已完成",
-    "PARTIAL": "部分",
+    "PARTIAL": "部分发运",
     "SHIPPED": "已发运",
-    "UPDATED": "已更新"
+    "UPDATED": "已更新",
+    "XML_SENT": "XML 已发送",
+    "SHIPMENT_RECEIVED": "已收货"
   },
   "time": {
-    "justNow": "刚刚"
+    "justNow": "刚刚",
+    "updatedJustNow": "刚刚更新",
+    "updatedSecondsAgo": "{{count}} 秒前更新",
+    "updatedMinutesAgo": "{{count}} 分钟前更新"
+  },
+  "validation": {
+    "required": "此字段为必填项。",
+    "email": "请输入有效的电子邮箱地址。",
+    "maxLength": "最多 {{max}} 个字符。",
+    "nonNegative": "不能小于 0。",
+    "positive": "必须大于 0。",
+    "exceedsOpen": "不能超过未结数量（{{max}}）。",
+    "gwBelowNw": "毛重不能小于净重。",
+    "deliveryDatePast": "请选择今天或之后的日期。",
+    "invalidDate": "请输入有效日期。",
+    "passwordMismatch": "两次输入的密码不一致。",
+    "fixErrors": "请修正标出的字段。",
+    "digitsOnly": "只能输入数字（0 或以上）。"
   }
 }

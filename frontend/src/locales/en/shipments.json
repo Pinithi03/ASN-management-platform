@@ -43,7 +43,8 @@
       "offline": "You are currently offline. Please reconnect to the network before sending the ASN to IUNGO.",
       "selectLine": "Please select at least one line item before downloading template.",
       "templateFailed": "Failed to download tailored template: {{error}}",
-      "xmlFailed": "Failed to download ASN XML: {{error}}"
+      "xmlFailed": "Failed to download ASN XML: {{error}}",
+      "pastDates": "These packing slips have a delivery date in the past: {{slips}}. Pick today or a later date."
     },
     "errors": {
       "actionRequired": "Action Required",
@@ -159,7 +160,7 @@
   "wizard": {
     "alerts": {
       "createFailed": "Failed to create shipment",
-      "gwNotGreater": "Carton {{carton}} for item {{item}}: Gross Weight ({{gw}} kg) must be strictly greater than Net Weight ({{nw}} kg).",
+      "gwNotGreater": "Carton {{carton}} for item {{item}}: Gross Weight ({{gw}} kg) cannot be less than Net Weight ({{nw}} kg).",
       "gwRequired": "Carton {{carton}} for item {{item}}: Gross Weight (kg) is mandatory and must be greater than 0.",
       "invalidQty": "Carton {{carton}} for item {{item}} has 0 or invalid quantity.",
       "invalidSplit": "Please enter a valid positive number greater than 0 to split.",
@@ -210,7 +211,10 @@
         "shipped": "Shipped",
         "shippingQty": "Shipping Qty"
       },
-      "title": "Purchase Order Line Item Allocation"
+      "title": "Purchase Order Line Item Allocation",
+      "fillAllTitle": "Ship the full remaining open quantity on every line of this PO",
+      "filledLines_one": "Filled {{count}} line",
+      "filledLines_other": "Filled {{count}} lines"
     },
     "step2": {
       "addCarton": "+ Add Carton",
@@ -233,7 +237,7 @@
       "countRollInputTitle": "Enter number of rolls to divide into",
       "discrepancy": "Discrepancy: {{diff}}",
       "ediRefTitle": "EDI Line Reference (Item-Carton)",
-      "gwLeNw": "GW ≤ NW!",
+      "gwLeNw": "GW < NW!",
       "numBoxes": "# of Boxes",
       "numRolls": "# of Rolls",
       "optional": "Optional",
@@ -272,7 +276,14 @@
       },
       "title": "Carton Packaging & Handling Unit Assignment",
       "toggleOptional": "Toggle Optional Columns",
-      "totalPacked": "Total Packed: <strong>{{packed}}</strong> / {{shipping}} {{uom}}"
+      "totalPacked": "Total Packed: <strong>{{packed}}</strong> / {{shipping}} {{uom}}",
+      "copyQtyTitle": "Copy this quantity to all cartons of this line item (never more than the quantity being shipped)",
+      "copyGwTitle": "Copy this gross weight to all cartons of this line item",
+      "copyNwTitle": "Copy this net weight to all cartons of this line item",
+      "qtyFilled_one": "Filled {{count}} carton",
+      "qtyFilled_other": "Filled {{count}} cartons",
+      "qtyFilledCapped_one": "Filled {{count}} carton — capped at {{max}}",
+      "qtyFilledCapped_other": "Filled {{count}} cartons — capped at {{max}}"
     },
     "step3": {
       "breakdown": "Handling Units & Packing Breakdown",
@@ -300,7 +311,9 @@
       },
       "totalQty": "Total Qty: <strong>{{qty}} {{uom}}</strong>",
       "transmitted": "Transmitted",
-      "xmlTitle": "Official SdDataSlice XML"
+      "xmlTitle": "Official SdDataSlice XML",
+      "requested": "Requested in order: {{date}}",
+      "requestedPassed": "Requested in order: {{date}} — already passed. Pick today or a later date."
     },
     "toolbar": {
       "back": "Back",

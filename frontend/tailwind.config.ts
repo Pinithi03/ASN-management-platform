@@ -63,8 +63,31 @@ const config: Config = {
         xs: "2px",
       },
       fontFamily: {
-        // Chinese fallbacks so zh-CN text never falls back to a random system font
+        // Inter (self-hosted via @fontsource). Chinese fallbacks so zh-CN text never falls back to a random system font.
         sans: ["Inter", "system-ui", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", "sans-serif"],
+        // Only for PO numbers, HU / SSCC numbers and XML.
+        mono: ['"JetBrains Mono"', "ui-monospace", "SFMono-Regular", "Consolas", "monospace"],
+      },
+      /*
+       * Fluid type scale: grows gently between 1280 px and 1600–1920 px screens.
+       * Body ≈ 15–16 px, table / label text 13–14 px, page titles 24–28 px.
+       */
+      fontSize: {
+        xs: ["clamp(0.8125rem, 0.5625rem + 0.3125vw, 0.875rem)", { lineHeight: "1.25rem" }],
+        sm: ["clamp(0.875rem, 0.625rem + 0.3125vw, 0.9375rem)", { lineHeight: "1.375rem" }],
+        base: ["clamp(0.9375rem, 0.8125rem + 0.15625vw, 1rem)", { lineHeight: "1.5rem" }],
+        lg: ["clamp(1.0625rem, 0.9375rem + 0.15625vw, 1.125rem)", { lineHeight: "1.625rem" }],
+        xl: ["clamp(1.1875rem, 0.9375rem + 0.3125vw, 1.3125rem)", { lineHeight: "1.75rem" }],
+        "2xl": ["clamp(1.5rem, 1rem + 0.625vw, 1.75rem)", { lineHeight: "2.125rem" }],
+      },
+      keyframes: {
+        "page-fade": { from: { opacity: "0" }, to: { opacity: "1" } },
+      },
+      animation: {
+        "page-fade": "page-fade 150ms ease-out",
+      },
+      transitionTimingFunction: {
+        "out-soft": "cubic-bezier(0.22, 1, 0.36, 1)",
       },
     },
   },

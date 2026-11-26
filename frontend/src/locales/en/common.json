@@ -2,17 +2,40 @@
   "actions": {
     "cancel": "Cancel",
     "signOut": "Sign Out",
-    "tryAgain": "Try again"
+    "tryAgain": "Try again",
+    "back": "Back",
+    "save": "Save",
+    "saving": "Saving…",
+    "refresh": "Refresh"
   },
   "poStatus": {
-    "ACTIVE": "ACTIVE",
-    "CANCELLED": "CANCELLED",
-    "COMPLETED": "COMPLETED",
-    "PARTIAL": "PARTIAL",
-    "SHIPPED": "SHIPPED",
-    "UPDATED": "UPDATED"
+    "ACTIVE": "Active",
+    "CANCELLED": "Cancelled",
+    "COMPLETED": "Completed",
+    "PARTIAL": "Partially shipped",
+    "SHIPPED": "Shipped",
+    "UPDATED": "Updated",
+    "XML_SENT": "XML sent",
+    "SHIPMENT_RECEIVED": "Shipment received"
   },
   "time": {
-    "justNow": "just now"
+    "justNow": "just now",
+    "updatedJustNow": "Updated just now",
+    "updatedSecondsAgo": "Updated {{count}} s ago",
+    "updatedMinutesAgo": "Updated {{count}} min ago"
+  },
+  "validation": {
+    "required": "This field is required.",
+    "email": "Enter a valid email address.",
+    "maxLength": "Use at most {{max}} characters.",
+    "nonNegative": "Must be 0 or more.",
+    "positive": "Must be greater than 0.",
+    "exceedsOpen": "Cannot exceed the open quantity ({{max}}).",
+    "gwBelowNw": "Gross weight must be at least the net weight.",
+    "deliveryDatePast": "Choose today or a future date.",
+    "invalidDate": "Enter a valid date.",
+    "passwordMismatch": "Passwords do not match.",
+    "fixErrors": "Please fix the highlighted fields.",
+    "digitsOnly": "Use digits only (0 or more)."
   }
 }

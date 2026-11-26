@@ -35,7 +35,9 @@
     "storeTitle": "View {{plant}} - Store {{store}}",
     "stores": "Stores:",
     "toDispatch": "to dispatch",
-    "zeroPos": "0 POs"
+    "zeroPos": "0 POs",
+    "selectHeading": "Select a destination plant",
+    "selectHint": "Choose a plant, then open its purchase orders. Double-click a card to open it directly."
   },
   "header": {
     "title": "Purchase Orders"
@@ -144,5 +146,10 @@
     "quantity": "Quantity",
     "selectAll": "Select all",
     "status": "Status"
+  },
+  "detail": {
+    "loadError": "This purchase order could not be loaded. It may have been removed, or you may not have access to it.",
+    "retry": "Try again",
+    "openInNewTab": "Open PO {{po}} in a new tab"
   }
 }

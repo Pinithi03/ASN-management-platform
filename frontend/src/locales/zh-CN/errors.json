@@ -3,7 +3,7 @@
   "ATTACHMENT_NOT_FOUND": "未找到附件。",
   "ATTACHMENT_READ_FAILED": "无法从存储中读取附件。",
   "CARTONS_REQUIRED": "至少需要一个纸箱。",
-  "CARTON_GW_NOT_GREATER": "第 {{carton}} 箱：毛重（{{gw}} kg）必须大于净重（{{nw}} kg）。",
+  "CARTON_GW_NOT_GREATER": "第 {{carton}} 箱：毛重（{{gw}} kg）不能小于净重（{{nw}} kg）。",
   "CARTON_GW_REQUIRED": "第 {{carton}} 箱：毛重为必填项，且必须大于 0 kg。",
   "CARTON_NW_REQUIRED": "第 {{carton}} 箱：净重为必填项，且必须大于 0 kg。",
   "CARTON_QTY_INVALID": "第 {{carton}} 箱：数量必须大于 0。",
@@ -25,5 +25,7 @@
   "SHIPMENT_NOT_FOUND": "未找到发运单。",
   "SHIPMENT_SAVE_FAILED": "无法保存发运单，请重试。",
   "SUPPLIER_NOT_LINKED": "您的账户未关联到供应商，请联系管理员。",
-  "generic": "出现错误，请重试。"
+  "generic": "出现错误，请重试。",
+  "DELIVERY_DATE_PAST": "交货日期 {{date}} 已过。请选择今天或之后的日期。",
+  "DELIVERY_DATE_INVALID": "交货日期“{{value}}”不是有效日期。"
 }

@@ -5,12 +5,21 @@
 
 import i18n from "./index";
 
-const PO_STATUSES = ["ACTIVE", "CANCELLED", "COMPLETED", "PARTIAL", "SHIPPED", "UPDATED"] as const;
+const PO_STATUSES = [
+  "ACTIVE",
+  "CANCELLED",
+  "COMPLETED",
+  "PARTIAL",
+  "SHIPPED",
+  "UPDATED",
+  "XML_SENT",
+  "SHIPMENT_RECEIVED",
+] as const;
 type PoStatus = (typeof PO_STATUSES)[number];
 
 export function poStatusLabel(status: string | null | undefined): string {
   if (!status) return "";
   return (PO_STATUSES as readonly string[]).includes(status)
     ? i18n.t(`common:poStatus.${status as PoStatus}`)
-    : status;
+    : status.replace(/_/g, " ");
 }

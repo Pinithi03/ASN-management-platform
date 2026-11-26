@@ -3,7 +3,7 @@
   "ATTACHMENT_NOT_FOUND": "Attachment not found.",
   "ATTACHMENT_READ_FAILED": "Could not read the attachment from storage.",
   "CARTONS_REQUIRED": "At least one carton is required.",
-  "CARTON_GW_NOT_GREATER": "Carton {{carton}}: gross weight ({{gw}} kg) must be greater than net weight ({{nw}} kg).",
+  "CARTON_GW_NOT_GREATER": "Carton {{carton}}: gross weight ({{gw}} kg) cannot be less than net weight ({{nw}} kg).",
   "CARTON_GW_REQUIRED": "Carton {{carton}}: gross weight is required and must be greater than 0 kg.",
   "CARTON_NW_REQUIRED": "Carton {{carton}}: net weight is required and must be greater than 0 kg.",
   "CARTON_QTY_INVALID": "Carton {{carton}}: quantity must be greater than 0.",
@@ -25,5 +25,7 @@
   "SHIPMENT_NOT_FOUND": "Shipment not found.",
   "SHIPMENT_SAVE_FAILED": "The shipment could not be saved. Please try again.",
   "SUPPLIER_NOT_LINKED": "Your account is not linked to a supplier. Please contact the administrator.",
-  "generic": "Something went wrong. Please try again."
+  "generic": "Something went wrong. Please try again.",
+  "DELIVERY_DATE_PAST": "The delivery date {{date}} is in the past. Choose today or a later date.",
+  "DELIVERY_DATE_INVALID": "The delivery date \"{{value}}\" is not a valid date."
 }
