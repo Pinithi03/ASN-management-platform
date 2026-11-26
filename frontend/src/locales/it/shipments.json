@@ -44,7 +44,8 @@
       "offline": "Sei offline. Riconnettiti alla rete prima di inviare l'ASN a IUNGO.",
       "selectLine": "Seleziona almeno una riga prima di scaricare il modello.",
       "templateFailed": "Impossibile scaricare il modello personalizzato: {{error}}",
-      "xmlFailed": "Impossibile scaricare l'XML ASN: {{error}}"
+      "xmlFailed": "Impossibile scaricare l'XML ASN: {{error}}",
+      "pastDates": "Queste distinte hanno una data di consegna passata: {{slips}}. Scegli oggi o una data successiva."
     },
     "errors": {
       "actionRequired": "Azione richiesta",
@@ -165,7 +166,7 @@
   "wizard": {
     "alerts": {
       "createFailed": "Impossibile creare la spedizione",
-      "gwNotGreater": "Cartone {{carton}} dell'articolo {{item}}: il peso lordo ({{gw}} kg) deve essere strettamente maggiore del peso netto ({{nw}} kg).",
+      "gwNotGreater": "Cartone {{carton}} dell'articolo {{item}}: il peso lordo ({{gw}} kg) non può essere inferiore al peso netto ({{nw}} kg).",
       "gwRequired": "Cartone {{carton}} dell'articolo {{item}}: il peso lordo (kg) è obbligatorio e deve essere maggiore di 0.",
       "invalidQty": "Il cartone {{carton}} dell'articolo {{item}} ha una quantità pari a 0 o non valida.",
       "invalidSplit": "Inserisci un numero positivo maggiore di 0 per suddividere.",
@@ -218,7 +219,10 @@
         "shipped": "Spedito",
         "shippingQty": "Qtà da spedire"
       },
-      "title": "Assegnazione righe ordine d'acquisto"
+      "title": "Assegnazione righe ordine d'acquisto",
+      "fillAllTitle": "Spedisci l'intera quantità aperta residua su ogni riga di questo OdA",
+      "filledLines_one": "Compilata {{count}} riga",
+      "filledLines_other": "Compilate {{count}} righe"
     },
     "step2": {
       "addCarton": "+ Aggiungi cartone",
@@ -241,7 +245,7 @@
       "countRollInputTitle": "Inserisci il numero di rotoli in cui suddividere",
       "discrepancy": "Differenza: {{diff}}",
       "ediRefTitle": "Riferimento riga EDI (articolo-cartone)",
-      "gwLeNw": "Lordo ≤ Netto!",
+      "gwLeNw": "Lordo < Netto!",
       "numBoxes": "N. cartoni",
       "numRolls": "N. rotoli",
       "optional": "Opzionale",
@@ -282,7 +286,14 @@
       },
       "title": "Imballaggio cartoni e assegnazione Handling Unit",
       "toggleOptional": "Mostra/nascondi colonne opzionali",
-      "totalPacked": "Totale imballato: <strong>{{packed}}</strong> / {{shipping}} {{uom}}"
+      "totalPacked": "Totale imballato: <strong>{{packed}}</strong> / {{shipping}} {{uom}}",
+      "copyQtyTitle": "Copia questa quantità su tutti i colli di questa riga (mai oltre la quantità in spedizione)",
+      "copyGwTitle": "Copia questo peso lordo su tutti i colli di questa riga",
+      "copyNwTitle": "Copia questo peso netto su tutti i colli di questa riga",
+      "qtyFilled_one": "Compilato {{count}} collo",
+      "qtyFilled_other": "Compilati {{count}} colli",
+      "qtyFilledCapped_one": "Compilato {{count}} collo — limitato a {{max}}",
+      "qtyFilledCapped_other": "Compilati {{count}} colli — limitato a {{max}}"
     },
     "step3": {
       "breakdown": "Handling Unit e dettaglio imballaggio",
@@ -311,7 +322,9 @@
       },
       "totalQty": "Qtà totale: <strong>{{qty}} {{uom}}</strong>",
       "transmitted": "Trasmessa",
-      "xmlTitle": "XML SdDataSlice ufficiale"
+      "xmlTitle": "XML SdDataSlice ufficiale",
+      "requested": "Richiesta nell'ordine: {{date}}",
+      "requestedPassed": "Richiesta nell'ordine: {{date}} — già passata. Scegli oggi o una data successiva."
     },
     "toolbar": {
       "back": "Indietro",

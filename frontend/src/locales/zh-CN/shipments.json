@@ -42,7 +42,8 @@
       "offline": "您当前处于离线状态。请先重新连接网络，再将 ASN 发送到 IUNGO。",
       "selectLine": "下载模板前请至少选择一个行项目。",
       "templateFailed": "无法下载定制模板：{{error}}",
-      "xmlFailed": "无法下载 ASN XML：{{error}}"
+      "xmlFailed": "无法下载 ASN XML：{{error}}",
+      "pastDates": "以下装箱单的交货日期已过：{{slips}}。请选择今天或之后的日期。"
     },
     "errors": {
       "actionRequired": "需要处理",
@@ -153,7 +154,7 @@
   "wizard": {
     "alerts": {
       "createFailed": "无法创建发运单",
-      "gwNotGreater": "物料 {{item}} 的第 {{carton}} 箱：毛重（{{gw}} kg）必须大于净重（{{nw}} kg）。",
+      "gwNotGreater": "物料 {{item}} 的第 {{carton}} 箱：毛重（{{gw}} kg）不能小于净重（{{nw}} kg）。",
       "gwRequired": "物料 {{item}} 的第 {{carton}} 箱：毛重 (kg) 为必填项，且必须大于 0。",
       "invalidQty": "物料 {{item}} 的第 {{carton}} 箱数量为 0 或无效。",
       "invalidSplit": "请输入大于 0 的有效正数以进行拆分。",
@@ -202,7 +203,9 @@
         "shipped": "已发运",
         "shippingQty": "发运数量"
       },
-      "title": "采购订单行项目分配"
+      "title": "采购订单行项目分配",
+      "fillAllTitle": "为该采购订单的每一行发运全部剩余未结数量",
+      "filledLines_other": "已填写 {{count}} 行"
     },
     "step2": {
       "addCarton": "+ 添加纸箱",
@@ -225,7 +228,7 @@
       "countRollInputTitle": "输入要拆分的卷数",
       "discrepancy": "差异：{{diff}}",
       "ediRefTitle": "EDI 行参考（物料-纸箱）",
-      "gwLeNw": "毛重 ≤ 净重！",
+      "gwLeNw": "毛重 < 净重！",
       "numBoxes": "箱数",
       "numRolls": "卷数",
       "optional": "可选",
@@ -262,7 +265,12 @@
       },
       "title": "纸箱包装和 Handling Unit 分配",
       "toggleOptional": "显示/隐藏可选列",
-      "totalPacked": "已装箱合计：<strong>{{packed}}</strong> / {{shipping}} {{uom}}"
+      "totalPacked": "已装箱合计：<strong>{{packed}}</strong> / {{shipping}} {{uom}}",
+      "copyQtyTitle": "将此数量复制到该行的所有箱（不超过本次发运数量）",
+      "copyGwTitle": "将此毛重复制到该行的所有箱",
+      "copyNwTitle": "将此净重复制到该行的所有箱",
+      "qtyFilled_other": "已填写 {{count}} 箱",
+      "qtyFilledCapped_other": "已填写 {{count}} 箱 — 上限 {{max}}"
     },
     "step3": {
       "breakdown": "Handling Unit 和装箱明细",
@@ -289,7 +297,9 @@
       },
       "totalQty": "总数量：<strong>{{qty}} {{uom}}</strong>",
       "transmitted": "已传输",
-      "xmlTitle": "正式 SdDataSlice XML"
+      "xmlTitle": "正式 SdDataSlice XML",
+      "requested": "订单要求日期：{{date}}",
+      "requestedPassed": "订单要求日期：{{date}} — 已过期。请选择今天或之后的日期。"
     },
     "toolbar": {
       "back": "返回",

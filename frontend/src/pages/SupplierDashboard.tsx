@@ -2,6 +2,7 @@
 // frontend/src/pages/SupplierDashboard.tsx
 
 import { useQuery } from "@tanstack/react-query";
+import { KPI_QUERY_OPTIONS, KpiCard, KpiGrid, KpiSkeleton, KpiUpdatedBar } from "@/components/dashboard/Kpi";
 import {
   Truck,
   Package,
@@ -146,27 +147,37 @@ export default function SupplierDashboard() {
   const supplierId = user?.supplier_id || user?.supplier_code || undefined;
 
   // 1. Fetch Scoped PO Stats for this supplier
-  const { data: poStats, isLoading: poStatsLoading } = useQuery({
+  const statsQ = useQuery({
     queryKey: ["supplierPOStats", supplierId],
     queryFn: () => poApi.getStats(supplierId),
-    refetchInterval: 10000,
+    ...KPI_QUERY_OPTIONS,
   });
+  const { data: poStats, isLoading: poStatsLoading } = statsQ;
 
   // 2. Fetch Scoped Purchase Orders for upcoming delivery schedule
-  const { data: poData, isLoading: poListLoading } = useQuery({
+  const posQ = useQuery({
     queryKey: ["supplierPOsList", supplierId],
     queryFn: () => poApi.list({ per_page: 50, supplier_id: supplierId }),
-    refetchInterval: 10000,
+    ...KPI_QUERY_OPTIONS,
   });
+  const { data: poData, isLoading: poListLoading } = posQ;
 
   // 3. Fetch Shipments scoped to this supplier
-  const { data: shipments, isLoading: shipmentsLoading } = useQuery({
+  const shipQ = useQuery({
     queryKey: ["supplierShipments", supplierId],
     queryFn: () => shipmentService.getShipments(undefined, undefined, supplierId),
-    refetchInterval: 10000,
+    ...KPI_QUERY_OPTIONS,
   });
+  const { data: shipments, isLoading: shipmentsLoading } = shipQ;
 
   const isLoading = poStatsLoading || poListLoading || shipmentsLoading;
+  const kpiUpdatedAt = Math.max(statsQ.dataUpdatedAt, posQ.dataUpdatedAt, shipQ.dataUpdatedAt);
+  const kpiRefreshing = statsQ.isFetching || posQ.isFetching || shipQ.isFetching;
+  const refreshKpis = () => {
+    void statsQ.refetch();
+    void posQ.refetch();
+    void shipQ.refetch();
+  };
 
   // ─── Calculations & Visual Metrics ─────────────────────────────
 
@@ -354,7 +365,8 @@ export default function SupplierDashboard() {
   const kpiCards = [
     {
       label: t("kpi.dispatchedVolume.label"),
-      value: t("kpi.dispatchedVolume.value", { pieces: formatNumber(shipmentMetrics.totalPieces) }),
+      value: shipmentMetrics.totalPieces,
+      format: (n: number) => t("kpi.dispatchedVolume.value", { pieces: formatNumber(n) }),
       icon: Truck,
       iconBg: "bg-emerald-50 text-emerald-600 border-emerald-100",
       subtitle: t("kpi.dispatchedVolume.subtitle", {
@@ -362,12 +374,13 @@ export default function SupplierDashboard() {
         dispatches: shipmentMetrics.totalCount,
       }),
       badge: t("kpi.dispatchedVolume.badge"),
-      badgeStyle: "bg-emerald-50 text-emerald-700 border-emerald-200",
+      badgeStyle: "bg-emerald-50 text-emerald-700 ring-emerald-200",
       onClick: () => navigate("/shipments"),
     },
     {
       label: t("kpi.dueSoon.label"),
-      value: t("kpi.dueSoon.value", { count: urgentCount + overdueCount }),
+      value: urgentCount + overdueCount,
+      format: (n: number) => t("kpi.dueSoon.value", { count: n }),
       icon: AlertTriangle,
       iconBg: overdueCount > 0 ? "bg-red-50 text-red-600 border-red-100" : "bg-amber-50 text-amber-600 border-amber-100",
       subtitle:
@@ -375,27 +388,29 @@ export default function SupplierDashboard() {
           ? t("kpi.dueSoon.subtitleWithOverdue", { overdue: overdueCount, urgent: urgentCount })
           : t("kpi.dueSoon.subtitle", { urgent: urgentCount }),
       badge: overdueCount > 0 ? t("kpi.dueSoon.badgeAttention") : t("kpi.dueSoon.badgeApproaching"),
-      badgeStyle: overdueCount > 0 ? "bg-red-50 text-red-700 border-red-200" : "bg-amber-50 text-amber-700 border-amber-200",
+      badgeStyle: overdueCount > 0 ? "bg-red-50 text-red-700 ring-red-200" : "bg-amber-50 text-amber-700 ring-amber-200",
       onClick: () => navigate("/purchase-orders"),
     },
     {
       label: t("kpi.unprocessed.label"),
-      value: t("kpi.unprocessed.value", { count: poStats?.active ?? 0 }),
+      value: poStats?.active ?? 0,
+      format: (n: number) => t("kpi.unprocessed.value", { count: n }),
       icon: Package,
       iconBg: "bg-slate-100 text-slate-700 border-slate-200",
       subtitle: t("kpi.unprocessed.subtitle", { percent: unprocessedRate }),
       badge: t("kpi.unprocessed.badge"),
-      badgeStyle: "bg-slate-100 text-slate-700 border-slate-200",
+      badgeStyle: "bg-slate-100 text-slate-700 ring-slate-200",
       onClick: () => navigate("/purchase-orders?status=ACTIVE"),
     },
     {
       label: t("kpi.partial.label"),
-      value: t("kpi.partial.value", { count: poStats?.partial ?? 0 }),
+      value: poStats?.partial ?? 0,
+      format: (n: number) => t("kpi.partial.value", { count: n }),
       icon: Layers,
       iconBg: "bg-amber-50 text-amber-600 border-amber-100",
       subtitle: t("kpi.partial.subtitle", { percent: fulfillmentRate }),
       badge: t("kpi.partial.badge", { percent: partialRate }),
-      badgeStyle: "bg-amber-50 text-amber-700 border-amber-200",
+      badgeStyle: "bg-amber-50 text-amber-700 ring-amber-200",
       onClick: () => navigate("/purchase-orders?status=PARTIAL"),
     },
   ];
@@ -409,6 +424,8 @@ export default function SupplierDashboard() {
             {t("header.subtitle")}
           </p>
         </div>
+        <div className="flex flex-wrap items-center gap-3 self-start sm:self-auto">
+        <KpiUpdatedBar updatedAt={kpiUpdatedAt} onRefresh={refreshKpis} refreshing={kpiRefreshing} />
         <button
           type="button"
           onClick={() => navigate("/order-history")}
@@ -417,51 +434,36 @@ export default function SupplierDashboard() {
           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
           <span>{t("header.orderHistory", { count: poStats?.completed ?? 0 })}</span>
         </button>
+        </div>
       </div>
       {isLoading ? (
-        <div className="flex flex-col items-center justify-center py-24 gap-4">
-          <div className="w-10 h-10 rounded-full border-3 border-emerald-600/30 border-t-emerald-600 animate-spin" />
-          <p className="text-xs font-medium text-slate-500 animate-pulse">
-            {t("loading")}
-          </p>
+        <div className="space-y-6" aria-busy="true" aria-label={t("loading")}>
+          <KpiGrid>
+            {[0, 1, 2, 3].map((i) => (
+              <KpiSkeleton key={i} />
+            ))}
+          </KpiGrid>
+          <div className="h-72 animate-pulse rounded-lg bg-white motion-reduce:animate-none" />
         </div>
       ) : (
         <>
-          {/* ─── Top 4 KPI Metric Cards ───────────────────────────── */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {kpiCards.map((kpi) => {
-              const Icon = kpi.icon;
-              return (
-                <div
-                  key={kpi.label}
-                  onClick={kpi.onClick}
-                  className="rounded-xl bg-white border border-slate-200 p-5 shadow-2xs hover:border-slate-300 hover:shadow-sm cursor-pointer transition-all"
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-semibold text-slate-500">
-                      {kpi.label}
-                    </span>
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center border ${kpi.iconBg}`}>
-                      <Icon className="w-4 h-4" />
-                    </div>
-                  </div>
-
-                  <div className="text-2xl font-bold text-slate-900 tracking-tight mb-2.5">
-                    {kpi.value}
-                  </div>
-
-                  <div className="flex items-center justify-between pt-2.5 border-t border-slate-100 text-xs">
-                    <span className="text-slate-500 truncate max-w-[180px]">
-                      {kpi.subtitle}
-                    </span>
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${kpi.badgeStyle}`}>
-                      {kpi.badge}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          {/* ─── Top 4 KPI cards (live) ───────────────────────────── */}
+          <KpiGrid>
+            {kpiCards.map((kpi) => (
+              <KpiCard
+                key={kpi.label}
+                label={kpi.label}
+                value={kpi.value}
+                format={kpi.format}
+                icon={kpi.icon}
+                iconClassName={kpi.iconBg}
+                subtitle={kpi.subtitle}
+                badge={kpi.badge}
+                badgeClassName={kpi.badgeStyle}
+                onClick={kpi.onClick}
+              />
+            ))}
+          </KpiGrid>
 
           {/* ─── Row 1: Shipping Velocity & Order Lifecycle ──────── */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -596,7 +598,7 @@ export default function SupplierDashboard() {
                     <span className="text-xl font-extrabold text-slate-900 dark:text-white">
                       {poStats?.total ?? 0}
                     </span>
-                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                    <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
                       {t("lifecycle.assignedPos")}
                     </span>
                   </div>
@@ -612,7 +614,7 @@ export default function SupplierDashboard() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-slate-900 dark:text-white">{item.value}</span>
-                      <span className="text-slate-400 text-[11px]">
+                      <span className="text-slate-400 text-xs">
                         ({Math.round((item.value / (poStats?.total || 1)) * 100)}%)
                       </span>
                     </div>
@@ -665,21 +667,21 @@ export default function SupplierDashboard() {
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 text-center">
                 <div className="p-2 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50">
-                  <p className="text-[10px] uppercase font-bold text-rose-600 dark:text-rose-400">{t("deadlines.tileOverdue")}</p>
+                  <p className="text-xs uppercase font-bold text-rose-600 dark:text-rose-400">{t("deadlines.tileOverdue")}</p>
                   <p className="text-lg font-extrabold text-rose-700 dark:text-rose-300">{overdueCount}</p>
                 </div>
                 <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50">
-                  <p className="text-[10px] uppercase font-bold text-amber-600 dark:text-amber-400">{t("deadlines.tileDue3")}</p>
+                  <p className="text-xs uppercase font-bold text-amber-600 dark:text-amber-400">{t("deadlines.tileDue3")}</p>
                   <p className="text-lg font-extrabold text-amber-700 dark:text-amber-300">{urgentCount}</p>
                 </div>
                 <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/50">
-                  <p className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400">{t("deadlines.tileDue7")}</p>
+                  <p className="text-xs uppercase font-bold text-emerald-600 dark:text-emerald-400">{t("deadlines.tileDue7")}</p>
                   <p className="text-lg font-extrabold text-emerald-700 dark:text-emerald-300">
                     {urgencyData.find((u) => u.id === "due7")?.count || 0}
                   </p>
                 </div>
                 <div className="p-2 rounded-xl bg-cyan-50 dark:bg-cyan-950/40 border border-cyan-200 dark:border-cyan-900/50">
-                  <p className="text-[10px] uppercase font-bold text-cyan-600 dark:text-cyan-400">{t("deadlines.tileOnTrack")}</p>
+                  <p className="text-xs uppercase font-bold text-cyan-600 dark:text-cyan-400">{t("deadlines.tileOnTrack")}</p>
                   <p className="text-lg font-extrabold text-cyan-700 dark:text-cyan-300">
                     {urgencyData.find((u) => u.id === "onTrack")?.count || 0}
                   </p>
@@ -708,7 +710,7 @@ export default function SupplierDashboard() {
                       <div className="flex items-center justify-between text-xs">
                         <div className="flex items-center gap-2">
                           <span className="font-semibold text-slate-900">{plant.name}</span>
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-slate-100 text-slate-600">
+                          <span className="px-1.5 py-0.5 rounded text-xs font-mono font-semibold bg-slate-100 text-slate-600">
                             {plant.code}
                           </span>
                         </div>
@@ -716,7 +718,7 @@ export default function SupplierDashboard() {
                           <span className="font-semibold text-slate-900">
                             {t("plants.pieces", { value: formatNumber(plant.pieces) })}
                           </span>
-                          <span className="text-slate-400 text-[11px] ml-1.5">
+                          <span className="text-slate-400 text-xs ml-1.5">
                             {t("plants.cartons", { count: plant.boxes })}
                           </span>
                         </div>
@@ -780,7 +782,7 @@ export default function SupplierDashboard() {
                               {po.po_number || t("dueSoon.unnamedPo")}
                             </span>
                             <span
-                              className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                              className={`px-2 py-0.5 rounded text-xs font-semibold border ${
                                 isOverdue
                                   ? "bg-red-50 text-red-700 border-red-200"
                                   : isUrgent
@@ -797,17 +799,17 @@ export default function SupplierDashboard() {
                                 : t("dueSoon.daysLeft", { days })}
                             </span>
                             {isPartial && (
-                              <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                              <span className="px-1.5 py-0.5 rounded text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
                                 {t("dueSoon.partial")}
                               </span>
                             )}
                           </div>
-                          <p className="text-[11px] text-slate-500 mt-1 truncate">
+                          <p className="text-xs text-slate-500 mt-1 truncate">
                             <span className="font-medium text-slate-700">{cleanDest}</span>
                             {" · "}
                             <span>{productDesc}</span>
                           </p>
-                          <p className="text-[10px] text-slate-400 mt-0.5">
+                          <p className="text-xs text-slate-400 mt-0.5">
                             {t("dueSoon.target", { date: formatDateSafe(po.delivery_date) })}{" "}
                             {isPartial && po.remaining_quantity != null ? (
                               <span className="font-semibold text-slate-700">
@@ -874,11 +876,11 @@ export default function SupplierDashboard() {
                           <span className="text-xs font-bold text-slate-900 font-mono truncate">
                             {s.shipment_number}
                           </span>
-                          <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          <span className="px-2 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                             {s.status}
                           </span>
                         </div>
-                        <p className="text-[11px] text-slate-500 mt-0.5 truncate">
+                        <p className="text-xs text-slate-500 mt-0.5 truncate">
                           {t("recent.plantLine", {
                             plant: s.plant_code || "PPA1",
                             cartons: s.total_boxes,

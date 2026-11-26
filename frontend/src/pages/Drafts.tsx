@@ -136,7 +136,7 @@ export default function Drafts() {
           {t("tabs.manual")}
           <span
             className={cn(
-              "px-2 py-0.5 text-[11px] rounded-full font-bold",
+              "px-2 py-0.5 text-xs rounded-full font-bold",
               filterTab === "manual"
                 ? isSupplier
                   ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
@@ -163,7 +163,7 @@ export default function Drafts() {
           {t("tabs.excel")}
           <span
             className={cn(
-              "px-2 py-0.5 text-[11px] rounded-full font-bold",
+              "px-2 py-0.5 text-xs rounded-full font-bold",
               filterTab === "excel"
                 ? isSupplier
                   ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
@@ -221,7 +221,7 @@ export default function Drafts() {
                         className="bg-white even:bg-gray-100 hover:bg-blue-50/70 border-b border-gray-300 text-xs transition-colors"
                       >
                         <td className="py-1 px-2 whitespace-nowrap border-r border-gray-200">
-                          <span className="inline-flex items-center px-1.5 py-0 rounded text-[10px] font-medium bg-gray-100 text-gray-700 border border-gray-200">
+                          <span className="inline-flex items-center px-1.5 py-0 rounded text-xs font-medium bg-gray-100 text-gray-700 border border-gray-200">
                             {draft.step === 1
                               ? t("row.stepItems", { step: draft.step })
                               : draft.step === 2
@@ -270,7 +270,7 @@ export default function Drafts() {
                             <button
                               type="button"
                               onClick={() => handleDeleteManual(draft)}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold text-slate-600 hover:text-red-600 hover:bg-red-50 rounded border border-slate-200 bg-white transition-colors cursor-pointer"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold text-slate-600 hover:text-red-600 hover:bg-red-50 rounded border border-slate-200 bg-white transition-colors cursor-pointer"
                             >
                               <Trash2 className="w-3 h-3" /> {t("actions.discard")}
                             </button>
@@ -278,7 +278,7 @@ export default function Drafts() {
                               type="button"
                               onClick={() => handleResumeManual(draft)}
                               className={cn(
-                                "inline-flex items-center gap-1 px-2.5 py-0.5 text-white rounded text-[11px] font-semibold shadow-2xs transition-colors cursor-pointer",
+                                "inline-flex items-center gap-1 px-2.5 py-0.5 text-white rounded text-xs font-semibold shadow-2xs transition-colors cursor-pointer",
                                 isSupplier ? "bg-emerald-600 hover:bg-emerald-700" : "bg-brand-600 hover:bg-brand-700"
                               )}
                             >
@@ -305,15 +305,15 @@ export default function Drafts() {
                       >
                         <td className="py-1 px-2 whitespace-nowrap border-r border-gray-200">
                           {isValid ? (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0 rounded text-xs font-bold bg-emerald-100 text-emerald-800">
                               <CheckCircle2 className="w-3 h-3" /> {t("status.validated")}
                             </span>
                           ) : res ? (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0 rounded text-xs font-bold bg-amber-100 text-amber-800">
                               <AlertCircle className="w-3 h-3" /> {t("status.needsAttention")}
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0 rounded text-[10px] font-bold bg-blue-100 text-blue-800">
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0 rounded text-xs font-bold bg-blue-100 text-blue-800">
                               <FileSpreadsheet className="w-3 h-3" /> {t("status.templateDownloaded")}
                             </span>
                           )}
@@ -361,14 +361,14 @@ export default function Drafts() {
                             <button
                               type="button"
                               onClick={() => handleDeleteExcel(draft)}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold text-slate-600 hover:text-red-600 hover:bg-red-50 rounded border border-slate-200 bg-white transition-colors cursor-pointer"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold text-slate-600 hover:text-red-600 hover:bg-red-50 rounded border border-slate-200 bg-white transition-colors cursor-pointer"
                             >
                               <Trash2 className="w-3 h-3" /> {t("actions.discard")}
                             </button>
                             <button
                               type="button"
                               onClick={() => handleResumeExcel(draft)}
-                              className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-semibold shadow-2xs transition-colors cursor-pointer"
+                              className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
                             >
                               {res ? t("actions.resumeExcel") : t("actions.uploadFilledSheet")} <ArrowRight className="w-3 h-3" />
                             </button>

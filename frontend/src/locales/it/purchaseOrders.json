@@ -41,7 +41,9 @@
     "storeTitle": "Visualizza {{plant}} - Magazzino {{store}}",
     "stores": "Magazzini:",
     "toDispatch": "da spedire",
-    "zeroPos": "0 ordini"
+    "zeroPos": "0 ordini",
+    "selectHeading": "Seleziona lo stabilimento di destinazione",
+    "selectHint": "Scegli uno stabilimento, poi apri i suoi ordini di acquisto. Fai doppio clic su una scheda per aprirla direttamente."
   },
   "header": {
     "title": "Ordini d'acquisto"
@@ -154,5 +156,10 @@
     "quantity": "Quantità",
     "selectAll": "Seleziona tutto",
     "status": "Stato"
+  },
+  "detail": {
+    "loadError": "Impossibile caricare questo ordine di acquisto. Potrebbe essere stato rimosso oppure non hai accesso.",
+    "retry": "Riprova",
+    "openInNewTab": "Apri l'OdA {{po}} in una nuova scheda"
   }
 }

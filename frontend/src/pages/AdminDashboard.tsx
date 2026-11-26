@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { KPI_QUERY_OPTIONS, KpiCard, KpiGrid, KpiSkeleton, KpiUpdatedBar } from "@/components/dashboard/Kpi";
 import {
   Truck,
   Package,
@@ -143,25 +144,28 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
 
   // 1. Fetch Purchase Orders Statistics (Direct summary from backend)
-  const { data: poStats, isLoading: poStatsLoading } = useQuery({
+  const statsQ = useQuery({
     queryKey: ["poStats"],
     queryFn: () => poApi.getStats(),
-    refetchInterval: 10000,
+    ...KPI_QUERY_OPTIONS,
   });
+  const { data: poStats, isLoading: poStatsLoading } = statsQ;
 
   // 2. Fetch Live Purchase Orders (For delivery deadlines, urgency & plants)
-  const { data: poData, isLoading: poListLoading } = useQuery({
+  const posQ = useQuery({
     queryKey: ["adminPOsList"],
     queryFn: () => poApi.list({ per_page: 100 }),
-    refetchInterval: 10000,
+    ...KPI_QUERY_OPTIONS,
   });
+  const { data: poData, isLoading: poListLoading } = posQ;
 
   // 3. Fetch Shipments (For actual shipped cartons, pieces, monthly trends)
-  const { data: shipments, isLoading: shipmentsLoading } = useQuery({
+  const shipQ = useQuery({
     queryKey: ["adminShipments"],
     queryFn: () => shipmentService.getShipments(),
-    refetchInterval: 10000,
+    ...KPI_QUERY_OPTIONS,
   });
+  const { data: shipments, isLoading: shipmentsLoading } = shipQ;
 
   // 4. Fetch Registered Suppliers (For supplier ranking & activity)
   const { data: suppliers, isLoading: suppliersLoading } = useQuery({
@@ -171,6 +175,13 @@ export default function AdminDashboard() {
   });
 
   const isLoading = poStatsLoading || poListLoading || shipmentsLoading || suppliersLoading;
+  const kpiUpdatedAt = Math.max(statsQ.dataUpdatedAt, posQ.dataUpdatedAt, shipQ.dataUpdatedAt);
+  const kpiRefreshing = statsQ.isFetching || posQ.isFetching || shipQ.isFetching;
+  const refreshKpis = () => {
+    void statsQ.refetch();
+    void posQ.refetch();
+    void shipQ.refetch();
+  };
 
   // ─── Core Calculations & Data Science Aggregations ─────────────
 
@@ -413,42 +424,46 @@ export default function AdminDashboard() {
   const kpiCards = [
     {
       label: "Total Shipped Volume",
-      value: shipmentMetrics.totalPieces > 0 ? `${shipmentMetrics.totalPieces.toLocaleString()} pcs` : "0 pcs",
+      value: shipmentMetrics.totalPieces,
+      format: (n: number) => `${n.toLocaleString()} pcs`,
       icon: Truck,
       iconBg: "bg-blue-50 text-blue-600 border-blue-100",
       subtitle: `${shipmentMetrics.totalBoxes.toLocaleString()} cartons · ${shipmentMetrics.totalCount} dispatches`,
       badge: "Dispatched",
-      badgeStyle: "bg-blue-50 text-blue-700 border-blue-200",
+      badgeStyle: "bg-blue-50 text-blue-700 ring-blue-200",
       onClick: () => navigate("/shipments"),
     },
     {
       label: "Deliveries Due Soon",
-      value: `${urgentCount + overdueCount} Orders`,
+      value: urgentCount + overdueCount,
+      format: (n: number) => `${n} Orders`,
       icon: AlertTriangle,
       iconBg: overdueCount > 0 ? "bg-red-50 text-red-600 border-red-100" : "bg-amber-50 text-amber-600 border-amber-100",
       subtitle: `${overdueCount > 0 ? `${overdueCount} overdue · ` : ""}${urgentCount} urgent (≤3d)`,
       badge: overdueCount > 0 ? "Attention" : "Approaching",
-      badgeStyle: overdueCount > 0 ? "bg-red-50 text-red-700 border-red-200" : "bg-amber-50 text-amber-700 border-amber-200",
+      badgeStyle: overdueCount > 0 ? "bg-red-50 text-red-700 ring-red-200" : "bg-amber-50 text-amber-700 ring-amber-200",
       onClick: () => navigate("/purchase-orders"),
     },
     {
       label: "Unprocessed Orders",
-      value: `${poStats?.active ?? 0} POs`,
+      value: poStats?.active ?? 0,
+      format: (n: number) => `${n} POs`,
       icon: Package,
       iconBg: "bg-slate-100 text-slate-700 border-slate-200",
       subtitle: `${unprocessedRate}% of total (${poStats?.total ?? 0} POs)`,
       badge: "Open",
-      badgeStyle: "bg-slate-100 text-slate-700 border-slate-200",
+      badgeStyle: "bg-slate-100 text-slate-700 ring-slate-200",
       onClick: () => navigate("/purchase-orders?status=ACTIVE"),
     },
     {
       label: "Partial Fulfillment",
-      value: `${poStats?.partial ?? 0} POs`,
+      value: poStats?.partial ?? 0,
+      format: (n: number) => `${n} POs`,
       icon: Layers,
       iconBg: "bg-amber-50 text-amber-600 border-amber-100",
       subtitle: `Split shipments (${fulfillmentRate}% completed)`,
       badge: `${partialRate}% Split`,
-      badgeStyle: "bg-amber-50 text-amber-700 border-amber-200",
+      badgeStyle: "bg-amber-50 text-amber-700 ring-amber-200",
       onClick: () => navigate("/purchase-orders?status=PARTIAL"),
     },
   ];
@@ -462,6 +477,8 @@ export default function AdminDashboard() {
             Platform-wide dispatch analytics, inbound PO pipeline, and destination plant performance
           </p>
         </div>
+        <div className="flex flex-wrap items-center gap-3 self-start sm:self-auto">
+        <KpiUpdatedBar updatedAt={kpiUpdatedAt} onRefresh={refreshKpis} refreshing={kpiRefreshing} />
         <button
           type="button"
           onClick={() => navigate("/order-history")}
@@ -470,51 +487,36 @@ export default function AdminDashboard() {
           <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />
           <span>Order History ({poStats?.completed ?? 0})</span>
         </button>
+        </div>
       </div>
       {isLoading ? (
-        <div className="flex flex-col items-center justify-center py-24 gap-4">
-          <div className="w-10 h-10 rounded-full border-3 border-blue-600/30 border-t-blue-600 animate-spin" />
-          <p className="text-xs font-medium text-slate-500 animate-pulse">
-            Loading metrics...
-          </p>
+        <div className="space-y-6" aria-busy="true" aria-label="Loading metrics">
+          <KpiGrid>
+            {[0, 1, 2, 3].map((i) => (
+              <KpiSkeleton key={i} />
+            ))}
+          </KpiGrid>
+          <div className="h-72 animate-pulse rounded-lg bg-white motion-reduce:animate-none" />
         </div>
       ) : (
         <>
-          {/* ─── Top 4 KPI Cards ─────────────────────── */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {kpiCards.map((kpi) => {
-              const Icon = kpi.icon;
-              return (
-                <div
-                  key={kpi.label}
-                  onClick={kpi.onClick}
-                  className="rounded-xl bg-white border border-slate-200 p-5 shadow-2xs hover:border-slate-300 hover:shadow-sm cursor-pointer transition-all"
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-semibold text-slate-500">
-                      {kpi.label}
-                    </span>
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center border ${kpi.iconBg}`}>
-                      <Icon className="w-4 h-4" />
-                    </div>
-                  </div>
-
-                  <div className="text-2xl font-bold text-slate-900 tracking-tight mb-2.5">
-                    {kpi.value}
-                  </div>
-
-                  <div className="flex items-center justify-between pt-2.5 border-t border-slate-100 text-xs">
-                    <span className="text-slate-500 truncate max-w-[180px]">
-                      {kpi.subtitle}
-                    </span>
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${kpi.badgeStyle}`}>
-                      {kpi.badge}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          {/* ─── Top 4 KPI cards (live) ─────────────────────── */}
+          <KpiGrid>
+            {kpiCards.map((kpi) => (
+              <KpiCard
+                key={kpi.label}
+                label={kpi.label}
+                value={kpi.value}
+                format={kpi.format}
+                icon={kpi.icon}
+                iconClassName={kpi.iconBg}
+                subtitle={kpi.subtitle}
+                badge={kpi.badge}
+                badgeClassName={kpi.badgeStyle}
+                onClick={kpi.onClick}
+              />
+            ))}
+          </KpiGrid>
 
           {/* ─── Row 1: Core Operational Visualizations ───────────── */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -642,7 +644,7 @@ export default function AdminDashboard() {
                     <span className="text-xl font-bold text-slate-900">
                       {poStats?.total ?? 0}
                     </span>
-                    <span className="text-[10px] font-semibold text-slate-400 uppercase">
+                    <span className="text-xs font-semibold text-slate-400 uppercase">
                       Total POs
                     </span>
                   </div>
@@ -659,7 +661,7 @@ export default function AdminDashboard() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-slate-900">{item.value}</span>
-                      <span className="text-slate-400 text-[11px]">
+                      <span className="text-slate-400 text-xs">
                         ({Math.round((item.value / (poStats?.total || 1)) * 100)}%)
                       </span>
                     </div>
@@ -709,21 +711,21 @@ export default function AdminDashboard() {
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4 pt-3 border-t border-slate-100 text-center">
                 <div className="p-2.5 rounded-lg bg-red-50 border border-red-200">
-                  <p className="text-[10px] uppercase font-bold text-red-600">Overdue</p>
+                  <p className="text-xs uppercase font-bold text-red-600">Overdue</p>
                   <p className="text-base font-bold text-red-700">{overdueCount}</p>
                 </div>
                 <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200">
-                  <p className="text-[10px] uppercase font-bold text-amber-700">Due ≤ 3 Days</p>
+                  <p className="text-xs uppercase font-bold text-amber-700">Due ≤ 3 Days</p>
                   <p className="text-base font-bold text-amber-800">{urgentCount}</p>
                 </div>
                 <div className="p-2.5 rounded-lg bg-blue-50 border border-blue-200">
-                  <p className="text-[10px] uppercase font-bold text-blue-600">Due in 7 Days</p>
+                  <p className="text-xs uppercase font-bold text-blue-600">Due in 7 Days</p>
                   <p className="text-base font-bold text-blue-700">
                     {urgencyData.find((u) => u.name.includes("7d"))?.count || 0}
                   </p>
                 </div>
                 <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200">
-                  <p className="text-[10px] uppercase font-bold text-emerald-600">On Track</p>
+                  <p className="text-xs uppercase font-bold text-emerald-600">On Track</p>
                   <p className="text-base font-bold text-emerald-700">
                     {urgencyData.find((u) => u.name.includes("Track"))?.count || 0}
                   </p>
@@ -752,7 +754,7 @@ export default function AdminDashboard() {
                       <div className="flex items-center justify-between text-xs">
                         <div className="flex items-center gap-2">
                           <span className="font-semibold text-slate-900">{plant.name}</span>
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-100 text-slate-600">
+                          <span className="px-1.5 py-0.5 rounded text-xs font-mono bg-slate-100 text-slate-600">
                             {plant.code}
                           </span>
                         </div>
@@ -760,7 +762,7 @@ export default function AdminDashboard() {
                           <span className="font-semibold text-slate-900">
                             {plant.pieces.toLocaleString()} pcs
                           </span>
-                          <span className="text-slate-400 text-[11px] ml-1.5">
+                          <span className="text-slate-400 text-xs ml-1.5">
                             ({plant.boxes} cartons)
                           </span>
                         </div>
@@ -808,7 +810,7 @@ export default function AdminDashboard() {
                         <p className="text-xs font-semibold text-slate-900 truncate">
                           {supp.name}
                         </p>
-                        <p className="text-[11px] text-slate-400 font-mono truncate">
+                        <p className="text-xs text-slate-400 font-mono truncate">
                           #{supp.code} · {supp.poCount} Orders
                         </p>
                       </div>
@@ -818,7 +820,7 @@ export default function AdminDashboard() {
                       <p className="text-xs font-bold text-slate-900">
                         {supp.pieces > 0 ? `${supp.pieces.toLocaleString()} pcs` : "Pending Dispatch"}
                       </p>
-                      <p className="text-[10px] text-slate-400">
+                      <p className="text-xs text-slate-400">
                         {supp.boxes} cartons · {supp.shipments} shipments
                       </p>
                     </div>
@@ -866,11 +868,11 @@ export default function AdminDashboard() {
                             <span className="text-xs font-bold text-slate-900 font-mono">
                               {po.po_number || "Unnamed PO"}
                             </span>
-                            <span className="text-[10px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded truncate max-w-[150px]">
+                            <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded truncate max-w-[150px]">
                               {supplierName}
                             </span>
                             <span
-                              className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                              className={`px-2 py-0.5 rounded text-xs font-semibold border ${
                                 isOverdue
                                   ? "bg-red-50 text-red-700 border-red-200"
                                   : isUrgent
@@ -887,12 +889,12 @@ export default function AdminDashboard() {
                                 : `${days}d left`}
                             </span>
                             {isPartial && (
-                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                              <span className="px-1.5 py-0.5 rounded text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
                                 Partial
                               </span>
                             )}
                           </div>
-                          <p className="text-[11px] text-slate-500 mt-1 truncate">
+                          <p className="text-xs text-slate-500 mt-1 truncate">
                             <span className="font-medium text-slate-700">{cleanDest}</span>
                             {" · "}
                             <span>{productDesc}</span>
@@ -904,17 +906,17 @@ export default function AdminDashboard() {
                             {isPartial && po.remaining_quantity != null ? (
                               <span>
                                 {Math.round(po.remaining_quantity).toLocaleString()}{" "}
-                                <span className="text-[10px] font-normal text-slate-400">/ {(po.quantity || 0).toLocaleString()}</span>{" "}
-                                <span className="font-sans text-[11px] font-semibold text-blue-600">{uom}</span>
+                                <span className="text-xs font-normal text-slate-400">/ {(po.quantity || 0).toLocaleString()}</span>{" "}
+                                <span className="font-sans text-xs font-semibold text-blue-600">{uom}</span>
                               </span>
                             ) : (
                               <span>
                                 {(po.quantity || 0).toLocaleString()}{" "}
-                                <span className="font-sans text-[11px] font-semibold text-blue-600">{uom}</span>
+                                <span className="font-sans text-xs font-semibold text-blue-600">{uom}</span>
                               </span>
                             )}
                           </p>
-                          <p className="text-[10px] text-slate-400 mt-0.5">
+                          <p className="text-xs text-slate-400 mt-0.5">
                             Target: {formatDateSafe(po.delivery_date)}
                           </p>
                         </div>

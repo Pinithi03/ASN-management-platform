@@ -13,8 +13,10 @@
     --foreground: 222.2 84% 4.9%;
     --card: 0 0% 100%;
     --card-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
+    /* Brand primary: deep navy (#1e3a8a), with slate neutrals */
+    --primary: 224 64% 33%;
     --primary-foreground: 210 40% 98%;
+    --ring: 224 64% 33%;
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 222.2 47.4% 11.2%;
     --muted: 210 40% 96.1%;
@@ -33,6 +35,7 @@
     --card: 222.2 84% 4.9%;
     --card-foreground: 210 40% 98%;
     --primary: 217.2 91.2% 59.8%;
+    --ring: 217.2 91.2% 59.8%;
     --primary-foreground: 222.2 47.4% 11.2%;
     --secondary: 217.2 32.6% 17.5%;
     --secondary-foreground: 210 40% 98%;
@@ -47,8 +50,111 @@
 }
 
 body {
-  @apply bg-background text-foreground antialiased;
+  @apply bg-background text-base text-foreground antialiased;
   font-feature-settings: "rlig" 1, "calt" 1;
+}
+
+/* Digits line up in tables, number inputs and quantity cells */
+table,
+input[type="number"],
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/*
+ * Existing scrolling tables (overflow container > table): when the window is
+ * narrow they scroll sideways; keep the first column pinned so rows stay readable.
+ * Cells take the row's background so pinned cells don't show content behind them.
+ */
+:is(.overflow-auto, .overflow-x-auto) > table > tbody > tr > td:first-child,
+:is(.overflow-auto, .overflow-x-auto) > table > thead > tr > th:first-child {
+  position: sticky;
+  left: 0;
+}
+:is(.overflow-auto, .overflow-x-auto) > table > tbody > tr > td:first-child {
+  z-index: 1;
+  background-color: inherit;
+}
+:is(.overflow-auto, .overflow-x-auto) > table > thead > tr > th:first-child {
+  z-index: 11;
+  background-color: inherit;
+}
+
+/* Visible focus ring for keyboard users everywhere */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+/* Honour reduced motion: switch off animations and transitions */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@layer components {
+  /* Buttons — one consistent hover / active / disabled / focus treatment */
+  .btn {
+    @apply inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-4 text-sm font-medium transition-colors duration-150;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2;
+    @apply disabled:pointer-events-none disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/80;
+  }
+  .btn-secondary {
+    @apply border border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 active:bg-slate-100;
+  }
+  .btn-danger {
+    @apply bg-red-600 text-white hover:bg-red-700 active:bg-red-800 focus-visible:ring-red-500;
+  }
+  .btn-sm {
+    @apply h-8 px-3 text-sm;
+  }
+
+  /*
+   * Shared data table.
+   * The wrapper scrolls horizontally on narrow windows; the header and the
+   * first column stay pinned, so columns are never squashed.
+   */
+  .data-table-wrap {
+    @apply relative w-full overflow-auto rounded-lg border border-slate-200 bg-white;
+    max-height: var(--table-max-h, none);
+  }
+  .data-table {
+    @apply w-full border-separate border-spacing-0 text-left text-sm text-slate-700;
+    font-variant-numeric: tabular-nums;
+  }
+  .data-table th {
+    @apply sticky top-0 z-10 whitespace-nowrap border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-600;
+  }
+  .data-table td {
+    @apply whitespace-nowrap border-b border-slate-100 px-3 py-2.5 align-middle;
+  }
+  .data-table tbody tr:hover td {
+    @apply bg-slate-50;
+  }
+  .data-table tfoot td {
+    @apply border-b-0 border-t border-slate-200 bg-slate-50 font-medium text-slate-800;
+  }
+  /* Sticky first column */
+  .data-table th:first-child,
+  .data-table td:first-child {
+    @apply sticky left-0;
+  }
+  .data-table td:first-child {
+    @apply z-[1] bg-white;
+  }
+  .data-table th:first-child {
+    @apply z-20;
+  }
 }
 
 /* Clean minimal scrollbars */

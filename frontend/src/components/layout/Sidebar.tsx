@@ -4,7 +4,7 @@
  * Includes user profile, notifications popover, and sign-out controls in the sidebar footer.
  */
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useMemo } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/utils/cn";
@@ -451,10 +451,33 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
     setOpenMenus((prev) => ({ ...prev, [label]: !prev[label] }));
   };
 
+  // Measure the active nav item so the indicator bar can slide to it.
+  const navRef = useRef<HTMLElement>(null);
+  const [indicator, setIndicator] = useState<{ top: number; height: number } | null>(null);
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const measure = () => {
+      const items = nav.querySelectorAll<HTMLElement>('[data-active="true"]');
+      const el = items[items.length - 1]; // deepest active item (sub-item wins over its parent)
+      if (!el) {
+        setIndicator(null);
+        return;
+      }
+      const navBox = nav.getBoundingClientRect();
+      const box = el.getBoundingClientRect();
+      setIndicator({ top: box.top - navBox.top + nav.scrollTop + 4, height: Math.max(0, box.height - 8) });
+    };
+    measure();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
+    ro?.observe(nav);
+    return () => ro?.disconnect();
+  }, [location.pathname, location.search, openMenus, collapsed, isCreatingDelivery]);
+
   return (
     <aside
       className={cn(
-        "flex h-full flex-col border-r border-slate-200 bg-white transition-all duration-300 relative z-30",
+        "flex h-full flex-col border-r border-slate-200 bg-white transition-[width] duration-200 ease-out-soft relative z-30 overflow-hidden",
         collapsed ? "w-16" : "w-64"
       )}
     >
@@ -481,10 +504,21 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       </div>
 
       {/* Main Navigation */}
-      <nav className="flex-1 space-y-1 overflow-y-auto px-2 py-4 custom-scrollbar">
+      <nav ref={navRef} className="relative flex-1 space-y-1 overflow-y-auto px-2 py-4 custom-scrollbar" aria-label={t("layout:nav.main")}>
+        {/* Active-item indicator: one bar that slides to the active item (~200 ms ease-out) */}
+        {indicator && (
+          <span
+            aria-hidden="true"
+            className={cn(
+              "pointer-events-none absolute left-0 top-0 w-[3px] rounded-r-full transition-[transform,height,opacity] duration-200 ease-out-soft",
+              isAdmin ? "bg-brand-700" : "bg-emerald-600"
+            )}
+            style={{ transform: `translateY(${indicator.top}px)`, height: indicator.height }}
+          />
+        )}
         <div className={cn("mb-2", !collapsed && "px-2")}>
           {!collapsed && (
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
               {t("layout:nav.main")}
             </span>
           )}
@@ -514,8 +548,10 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                       }
                     }
                   }}
+                  data-active={isParentActive && (collapsed || !isMenuOpen) ? "true" : undefined}
+                  aria-expanded={collapsed ? undefined : isMenuOpen}
                   className={cn(
-                    "w-full flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors cursor-pointer",
+                    "group w-full flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-150 cursor-pointer",
                     isParentActive
                       ? isAdmin
                         ? "bg-brand-50 text-brand-700 font-semibold"
@@ -525,7 +561,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   title={collapsed ? navLabel(item) : undefined}
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <item.icon className="h-5 w-5 flex-shrink-0" />
+                    <item.icon className="h-5 w-5 flex-shrink-0 transition-transform duration-150 group-hover:translate-x-0.5" aria-hidden="true" />
                     {!collapsed && <span className="truncate">{navLabel(item)}</span>}
                   </div>
                   {!collapsed && (
@@ -548,8 +584,9 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                         <NavLink
                           key={sub.to}
                           to={buildPlantAwareUrl(sub.to)}
+                          data-active={isSubActive ? "true" : undefined}
                           className={cn(
-                            "flex items-center gap-2.5 rounded-lg pl-6 pr-3 py-1.5 text-xs font-medium transition-colors",
+                            "group flex items-center gap-2.5 rounded-lg pl-6 pr-3 py-1.5 text-sm font-medium transition-colors duration-150",
                             isSubActive
                               ? isAdmin
                                 ? "bg-brand-50 text-brand-700 font-semibold"
@@ -557,7 +594,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                               : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
                           )}
                         >
-                          <sub.icon className="h-3.5 w-3.5 flex-shrink-0" />
+                          <sub.icon className="h-4 w-4 flex-shrink-0 transition-transform duration-150 group-hover:translate-x-0.5" aria-hidden="true" />
                           <span>{navLabel(sub)}</span>
                         </NavLink>
                       );
@@ -573,8 +610,9 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
             <NavLink
               key={item.to}
               to={item.to}
+              data-active={isActive(item.to) ? "true" : undefined}
               className={cn(
-                "flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                "group flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-150",
                 isActive(item.to)
                   ? isAdmin
                     ? "bg-brand-50 text-brand-700 font-semibold"
@@ -584,11 +622,11 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
               title={collapsed ? navLabel(item) : undefined}
             >
               <div className="flex items-center gap-3">
-                <item.icon className="h-5 w-5 flex-shrink-0" />
+                <item.icon className="h-5 w-5 flex-shrink-0 transition-transform duration-150 group-hover:translate-x-0.5" aria-hidden="true" />
                 {!collapsed && <span>{navLabel(item)}</span>}
               </div>
               {!collapsed && isDraftItem && draftCount > 0 && (
-                <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-brand-50 text-brand-700 border border-brand-200">
+                <span className="px-2 py-0.5 text-xs font-bold rounded-full bg-brand-50 text-brand-700 border border-brand-200">
                   {draftCount}
                 </span>
               )}
@@ -599,7 +637,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         {/* Settings / Profile Section */}
         <div className={cn("mb-2 mt-6", !collapsed && "px-2")}>
           {!collapsed && (
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
               {isAdmin ? "Settings" : t("layout:nav.account")}
             </span>
           )}
@@ -608,8 +646,9 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
           <NavLink
             key={item.to}
             to={item.to}
+            data-active={isActive(item.to) ? "true" : undefined}
             className={cn(
-              "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+              "group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-150",
               isActive(item.to)
                 ? isAdmin
                   ? "bg-brand-50 text-brand-700 font-semibold"
@@ -618,7 +657,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
             )}
             title={collapsed ? navLabel(item) : undefined}
           >
-            <item.icon className="h-5 w-5 flex-shrink-0" />
+            <item.icon className="h-5 w-5 flex-shrink-0 transition-transform duration-150 group-hover:translate-x-0.5" aria-hidden="true" />
             {!collapsed && <span>{navLabel(item)}</span>}
           </NavLink>
         ))}
@@ -644,7 +683,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   {isAdmin ? "Notifications" : t("layout:notifications.alerts")}
                 </h3>
                 {unreadCount > 0 && (
-                  <span className="px-2 py-0.5 text-[10px] font-bold bg-blue-100 text-blue-700 rounded-full border border-blue-200">
+                  <span className="px-2 py-0.5 text-xs font-bold bg-blue-100 text-blue-700 rounded-full border border-blue-200">
                     {t("layout:notifications.newCount", { count: unreadCount })}
                   </span>
                 )}
@@ -653,7 +692,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 {unreadCount > 0 && (
                   <button
                     onClick={handleMarkAllRead}
-                    className="text-[11px] font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1 cursor-pointer"
+                    className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1 cursor-pointer"
                   >
                     <CheckCheck className="w-3.5 h-3.5" /> {t("layout:notifications.markAllRead")}
                   </button>
@@ -691,11 +730,11 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-1">
                           <p className="text-xs font-semibold text-slate-900 truncate">{item.title}</p>
-                          <span className="text-[10px] text-slate-400 shrink-0 font-mono flex items-center gap-0.5">
+                          <span className="text-xs text-slate-400 shrink-0 font-mono flex items-center gap-0.5">
                             <Clock className="w-3 h-3" /> {item.time}
                           </span>
                         </div>
-                        <p className="text-[11px] text-slate-500 font-normal mt-0.5 line-clamp-2 leading-tight">
+                        <p className="text-xs text-slate-500 font-normal mt-0.5 line-clamp-2 leading-tight">
                           {item.desc}
                         </p>
                       </div>
@@ -749,7 +788,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                       <p className="text-xs font-bold text-slate-900 truncate">
                         {user?.name || "Admin"}
                       </p>
-                      <p className="text-[11px] text-slate-500 truncate">
+                      <p className="text-xs text-slate-500 truncate">
                         {user?.role === "SUPER_ADMIN" ? "Super Admin (HQ)" : "Central HQ"}
                       </p>
                     </>
@@ -758,7 +797,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                       <p className="text-xs font-bold font-mono text-slate-900 truncate">
                         {user?.supplier_code || t("layout:user.supplier")}
                       </p>
-                      <p className="text-[11px] text-slate-500 truncate" title={user?.supplier_name || user?.name || undefined}>
+                      <p className="text-xs text-slate-500 truncate" title={user?.supplier_name || user?.name || undefined}>
                         {user?.supplier_name || user?.name || t("layout:user.supplierPartner")}
                       </p>
                     </>
@@ -780,7 +819,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   {unreadCount > 0 && (
                     <span
                       className={cn(
-                        "absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white shadow-2xs",
+                        "absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-1 text-xs font-bold text-white shadow-2xs",
                         isAdmin ? "bg-blue-600" : "bg-emerald-600"
                       )}
                     >
@@ -825,7 +864,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
               {unreadCount > 0 && (
                 <span
                   className={cn(
-                    "absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white shadow-2xs",
+                    "absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-1 text-xs font-bold text-white shadow-2xs",
                     isAdmin ? "bg-blue-600" : "bg-emerald-600"
                   )}
                 >

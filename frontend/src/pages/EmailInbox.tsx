@@ -218,7 +218,7 @@ export default function EmailInbox() {
             <div className="overflow-auto max-h-[calc(100vh-260px)]">
               <table className="w-full text-xs text-left">
                 <thead className="sticky top-0 z-10 bg-slate-50 shadow-xs">
-                  <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider text-[11px]">
+                  <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider text-xs">
                     <th className="px-3.5 py-2 w-1/4 sm:w-1/5">{t("emails:table.sender")}</th>
                     <th className="px-3.5 py-2">{t("emails:table.subject")}</th>
                     <th className="px-3.5 py-2 text-right w-36 whitespace-nowrap">{t("emails:table.received")}</th>

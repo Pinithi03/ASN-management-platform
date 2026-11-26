@@ -105,7 +105,12 @@ export default function Profile() {
 
   const handleSaveHu = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!huInput.trim()) return;
+    if (!huInput.trim() || isSavingHu) return;
+    // HU sequence: digits only, 0 or more (never negative), at most 20 digits.
+    if (!/^\d{1,20}$/.test(huInput.trim())) {
+      setHuError(t("common:validation.digitsOnly"));
+      return;
+    }
     setIsSavingHu(true);
     setHuError(null);
     setHuSuccess(null);
@@ -280,7 +285,7 @@ export default function Profile() {
                 title={t("profile:avatar.changePhoto")}
               >
                 <Camera className="w-4 h-4 mb-0.5" />
-                <span className="text-[9px] font-semibold">{t("profile:avatar.change")}</span>
+                <span className="text-xs font-semibold">{t("profile:avatar.change")}</span>
               </button>
             </div>
 
@@ -291,11 +296,11 @@ export default function Profile() {
                   {matchedSupplier.supplier_code}
                 </span>
                 {matchedSupplier.is_active ? (
-                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
                     {t("profile:header.active")}
                   </span>
                 ) : (
-                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-200">
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-200">
                     {t("profile:header.inactive")}
                   </span>
                 )}
@@ -371,17 +376,17 @@ export default function Profile() {
                 </div>
                 <div>
                   <h2 className="text-sm font-bold text-slate-900">{t("profile:hu.title")}</h2>
-                  <p className="text-[11px] text-slate-500">{t("profile:hu.subtitle")}</p>
+                  <p className="text-xs text-slate-500">{t("profile:hu.subtitle")}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 {isHuLocked ? (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
                     <Lock className="w-3 h-3 text-amber-600" />
                     {t("profile:hu.locked")}
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
                     <AlertCircle className="w-3 h-3 text-rose-600" />
                     {t("profile:hu.setupNeeded")}
                   </span>
@@ -393,7 +398,7 @@ export default function Profile() {
                       setIsAdminEditOpen(!isAdminEditOpen);
                       if (!isAdminEditOpen) setHuInput(matchedSupplier.current_hu_number || "");
                     }}
-                    className="text-[11px] font-semibold px-2 py-0.5 rounded-md border border-slate-200 hover:bg-slate-50 text-slate-700 transition-colors cursor-pointer"
+                    className="text-xs font-semibold px-2 py-0.5 rounded-md border border-slate-200 hover:bg-slate-50 text-slate-700 transition-colors cursor-pointer"
                   >
                     {isAdminEditOpen ? t("common:actions.cancel") : t("profile:hu.edit")}
                   </button>
@@ -422,19 +427,19 @@ export default function Profile() {
                 <div className="space-y-3">
                   <div className="p-3.5 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-between gap-3">
                     <div>
-                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                      <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
                         {t("profile:hu.lastUsed")}
                       </span>
                       <span className="font-mono text-base sm:text-lg font-bold text-slate-900 block mt-0.5">
                         {matchedSupplier.current_hu_number || t("profile:fallback.initialized")}
                       </span>
                     </div>
-                    <span className="text-[11px] font-medium text-slate-600 bg-white border border-slate-200 px-2.5 py-1 rounded shadow-2xs">
+                    <span className="text-xs font-medium text-slate-600 bg-white border border-slate-200 px-2.5 py-1 rounded shadow-2xs">
                       {t("profile:hu.synchronized")}
                     </span>
                   </div>
 
-                  <p className="text-[11px] text-slate-500">
+                  <p className="text-xs text-slate-500">
                     {t("profile:hu.lockedNote")}
                   </p>
                 </div>
@@ -448,7 +453,13 @@ export default function Profile() {
                       <input
                         type="text"
                         value={huInput}
-                        onChange={(e) => setHuInput(e.target.value)}
+                        inputMode="numeric"
+                        maxLength={20}
+                        aria-invalid={Boolean(huInput.trim()) && !/^\d+$/.test(huInput.trim())}
+                        onChange={(e) => {
+                          setHuInput(e.target.value);
+                          setHuError(null);
+                        }}
                         placeholder={t("profile:hu.placeholder")}
                         className="flex-1 h-9 px-3 text-xs font-mono rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400 outline-none"
                         disabled={isSavingHu}
@@ -464,7 +475,7 @@ export default function Profile() {
                       </button>
                     </div>
                   </div>
-                  <p className="text-[11px] text-slate-500">{t("profile:hu.nextCarton")}</p>
+                  <p className="text-xs text-slate-500">{t("profile:hu.nextCarton")}</p>
                 </form>
               )}
             </div>
@@ -480,39 +491,39 @@ export default function Profile() {
               </div>
               <div>
                 <h2 className="text-sm font-bold text-slate-900">{t("profile:registry.title")}</h2>
-                <p className="text-[11px] text-slate-500">{t("profile:registry.subtitle")}</p>
+                <p className="text-xs text-slate-500">{t("profile:registry.subtitle")}</p>
               </div>
             </div>
-            <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+            <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
               <ShieldCheck className="w-3 h-3" /> {t("profile:registry.verified")}
             </span>
           </div>
 
           <div className="grid grid-cols-2 gap-3 text-xs pt-1">
             <div className="p-2.5 rounded-lg border border-slate-100 bg-slate-50/80">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">{t("profile:registry.companyName")}</span>
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t("profile:registry.companyName")}</span>
               <span className="font-semibold text-slate-900 truncate block mt-0.5">{matchedSupplier.name}</span>
             </div>
 
             <div className="p-2.5 rounded-lg border border-slate-100 bg-slate-50/80">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">{t("profile:registry.partnerCode")}</span>
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t("profile:registry.partnerCode")}</span>
               <span className="font-mono font-bold text-slate-900 block mt-0.5">{matchedSupplier.supplier_code}</span>
             </div>
 
             <div className="p-2.5 rounded-lg border border-slate-100 bg-slate-50/80">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">{t("profile:registry.contactPerson")}</span>
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t("profile:registry.contactPerson")}</span>
               <span className="font-medium text-slate-800 block mt-0.5">
                 {matchedSupplier.contact_name || user?.name || t("profile:fallback.representative")}
               </span>
             </div>
 
             <div className="p-2.5 rounded-lg border border-slate-100 bg-slate-50/80">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">{t("profile:registry.country")}</span>
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t("profile:registry.country")}</span>
               <span className="font-medium text-slate-800 block mt-0.5">{matchedSupplier.country || "Sri Lanka"}</span>
             </div>
           </div>
 
-          <p className="text-[11px] text-slate-500 pt-1">
+          <p className="text-xs text-slate-500 pt-1">
             {t("profile:registry.changesNote")}
           </p>
         </div>
@@ -529,12 +540,12 @@ export default function Profile() {
               <div className="flex items-center gap-2">
                 <h3 className="text-xs font-bold text-slate-900">{t("profile:cache.title")}</h3>
                 {draftCount > 0 && (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
                     {t("profile:cache.draftBadge", { count: draftCount })}
                   </span>
                 )}
               </div>
-              <p className="text-[11px] text-slate-500 mt-0.5">
+              <p className="text-xs text-slate-500 mt-0.5">
                 {t("profile:cache.storageInfo", {
                   items: draftStorageInfo.draftCount,
                   sizeKb: draftStorageInfo.approxSizeKb,

@@ -17,7 +17,7 @@ import io
 import logging
 import re
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Optional
 
@@ -58,6 +58,41 @@ from app.services.po_service import update_po_statuses
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+# ─── Delivery date validation ────────────────────────────────────────
+# Delivery dates are calendar dates chosen in the user's local time zone.
+# The server does not know that zone, so "today" is taken as the earliest
+# local date anywhere on Earth (UTC-12): a date the user sees as today is
+# never rejected, and anything earlier than every zone's today is.
+
+
+def _earliest_local_today() -> date:
+    return (datetime.now(timezone.utc) - timedelta(hours=12)).date()
+
+
+def parse_delivery_date(value: Optional[str], *, label: str = "Delivery date") -> Optional[date]:
+    """Parse YYYY-MM-DD and reject past dates with a 422. Empty input returns None."""
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        parsed = datetime.strptime(raw[:10], "%Y-%m-%d").date()
+    except ValueError:
+        raise CodedHTTPException(
+            code="DELIVERY_DATE_INVALID",
+            params={"value": raw},
+            status_code=422,
+            detail=f"{label} '{raw}' is not a valid date (expected YYYY-MM-DD).",
+        )
+    if parsed < _earliest_local_today():
+        raise CodedHTTPException(
+            code="DELIVERY_DATE_PAST",
+            params={"date": parsed.isoformat()},
+            status_code=422,
+            detail=f"{label} {parsed.isoformat()} is in the past. Choose today or a later date.",
+        )
+    return parsed
 
 
 async def generate_po_shipment_number(db: AsyncSession, po_number: Optional[str]) -> str:
@@ -418,6 +453,28 @@ async def create_shipment_from_excel(
         raise CodedHTTPException(code="EXCEL_FILE_TYPE", status_code=400, detail="Only Excel files (.xlsx) are accepted")
 
     ps_clean = str(packing_slip_number or "").strip()
+
+    # Validate delivery dates up front (before HU allocation / DB writes).
+    est_arrival_date = parse_delivery_date(estimated_arrival)
+    ps_dates_map: dict[str, date] = {}
+    if packing_slip_dates:
+        import json
+
+        try:
+            raw_map = json.loads(packing_slip_dates)
+        except ValueError:
+            raise CodedHTTPException(
+                code="DELIVERY_DATE_INVALID",
+                params={"value": "packing_slip_dates"},
+                status_code=422,
+                detail="packing_slip_dates must be a JSON object of {packing slip: YYYY-MM-DD}.",
+            )
+        if isinstance(raw_map, dict):
+            for k, v in raw_map.items():
+                parsed = parse_delivery_date(v, label=f"Delivery date for packing slip {k}")
+                if parsed:
+                    ps_dates_map[str(k).strip()] = parsed
+
     file_bytes = await file.read()
     if not file_bytes:
         raise CodedHTTPException(code="FILE_EMPTY", status_code=400, detail="File is empty")
@@ -591,29 +648,7 @@ async def create_shipment_from_excel(
             detail=f"Packing slip / Shipment number(s) '{', '.join(existing_list)}' already exist. Please use unique numbers.",
         )
 
-    # Parse per-packing slip delivery dates if provided as JSON (e.g. {"01007771": "2026-10-28"})
-    ps_dates_map: dict[str, date] = {}
-    if packing_slip_dates:
-        try:
-            import json
-            raw_map = json.loads(packing_slip_dates)
-            if isinstance(raw_map, dict):
-                for k, v in raw_map.items():
-                    if v and str(v).strip():
-                        try:
-                            ps_dates_map[str(k).strip()] = datetime.strptime(str(v).strip(), "%Y-%m-%d").date()
-                        except ValueError:
-                            pass
-        except Exception as e:
-            logger.warning("Could not parse packing_slip_dates JSON: %s", e)
-
     shipment_date = date.today()
-    est_arrival_date = None
-    if estimated_arrival:
-        try:
-            est_arrival_date = datetime.strptime(estimated_arrival, "%Y-%m-%d").date()
-        except ValueError:
-            pass
 
     po_items_list = (po_obj.extra_data or {}).get("items", []) if po_obj else []
     po_order_date = getattr(po_obj, "order_date", None) or shipment_date
@@ -629,8 +664,10 @@ async def create_shipment_from_excel(
             for gr in group_rows:
                 if getattr(gr, "delivery_date", None):
                     try:
-                        ps_arrival_date = datetime.strptime(str(gr.delivery_date).strip(), "%Y-%m-%d").date()
-                        break
+                        row_date = datetime.strptime(str(gr.delivery_date).strip(), "%Y-%m-%d").date()
+                        if row_date >= _earliest_local_today():
+                            ps_arrival_date = row_date
+                            break
                     except Exception:
                         pass
 
@@ -923,6 +960,9 @@ async def create_direct_shipment(
             detail="Packing Slip / Delivery Note Number is required",
         )
 
+    # Delivery date: today or later (validated before any HU allocation / DB write).
+    est_arrival_date = parse_delivery_date(req.estimated_arrival)
+
     # Check for duplicate shipment / packing slip number
     existing_shipment = await db.scalar(
         select(Shipment.id).where(Shipment.shipment_number == ps_clean)
@@ -940,7 +980,7 @@ async def create_direct_shipment(
                 status_code=422,
                 detail=f"Carton {idx + 1}: Quantity must be greater than 0",
             )
-        # Validate mandatory weights: GW > NW > 0
+        # Validate mandatory weights: GW >= NW > 0
         if c.net_weight is None or c.net_weight <= 0:
             raise CodedHTTPException(code="CARTON_NW_REQUIRED", params={"carton": idx + 1},
                 status_code=422,
@@ -951,10 +991,10 @@ async def create_direct_shipment(
                 status_code=422,
                 detail=f"Carton {idx + 1}: Gross weight is mandatory and must be greater than 0 kg",
             )
-        if c.gross_weight <= c.net_weight:
+        if c.gross_weight < c.net_weight:
             raise CodedHTTPException(code="CARTON_GW_NOT_GREATER", params={"carton": idx + 1, "gw": c.gross_weight, "nw": c.net_weight},
                 status_code=422,
-                detail=f"Carton {idx + 1}: Gross weight ({c.gross_weight} kg) must be strictly greater than net weight ({c.net_weight} kg)",
+                detail=f"Carton {idx + 1}: Gross weight ({c.gross_weight} kg) cannot be less than net weight ({c.net_weight} kg)",
             )
 
         if not c.lot_number or not c.lot_number.strip():
@@ -1067,12 +1107,6 @@ async def create_direct_shipment(
 
     # 5. Build Shipment entity
     shipment_date = date.today()
-    est_arrival_date = None
-    if req.estimated_arrival:
-        try:
-            est_arrival_date = datetime.strptime(req.estimated_arrival, "%Y-%m-%d").date()
-        except ValueError:
-            pass
 
     # Use supplier-provided packing slip / delivery note number as shipment number
     shipment_number = ps_clean

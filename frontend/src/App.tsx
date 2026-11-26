@@ -18,11 +18,15 @@ import EmailInbox from "@/pages/EmailInbox";
 import EmailDetailPage from "@/pages/EmailDetail";
 import PurchaseOrders from "@/pages/PurchaseOrders";
 import PurchaseOrderLines from "@/pages/PurchaseOrderLines";
+import PurchaseOrderDetail from "@/pages/PurchaseOrderDetail";
 import OrderHistory from "@/pages/OrderHistory";
 import Settings from "@/pages/Settings";
 import UserManagement from "@/pages/UserManagement";
 import Suppliers from "@/pages/Suppliers";
+import SupplierForm from "@/pages/SupplierForm";
+import UserEdit from "@/pages/UserEdit";
 import Shipments from "@/pages/Shipments";
+import ShipmentDetail from "@/pages/ShipmentDetail";
 import Drafts from "@/pages/Drafts";
 import Profile from "@/pages/Profile";
 
@@ -73,6 +77,8 @@ export default function App() {
         <Route path="/purchase-orders" element={<RedirectWithSearch to="/purchase-orders/manual" />} />
         <Route path="/purchase-orders/manual" element={<PurchaseOrders mode="manual" />} />
         <Route path="/purchase-orders/excel" element={<PurchaseOrders mode="excel" />} />
+        {/* PO detail — opened in a new tab; loads by id from the URL */}
+        <Route path="/purchase-orders/:poId" element={<PurchaseOrderDetail />} />
 
         {/* 2. Purchase Order Lines (Manual Process & Excel Drop) */}
         <Route path="/purchase-order-lines" element={<RedirectWithSearch to="/purchase-order-lines/manual" />} />
@@ -84,6 +90,7 @@ export default function App() {
         <Route path="/asn" element={<Navigate to="/shipments" replace />} />
         <Route path="/review" element={<Navigate to="/shipments" replace />} />
         <Route path="/shipments" element={<Shipments />} />
+        <Route path="/shipments/:shipmentId" element={<ShipmentDetail />} />
         <Route path="/order-history" element={<OrderHistory />} />
 
         {/* 7. Emails */}
@@ -94,6 +101,18 @@ export default function App() {
         <Route
           path="/suppliers"
           element={<RequirePermission permissions={["*"]}><Suppliers /></RequirePermission>}
+        />
+        <Route
+          path="/suppliers/new"
+          element={<RequirePermission permissions={["*"]}><SupplierForm /></RequirePermission>}
+        />
+        <Route
+          path="/suppliers/:supplierId/edit"
+          element={<RequirePermission permissions={["*"]}><SupplierForm /></RequirePermission>}
+        />
+        <Route
+          path="/users/:userId/edit"
+          element={<RequirePermission permissions={["*"]}><UserEdit /></RequirePermission>}
         />
         <Route
           path="/settings"

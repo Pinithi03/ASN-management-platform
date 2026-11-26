@@ -29,11 +29,12 @@ import type { POLineItemRecord, PurchaseOrder } from "@/types/email";
 import { cn } from "@/utils/cn";
 import { resolvePlantAndLocation, KNOWN_PLANTS } from "@/utils/plantResolver";
 import PlantAccordionShowcase from "@/components/plants/PlantAccordionShowcase";
+import { poDetailPath } from "@/utils/poLineItems";
 import { usePlantSelection } from "@/hooks/usePlantSelection";
 import { saveManualDraft, saveExcelDraft } from "@/utils/draftStorage";
 
 const formatDateDisplay = (dateStr?: string | null) => {
-  if (!dateStr) return "â€”";
+  if (!dateStr) return "—";
   try {
     const s = dateStr.trim();
     if (/^\d{2}-\d{2}-\d{4}$/.test(s)) {
@@ -243,9 +244,9 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
 
   // Multi-PO chips & autocomplete helpers
   const normalizePO = (value: string) =>
-    value.trim().replace(/^[A-Z0-9]{2,6}\s*[-â€“â€”_]\s*(?=\d{6,}$)/i, "");
+    value.trim().replace(/^[A-Z0-9]{2,6}\s*[-–—_]\s*(?=\d{6,}$)/i, "");
   const isPOToken = (value: string) =>
-    /^(?:[A-Z0-9]{2,6}\s*[-â€“â€”_]\s*)?\d{6,15}$/i.test(value.trim());
+    /^(?:[A-Z0-9]{2,6}\s*[-–—_]\s*)?\d{6,15}$/i.test(value.trim());
 
   const suggestions = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -662,7 +663,7 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
                   {/* Notification badge */}
                   <span
                     className={cn(
-                      "inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full text-[10px] font-extrabold shadow-2xs transition-all",
+                      "inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full text-xs font-extrabold shadow-2xs transition-all",
                       hasCount
                         ? isSelected
                           ? "bg-white text-slate-900 border border-white font-black"
@@ -681,7 +682,7 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
         )}
       </div>
 
-      {/* â”€â”€â”€ PLANT GATEWAY MODE: 5-Plant Horizontal Accordion Showcase â”€â”€â”€ */}
+      {/* ─── PLANT GATEWAY MODE: 5-Plant Horizontal Accordion Showcase ─── */}
       {selectedPlant === "ALL" ? (
         <PlantAccordionShowcase
           orders={allOrdersList}
@@ -901,9 +902,9 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
               {/* Clean PO Number Suggestions Dropdown */}
               {isDropdownOpen && suggestions.length > 0 && (
                 <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden divide-y divide-gray-100 animate-in fade-in slide-in-from-top-1 duration-150">
-                  <div className="px-3.5 py-1.5 bg-gray-50/90 text-[11px] font-semibold text-gray-500 uppercase tracking-wider flex items-center justify-between">
+                  <div className="px-3.5 py-1.5 bg-gray-50/90 text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center justify-between">
                     <span>{t("purchaseOrders:shared.suggested")}</span>
-                    <span className="text-[10px] text-gray-400 font-normal">{t("purchaseOrders:shared.keysHint")}</span>
+                    <span className="text-xs text-gray-400 font-normal">{t("purchaseOrders:shared.keysHint")}</span>
                   </div>
                   <div className="max-h-[240px] overflow-y-auto py-1">
                     {suggestions.map((poNum, idx) => {
@@ -1079,9 +1080,16 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
                           {/* PO / Line Identifier (e.g. 2001382767 00100-0001) */}
                           <td className="py-1 px-2 whitespace-nowrap border-r border-gray-200">
                             <div className="flex items-center gap-1.5">
-                              <span className="font-mono text-xs font-bold text-slate-900">
+                              <a
+                                href={poDetailPath(ln.po_id, mode === "excel" ? "excel" : "manual")}
+                                target="_blank"
+                                rel="noopener"
+                                onClick={(e) => e.stopPropagation()}
+                                className="font-mono font-semibold text-slate-900 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-sm"
+                                aria-label={t("purchaseOrders:detail.openInNewTab", { po: ln.po_number })}
+                              >
                                 {ln.po_number}
-                              </span>
+                              </a>
                               <span
                                 className={cn(
                                   "font-mono text-xs font-semibold",
@@ -1093,7 +1101,7 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
 
                               {ln.po_version && ln.po_version > 1 ? (
                                 <span
-                                  className="text-[10px] font-bold text-amber-700"
+                                  className="text-xs font-bold text-amber-700"
                                   title={t("purchaseOrderLines:table.revised", { version: ln.po_version })}
                                 >
                                   v{ln.po_version}
@@ -1122,11 +1130,11 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
                           <td className="py-1 px-2 whitespace-nowrap border-r border-gray-200">
                             <div className="flex items-center gap-1.5">
                               <span className="font-mono text-xs font-semibold text-slate-900">
-                                {ln.material_code || "â€”"}
+                                {ln.material_code || "—"}
                               </span>
                               {(ln.partner_code || ln.color) && (
-                                <span className="text-[10px] text-slate-500 font-mono">
-                                  ({[ln.partner_code, ln.color].filter(Boolean).join(" Â· ")})
+                                <span className="text-xs text-slate-500 font-mono">
+                                  ({[ln.partner_code, ln.color].filter(Boolean).join(" · ")})
                                 </span>
                               )}
                             </div>
@@ -1135,7 +1143,7 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
                           {/* Description */}
                           <td className="py-1 px-2 max-w-[300px] whitespace-nowrap border-r border-gray-200">
                             <p className="text-xs text-slate-700 truncate" title={ln.material_description || undefined}>
-                              {ln.material_description || "â€”"}
+                              {ln.material_description || "—"}
                             </p>
                           </td>
 
@@ -1170,7 +1178,7 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
                           {/* Ordered Qty */}
                           <td className="py-1 px-2 text-right whitespace-nowrap font-mono text-xs text-slate-600 border-r border-gray-200">
                             {formatNumber(ln.ordered_qty)}{" "}
-                            <span className="text-[10px] text-slate-400">{ln.uom || "M"}</span>
+                            <span className="text-xs text-slate-400">{ln.uom || "M"}</span>
                           </td>
 
                           {/* Shipped Qty */}
@@ -1189,7 +1197,7 @@ export default function PurchaseOrderLines({ mode }: PurchaseOrderLinesProps = {
                               )}
                             >
                               {formatNumber(ln.remaining_qty)}
-                              <span className="text-[10px] font-semibold opacity-75">{ln.uom || "M"}</span>
+                              <span className="text-xs font-semibold opacity-75">{ln.uom || "M"}</span>
                             </span>
                           </td>
                         </tr>

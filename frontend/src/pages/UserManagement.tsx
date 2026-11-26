@@ -12,13 +12,11 @@ import {
   KeyRound,
   Edit2,
   Trash2,
-  X,
   Mail,
-  AlertCircle,
   UserCheck,
   ShieldCheck,
 } from "lucide-react";
-import { userApi, UserItem, UpdateUserPayload } from "@/services/userApi";
+import { userApi, UserItem } from "@/services/userApi";
 import { format } from "date-fns";
 
 export default function UserManagement() {
@@ -29,17 +27,7 @@ export default function UserManagement() {
   const [roleFilter, setRoleFilter] = useState<string>("ALL");
 
   // Modals state
-  const [editingUser, setEditingUser] = useState<UserItem | null>(null);
   const [resetPassResult, setResetPassResult] = useState<{ email: string; pass: string } | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
-
-  // Form state for editing
-  const [formData, setFormData] = useState<UpdateUserPayload>({
-    full_name: "",
-    role: "ADMIN",
-    plant_code: "HQ",
-    is_active: true,
-  });
 
   const { data: apiUsers = [], isLoading } = useQuery({
     queryKey: ["users"],
@@ -49,19 +37,6 @@ export default function UserManagement() {
   const users = apiUsers;
 
   // ─── Mutations ──────────────────────────────────────────────
-  const updateUserMutation = useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: UpdateUserPayload }) =>
-      userApi.update(id, { ...payload, plant_code: "HQ" }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["users"] });
-      setEditingUser(null);
-      resetForm();
-    },
-    onError: (err: Error) => {
-      setActionError(err.message || "Failed to update administrator.");
-    },
-  });
-
   const toggleStatusMutation = useMutation({
     mutationFn: ({ id, is_active }: { id: string; is_active: boolean }) =>
       userApi.update(id, { is_active }),
@@ -86,27 +61,6 @@ export default function UserManagement() {
       });
     },
   });
-
-  const resetForm = () => {
-    setFormData({
-      full_name: "",
-      role: "ADMIN",
-      plant_code: "HQ",
-      is_active: true,
-    });
-    setActionError(null);
-  };
-
-  const handleOpenEdit = (user: UserItem) => {
-    setEditingUser(user);
-    setFormData({
-      full_name: user.full_name || "",
-      role: user.role === "SUPER_ADMIN" ? "SUPER_ADMIN" : "ADMIN",
-      plant_code: "HQ",
-      is_active: user.is_active,
-    });
-    setActionError(null);
-  };
 
   // Filtered users
   const filteredUsers = useMemo(() => {
@@ -305,13 +259,16 @@ export default function UserManagement() {
                       {/* Actions */}
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            onClick={() => handleOpenEdit(usr)}
-                            className="p-1.5 text-gray-500 hover:text-brand-600 hover:bg-gray-100 rounded-lg transition-colors"
-                            title="Edit Administrator Profile"
+                          <a
+                            href={`/users/${usr.id}/edit`}
+                            target="_blank"
+                            rel="noopener"
+                            className="p-1.5 text-gray-500 hover:text-brand-600 hover:bg-gray-100 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                            title="Edit administrator (opens in a new tab)"
+                            aria-label={`Edit ${usr.email}`}
                           >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
+                            <Edit2 className="w-4 h-4" aria-hidden="true" />
+                          </a>
                           <button
                             onClick={() => resetPasswordMutation.mutate(usr)}
                             className="p-1.5 text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
@@ -341,96 +298,6 @@ export default function UserManagement() {
         )}
       </div>
 
-      {/* ─── EDIT ADMIN MODAL ────────────────────────────────────── */}
-      {editingUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in">
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95">
-            <div className="p-5 bg-brand-900 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Edit2 className="w-5 h-5 text-brand-400" />
-                <h3 className="text-base font-bold">Edit Administrator Profile ({editingUser.email})</h3>
-              </div>
-              <button
-                onClick={() => setEditingUser(null)}
-                className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-brand-800 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                updateUserMutation.mutate({
-                  id: editingUser.id,
-                  payload: {
-                    full_name: formData.full_name,
-                    role: formData.role,
-                    plant_code: "HQ",
-                    is_active: formData.is_active,
-                  },
-                });
-              }}
-              className="p-6 space-y-4"
-            >
-              {actionError && (
-                <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
-                  <span>{actionError}</span>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                  Full Name
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.full_name}
-                  onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                  className="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                  System Role
-                </label>
-                <select
-                  value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                  className="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none"
-                >
-                  <option value="SUPER_ADMIN">Super Administrator (Full System & Organization Control)</option>
-                  <option value="ADMIN">System Administrator (Operations & ASN Management)</option>
-                </select>
-                <p className="text-[11px] text-gray-500 mt-1.5">
-                  Administrators operate centrally across all manufacturing facilities and headquarters.
-                </p>
-              </div>
-
-              <div className="pt-3 flex items-center justify-end gap-3 border-t border-gray-100 mt-4">
-                <button
-                  type="button"
-                  onClick={() => setEditingUser(null)}
-                  className="px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-800 rounded-lg"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={updateUserMutation.isPending}
-                  className="px-5 py-2 text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 rounded-lg transition-all shadow-sm"
-                >
-                  {updateUserMutation.isPending ? "Saving Changes..." : "Save Changes"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
       {/* ─── RESET PASSWORD RESULT MODAL ───────────────────────── */}
       {resetPassResult && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in">
@@ -446,7 +313,7 @@ export default function UserManagement() {
             </div>
 
             <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-left font-mono text-xs text-amber-900 space-y-1">
-              <p className="text-[10px] text-amber-600 uppercase font-semibold">Temporary Access Password:</p>
+              <p className="text-xs text-amber-600 uppercase font-semibold">Temporary Access Password:</p>
               <p className="text-sm font-bold tracking-wider">{resetPassResult.pass}</p>
             </div>
 

@@ -10,7 +10,6 @@ import {
   CheckCircle2,
   MapPin,
   X,
-  Sparkles,
   Edit2,
   Trash2,
   AlertTriangle,
@@ -24,17 +23,16 @@ import {
   Eye,
   EyeOff,
   Camera,
-  Upload,
   Loader2,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supplierApi } from "@/services/supplierApi";
-import { LANGUAGE_NAMES, SUPPORTED_LANGUAGES } from "@/i18n";
 import {
   recordSupplierFieldChanges,
-  recordSupplierCreateEvent,
   recordSupplierDeleteEvent,
 } from "@/utils/supplierFieldUpdates";
+import { compressAndEncodeImage } from "@/utils/image";
+import { usePageSize } from "@/hooks/usePageSize";
 
 export interface SupplierItem {
   id: string;
@@ -95,51 +93,8 @@ export default function Suppliers() {
 
   // Avatar Upload Refs & State for Grid Cards & Modals
   const cardFileInputRef = useRef<HTMLInputElement>(null);
-  const modalFileInputRef = useRef<HTMLInputElement>(null);
   const [avatarUploadTarget, setAvatarUploadTarget] = useState<SupplierItem | null>(null);
-  const [isUploadingModalAvatar, setIsUploadingModalAvatar] = useState(false);
   const [isUploadingCardAvatar, setIsUploadingCardAvatar] = useState(false);
-  const [isSavingEdit, setIsSavingEdit] = useState(false);
-
-  const compressAndEncodeImage = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement("canvas");
-          const MAX_SIZE = 512;
-          let width = img.width;
-          let height = img.height;
-          if (width > height) {
-            if (width > MAX_SIZE) {
-              height = Math.round((height * MAX_SIZE) / width);
-              width = MAX_SIZE;
-            }
-          } else {
-            if (height > MAX_SIZE) {
-              width = Math.round((width * MAX_SIZE) / height);
-              height = MAX_SIZE;
-            }
-          }
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext("2d");
-          if (!ctx) {
-            resolve(e.target?.result as string);
-            return;
-          }
-          ctx.drawImage(img, 0, 0, width, height);
-          const dataUrl = canvas.toDataURL("image/jpeg", 0.88);
-          resolve(dataUrl);
-        };
-        img.onerror = () => reject(new Error("Failed to load image file."));
-        img.src = e.target?.result as string;
-      };
-      reader.onerror = () => reject(new Error("Failed to read image file."));
-      reader.readAsDataURL(file);
-    });
-  };
 
   const handleTriggerCardAvatarUpload = (supplier: SupplierItem) => {
     setAvatarUploadTarget(supplier);
@@ -172,32 +127,7 @@ export default function Suppliers() {
     }
   };
 
-  const handleModalAvatarSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith("image/")) {
-      showToast("Please select a valid image file (PNG, JPG, WebP).");
-      return;
-    }
-
-    setIsUploadingModalAvatar(true);
-    try {
-      const dataUrl = await compressAndEncodeImage(file);
-      setFormData((prev) => ({ ...prev, profile_picture_url: dataUrl }));
-      showToast("Profile image attached! Click save to apply changes.");
-    } catch (err) {
-      console.error("Modal avatar processing failed:", err);
-      showToast("Could not process image file.");
-    } finally {
-      setIsUploadingModalAvatar(false);
-      if (modalFileInputRef.current) modalFileInputRef.current.value = "";
-    }
-  };
-
   // Modals
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [editingSupplier, setEditingSupplier] = useState<SupplierItem | null>(null);
   const [deletingSupplier, setDeletingSupplier] = useState<SupplierItem | null>(null);
 
   // Admin Security Verification State for Deletion
@@ -275,182 +205,17 @@ export default function Suppliers() {
     }
   };
 
-  // Form State
-  const [formData, setFormData] = useState({
-    name: "",
-    supplier_code: "",
-    country: "Sri Lanka",
-    profile_picture_url: "",
-    current_hu_number: "",
-    hu_locked: false,
-    is_active: true,
-    preferred_language: "en",
-  });
-
-  const resetForm = () => {
-    setFormData({
-      name: "",
-      supplier_code: "",
-      country: "Sri Lanka",
-      profile_picture_url: "",
-      current_hu_number: "",
-      hu_locked: false,
-      is_active: true,
-      preferred_language: "en",
-    });
-  };
-
-  const handleAcknowledgeSupplierUpdate = (supplier: SupplierItem) => {
+  const handleAcknowledgeSupplierUpdate = (supplier: SupplierItem, silent = false) => {
+    if (silent && !supplier.recently_updated_by_supplier) return;
     setSuppliers((prev) =>
       prev.map((s) => (s.id === supplier.id ? { ...s, recently_updated_by_supplier: false } : s))
     );
-    showToast(`Acknowledged profile updates for ${supplier.name} (${supplier.supplier_code})`);
+    if (!silent) showToast(`Acknowledged profile updates for ${supplier.name} (${supplier.supplier_code})`);
   };
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 4000);
-  };
-
-  // ─── CREATE ───────────────────────────────────────────────────
-  const handleCreateSupplier = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.name.trim() || !formData.supplier_code.trim()) {
-      showToast("Please fill in mandatory fields: Name and Supplier Code.");
-      return;
-    }
-
-    try {
-      const created = await supplierApi.create({
-        name: formData.name.trim(),
-        supplier_code: formData.supplier_code.trim().toUpperCase(),
-        country: formData.country.trim() || "Sri Lanka",
-        profile_picture_url: formData.profile_picture_url.trim() || undefined,
-        current_hu_number: formData.current_hu_number.trim() || undefined,
-        is_active: formData.is_active,
-        preferred_language: formData.preferred_language,
-      });
-      recordSupplierCreateEvent({
-        id: created.id,
-        supplier_code: created.supplier_code,
-        name: created.name,
-        email: created.email,
-        credentials_sent: true,
-      });
-      await queryClient.invalidateQueries({ queryKey: ["suppliers"] });
-      refetch();
-      showToast(`Supplier onboarded: ${created.name} (${created.supplier_code})`);
-      setIsAddModalOpen(false);
-      resetForm();
-    } catch (err: any) {
-      console.error("Create supplier failed:", err);
-      const errorMsg =
-        err?.response?.data?.detail ||
-        err?.message ||
-        "Failed to onboard supplier. Please check details and try again.";
-      showToast(typeof errorMsg === "string" ? errorMsg : JSON.stringify(errorMsg));
-    }
-  };
-
-  // ─── XML DATA LOOKUP / AUTOFILL ──────────────────────────────
-  const [isLookingUpXml, setIsLookingUpXml] = useState(false);
-  const [xmlFoundBadge, setXmlFoundBadge] = useState<string | null>(null);
-
-  const handleLookupXml = async (codeToLookup?: string) => {
-    const code = (codeToLookup || formData.supplier_code).trim();
-    if (!code) {
-      showToast("Please enter a supplier code first to fetch details.");
-      return;
-    }
-    setIsLookingUpXml(true);
-    setXmlFoundBadge(null);
-    try {
-      const res = await supplierApi.lookupXml(code);
-      if (res && res.found) {
-        setFormData((prev) => ({
-          ...prev,
-          supplier_code: res.supplier_code || prev.supplier_code,
-          name: res.name || prev.name,
-          country: res.country || prev.country,
-        }));
-        setXmlFoundBadge(`Auto-filled from ${res.source_filename || "Inbound XML"}`);
-        showToast(`Loaded details from XML: ${res.name} (${res.supplier_code})`);
-      } else {
-        setXmlFoundBadge(null);
-        showToast(`No inbound XML found for code ${code} yet.`);
-      }
-    } catch (err) {
-      console.warn("XML lookup error:", err);
-      showToast("Could not lookup XML for this code.");
-    } finally {
-      setIsLookingUpXml(false);
-    }
-  };
-
-  // ─── UPDATE ───────────────────────────────────────────────────
-  const handleOpenEdit = async (supplier: SupplierItem) => {
-    if (supplier.recently_updated_by_supplier) {
-      setSuppliers((prev) =>
-        prev.map((s) => (s.id === supplier.id ? { ...s, recently_updated_by_supplier: false } : s))
-      );
-    }
-    setEditingSupplier(supplier);
-    setXmlFoundBadge(null);
-    setFormData({
-      name: supplier.name,
-      supplier_code: supplier.supplier_code,
-      country: supplier.country || "Sri Lanka",
-      profile_picture_url: supplier.profile_picture_url || "",
-      current_hu_number: supplier.current_hu_number || "",
-      hu_locked: Boolean(supplier.hu_locked),
-      is_active: supplier.is_active,
-      preferred_language: supplier.preferred_language || "en",
-    });
-  };
-
-  const handleUpdateSupplier = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingSupplier) return;
-
-    // Detect and log granular field changes for live notifications & sync
-    const changedFields = recordSupplierFieldChanges(editingSupplier, {
-      name: formData.name.trim(),
-      supplier_code: formData.supplier_code.trim().toUpperCase(),
-      country: formData.country.trim(),
-      is_active: formData.is_active,
-    });
-
-    setIsSavingEdit(true);
-    try {
-      const updated = await supplierApi.update(editingSupplier.id, {
-        name: formData.name.trim(),
-        supplier_code: formData.supplier_code.trim().toUpperCase(),
-        country: formData.country.trim(),
-        profile_picture_url: formData.profile_picture_url.trim() || undefined,
-        current_hu_number: formData.current_hu_number.trim(),
-        hu_locked: formData.hu_locked,
-        is_active: formData.is_active,
-        preferred_language: formData.preferred_language,
-      });
-      await queryClient.invalidateQueries({ queryKey: ["suppliers"] });
-      refetch();
-      const changeMsg =
-        changedFields.length > 0
-          ? ` (${changedFields.map((c) => c.field_label).join(", ")})`
-          : "";
-      showToast(`Updated details for ${updated.name} (${updated.supplier_code})${changeMsg}`);
-      setEditingSupplier(null);
-      resetForm();
-    } catch (err: any) {
-      console.error("Update supplier failed:", err);
-      const errorMsg =
-        err?.response?.data?.detail ||
-        err?.message ||
-        "Failed to update supplier details.";
-      showToast(typeof errorMsg === "string" ? errorMsg : JSON.stringify(errorMsg));
-    } finally {
-      setIsSavingEdit(false);
-    }
   };
 
   const handleToggleActive = async (supplier: SupplierItem) => {
@@ -523,13 +288,13 @@ export default function Suppliers() {
     return 0;
   });
 
-  // ─── PAGINATION (15 CARDS PER PAGE - DIRECTORY STYLE) ──────────
+  // ─── PAGINATION (≥10 rows; grows on tall screens; user choice wins) ──────────
   const [page, setPage] = useState(1);
-  const PAGE_SIZE = 15;
+  const { pageSize: PAGE_SIZE, setPageSize, options: pageSizeOptions } = usePageSize("suppliers", 56, 320);
 
   useEffect(() => {
     setPage(1);
-  }, [search, statusFilter, sortBy]);
+  }, [search, statusFilter, sortBy, PAGE_SIZE]);
 
   const totalSuppliers = sortedSuppliers.length;
   const totalPages = Math.ceil(totalSuppliers / PAGE_SIZE) || 1;
@@ -555,16 +320,10 @@ export default function Suppliers() {
             Supplier Onboarding & Management
           </h1>
         </div>
-        <button
-          onClick={() => {
-            resetForm();
-            setIsAddModalOpen(true);
-          }}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white px-3.5 py-2 text-xs font-semibold shadow-xs transition-colors cursor-pointer"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          <span>Onboard New Supplier</span>
-        </button>
+        <a href="/suppliers/new" target="_blank" rel="noopener" className="btn btn-primary">
+          <Plus className="h-4 w-4" aria-hidden="true" />
+          <span>Onboard new supplier</span>
+        </a>
       </div>
 
       {/* Toast Alert */}
@@ -605,13 +364,6 @@ export default function Suppliers() {
         type="file"
         ref={cardFileInputRef}
         onChange={handleCardAvatarFileSelect}
-        accept="image/png,image/jpeg,image/webp"
-        className="hidden"
-      />
-      <input
-        type="file"
-        ref={modalFileInputRef}
-        onChange={handleModalAvatarSelect}
         accept="image/png,image/jpeg,image/webp"
         className="hidden"
       />
@@ -729,7 +481,7 @@ export default function Suppliers() {
       <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
         <div className="overflow-auto max-h-[calc(100vh-280px)]">
           <table className="w-full text-left text-xs text-slate-600">
-            <thead className="sticky top-0 z-10 bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 shadow-xs">
+            <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 shadow-xs">
               <tr>
                 <th className="py-3 px-4">Partner</th>
                 <th className="py-3 px-4">HU Sequence</th>
@@ -782,23 +534,26 @@ export default function Suppliers() {
                           </div>
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5">
-                              <span
-                                onClick={() => handleOpenEdit(s)}
-                                className="font-bold text-slate-900 hover:text-blue-600 cursor-pointer block truncate"
+                              <a
+                                href={`/suppliers/${s.id}/edit`}
+                                target="_blank"
+                                rel="noopener"
+                                onClick={() => handleAcknowledgeSupplierUpdate(s, true)}
+                                className="font-semibold text-slate-900 hover:underline block truncate rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                               >
                                 {s.name}
-                              </span>
+                              </a>
                               {s.recently_updated_by_supplier && (
                                 <button
                                   onClick={() => handleAcknowledgeSupplierUpdate(s)}
-                                  className="px-1.5 py-0.5 text-[9px] font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded transition-colors"
+                                  className="px-1.5 py-0.5 text-xs font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded transition-colors"
                                   title="Profile updated by supplier! Click to acknowledge."
                                 >
                                   Updated
                                 </button>
                               )}
                             </div>
-                            <span className="font-mono text-[10px] text-slate-400 block">{s.supplier_code}</span>
+                            <span className="font-mono text-xs text-slate-400 block">{s.supplier_code}</span>
                           </div>
                         </div>
                       </td>
@@ -817,13 +572,13 @@ export default function Suppliers() {
                       </td>
                       <td className="py-3 px-4">
                         {isArchived ? (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                          <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">
                             Archived
                           </span>
                         ) : (
                           <button
                             onClick={() => handleToggleActive(s)}
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold border transition-colors ${
+                            className={`px-2 py-0.5 rounded-full text-xs font-bold border transition-colors ${
                               s.is_active
                                 ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
                                 : "bg-red-50 text-red-600 border-red-200 hover:bg-red-100"
@@ -847,13 +602,17 @@ export default function Suppliers() {
                             </button>
                           ) : (
                             <>
-                              <button
-                                onClick={() => handleOpenEdit(s)}
-                                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors"
-                                title="Edit"
+                              <a
+                                href={`/suppliers/${s.id}/edit`}
+                                target="_blank"
+                                rel="noopener"
+                                onClick={() => handleAcknowledgeSupplierUpdate(s, true)}
+                                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                                title="Edit (opens in a new tab)"
+                                aria-label={`Edit ${s.name}`}
                               >
-                                <Edit2 className="w-3.5 h-3.5" />
-                              </button>
+                                <Edit2 className="w-4 h-4" aria-hidden="true" />
+                              </a>
                               <button
                                 onClick={() => handleOpenDeleteModal(s)}
                                 className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
@@ -881,6 +640,20 @@ export default function Suppliers() {
         </div>
 
         <div className="flex items-center gap-1 text-xs text-gray-600">
+          <label className="flex items-center gap-1.5 pr-2">
+            <span>Rows per page</span>
+            <select
+              value={PAGE_SIZE}
+              onChange={(e) => setPageSize(Number(e.target.value))}
+              className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-sm"
+            >
+              {pageSizeOptions.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </label>
           <span className="px-2 font-normal tracking-tight text-gray-600">
             {paginationText}
           </span>
@@ -905,410 +678,6 @@ export default function Suppliers() {
         </div>
       </div>
 
-      {/* ─── CREATE / ONBOARD MODAL ─────────────────────────────────── */}
-      {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl w-full max-w-lg overflow-hidden">
-            <div className="flex items-center justify-between p-5 border-b border-gray-100 bg-gray-50/50">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-brand-600" />
-                <h2 className="text-lg font-bold text-gray-900">Onboard New Supplier Partner</h2>
-              </div>
-              <button
-                onClick={() => setIsAddModalOpen(false)}
-                className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateSupplier} className="p-6 space-y-4">
-              {xmlFoundBadge && (
-                <div className="text-[11px] font-medium text-emerald-800 bg-emerald-50 px-3 py-2 rounded-xl border border-emerald-200 flex items-center gap-2">
-                  <Sparkles className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  <span>{xmlFoundBadge}</span>
-                </div>
-              )}
-
-              {/* Avatar Upload Preview Section */}
-              <div className="flex items-center gap-4 p-3 bg-gray-50/80 rounded-xl border border-gray-200">
-                <div
-                  onClick={() => modalFileInputRef.current?.click()}
-                  className="relative w-16 h-16 rounded-full overflow-hidden border-2 border-white shadow-sm cursor-pointer group/modalAvatar ring-2 ring-gray-200 hover:ring-brand-500 shrink-0 flex items-center justify-center bg-gray-100"
-                  title="Click to select profile picture"
-                >
-                  {formData.profile_picture_url ? (
-                    <img
-                      src={formData.profile_picture_url}
-                      alt="Preview"
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div
-                      className={`w-full h-full flex items-center justify-center font-bold text-xl uppercase ${
-                        formData.name ? getAvatarFallbackBg(formData.name) : "bg-brand-50 text-brand-600"
-                      }`}
-                    >
-                      {formData.name ? formData.name.charAt(0) : <Camera className="w-6 h-6 text-gray-400" />}
-                    </div>
-                  )}
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/modalAvatar:opacity-100 flex items-center justify-center transition-opacity text-white">
-                    {isUploadingModalAvatar ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    ) : (
-                      <Camera className="w-5 h-5" />
-                    )}
-                  </div>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-slate-800">Partner Profile Picture / Logo</p>
-                  <div className="mt-1.5 flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => modalFileInputRef.current?.click()}
-                      disabled={isUploadingModalAvatar}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-brand-700 bg-white hover:bg-brand-50 border border-brand-200 rounded-lg shadow-2xs transition-colors"
-                    >
-                      <Upload className="w-3 h-3" />
-                      {formData.profile_picture_url ? "Change Photo" : "Upload Photo"}
-                    </button>
-                    {formData.profile_picture_url && (
-                      <button
-                        type="button"
-                        onClick={() => setFormData((prev) => ({ ...prev, profile_picture_url: "" }))}
-                        className="text-xs text-red-600 hover:text-red-700 font-medium px-2 py-1 rounded-lg hover:bg-red-50 transition-colors"
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                  Supplier Company Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="e.g. South Asia Textiles Ltd"
-                  className="w-full h-10 px-3 text-sm rounded-xl border border-gray-200 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                      Supplier Code <span className="text-red-500">*</span>
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => handleLookupXml()}
-                      disabled={isLookingUpXml || !formData.supplier_code.trim()}
-                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-700 bg-brand-50 hover:bg-brand-100 px-2 py-0.5 rounded-lg border border-brand-200 transition-colors disabled:opacity-40"
-                      title="Fetch details from incoming XML attachments in mailbox"
-                    >
-                      <Sparkles className={`w-3 h-3 text-brand-600 ${isLookingUpXml ? "animate-spin" : ""}`} />
-                      <span>{isLookingUpXml ? "Fetching..." : "Auto-fetch XML"}</span>
-                    </button>
-                  </div>
-                  <input
-                    type="text"
-                    required
-                    value={formData.supplier_code}
-                    onChange={(e) => setFormData({ ...formData, supplier_code: e.target.value })}
-                    onBlur={() => {
-                      if (formData.supplier_code.trim() && !formData.name) {
-                        handleLookupXml(formData.supplier_code);
-                      }
-                    }}
-                    placeholder="e.g. 0000111924"
-                    className="w-full h-10 px-3 text-sm font-mono font-semibold rounded-xl border border-gray-200 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                  />
-                  <span className="text-[10px] text-gray-400 mt-0.5 block">Unique EDI code from &lt;SdPartner&gt;</span>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                    Country
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.country}
-                    onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-                    placeholder="Sri Lanka"
-                    className="w-full h-10 px-3 text-sm rounded-xl border border-gray-200 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                    Language
-                  </label>
-                  <select
-                    value={formData.preferred_language}
-                    onChange={(e) => setFormData({ ...formData, preferred_language: e.target.value })}
-                    className="w-full h-10 px-3 text-sm rounded-xl border border-gray-200 bg-white focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                    title="Portal, login page and welcome email language for this supplier"
-                  >
-                    {SUPPORTED_LANGUAGES.map((lang) => (
-                      <option key={lang} value={lang}>
-                        {LANGUAGE_NAMES[lang]}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                  Last Used Handling Unit (HU) Number
-                </label>
-                <input
-                  type="text"
-                  value={formData.current_hu_number}
-                  onChange={(e) => setFormData({ ...formData, current_hu_number: e.target.value })}
-                  placeholder="e.g. 0 (if starting fresh) or last used serial (e.g. 50)"
-                  className="w-full h-10 px-3 text-sm font-mono rounded-xl border border-gray-200 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                />
-                <span className="text-[10px] text-slate-400 mt-0.5 block">
-                  Next carton sequence will start from this number + 1.
-                </span>
-              </div>
-
-              <div className="pt-4 border-t border-gray-100 flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setIsAddModalOpen(false)}
-                  className="px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-100 rounded-xl"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2.5 text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 active:bg-brand-800 rounded-xl shadow-sm transition-all"
-                >
-                  Onboard Partner
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ─── UPDATE / EDIT MODAL ───────────────────────────────────── */}
-      {editingSupplier && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl w-full max-w-lg overflow-hidden">
-            <div className="flex items-center justify-between p-5 border-b border-gray-100 bg-gray-50/50">
-              <div className="flex items-center gap-2">
-                <Edit2 className="w-5 h-5 text-brand-600" />
-                <h2 className="text-lg font-bold text-gray-900">Edit Supplier Details</h2>
-              </div>
-              <button
-                onClick={() => setEditingSupplier(null)}
-                className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleUpdateSupplier} className="p-6 space-y-4">
-              {xmlFoundBadge && (
-                <div className="text-[11px] font-medium text-emerald-800 bg-emerald-50 px-3 py-2 rounded-xl border border-emerald-200 flex items-center gap-2">
-                  <Sparkles className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  <span>{xmlFoundBadge}</span>
-                </div>
-              )}
-
-              {/* Avatar Upload Preview Section */}
-              <div className="flex items-center gap-4 p-3 bg-gray-50/80 rounded-xl border border-gray-200">
-                <div
-                  onClick={() => modalFileInputRef.current?.click()}
-                  className="relative w-16 h-16 rounded-full overflow-hidden border-2 border-white shadow-sm cursor-pointer group/modalAvatar ring-2 ring-gray-200 hover:ring-brand-500 shrink-0 flex items-center justify-center bg-gray-100"
-                  title="Click to select profile picture"
-                >
-                  {formData.profile_picture_url ? (
-                    <img
-                      src={formData.profile_picture_url}
-                      alt="Preview"
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div
-                      className={`w-full h-full flex items-center justify-center font-bold text-xl uppercase ${
-                        formData.name ? getAvatarFallbackBg(formData.name) : "bg-brand-50 text-brand-600"
-                      }`}
-                    >
-                      {formData.name ? formData.name.charAt(0) : <Camera className="w-6 h-6 text-gray-400" />}
-                    </div>
-                  )}
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/modalAvatar:opacity-100 flex items-center justify-center transition-opacity text-white">
-                    {isUploadingModalAvatar ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    ) : (
-                      <Camera className="w-5 h-5" />
-                    )}
-                  </div>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-gray-800">Partner Profile Picture / Logo</p>
-                  <p className="text-[11px] text-gray-500">
-                    Supports PNG, JPG, or WebP. Auto-optimized for instant loading.
-                  </p>
-                  <div className="mt-1.5 flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => modalFileInputRef.current?.click()}
-                      disabled={isUploadingModalAvatar}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-brand-700 bg-white hover:bg-brand-50 border border-brand-200 rounded-lg shadow-2xs transition-colors"
-                    >
-                      <Upload className="w-3 h-3" />
-                      {formData.profile_picture_url ? "Change Photo" : "Upload Photo"}
-                    </button>
-                    {formData.profile_picture_url && (
-                      <button
-                        type="button"
-                        onClick={() => setFormData((prev) => ({ ...prev, profile_picture_url: "" }))}
-                        className="text-xs text-red-600 hover:text-red-700 font-medium px-2 py-1 rounded-lg hover:bg-red-50 transition-colors"
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                  Supplier Company Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full h-10 px-3 text-sm rounded-xl border border-gray-200 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                    Supplier Code <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.supplier_code}
-                    onChange={(e) => setFormData({ ...formData, supplier_code: e.target.value })}
-                    className="w-full h-10 px-3 text-sm font-mono font-semibold rounded-xl border border-gray-200 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                    Country
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.country}
-                    onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-                    className="w-full h-10 px-3 text-sm rounded-xl border border-gray-200 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                    Language
-                  </label>
-                  <select
-                    value={formData.preferred_language}
-                    onChange={(e) => setFormData({ ...formData, preferred_language: e.target.value })}
-                    className="w-full h-10 px-3 text-sm rounded-xl border border-gray-200 bg-white focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                    title="Portal, login page and welcome email language for this supplier"
-                  >
-                    {SUPPORTED_LANGUAGES.map((lang) => (
-                      <option key={lang} value={lang}>
-                        {LANGUAGE_NAMES[lang]}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 p-3 bg-gray-50/80 rounded-xl border border-gray-200">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                    Last Used Handling Unit (HU) Number
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.current_hu_number}
-                    onChange={(e) => setFormData({ ...formData, current_hu_number: e.target.value })}
-                    placeholder="e.g. 0 (if starting fresh) or last used serial (e.g. 50)"
-                    className="w-full h-10 px-3 text-sm font-mono rounded-xl border border-gray-200 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white"
-                  />
-                  <span className="text-[10px] text-slate-400 mt-0.5 block">
-                    Next carton sequence will start from this number + 1.
-                  </span>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                    Supplier Edit Lock
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer mt-2 text-xs font-semibold text-gray-800">
-                    <input
-                      type="checkbox"
-                      checked={formData.hu_locked}
-                      onChange={(e) => setFormData({ ...formData, hu_locked: e.target.checked })}
-                      className="w-4 h-4 text-brand-600 rounded border-gray-300 focus:ring-brand-500"
-                    />
-                    <span>{formData.hu_locked ? "Locked for Supplier" : "Unlocked (Editable once)"}</span>
-                  </label>
-                  <span className="text-[10px] text-gray-400 mt-1 block">
-                    {formData.hu_locked ? "Supplier cannot change from portal" : "Supplier can configure once from portal"}
-                  </span>
-                </div>
-              </div>
-
-              <div>
-                <label className="flex items-center gap-2 cursor-pointer mt-2">
-                  <input
-                    type="checkbox"
-                    checked={formData.is_active}
-                    onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                    className="w-4 h-4 text-brand-600 rounded border-gray-300 focus:ring-brand-500"
-                  />
-                  <span className="text-sm font-semibold text-gray-800">Supplier Account Active</span>
-                </label>
-              </div>
-
-              <div className="pt-4 border-t border-gray-100 flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setEditingSupplier(null)}
-                  className="px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-100 rounded-xl"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSavingEdit}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 disabled:opacity-60 disabled:cursor-not-allowed rounded-xl shadow-sm transition-all"
-                >
-                  {isSavingEdit && <Loader2 className="w-4 h-4 animate-spin" />}
-                  <span>{isSavingEdit ? "Saving Changes..." : "Save Changes"}</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
       {/* ─── DELETE / ARCHIVE CONFIRMATION WITH ADMIN VERIFICATION MODAL ──────── */}
       {deletingSupplier && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
@@ -1323,7 +692,7 @@ export default function Suppliers() {
                 You are archiving <strong className="text-gray-900">{deletingSupplier.name}</strong> (<span className="font-mono font-bold text-brand-700">{deletingSupplier.supplier_code}</span>).
               </p>
 
-              <div className="text-[11px] text-amber-900 bg-amber-50 p-3 rounded-xl border border-amber-200 mt-2.5 text-left space-y-1">
+              <div className="text-xs text-amber-900 bg-amber-50 p-3 rounded-xl border border-amber-200 mt-2.5 text-left space-y-1">
                 <div className="font-bold flex items-center gap-1.5 text-amber-800">
                   <ShieldCheck className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                   <span>Automated Backup Protection</span>
@@ -1369,7 +738,7 @@ export default function Suppliers() {
                     )}
                   </button>
                 </div>
-                <span className="text-[10px] text-gray-400 mt-1 flex items-center gap-1">
+                <span className="text-xs text-gray-400 mt-1 flex items-center gap-1">
                   <Lock className="w-3 h-3 text-gray-400" />
                   Direct verification with Keycloak Security Service
                 </span>
