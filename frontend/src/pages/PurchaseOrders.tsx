@@ -27,6 +27,7 @@ import { resolvePlantAndLocation, KNOWN_PLANTS } from "@/utils/plantResolver";
 import PlantAccordionShowcase from "@/components/plants/PlantAccordionShowcase";
 import { usePlantSelection } from "@/hooks/usePlantSelection";
 import StatusBadge from "@/components/ui/StatusBadge";
+import PageHeader from "@/components/ui/PageHeader";
 import { statusBorderClass } from "@/utils/statusStyles";
 import { poDetailPath } from "@/utils/poLineItems";
 
@@ -652,14 +653,14 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
     <div
       className={cn(
         selectedPlant === "ALL"
-          ? "p-4 sm:p-6 space-y-4 sm:space-y-5"
-          : "h-full flex flex-col overflow-hidden px-4 pt-4 pb-0 sm:px-6 sm:pt-5 sm:pb-0 gap-3"
+          ? "p-4 sm:p-6 space-y-5"
+          : "h-full flex flex-col overflow-hidden px-4 pt-4 pb-0 sm:px-6 sm:pt-6 sm:pb-0 gap-3"
       )}
     >
       {/* Page Header with Plant Breadcrumb, Mode Indicator & Location Pills */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 shrink-0">
-        <div className="space-y-1">
-          {selectedPlant !== "ALL" && KNOWN_PLANTS[selectedPlant] && (
+      <PageHeader
+        breadcrumb={
+          selectedPlant !== "ALL" && KNOWN_PLANTS[selectedPlant] ? (
             <div className="flex items-center gap-1.5 text-xs text-slate-500">
               <button
                 type="button"
@@ -675,40 +676,16 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
                 {KNOWN_PLANTS[selectedPlant].name} ({KNOWN_PLANTS[selectedPlant].defaultCode})
               </span>
             </div>
-          )}
-
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-bold tracking-tight text-gray-950">{t("purchaseOrders:header.title")}</h1>
-            {activeMode === "manual" ? (
-              <span
-                className={cn(
-                  "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold shadow-2xs border",
-                  isSupplier
-                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                    : "bg-blue-50 text-blue-700 border-blue-200"
-                )}
-              >
-                <Layers className={cn("w-3.5 h-3.5", isSupplier ? "text-emerald-600" : "text-blue-600")} />
-                {t("layout:nav.manualProcess")}
-              </span>
-            ) : (
-              <span
-                className={cn(
-                  "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold shadow-2xs border",
-                  isSupplier
-                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                    : "bg-blue-50 text-blue-700 border-blue-200"
-                )}
-              >
-                <FileSpreadsheet className={cn("w-3.5 h-3.5", isSupplier ? "text-emerald-600" : "text-blue-600")} />
-                {t("layout:nav.excelDrop")}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Location Pills with Notification Badges (replaces the dropdown & Change Plant button) */}
-        {selectedPlant !== "ALL" && availableLocations.length > 0 && (
+          ) : undefined
+        }
+        title={t("purchaseOrders:header.title")}
+        badge={
+          activeMode === "manual"
+            ? { label: t("layout:nav.manualProcess"), icon: Layers, tone: "role" }
+            : { label: t("layout:nav.excelDrop"), icon: FileSpreadsheet, tone: "role" }
+        }
+        actions={
+          selectedPlant !== "ALL" && availableLocations.length > 0 ? (
           <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100/90 border border-slate-200 rounded-2xl shadow-2xs self-start lg:self-center">
             {/* Individual Store Location Pills */}
             {availableLocations.map((loc) => {
@@ -756,8 +733,9 @@ export default function PurchaseOrders({ mode }: PurchaseOrdersProps = {}) {
               );
             })}
           </div>
-        )}
-      </div>
+          ) : undefined
+        }
+      />
 
       {/* ─── PLANT GATEWAY MODE: 5-Plant Horizontal Accordion Showcase ─── */}
       {selectedPlant === "ALL" ? (
