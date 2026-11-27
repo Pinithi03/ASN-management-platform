@@ -60,13 +60,13 @@ function NavCountBadge({ count, collapsed }: { count: NavCount | null; collapsed
   if (collapsed) return null; // the collapsed rail shows a dot on the icon instead
   if (count.fresh > 0) {
     return (
-      <span className="ml-2 shrink-0 rounded-full bg-brand-900 px-2 py-0.5 text-xs font-semibold tabular-nums text-white">
+      <span className="shrink-0 rounded-full bg-brand-900 px-2 py-0.5 text-xs font-semibold tabular-nums text-white">
         {formatNavCount(count.fresh)}
       </span>
     );
   }
   if (count.total <= 0) return null;
-  return <span className="ml-2 shrink-0 text-xs tabular-nums text-slate-500">{formatNavCount(count.total)}</span>;
+  return <span className="shrink-0 text-xs tabular-nums text-slate-500">{formatNavCount(count.total)}</span>;
 }
 
 /** Small dot on the icon in the collapsed rail when there is something new. */
@@ -352,7 +352,7 @@ export default function Sidebar({ collapsed, onToggle, width = 256, resizing = f
       </div>
 
       {/* Main Navigation */}
-      <nav ref={navRef} className="relative flex-1 space-y-1 overflow-y-auto px-2 py-4 custom-scrollbar" aria-label={t("layout:nav.main")}>
+      <nav ref={navRef} className="relative min-w-0 flex-1 space-y-1 overflow-y-auto overflow-x-hidden pl-2 pr-3 py-4 custom-scrollbar" aria-label={t("layout:nav.main")}>
         {/* Active-item indicator: one bar that slides to the active item (~200 ms ease-out) */}
         {indicator && (
           <span
@@ -400,7 +400,7 @@ export default function Sidebar({ collapsed, onToggle, width = 256, resizing = f
                   aria-expanded={collapsed ? undefined : isMenuOpen}
                   aria-label={countLabel(navLabel(item), countFor(item))}
                   className={cn(
-                    "group w-full flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-150 cursor-pointer",
+                    "group w-full min-w-0 overflow-hidden flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-150 cursor-pointer",
                     isParentActive
                       ? isAdmin
                         ? "bg-brand-50 text-brand-700 font-semibold"
@@ -468,7 +468,7 @@ export default function Sidebar({ collapsed, onToggle, width = 256, resizing = f
               data-active={isActive(item.to) ? "true" : undefined}
               aria-label={countLabel(navLabel(item), count)}
               className={cn(
-                "group flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-150",
+                "group min-w-0 overflow-hidden flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-150",
                 isActive(item.to)
                   ? isAdmin
                     ? "bg-brand-50 text-brand-700 font-semibold"
@@ -507,7 +507,7 @@ export default function Sidebar({ collapsed, onToggle, width = 256, resizing = f
               data-active={isActive(item.to) ? "true" : undefined}
               aria-label={countLabel(navLabel(item), count)}
               className={cn(
-                "group flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-150",
+                "group min-w-0 overflow-hidden flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-150",
                 isActive(item.to)
                   ? isAdmin
                     ? "bg-brand-50 text-brand-700 font-semibold"
