@@ -23,6 +23,7 @@ import {
 import { cn } from "@/utils/cn";
 import { shipmentService } from "@/services/shipmentService";
 import { getErrorMessage } from "@/services/apiError";
+import PageHeader from "@/components/ui/PageHeader";
 
 type TabType = "company" | "email" | "asn" | "security" | "health";
 
@@ -144,15 +145,12 @@ export default function Settings() {
   };
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-900">Settings</h1>
-        </div>
-
-        {/* Save Button */}
-        <div className="flex items-center gap-3">
+    <div className="p-4 sm:p-6 space-y-5 max-w-7xl mx-auto">
+      <PageHeader
+        title="Settings"
+        actions={
+        /* Save Button */
+        <div className="flex flex-wrap items-center gap-3">
           {saveError && (
             <span role="alert" className="text-sm text-red-700 bg-red-50 px-3 py-1.5 rounded-lg border border-red-200">
               {saveError}
@@ -176,7 +174,8 @@ export default function Settings() {
             Save Configuration
           </button>
         </div>
-      </div>
+        }
+      />
 
       {/* Tabs Navigation Bar */}
       <div className="flex items-center gap-2 border-b border-slate-200 overflow-x-auto pb-1 scrollbar-none">

@@ -14,6 +14,7 @@
   },
   "gateway": {
     "activeOrders": "Active Orders",
+    "activeShort": "Active",
     "badgeUnit_one": "PO",
     "badgeUnit_other": "POs",
     "cta": "{{label}} ({{count}})",

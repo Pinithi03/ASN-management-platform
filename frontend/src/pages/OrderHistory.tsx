@@ -22,6 +22,7 @@ import { poDetailPath } from "@/utils/poLineItems";
 import { statusBorderClass } from "@/utils/statusStyles";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { cn } from "@/utils/cn";
+import PageHeader from "@/components/ui/PageHeader";
 
 const formatDateDisplay = (dateStr?: string | null) => {
   if (!dateStr) return "—";
@@ -133,24 +134,16 @@ export default function OrderHistory() {
   };
 
   return (
-    <div className="h-full flex flex-col overflow-hidden px-4 pt-4 pb-0 sm:px-6 sm:pt-5 sm:pb-0 gap-3">
+    <div className="h-full flex flex-col overflow-hidden px-4 pt-4 pb-0 sm:px-6 sm:pt-6 sm:pb-0 gap-3">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-bold tracking-tight text-gray-950">{t("header.title")}</h1>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-              {t("header.archive", { total: formatNumber(totalOrders) })}
-            </span>
-          </div>
-          <p className="text-xs text-slate-500 mt-1">
-            {t("header.subtitle")}
-          </p>
-        </div>
-
-        {/* Plant Filter Dropdown */}
-        <div className="relative self-start sm:self-auto">
+      <PageHeader
+        className="mb-2"
+        title={t("header.title")}
+        badge={{ label: t("header.archive", { total: formatNumber(totalOrders) }), icon: CheckCircle2, tone: "success" }}
+        description={t("header.subtitle")}
+        actions={
+        /* Plant Filter Dropdown */
+        <div className="relative">
           <select
             value={plantFilter}
             onChange={(e) => {
@@ -170,7 +163,8 @@ export default function OrderHistory() {
           <Factory className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
         </div>
-      </div>
+        }
+      />
 
       {/* Multi-PO Search Bar */}
       <div className="relative flex flex-wrap items-center gap-1.5 min-h-[42px] pl-10 pr-9 py-1.5 text-sm border border-gray-200 rounded-xl focus-within:ring-2 focus-within:ring-blue-500 bg-white shadow-2xs">

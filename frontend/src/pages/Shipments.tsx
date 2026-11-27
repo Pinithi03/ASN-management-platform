@@ -71,6 +71,7 @@ import PastDateAlert, { DATE_ERROR_TEXT_CLASSES, DATE_INPUT_ERROR_CLASSES } from
 import { statusBorderClass } from "@/utils/statusStyles";
 import { broadcastInvalidate } from "@/lib/crossTab";
 import { deliveryDateError, parseLocalDate, startOfToday, todayLocalISO, isPastLocalDate, toISODate } from "@/utils/dates";
+import PageHeader from "@/components/ui/PageHeader";
 
 // Re-exported for existing importers.
 export { formatPlantName, matchPlant, PLANT_NAMES } from "@/components/shipments/shared";
@@ -245,16 +246,12 @@ export default function Shipments() {
   const paginatedShipments = filteredShipments.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
-    <div className={cn(!isCreating ? "h-full flex flex-col overflow-hidden px-4 pt-4 pb-0 sm:px-6 sm:pt-5 sm:pb-0 gap-3" : "p-6 space-y-6")}>
+    <div className={cn(!isCreating ? "h-full flex flex-col overflow-hidden px-4 pt-4 pb-0 sm:px-6 sm:pt-6 sm:pb-0 gap-3" : "p-4 sm:p-6 space-y-5")}>
       {/* ───────────────────────────────────────────────────────────── */}
       {/* 1. TOP HEADER / TITLE                                         */}
       {/* ───────────────────────────────────────────────────────────── */}
       {!isCreating ? (
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-semibold text-slate-900">{t("list.title")}</h1>
-          </div>
-        </div>
+        <PageHeader className="mb-2" title={t("list.title")} />
       ) : creationMethod === "excel" ? (
         <div className="flex items-center justify-between pb-3 border-b border-gray-200">
           <button

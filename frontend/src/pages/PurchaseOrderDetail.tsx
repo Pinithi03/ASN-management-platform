@@ -31,6 +31,7 @@ import { extractLineItems } from "@/utils/poLineItems";
 import { statusBorderClass } from "@/utils/statusStyles";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { cn } from "@/utils/cn";
+import PageHeader, { PageHeaderBadgePill } from "@/components/ui/PageHeader";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -120,7 +121,7 @@ export default function PurchaseOrderDetail() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-screen-2xl space-y-4 p-4 sm:p-6">
+    <div className="mx-auto w-full max-w-screen-2xl space-y-5 p-4 sm:p-6">
       {/* ── PO header ─────────────────────────────────────────── */}
       <section
         className={cn("rounded-lg border border-slate-200 bg-white p-5 shadow-xs", statusBorderClass(po.status))}
@@ -128,16 +129,21 @@ export default function PurchaseOrderDetail() {
       >
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0 space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 id="po-title" className="font-mono text-2xl font-semibold text-slate-900">
-                PO {po.po_number || " "}
-              </h1>
+            <PageHeader
+              mono
+              titleId="po-title"
+              title={`PO ${po.po_number || " "}`}
+              badge={
+              <>
               <StatusBadge status={po.status} />
-              <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                {po.version && po.version > 1
-                  ? t("purchaseOrders:modal.revision", { version: po.version })
-                  : t("purchaseOrders:modal.original")}
-              </span>
+              <PageHeaderBadgePill
+                tone="neutral"
+                label={
+                  po.version && po.version > 1
+                    ? t("purchaseOrders:modal.revision", { version: po.version })
+                    : t("purchaseOrders:modal.original")
+                }
+              />
               {po.po_number && (
                 <button
                   type="button"
@@ -156,7 +162,9 @@ export default function PurchaseOrderDetail() {
                   )}
                 </button>
               )}
-            </div>
+              </>
+              }
+            />
 
             <dl className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-sm text-slate-600">
               <div className="flex items-center gap-1.5">

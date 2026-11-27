@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { userApi, UserItem } from "@/services/userApi";
 import { format } from "date-fns";
+import PageHeader from "@/components/ui/PageHeader";
 
 export default function UserManagement() {
   const queryClient = useQueryClient();
@@ -86,13 +87,8 @@ export default function UserManagement() {
   }, [users]);
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Top Title Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-900">Administrators</h1>
-        </div>
-      </div>
+    <div className="p-4 sm:p-6 space-y-5">
+      <PageHeader title="Administrators" />
 
       {/* KPI Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

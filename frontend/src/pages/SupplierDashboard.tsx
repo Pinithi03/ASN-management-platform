@@ -26,6 +26,7 @@ import { useMemo } from "react";
 import { Trans, useTranslation } from "react-i18next";
 import i18n from "@/i18n";
 import { formatDate, formatMonthShort, formatNumber } from "@/i18n/format";
+import PageHeader from "@/components/ui/PageHeader";
 import {
   AreaChart,
   Area,
@@ -416,26 +417,24 @@ export default function SupplierDashboard() {
   ];
 
   return (
-    <div className="p-6 space-y-6 bg-slate-50 min-h-screen text-slate-900 font-sans">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight">{t("header.title")}</h1>
-          <p className="text-xs text-slate-500 mt-0.5">
-            {t("header.subtitle")}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3 self-start sm:self-auto">
-        <KpiUpdatedBar updatedAt={kpiUpdatedAt} onRefresh={refreshKpis} refreshing={kpiRefreshing} />
-        <button
-          type="button"
-          onClick={() => navigate("/order-history")}
-          className="self-start sm:self-auto inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-2xs transition-colors cursor-pointer"
-        >
-          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-          <span>{t("header.orderHistory", { count: poStats?.completed ?? 0 })}</span>
-        </button>
-        </div>
-      </div>
+    <div className="p-4 sm:p-6 space-y-5 bg-slate-50 min-h-screen text-slate-900 font-sans">
+      <PageHeader
+        title={t("header.title")}
+        description={t("header.subtitle")}
+        actions={
+          <>
+            <KpiUpdatedBar updatedAt={kpiUpdatedAt} onRefresh={refreshKpis} refreshing={kpiRefreshing} />
+            <button
+              type="button"
+              onClick={() => navigate("/order-history")}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-2xs transition-colors cursor-pointer"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              <span>{t("header.orderHistory", { count: poStats?.completed ?? 0 })}</span>
+            </button>
+          </>
+        }
+      />
       {isLoading ? (
         <div className="space-y-6" aria-busy="true" aria-label={t("loading")}>
           <KpiGrid>

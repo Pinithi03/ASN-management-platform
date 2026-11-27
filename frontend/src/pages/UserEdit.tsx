@@ -14,6 +14,7 @@ import { userApi } from "@/services/userApi";
 import { getErrorMessage } from "@/services/apiError";
 import { broadcastInvalidate } from "@/lib/crossTab";
 import { cn } from "@/utils/cn";
+import PageHeader from "@/components/ui/PageHeader";
 
 const schema = z.object({
   full_name: z.string().trim().min(1, "Full name is required.").max(120, "Use at most 120 characters."),
@@ -75,17 +76,17 @@ export default function UserEdit() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl space-y-4 p-4 sm:p-6">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Edit administrator</h1>
-          <p className="text-sm text-slate-500">{user.email}</p>
-        </div>
-        <button type="button" onClick={() => navigate("/settings/users")} className="btn btn-secondary">
-          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-          All users
-        </button>
-      </div>
+    <div className="mx-auto w-full max-w-2xl space-y-5 p-4 sm:p-6">
+      <PageHeader
+        title="Edit administrator"
+        description={user.email}
+        actions={
+          <button type="button" onClick={() => navigate("/settings/users")} className="btn btn-secondary">
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            All users
+          </button>
+        }
+      />
 
       {isSubmitSuccessful && !isDirty && (
         <div role="status" className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
