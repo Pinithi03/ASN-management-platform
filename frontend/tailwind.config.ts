@@ -63,8 +63,10 @@ const config: Config = {
         xs: "2px",
       },
       fontFamily: {
-        // Inter (self-hosted via @fontsource). Chinese fallbacks so zh-CN text never falls back to a random system font.
-        sans: ["Inter", "system-ui", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", "sans-serif"],
+        // Body text, tables, forms: Lato. Headings, titles, buttons, labels: Roboto (font-heading).
+        // Self-hosted via @fontsource. Chinese fallbacks so zh-CN text never falls back to a random system font.
+        sans: ["Lato", "system-ui", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", "sans-serif"],
+        heading: ["Roboto", "system-ui", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", "sans-serif"],
         // Only for PO numbers, HU / SSCC numbers and XML.
         mono: ['"JetBrains Mono"', "ui-monospace", "SFMono-Regular", "Consolas", "monospace"],
       },
@@ -79,6 +81,12 @@ const config: Config = {
         lg: ["clamp(1.0625rem, 0.9375rem + 0.15625vw, 1.125rem)", { lineHeight: "1.625rem" }],
         xl: ["clamp(1.1875rem, 0.9375rem + 0.3125vw, 1.3125rem)", { lineHeight: "1.75rem" }],
         "2xl": ["clamp(1.5rem, 1rem + 0.625vw, 1.75rem)", { lineHeight: "2.125rem" }],
+      },
+      // Uppercase labels use one letter-spacing everywhere (0.06em).
+      letterSpacing: {
+        wide: "0.06em",
+        wider: "0.06em",
+        widest: "0.06em",
       },
       keyframes: {
         "page-fade": { from: { opacity: "0" }, to: { opacity: "1" } },

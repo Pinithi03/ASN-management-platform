@@ -35,7 +35,8 @@
     "toDispatch": "待发运",
     "zeroPos": "0 个采购订单",
     "selectHeading": "选择目的地工厂",
-    "selectHint": "选择一个工厂，然后打开其采购订单。双击卡片可直接打开。"
+    "selectHint": "单击工厂即可选中。双击或按 Enter 键打开其采购订单。",
+    "storeCount_other": "{{count}} 个仓库"
   },
   "header": {
     "title": "采购订单"

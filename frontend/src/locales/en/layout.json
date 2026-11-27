@@ -32,23 +32,28 @@
     "shipments": "Shipments"
   },
   "notifications": {
-    "alerts": "Alerts",
     "markAllRead": "Mark all read",
-    "markAsRead": "Mark as read",
-    "newCount": "{{count}} new",
-    "newPoAssigned": "New Purchase Order Assigned",
-    "newPoAssignedDesc": "PO {{poNumber}} assigned to your account ({{quantity}} units)",
     "noUnread": "No unread notifications",
-    "orderFallback": "Order",
-    "recently": "Recently",
     "title": "Notifications",
-    "viewMyOrders": "View My Orders"
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "earlier": "Earlier",
+    "close": "Close notifications",
+    "tabUnread": "Unread",
+    "tabAll": "All",
+    "loadFailed": "Notifications could not be loaded. Try again in a moment.",
+    "empty": "No notifications yet",
+    "unread": "Unread",
+    "loadMore": "Load more",
+    "viewAllPos": "View all purchase orders",
+    "bellWithUnread": "Notifications, {{count}} unread"
   },
   "sidebar": {
     "collapse": "Collapse sidebar",
     "expand": "Expand sidebar",
     "supplierPortal": "Supplier Portal",
-    "toggleMenu": "Toggle Menu"
+    "toggleMenu": "Toggle Menu",
+    "resize": "Resize sidebar"
   },
   "signOut": {
     "confirmMessage": "Are you sure you want to end your current session?",
@@ -57,5 +62,52 @@
   "user": {
     "supplier": "Supplier",
     "supplierPartner": "Supplier Partner"
+  },
+  "navCounts": {
+    "aria": "{{label}}, {{total}} total",
+    "ariaWithNew": "{{label}}, {{total}} total, {{fresh}} new",
+    "tooltip": "{{fresh}} new · {{total}} total"
+  },
+  "notif": {
+    "PO_RECEIVED": {
+      "title": "New purchase order",
+      "desc": "PO {{po}} has been assigned to you."
+    },
+    "PO_UPDATED": {
+      "title": "Purchase order updated",
+      "desc": "PO {{po}} was updated (version {{version}})."
+    },
+    "SHIPMENT_CREATED": {
+      "title": "Shipment created",
+      "desc": "Shipment {{shipment}} with {{cartons}} cartons was created."
+    },
+    "ASN_DISPATCHED": {
+      "title": "ASN sent to IUNGO",
+      "desc": "The ASN for shipment {{shipment}} was sent to {{recipient}}."
+    },
+    "ASN_DISPATCH_FAILED": {
+      "title": "ASN could not be sent",
+      "desc": "The ASN for shipment {{shipment}} could not be sent to {{recipient}}. Open the shipment and send it again."
+    },
+    "SUPPLIER_ONBOARDED": {
+      "title": "Supplier onboarded",
+      "desc": "{{name}} ({{code}}) was onboarded."
+    },
+    "SUPPLIER_AUTO_DETECTED": {
+      "title": "New supplier detected",
+      "desc": "{{name}} ({{code}}) was found in an incoming PO email and needs review."
+    },
+    "SUPPLIER_ARCHIVED": {
+      "title": "Supplier archived",
+      "desc": "{{name}} ({{code}}) was archived and can no longer sign in."
+    },
+    "SUPPLIER_RESTORED": {
+      "title": "Supplier restored",
+      "desc": "{{name}} ({{code}}) was restored."
+    },
+    "EMAIL_PARSE_ERROR": {
+      "title": "Email needs review",
+      "desc": "No purchase order could be read from \"{{subject}}\"."
+    }
   }
 }

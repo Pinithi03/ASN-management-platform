@@ -54,6 +54,7 @@ from app.services.packing_excel_service import (
     validate_packing_excel,
 )
 from app.services.po_service import update_po_statuses
+from app.services import notification_service
 
 logger = logging.getLogger(__name__)
 
@@ -853,6 +854,15 @@ async def create_shipment_from_excel(
         # Update PO statuses (PARTIAL / COMPLETED)
         affected_pos = list({row.po_number for row in validation_res.rows if row.po_number})
         await update_po_statuses(db, affected_pos)
+        for item in processed_shipments:
+            shp_created = item["shipment"]
+            await notification_service.notify_supplier(
+                db,
+                shp_created.supplier_id,
+                "SHIPMENT_CREATED",
+                params={"shipment": shp_created.shipment_number, "cartons": shp_created.total_boxes},
+                link=f"/shipments/{shp_created.id}",
+            )
         await db.commit()
     except Exception as e:
         logger.error("DB commit failed for multi-shipment creation: %s", e)
@@ -1306,6 +1316,14 @@ async def create_direct_shipment(
         # Update PO statuses (PARTIAL / COMPLETED)
         affected_pos = list({c.po_number for c in req.cartons if c.po_number})
         await update_po_statuses(db, affected_pos)
+
+        await notification_service.notify_supplier(
+            db,
+            shipment.supplier_id,
+            "SHIPMENT_CREATED",
+            params={"shipment": shipment.shipment_number, "cartons": shipment.total_boxes},
+            link=f"/shipments/{shipment.id}",
+        )
 
         await db.commit()
     except Exception as e:

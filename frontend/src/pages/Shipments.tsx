@@ -67,6 +67,7 @@ import {
   shipmentStatusLabel,
 } from "@/components/shipments/shared";
 import StatusBadge from "@/components/ui/StatusBadge";
+import PastDateAlert, { DATE_ERROR_TEXT_CLASSES, DATE_INPUT_ERROR_CLASSES } from "@/components/ui/PastDateAlert";
 import { statusBorderClass } from "@/utils/statusStyles";
 import { broadcastInvalidate } from "@/lib/crossTab";
 import { deliveryDateError, parseLocalDate, startOfToday, todayLocalISO, isPastLocalDate, toISODate } from "@/utils/dates";
@@ -2509,25 +2510,29 @@ function WebPackingWizard({
                 className={cn(
                   "h-7 px-2 text-xs font-mono font-bold rounded border bg-white outline-none shadow-2xs cursor-pointer transition-all",
                   deliveryDateErrKey && (attemptedSubmit || deliveryDate)
-                    ? "border-red-500 ring-2 ring-red-200 bg-red-50/40"
+                    ? DATE_INPUT_ERROR_CLASSES
                     : "border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400"
                 )}
               />
             </div>
           </div>
-          <div id="wizard-delivery-date-help" className="-mt-1 space-y-0.5 px-1 text-sm">
-            {requestedDeliveryDate && (
-              <p className={cn(requestedDeliveryPassed ? "text-amber-700" : "text-slate-500")}>
-                {requestedDeliveryPassed
-                  ? t("wizard.step3.requestedPassed", { date: formatDate(requestedDeliveryDate) })
-                  : t("wizard.step3.requested", { date: formatDate(requestedDeliveryDate) })}
-              </p>
-            )}
+          {/* Under the date field: 1) field error (red text), 2) requested-date notice (red box when passed) */}
+          <div id="wizard-delivery-date-help" className="-mt-1 px-1 text-sm">
             {deliveryDateErrKey && (attemptedSubmit || deliveryDate) && (
-              <p role="alert" className="text-red-600">
+              <p role="alert" className={DATE_ERROR_TEXT_CLASSES}>
                 {t(`common:${deliveryDateErrKey}` as "common:validation.required")}
               </p>
             )}
+            {requestedDeliveryDate &&
+              (requestedDeliveryPassed ? (
+                <PastDateAlert className="mt-2 max-w-xl">
+                  {t("wizard.step3.requestedPassed", { date: formatDate(requestedDeliveryDate) })}
+                </PastDateAlert>
+              ) : (
+                <p className="mt-1 text-slate-500">
+                  {t("wizard.step3.requested", { date: formatDate(requestedDeliveryDate) })}
+                </p>
+              ))}
           </div>
 
           {/* C. Handling Units & Packing List (Clean List View Table) */}
@@ -2847,6 +2852,27 @@ function ExcelPackingWorkflow({
   const detectedPackingSlips = useMemo(() => {
     return packingSlipGroups.map((g) => g.slipNumber).filter((s) => s !== "DEFAULT");
   }, [packingSlipGroups]);
+
+  // Packing slips whose delivery date in the uploaded file has already passed (shown as a red notice;
+  // these dates are never prefilled, the user must pick today or later).
+  const excelPastFileDates = useMemo(() => {
+    const seen = new Map<string, Date>();
+    validationResult?.rows?.forEach((r: any) => {
+      const slip = (r.pack_number || "").trim() || packingSlipNumber.trim() || "—";
+      if (!seen.has(slip) && r.delivery_date && isPastLocalDate(r.delivery_date)) {
+        const d = parseLocalDate(r.delivery_date);
+        if (d) seen.set(slip, d);
+      }
+    });
+    return Array.from(seen, ([slip, date]) => ({ slip, date }));
+  }, [validationResult, packingSlipNumber]);
+
+  // Packing slips whose chosen delivery date is in the past (multi-slip uploads).
+  // Shown in a red box above the packing-slip table; submit is blocked while any remain.
+  const excelPastSlipDates = useMemo(
+    () => detectedPackingSlips.filter((ps) => packingSlipDates[ps]?.trim() && isPastLocalDate(packingSlipDates[ps])),
+    [detectedPackingSlips, packingSlipDates]
+  );
 
   // Single delivery date (one packing slip): required, today or later (local date).
   const excelSingleDateValue =
@@ -3220,10 +3246,10 @@ function ExcelPackingWorkflow({
         return;
       }
       // Same rule as the single date: every packing slip date must be today or later.
-      const past = detectedPackingSlips.filter((ps) => deliveryDateError(packingSlipDates[ps]));
-      if (past.length > 0) {
+      // The red box above the packing-slip table lists them (no browser popup).
+      if (excelPastSlipDates.length > 0) {
         setAttemptedSubmit(true);
-        alert(t("excel.alerts.pastDates", { slips: past.join(", ") }));
+        document.getElementById("excel-past-dates")?.scrollIntoView({ block: "nearest" });
         return;
       }
     } else {
@@ -3500,12 +3526,12 @@ function ExcelPackingWorkflow({
                       className={cn(
                         "h-8 px-2.5 text-xs font-mono font-bold rounded-lg border bg-white outline-none shadow-2xs cursor-pointer disabled:bg-slate-100 disabled:text-slate-500 transition-all",
                         excelSingleDateErr
-                          ? "border-red-500 ring-2 ring-red-200 bg-red-50/40"
+                          ? DATE_INPUT_ERROR_CLASSES
                           : "border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400"
                       )}
                     />
                     {excelSingleDateErr && (
-                      <span id="excel-delivery-date-error" role="alert" className="text-sm text-red-600">
+                      <span id="excel-delivery-date-error" role="alert" className={DATE_ERROR_TEXT_CLASSES}>
                         {t(`common:${excelSingleDateErr}` as "common:validation.required")}
                       </span>
                     )}
@@ -3546,7 +3572,13 @@ function ExcelPackingWorkflow({
             ) : (
               <button
                 type="button"
-                disabled={submitting || (validationResult && !validationResult.is_valid)}
+                disabled={
+                  submitting ||
+                  (validationResult && !validationResult.is_valid) ||
+                  // Blocked while a past delivery date is shown in red (no popup needed)
+                  excelPastSlipDates.length > 0 ||
+                  (detectedPackingSlips.length <= 1 && Boolean(excelSingleDateValue) && Boolean(excelSingleDateErr))
+                }
                 onClick={() => {
                   if (!isOnline) {
                     alert(t("excel.alerts.offline"));
@@ -3586,6 +3618,15 @@ function ExcelPackingWorkflow({
                       document.getElementById("excel-delivery-date")?.focus();
                       return;
                     }
+                    if (deliveryDateError(singleDate)) {
+                      // the red error under the date field explains it
+                      document.getElementById("excel-delivery-date")?.focus();
+                      return;
+                    }
+                  }
+                  if (excelPastSlipDates.length > 0) {
+                    document.getElementById("excel-past-dates")?.scrollIntoView({ block: "nearest" });
+                    return;
                   }
                   setShowConfirmExcelDispatch(true);
                 }}
@@ -3814,6 +3855,22 @@ function ExcelPackingWorkflow({
                 </div>
               </div>
 
+              {/* Chosen packing-slip dates in the past: inline red box (submit is blocked while it shows) */}
+              {!createdResponse && excelPastSlipDates.length > 0 && (
+                <PastDateAlert id="excel-past-dates" className="m-2">
+                  {t("excel.alerts.pastDates", { slips: excelPastSlipDates.join(", ") })}
+                </PastDateAlert>
+              )}
+
+              {/* Delivery dates in the uploaded file that have already passed (not prefilled) */}
+              {!createdResponse && excelPastFileDates.length > 0 && (
+                <PastDateAlert className="m-2">
+                  {t("excel.alerts.fileDatesPassed", {
+                    slips: excelPastFileDates.map((d) => `${d.slip} (${formatDate(d.date)})`).join(", "),
+                  })}
+                </PastDateAlert>
+              )}
+
               <div className="flex-1 overflow-auto custom-scrollbar">
                 <table className="w-full text-left text-xs border-collapse">
                   <thead className="bg-zinc-700 text-white text-xs font-semibold uppercase tracking-wider sticky top-0 z-10 border-b border-zinc-800">
@@ -3908,7 +3965,7 @@ function ExcelPackingWorkflow({
                                 className={cn(
                                   "h-6 px-1.5 text-xs font-mono font-bold rounded border bg-white focus:outline-none focus:ring-1 cursor-pointer disabled:bg-slate-100 disabled:text-slate-500 w-30 shadow-2xs transition-all",
                                   (attemptedSubmit && !rowDate) || (rowDate && isPastLocalDate(rowDate) && !createdResponse)
-                                    ? "border-red-500 ring-2 ring-red-200 bg-red-50/40 text-red-900 focus:border-red-500 focus:ring-red-400"
+                                    ? `${DATE_INPUT_ERROR_CLASSES} text-red-900`
                                     : !rowDate && !createdResponse
                                     ? "border-amber-400 bg-amber-50/60 text-amber-900 focus:border-amber-500 focus:ring-amber-400"
                                     : "border-slate-300 text-slate-800 focus:border-emerald-500 focus:ring-emerald-400"

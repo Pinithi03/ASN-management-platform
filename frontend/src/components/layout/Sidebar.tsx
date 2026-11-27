@@ -4,7 +4,7 @@
  * Includes user profile, notifications popover, and sign-out controls in the sidebar footer.
  */
 
-import { useState, useEffect, useLayoutEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/utils/cn";
@@ -12,15 +12,10 @@ import type { LayoutResources } from "@/i18n/resources";
 import LanguageSwitcher from "./LanguageSwitcher";
 import { useAuthStore } from "@/store/authStore";
 import { useQuery } from "@tanstack/react-query";
-import { formatDistanceToNow } from "date-fns";
-import { formatNumber, formatRelative } from "@/i18n/format";
 import { supplierApi } from "@/services/supplierApi";
-import { poApi } from "@/services/poApi";
-import {
-  getAllSupplierFieldChanges,
-  FIELD_ICONS,
-  FIELD_COLORS,
-} from "@/utils/supplierFieldUpdates";
+import { useNavCounts, formatNavCount, type NavCount } from "@/hooks/useNavCounts";
+import { useUnreadNotificationCount } from "@/hooks/useNotifications";
+import NotificationsPanel, { bellBadge } from "./NotificationsPanel";
 import {
   clearSharedPlantState,
   getSavedSharedPlant,
@@ -47,17 +42,37 @@ import {
   Bell,
   LogOut,
   X,
-  Check,
-  CheckCheck,
-  ArrowRight,
-  Clock,
-  Sparkles,
 } from "lucide-react";
 import { useDraftCount } from "@/utils/draftStorage";
 
 interface SidebarProps {
   collapsed: boolean;
   onToggle: () => void;
+  /** Expanded width in px (desktop resize handle). Defaults to 256. */
+  width?: number;
+  /** True while the user drags the resize handle: width changes follow the pointer with no transition. */
+  resizing?: boolean;
+}
+
+/** Count shown at the right of a nav row (Gmail style). */
+function NavCountBadge({ count, collapsed }: { count: NavCount | null; collapsed: boolean }) {
+  if (!count) return null;
+  if (collapsed) return null; // the collapsed rail shows a dot on the icon instead
+  if (count.fresh > 0) {
+    return (
+      <span className="ml-2 shrink-0 rounded-full bg-brand-900 px-2 py-0.5 text-xs font-semibold tabular-nums text-white">
+        {formatNavCount(count.fresh)}
+      </span>
+    );
+  }
+  if (count.total <= 0) return null;
+  return <span className="ml-2 shrink-0 text-xs tabular-nums text-slate-500">{formatNavCount(count.total)}</span>;
+}
+
+/** Small dot on the icon in the collapsed rail when there is something new. */
+function NewDot({ count, collapsed }: { count: NavCount | null; collapsed: boolean }) {
+  if (!collapsed || !count || count.fresh <= 0) return null;
+  return <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-brand-900 ring-2 ring-white" aria-hidden="true" />;
 }
 
 type NavLabelKey = keyof LayoutResources["nav"];
@@ -79,17 +94,6 @@ interface NavItem {
   label: string;
   labelKey?: NavLabelKey;
   children?: NavSubItem[];
-}
-
-export interface NotificationItem {
-  id: string;
-  title: string;
-  desc: string;
-  time: string;
-  unread: boolean;
-  to: string;
-  icon: typeof Sparkles;
-  color: string;
 }
 
 // Admin portal navigation
@@ -168,7 +172,7 @@ function matchesBasePath(pathname: string, basePath: string): boolean {
   return pathname === basePath || pathname.startsWith(`${basePath}/`);
 }
 
-export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
+export default function Sidebar({ collapsed, onToggle, width = 256, resizing = false }: SidebarProps) {
   const { t } = useTranslation(["layout", "common"]);
   const navLabel = (item: { label: string; labelKey?: NavLabelKey }) =>
     item.labelKey ? t(`layout:nav.${item.labelKey}`) : item.label;
@@ -185,203 +189,45 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
   const [notifOpen, setNotifOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const notifRef = useRef<HTMLDivElement>(null);
-  const [fieldChangeTick, setFieldChangeTick] = useState(0);
+  const bellRef = useRef<HTMLButtonElement>(null);
 
-  // Listen for real-time field change broadcast events
-  useEffect(() => {
-    const handleFieldUpdate = () => {
-      setFieldChangeTick((t) => t + 1);
-    };
-    window.addEventListener("supplier-field-updated", handleFieldUpdate);
-    return () => window.removeEventListener("supplier-field-updated", handleFieldUpdate);
-  }, []);
-
-  // Dynamic live supplier accounts from database
+  // Live supplier list (admin): active-supplier count in the nav
   const { data: dbSuppliers } = useQuery({
     queryKey: ["suppliers"],
     queryFn: () => supplierApi.list(),
+    enabled: isAdmin,
     staleTime: 5000,
-    refetchInterval: 10000,
+    refetchInterval: 60_000,
   });
 
-  // Dynamic assigned POs strictly for logged-in supplier account
-  const { data: poData } = useQuery({
-    queryKey: ["supplierNotificationsPOs", user?.supplier_code, user?.supplier_id],
-    queryFn: () =>
-      poApi.list({
-        supplier_id: user?.supplier_id || user?.supplier_code || undefined,
-        exclude_completed: true,
-        per_page: 5,
-      }),
-    enabled: !isAdmin && Boolean(user?.supplier_code || user?.supplier_id),
-    staleTime: 10000,
-  });
+  // Notifications come from the backend (shared across browsers and devices)
+  const { data: unreadCount = 0 } = useUnreadNotificationCount();
 
-  // Track read notification IDs in localStorage
-  const [readNotifIds, setReadNotifIds] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem("read_notif_ids");
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
-
-  // Notifications for Admin
-  const adminNotifications: NotificationItem[] = useMemo(() => {
-    const notifs: NotificationItem[] = [];
-
-    const recentFieldEdits = getAllSupplierFieldChanges().slice(0, 20);
-    recentFieldEdits.forEach((chg) => {
-      let timeFormatted = "Recently";
-      try {
-        const d = new Date(chg.updated_at);
-        if (!isNaN(d.getTime())) {
-          timeFormatted = formatDistanceToNow(d, { addSuffix: true });
-        }
-      } catch {}
-
-      const IconComponent = FIELD_ICONS[chg.field_key] || Sparkles;
-      const colorStyle =
-        FIELD_COLORS[chg.field_key] ||
-        "bg-amber-600 text-white border border-amber-700 shadow-xs";
-
-      let notifTitle = `${chg.field_label} Updated`;
-      let notifDesc = `${chg.field_label} set to "${chg.new_value}" for ${chg.supplier_name} (${chg.supplier_code})`;
-
-      if (chg.field_key === "delete") {
-        notifTitle = "Supplier Profile Deleted";
-        notifDesc = `${chg.supplier_name} (${chg.supplier_code}) was deleted from the platform`;
-      } else if (chg.field_key === "create") {
-        notifTitle = chg.field_label || "Supplier Onboarded & Credentials Sent";
-        notifDesc = `${chg.supplier_name} (${chg.supplier_code}) onboarded. ${
-          chg.new_value.includes("credentials emailed to")
-            ? "Login credentials sent to " + chg.new_value.split("credentials emailed to ")[1]?.replace(")", "")
-            : "Added to active partner directory"
-        }`;
-      } else if (chg.field_key === "is_active") {
-        notifTitle = "Account Status Changed";
-        notifDesc = `${chg.supplier_name} (${chg.supplier_code}) is now ${chg.new_value}`;
-      } else if (chg.new_value === "Removed / Cleared") {
-        notifTitle = `${chg.field_label} Cleared`;
-        notifDesc = `${chg.field_label} was removed for ${chg.supplier_name} (${chg.supplier_code})`;
-      }
-
-      notifs.push({
-        id: chg.id,
-        title: notifTitle,
-        desc: notifDesc,
-        time: timeFormatted,
-        unread: !readNotifIds.includes(chg.id),
-        to: "/suppliers",
-        icon: IconComponent,
-        color: colorStyle,
-      });
-    });
-
-    if (dbSuppliers && dbSuppliers.length > 0) {
-      const autoDetected = dbSuppliers.filter((s) => Boolean(s.detected_via || s.is_pending_approval));
-      autoDetected.forEach((s) => {
-        let timeFormatted = "Recently";
-        try {
-          const d = new Date(s.onboarded_at || "");
-          if (!isNaN(d.getTime())) {
-            timeFormatted = formatDistanceToNow(d, { addSuffix: true });
-          }
-        } catch {}
-
-        const notifId = `sup-autodetect-${s.id || s.supplier_code}`;
-        notifs.push({
-          id: notifId,
-          title: "New Supplier Auto-Detected",
-          desc: `${s.name} (${s.supplier_code}) auto-discovered from inbound PO email`,
-          time: timeFormatted,
-          unread: !readNotifIds.includes(notifId),
-          to: "/suppliers",
-          icon: Sparkles,
-          color: "bg-emerald-700 text-white border border-emerald-800 shadow-xs",
-        });
-      });
-    }
-
-    return notifs;
-  }, [dbSuppliers, readNotifIds, fieldChangeTick]);
-
-  // Notifications for Supplier
-  const supplierNotifications: NotificationItem[] = useMemo(() => {
-    const notifs: NotificationItem[] = [];
-
-    const pos = poData?.items || [];
-    pos.forEach((po) => {
-      const notifId = `po-${po.id}`;
-      let timeFormatted = t("layout:notifications.recently");
-      try {
-        const d = new Date(po.created_at || po.delivery_date || "");
-        if (!isNaN(d.getTime())) {
-          timeFormatted = formatRelative(d);
-        }
-      } catch {}
-
-      notifs.push({
-        id: notifId,
-        title: t("layout:notifications.newPoAssigned"),
-        desc: t("layout:notifications.newPoAssignedDesc", {
-          poNumber: po.po_number || t("layout:notifications.orderFallback"),
-          quantity: formatNumber(po.quantity ?? 0),
-        }),
-        time: timeFormatted,
-        unread: !readNotifIds.includes(notifId),
-        to: "/purchase-orders",
-        icon: FileText,
-        color: "bg-emerald-700 text-white border border-emerald-800 shadow-xs",
-      });
-    });
-
-    return notifs;
-  }, [poData, readNotifIds, t]);
-
-  const notifications: NotificationItem[] = isAdmin ? adminNotifications : supplierNotifications;
-
-  // Close notification dropdown on click outside
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
-        setNotifOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  const activeNotifications = useMemo(() => {
-    return notifications.filter((n) => !readNotifIds.includes(n.id));
-  }, [notifications, readNotifIds]);
-
-  const unreadCount = activeNotifications.length;
-
-  const handleMarkAllRead = () => {
-    const allIds = notifications.map((n) => n.id);
-    setReadNotifIds((prev) => {
-      const merged = Array.from(new Set([...prev, ...allIds]));
-      localStorage.setItem("read_notif_ids", JSON.stringify(merged));
-      return merged;
-    });
+  // Gmail-style counts next to nav items
+  const { emails: emailCount, shipments: shipmentCount, purchaseOrders: poCount } = useNavCounts();
+  const activeSupplierCount: NavCount | null =
+    isAdmin && Array.isArray(dbSuppliers)
+      ? { total: dbSuppliers.filter((s) => !s.is_deleted && s.is_active).length, fresh: 0 }
+      : null;
+  const countFor = (item: { to: string; label: string }): NavCount | null => {
+    if (item.to === "/emails") return emailCount;
+    if (item.to === "/shipments") return shipmentCount;
+    if (item.label === "Purchase Orders") return poCount;
+    if (item.to === "/suppliers") return activeSupplierCount;
+    if (item.to === "/drafts") return draftCount > 0 ? { total: draftCount, fresh: 0 } : null;
+    return null;
   };
-
-  const handleDismissNotif = (id: string) => {
-    setReadNotifIds((prev) => {
-      const next = prev.includes(id) ? prev : [...prev, id];
-      localStorage.setItem("read_notif_ids", JSON.stringify(next));
-      return next;
-    });
-  };
-
-  const handleNotifClick = (item: NotificationItem) => {
-    handleDismissNotif(item.id);
-    setNotifOpen(false);
-    navigate(item.to);
-  };
+  /** "Email Inbox, 76 total, 3 new" — for screen readers and the tooltip. */
+  const countLabel = (label: string, c: NavCount | null) =>
+    !c
+      ? label
+      : c.fresh > 0
+      ? t("layout:navCounts.ariaWithNew", { label, total: formatNavCount(c.total), fresh: formatNavCount(c.fresh) })
+      : t("layout:navCounts.aria", { label, total: formatNavCount(c.total) });
+  const countTitle = (c: NavCount | null) =>
+    c && c.fresh > 0
+      ? t("layout:navCounts.tooltip", { fresh: formatNavCount(c.fresh), total: formatNavCount(c.total) })
+      : undefined;
 
   const handleConfirmLogout = () => {
     setShowLogoutConfirm(false);
@@ -476,9 +322,11 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
   return (
     <aside
+      style={{ width: collapsed ? 64 : width }}
       className={cn(
-        "flex h-full flex-col border-r border-slate-200 bg-white transition-[width] duration-200 ease-out-soft relative z-30 overflow-hidden",
-        collapsed ? "w-16" : "w-64"
+        "flex h-full shrink-0 flex-col border-r border-slate-200 bg-white relative z-30 overflow-hidden",
+        // While dragging the resize handle the width follows the pointer directly.
+        !resizing && "transition-[width] duration-200 ease-out-soft motion-reduce:transition-none"
       )}
     >
       {/* Brand Header */}
@@ -518,7 +366,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         )}
         <div className={cn("mb-2", !collapsed && "px-2")}>
           {!collapsed && (
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+            <span className="font-heading text-xs font-bold uppercase tracking-[0.06em] text-slate-400">
               {t("layout:nav.main")}
             </span>
           )}
@@ -550,6 +398,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   }}
                   data-active={isParentActive && (collapsed || !isMenuOpen) ? "true" : undefined}
                   aria-expanded={collapsed ? undefined : isMenuOpen}
+                  aria-label={countLabel(navLabel(item), countFor(item))}
                   className={cn(
                     "group w-full flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-150 cursor-pointer",
                     isParentActive
@@ -558,19 +407,25 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                         : "bg-emerald-50 text-emerald-700 font-semibold"
                       : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                   )}
-                  title={collapsed ? navLabel(item) : undefined}
+                  title={collapsed ? navLabel(item) : countTitle(countFor(item))}
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <item.icon className="h-5 w-5 flex-shrink-0 transition-transform duration-150 group-hover:translate-x-0.5" aria-hidden="true" />
+                    <span className="relative shrink-0">
+                      <item.icon className="h-5 w-5 transition-transform duration-150 group-hover:translate-x-0.5" aria-hidden="true" />
+                      <NewDot count={countFor(item)} collapsed={collapsed} />
+                    </span>
                     {!collapsed && <span className="truncate">{navLabel(item)}</span>}
                   </div>
                   {!collapsed && (
-                    <ChevronDown
-                      className={cn(
-                        "h-4 w-4 text-slate-400 transition-transform duration-200 shrink-0",
-                        isMenuOpen && "rotate-180 text-slate-600"
-                      )}
-                    />
+                    <span className="flex shrink-0 items-center">
+                      <NavCountBadge count={countFor(item)} collapsed={collapsed} />
+                      <ChevronDown
+                        className={cn(
+                          "ml-1.5 h-4 w-4 text-slate-400 transition-transform duration-200 shrink-0",
+                          isMenuOpen && "rotate-180 text-slate-600"
+                        )}
+                      />
+                    </span>
                   )}
                 </button>
 
@@ -595,7 +450,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                           )}
                         >
                           <sub.icon className="h-4 w-4 flex-shrink-0 transition-transform duration-150 group-hover:translate-x-0.5" aria-hidden="true" />
-                          <span>{navLabel(sub)}</span>
+                          <span className="truncate">{navLabel(sub)}</span>
                         </NavLink>
                       );
                     })}
@@ -605,31 +460,32 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
             );
           }
 
-          const isDraftItem = item.to === "/drafts";
+          const count = countFor(item);
           return (
             <NavLink
               key={item.to}
               to={item.to}
               data-active={isActive(item.to) ? "true" : undefined}
+              aria-label={countLabel(navLabel(item), count)}
               className={cn(
                 "group flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-150",
                 isActive(item.to)
                   ? isAdmin
                     ? "bg-brand-50 text-brand-700 font-semibold"
                     : "bg-emerald-50 text-emerald-700 font-semibold"
-                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-900",
+                count && count.fresh > 0 && "font-semibold text-slate-900"
               )}
-              title={collapsed ? navLabel(item) : undefined}
+              title={collapsed ? navLabel(item) : countTitle(count)}
             >
-              <div className="flex items-center gap-3">
-                <item.icon className="h-5 w-5 flex-shrink-0 transition-transform duration-150 group-hover:translate-x-0.5" aria-hidden="true" />
-                {!collapsed && <span>{navLabel(item)}</span>}
-              </div>
-              {!collapsed && isDraftItem && draftCount > 0 && (
-                <span className="px-2 py-0.5 text-xs font-bold rounded-full bg-brand-50 text-brand-700 border border-brand-200">
-                  {draftCount}
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="relative shrink-0">
+                  <item.icon className="h-5 w-5 transition-transform duration-150 group-hover:translate-x-0.5" aria-hidden="true" />
+                  <NewDot count={count} collapsed={collapsed} />
                 </span>
-              )}
+                {!collapsed && <span className="truncate">{navLabel(item)}</span>}
+              </div>
+              <NavCountBadge count={count} collapsed={collapsed} />
             </NavLink>
           );
         })}
@@ -637,137 +493,47 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         {/* Settings / Profile Section */}
         <div className={cn("mb-2 mt-6", !collapsed && "px-2")}>
           {!collapsed && (
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+            <span className="font-heading text-xs font-bold uppercase tracking-[0.06em] text-slate-400">
               {isAdmin ? "Settings" : t("layout:nav.account")}
             </span>
           )}
         </div>
-        {settingsNav.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            data-active={isActive(item.to) ? "true" : undefined}
-            className={cn(
-              "group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-150",
-              isActive(item.to)
-                ? isAdmin
-                  ? "bg-brand-50 text-brand-700 font-semibold"
-                  : "bg-emerald-50 text-emerald-700 font-semibold"
-                : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-            )}
-            title={collapsed ? navLabel(item) : undefined}
-          >
-            <item.icon className="h-5 w-5 flex-shrink-0 transition-transform duration-150 group-hover:translate-x-0.5" aria-hidden="true" />
-            {!collapsed && <span>{navLabel(item)}</span>}
-          </NavLink>
-        ))}
+        {settingsNav.map((item) => {
+          const count = countFor(item);
+          return (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              data-active={isActive(item.to) ? "true" : undefined}
+              aria-label={countLabel(navLabel(item), count)}
+              className={cn(
+                "group flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-150",
+                isActive(item.to)
+                  ? isAdmin
+                    ? "bg-brand-50 text-brand-700 font-semibold"
+                    : "bg-emerald-50 text-emerald-700 font-semibold"
+                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-900",
+                count && count.fresh > 0 && "font-semibold text-slate-900"
+              )}
+              title={collapsed ? navLabel(item) : countTitle(count)}
+            >
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="relative shrink-0">
+                  <item.icon className="h-5 w-5 transition-transform duration-150 group-hover:translate-x-0.5" aria-hidden="true" />
+                  <NewDot count={count} collapsed={collapsed} />
+                </span>
+                {!collapsed && <span className="truncate">{navLabel(item)}</span>}
+              </div>
+              <NavCountBadge count={count} collapsed={collapsed} />
+            </NavLink>
+          );
+        })}
       </nav>
 
       {/* User Profile & Actions Footer */}
-      <div className="border-t border-slate-200 bg-slate-50/70 relative shrink-0" ref={notifRef}>
-        {/* Floating Notification Popover */}
-        {notifOpen && (
-          <div
-            className={cn(
-              "absolute mb-2 rounded-2xl border border-slate-200 bg-white shadow-2xl z-50 animate-in fade-in flex flex-col overflow-hidden",
-              collapsed
-                ? "left-full bottom-2 ml-2 w-80 sm:w-96 slide-in-from-left-2"
-                : "left-2 bottom-full w-[calc(100%-16px)] sm:w-80 slide-in-from-bottom-2"
-            )}
-          >
-            {/* Popover Header */}
-            <div className="flex items-center justify-between p-3 border-b border-slate-100 bg-slate-50/60">
-              <div className="flex items-center gap-2">
-                <Bell className="w-4 h-4 text-blue-600" />
-                <h3 className="text-xs font-bold text-slate-900">
-                  {isAdmin ? "Notifications" : t("layout:notifications.alerts")}
-                </h3>
-                {unreadCount > 0 && (
-                  <span className="px-2 py-0.5 text-xs font-bold bg-blue-100 text-blue-700 rounded-full border border-blue-200">
-                    {t("layout:notifications.newCount", { count: unreadCount })}
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                {unreadCount > 0 && (
-                  <button
-                    onClick={handleMarkAllRead}
-                    className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1 cursor-pointer"
-                  >
-                    <CheckCheck className="w-3.5 h-3.5" /> {t("layout:notifications.markAllRead")}
-                  </button>
-                )}
-                <button
-                  onClick={() => setNotifOpen(false)}
-                  className="text-slate-400 hover:text-slate-600 p-0.5 rounded cursor-pointer"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-
-            {/* Notification Items List */}
-            <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 custom-scrollbar">
-              {activeNotifications.length === 0 ? (
-                <div className="py-7 px-4 text-center">
-                  <div className="w-8 h-8 mx-auto rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mb-1.5">
-                    <CheckCheck className="w-4 h-4" />
-                  </div>
-                  <p className="text-xs font-medium text-slate-600">{t("layout:notifications.noUnread")}</p>
-                </div>
-              ) : (
-                activeNotifications.map((item) => {
-                  const Icon = item.icon;
-                  return (
-                    <div
-                      key={item.id}
-                      onClick={() => handleNotifClick(item)}
-                      className="group flex items-start gap-2.5 p-2.5 text-left transition-colors cursor-pointer hover:bg-slate-50 border-l-2 border-blue-600 relative"
-                    >
-                      <div className={cn("w-6 h-6 rounded-lg flex items-center justify-center shrink-0 mt-0.5 text-white", item.color)}>
-                        <Icon className="w-3 h-3" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-1">
-                          <p className="text-xs font-semibold text-slate-900 truncate">{item.title}</p>
-                          <span className="text-xs text-slate-400 shrink-0 font-mono flex items-center gap-0.5">
-                            <Clock className="w-3 h-3" /> {item.time}
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-500 font-normal mt-0.5 line-clamp-2 leading-tight">
-                          {item.desc}
-                        </p>
-                      </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDismissNotif(item.id);
-                        }}
-                        title={t("layout:notifications.markAsRead")}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all shrink-0 rounded"
-                      >
-                        <Check className="w-3 h-3" />
-                      </button>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-            {/* Popover Footer Link */}
-            <div className="p-2 border-t border-slate-100 bg-slate-50/40 text-center">
-              <button
-                onClick={() => {
-                  setNotifOpen(false);
-                  navigate(isAdmin ? "/suppliers" : "/purchase-orders");
-                }}
-                className="text-xs font-semibold text-blue-600 hover:text-blue-700 inline-flex items-center gap-1 cursor-pointer"
-              >
-                {isAdmin ? "Manage All Suppliers" : t("layout:notifications.viewMyOrders")} <ArrowRight className="w-3 h-3" />
-              </button>
-            </div>
-          </div>
-        )}
+      <div className="border-t border-slate-200 bg-slate-50/70 relative shrink-0">
+        {/* Notifications: rendered in a portal so the sidebar can never cut it off */}
+        <NotificationsPanel open={notifOpen} onClose={() => setNotifOpen(false)} anchor={bellRef.current} isAdmin={isAdmin} />
 
         {/* User Card Content */}
         {!collapsed ? (
@@ -811,7 +577,11 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
                 <button
                   type="button"
-                  onClick={() => setNotifOpen(!notifOpen)}
+                  ref={bellRef}
+                  onClick={() => setNotifOpen((v) => !v)}
+                  aria-expanded={notifOpen}
+                  aria-haspopup="dialog"
+                  aria-label={unreadCount > 0 ? t("layout:notifications.bellWithUnread", { count: unreadCount }) : t("layout:notifications.title")}
                   className="relative p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-200/60 transition-colors cursor-pointer"
                   title={t("layout:notifications.title")}
                 >
@@ -819,11 +589,11 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   {unreadCount > 0 && (
                     <span
                       className={cn(
-                        "absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-1 text-xs font-bold text-white shadow-2xs",
+                        "absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-xs font-bold leading-none tabular-nums text-white shadow-2xs",
                         isAdmin ? "bg-blue-600" : "bg-emerald-600"
                       )}
                     >
-                      {unreadCount}
+                      {bellBadge(unreadCount)}
                     </span>
                   )}
                 </button>
@@ -856,7 +626,11 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
             <button
               type="button"
-              onClick={() => setNotifOpen(!notifOpen)}
+              ref={bellRef}
+                  onClick={() => setNotifOpen((v) => !v)}
+                  aria-expanded={notifOpen}
+                  aria-haspopup="dialog"
+                  aria-label={unreadCount > 0 ? t("layout:notifications.bellWithUnread", { count: unreadCount }) : t("layout:notifications.title")}
               className="relative p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-200/60 transition-colors cursor-pointer"
               title={t("layout:notifications.title")}
             >
@@ -864,11 +638,11 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
               {unreadCount > 0 && (
                 <span
                   className={cn(
-                    "absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-1 text-xs font-bold text-white shadow-2xs",
+                    "absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-xs font-bold leading-none tabular-nums text-white shadow-2xs",
                     isAdmin ? "bg-blue-600" : "bg-emerald-600"
                   )}
                 >
-                  {unreadCount}
+                  {bellBadge(unreadCount)}
                 </span>
               )}
             </button>

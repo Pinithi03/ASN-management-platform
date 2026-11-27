@@ -37,7 +37,9 @@
     "toDispatch": "to dispatch",
     "zeroPos": "0 POs",
     "selectHeading": "Select a destination plant",
-    "selectHint": "Choose a plant, then open its purchase orders. Double-click a card to open it directly."
+    "selectHint": "Click a plant to select it. Double-click or press Enter to open its purchase orders.",
+    "storeCount_one": "{{count}} store",
+    "storeCount_other": "{{count}} stores"
   },
   "header": {
     "title": "Purchase Orders"

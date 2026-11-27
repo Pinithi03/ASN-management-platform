@@ -62,6 +62,7 @@ from app.db.session import get_db
 from app.models.parsed_data import ParsedData
 from app.models.purchase_order import PurchaseOrder
 from app.models.supplier import Supplier
+from app.services import notification_service
 
 logger = logging.getLogger(__name__)
 
@@ -362,6 +363,12 @@ async def _ensure_seed_and_email_sync(db: AsyncSession) -> None:
                     is_active=False,
                 )
                 db.add(new_s)
+                await notification_service.notify_admins(
+                    db,
+                    "SUPPLIER_AUTO_DETECTED",
+                    params={"name": new_s.name, "code": new_s.supplier_code},
+                    link="/suppliers",
+                )
                 mark_supplier_discovered(
                     supplier_code=new_s.supplier_code,
                     detected_via="System PO Ingestion",
@@ -633,6 +640,13 @@ async def create_supplier(
         preferred_language=payload.preferred_language,
     )
     db.add(new_supp)
+    await db.flush()
+    await notification_service.notify_admins(
+        db,
+        "SUPPLIER_ONBOARDED",
+        params={"name": new_supp.name, "code": new_supp.supplier_code},
+        link=f"/suppliers/{new_supp.id}/edit",
+    )
     await db.commit()
     await db.refresh(new_supp)
 
@@ -1000,6 +1014,12 @@ async def delete_supplier(
     except Exception as ex:
         logger.warning("Could not sync supplier %s state to Keycloak: %s", code, ex)
 
+    await notification_service.notify_admins(
+        db,
+        "SUPPLIER_ARCHIVED",
+        params={"name": supp.name, "code": supp.supplier_code},
+        link="/suppliers",
+    )
     await db.commit()
     return {
         "status": "success",
@@ -1049,6 +1069,12 @@ async def restore_supplier(
     except Exception as ex:
         logger.warning("Could not re-enable supplier %s in Keycloak: %s", code, ex)
 
+    await notification_service.notify_admins(
+        db,
+        "SUPPLIER_RESTORED",
+        params={"name": supp.name, "code": supp.supplier_code},
+        link=f"/suppliers/{supp.id}/edit",
+    )
     await db.commit()
     await db.refresh(supp)
 

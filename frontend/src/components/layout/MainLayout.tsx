@@ -7,18 +7,29 @@ import { Outlet, useLocation } from "react-router-dom";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { Trans, useTranslation } from "react-i18next";
 import Sidebar from "./Sidebar";
+import SidebarResizeHandle, { SIDEBAR_DEFAULT, clampSidebarWidth } from "./SidebarResizeHandle";
 import { useAuthStore } from "@/store/authStore";
 import { useQuery } from "@tanstack/react-query";
 import { supplierApi } from "@/services/supplierApi";
 import { ShieldAlert, Lock, Building2, Menu } from "lucide-react";
 
 const SIDEBAR_PREF_KEY = "ans_sidebar_collapsed";
+const SIDEBAR_WIDTH_KEY = "ans_sidebar_width";
 
 function readCollapsedPref(): boolean {
   try {
     return localStorage.getItem(SIDEBAR_PREF_KEY) === "1";
   } catch {
     return false;
+  }
+}
+
+function readWidthPref(): number {
+  try {
+    const v = Number(localStorage.getItem(SIDEBAR_WIDTH_KEY));
+    return v ? clampSidebarWidth(v) : SIDEBAR_DEFAULT;
+  } catch {
+    return SIDEBAR_DEFAULT;
   }
 }
 
@@ -54,6 +65,21 @@ export default function MainLayout() {
       setRailExpanded((v) => !v);
     } else {
       setMobileOpen((v) => !v);
+    }
+  };
+
+  // Desktop sidebar width (drag handle), remembered per browser.
+  const [sidebarWidth, setSidebarWidth] = useState(readWidthPref);
+  const [dragPreview, setDragPreview] = useState<{ width: number; collapsed: boolean } | null>(null);
+  const commitSidebarSize = ({ width, collapsed }: { width: number; collapsed: boolean }) => {
+    setDragPreview(null);
+    setSidebarWidth(width);
+    setDesktopCollapsed(collapsed);
+    try {
+      localStorage.setItem(SIDEBAR_WIDTH_KEY, String(width));
+      localStorage.setItem(SIDEBAR_PREF_KEY, collapsed ? "1" : "0");
+    } catch {
+      /* storage unavailable */
     }
   };
 
@@ -116,7 +142,24 @@ export default function MainLayout() {
           </div>
         )
       ) : (
-        <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
+        // Desktop: resizable via the drag handle on the right edge. Tablet rail: no handle.
+        <div className="relative flex h-full shrink-0">
+          <Sidebar
+            collapsed={isDesktop && dragPreview ? dragPreview.collapsed : sidebarCollapsed}
+            onToggle={toggleSidebar}
+            width={isDesktop ? (dragPreview?.width ?? sidebarWidth) : SIDEBAR_DEFAULT}
+            resizing={isDesktop && dragPreview !== null}
+          />
+          {isDesktop && (
+            <SidebarResizeHandle
+              width={dragPreview?.width ?? sidebarWidth}
+              collapsed={dragPreview ? dragPreview.collapsed : desktopCollapsed}
+              onPreview={(next) => setDragPreview(next)}
+              onCommit={commitSidebarSize}
+              onDraggingChange={(d) => !d && setDragPreview(null)}
+            />
+          )}
+        </div>
       )}
       <div className="flex flex-1 flex-col overflow-hidden min-w-0">
         {/* Top bar with hamburger — phones only (<768 px) */}
