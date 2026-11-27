@@ -49,9 +49,32 @@
   }
 }
 
+/*
+ * One font system across every screen (same pairing as zone24x7.com):
+ *   Lato            body text, tables, forms, inputs, toasts
+ *   Roboto          headings, page / card titles, buttons, table headers, small uppercase labels
+ *   JetBrains Mono  only PO numbers, material codes, HU / SSCC numbers and XML (font-mono)
+ * :where() keeps these at zero specificity, so a component's own font-mono still wins.
+ */
 body {
-  @apply bg-background text-base text-foreground antialiased;
+  @apply bg-background text-base text-foreground antialiased font-sans;
   font-feature-settings: "rlig" 1, "calt" 1;
+}
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+:where(h1, h2, h3, h4, h5, h6, button, th, legend, .btn, .font-heading) {
+  font-family: theme("fontFamily.heading");
+}
+:where(h1) {
+  font-weight: 700;
+}
+/* Small uppercase labels: table headers, sidebar "MAIN" / "ACCOUNT", plant codes */
+:where(th, .uppercase) {
+  font-family: theme("fontFamily.heading");
+  letter-spacing: 0.06em;
 }
 
 /* Digits line up in tables, number inputs and quantity cells */

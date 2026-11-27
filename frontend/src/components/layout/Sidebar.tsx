@@ -518,7 +518,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         )}
         <div className={cn("mb-2", !collapsed && "px-2")}>
           {!collapsed && (
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+            <span className="font-heading text-xs font-bold uppercase tracking-[0.06em] text-slate-400">
               {t("layout:nav.main")}
             </span>
           )}
@@ -637,7 +637,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         {/* Settings / Profile Section */}
         <div className={cn("mb-2 mt-6", !collapsed && "px-2")}>
           {!collapsed && (
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+            <span className="font-heading text-xs font-bold uppercase tracking-[0.06em] text-slate-400">
               {isAdmin ? "Settings" : t("layout:nav.account")}
             </span>
           )}
