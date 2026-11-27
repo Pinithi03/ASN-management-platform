@@ -32,23 +32,28 @@
     "shipments": "Spedizioni"
   },
   "notifications": {
-    "alerts": "Avvisi",
     "markAllRead": "Segna tutto come letto",
-    "markAsRead": "Segna come letto",
-    "newCount": "{{count}} nuovi",
-    "newPoAssigned": "Nuovo ordine d'acquisto assegnato",
-    "newPoAssignedDesc": "Ordine d'acquisto {{poNumber}} assegnato al tuo account ({{quantity}} unità)",
     "noUnread": "Nessuna notifica non letta",
-    "orderFallback": "Ordine",
-    "recently": "Di recente",
     "title": "Notifiche",
-    "viewMyOrders": "Visualizza i miei ordini"
+    "today": "Oggi",
+    "yesterday": "Ieri",
+    "earlier": "Precedenti",
+    "close": "Chiudi notifiche",
+    "tabUnread": "Non lette",
+    "tabAll": "Tutte",
+    "loadFailed": "Impossibile caricare le notifiche. Riprova tra poco.",
+    "empty": "Nessuna notifica",
+    "unread": "Non letta",
+    "loadMore": "Carica altre",
+    "viewAllPos": "Vedi tutti gli ordini di acquisto",
+    "bellWithUnread": "Notifiche, {{count}} non lette"
   },
   "sidebar": {
     "collapse": "Comprimi barra laterale",
     "expand": "Espandi barra laterale",
     "supplierPortal": "Portale fornitori",
-    "toggleMenu": "Mostra/nascondi menu"
+    "toggleMenu": "Mostra/nascondi menu",
+    "resize": "Ridimensiona la barra laterale"
   },
   "signOut": {
     "confirmMessage": "Vuoi davvero terminare la sessione corrente?",
@@ -57,5 +62,52 @@
   "user": {
     "supplier": "Fornitore",
     "supplierPartner": "Partner fornitore"
+  },
+  "navCounts": {
+    "aria": "{{label}}, {{total}} in totale",
+    "ariaWithNew": "{{label}}, {{total}} in totale, {{fresh}} nuovi",
+    "tooltip": "{{fresh}} nuovi · {{total}} in totale"
+  },
+  "notif": {
+    "PO_RECEIVED": {
+      "title": "Nuovo ordine di acquisto",
+      "desc": "L'OdA {{po}} è stato assegnato a te."
+    },
+    "PO_UPDATED": {
+      "title": "Ordine di acquisto aggiornato",
+      "desc": "L'OdA {{po}} è stato aggiornato (versione {{version}})."
+    },
+    "SHIPMENT_CREATED": {
+      "title": "Spedizione creata",
+      "desc": "La spedizione {{shipment}} con {{cartons}} colli è stata creata."
+    },
+    "ASN_DISPATCHED": {
+      "title": "ASN inviato a IUNGO",
+      "desc": "L'ASN della spedizione {{shipment}} è stato inviato a {{recipient}}."
+    },
+    "ASN_DISPATCH_FAILED": {
+      "title": "Impossibile inviare l'ASN",
+      "desc": "Impossibile inviare l'ASN della spedizione {{shipment}} a {{recipient}}. Apri la spedizione e invialo di nuovo."
+    },
+    "SUPPLIER_ONBOARDED": {
+      "title": "Fornitore registrato",
+      "desc": "{{name}} ({{code}}) è stato registrato."
+    },
+    "SUPPLIER_AUTO_DETECTED": {
+      "title": "Nuovo fornitore rilevato",
+      "desc": "{{name}} ({{code}}) è stato trovato in un'email di OdA in arrivo e va verificato."
+    },
+    "SUPPLIER_ARCHIVED": {
+      "title": "Fornitore archiviato",
+      "desc": "{{name}} ({{code}}) è stato archiviato e non può più accedere."
+    },
+    "SUPPLIER_RESTORED": {
+      "title": "Fornitore ripristinato",
+      "desc": "{{name}} ({{code}}) è stato ripristinato."
+    },
+    "EMAIL_PARSE_ERROR": {
+      "title": "Email da verificare",
+      "desc": "Nessun ordine di acquisto letto da \"{{subject}}\"."
+    }
   }
 }

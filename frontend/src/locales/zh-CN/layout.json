@@ -32,23 +32,28 @@
     "shipments": "发运"
   },
   "notifications": {
-    "alerts": "提醒",
     "markAllRead": "全部标为已读",
-    "markAsRead": "标为已读",
-    "newCount": "{{count}} 条新消息",
-    "newPoAssigned": "已分配新的采购订单",
-    "newPoAssignedDesc": "采购订单 {{poNumber}} 已分配到您的账户（{{quantity}} 件）",
     "noUnread": "没有未读通知",
-    "orderFallback": "订单",
-    "recently": "最近",
     "title": "通知",
-    "viewMyOrders": "查看我的订单"
+    "today": "今天",
+    "yesterday": "昨天",
+    "earlier": "更早",
+    "close": "关闭通知",
+    "tabUnread": "未读",
+    "tabAll": "全部",
+    "loadFailed": "无法加载通知，请稍后重试。",
+    "empty": "暂无通知",
+    "unread": "未读",
+    "loadMore": "加载更多",
+    "viewAllPos": "查看所有采购订单",
+    "bellWithUnread": "通知，{{count}} 条未读"
   },
   "sidebar": {
     "collapse": "收起侧边栏",
     "expand": "展开侧边栏",
     "supplierPortal": "供应商门户",
-    "toggleMenu": "切换菜单"
+    "toggleMenu": "切换菜单",
+    "resize": "调整侧边栏宽度"
   },
   "signOut": {
     "confirmMessage": "确定要结束当前会话吗？",
@@ -57,5 +62,52 @@
   "user": {
     "supplier": "供应商",
     "supplierPartner": "供应商合作伙伴"
+  },
+  "navCounts": {
+    "aria": "{{label}}，共 {{total}}",
+    "ariaWithNew": "{{label}}，共 {{total}}，{{fresh}} 个新",
+    "tooltip": "{{fresh}} 个新 · 共 {{total}}"
+  },
+  "notif": {
+    "PO_RECEIVED": {
+      "title": "新采购订单",
+      "desc": "采购订单 {{po}} 已分配给您。"
+    },
+    "PO_UPDATED": {
+      "title": "采购订单已更新",
+      "desc": "采购订单 {{po}} 已更新（版本 {{version}}）。"
+    },
+    "SHIPMENT_CREATED": {
+      "title": "已创建发运",
+      "desc": "已创建发运 {{shipment}}，共 {{cartons}} 箱。"
+    },
+    "ASN_DISPATCHED": {
+      "title": "ASN 已发送至 IUNGO",
+      "desc": "发运 {{shipment}} 的 ASN 已发送至 {{recipient}}。"
+    },
+    "ASN_DISPATCH_FAILED": {
+      "title": "ASN 发送失败",
+      "desc": "发运 {{shipment}} 的 ASN 无法发送至 {{recipient}}。请打开该发运并重新发送。"
+    },
+    "SUPPLIER_ONBOARDED": {
+      "title": "已添加供应商",
+      "desc": "{{name}}（{{code}}）已添加。"
+    },
+    "SUPPLIER_AUTO_DETECTED": {
+      "title": "检测到新供应商",
+      "desc": "在收到的采购订单邮件中发现 {{name}}（{{code}}），需要审核。"
+    },
+    "SUPPLIER_ARCHIVED": {
+      "title": "供应商已归档",
+      "desc": "{{name}}（{{code}}）已归档，无法再登录。"
+    },
+    "SUPPLIER_RESTORED": {
+      "title": "供应商已恢复",
+      "desc": "{{name}}（{{code}}）已恢复。"
+    },
+    "EMAIL_PARSE_ERROR": {
+      "title": "邮件需要审核",
+      "desc": "无法从“{{subject}}”中读取采购订单。"
+    }
   }
 }
