@@ -18,6 +18,7 @@ import {
 import { emailApi } from "@/services/emailApi";
 import { useAuthStore } from "@/store/authStore";
 import { formatDate, formatNumber } from "@/i18n/format";
+import PageHeader from "@/components/ui/PageHeader";
 
 export default function EmailInbox() {
   const { t } = useTranslation(["emails", "layout"]);
@@ -106,19 +107,16 @@ export default function EmailInbox() {
         });
 
   return (
-    <div className="p-6 space-y-5 bg-slate-50 min-h-screen text-slate-900 font-sans">
+    <div className="p-4 sm:p-6 space-y-5 bg-slate-50 min-h-screen text-slate-900 font-sans">
       {/* Header with Fetch & Sync Emails Button */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <h1 className="text-xl font-semibold text-slate-900">
-            {isAdmin ? "Email Inbox" : t("layout:nav.myEmails")}
-          </h1>
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-slate-100 text-slate-600 text-xs font-medium rounded-full border border-slate-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            {t("emails:inbox.autoSync")}
-          </span>
-        </div>
-
+      <PageHeader
+        title={isAdmin ? "Email Inbox" : t("layout:nav.myEmails")}
+        badge={{
+          label: t("emails:inbox.autoSync"),
+          icon: <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />,
+          tone: "success",
+        }}
+        actions={
         <button
           onClick={handleSyncMailbox}
           disabled={isSyncing}
@@ -131,7 +129,8 @@ export default function EmailInbox() {
           <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin" : ""}`} />
           {isSyncing ? t("emails:inbox.syncing") : t("emails:inbox.sync")}
         </button>
-      </div>
+        }
+      />
 
       {syncMessage && (
         <div

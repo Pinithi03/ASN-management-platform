@@ -24,9 +24,10 @@ import {
 } from "@/utils/draftStorage";
 import { cn } from "@/utils/cn";
 import { getErrorMessage } from "@/services/apiError";
+import PageHeader from "@/components/ui/PageHeader";
 
 export default function Profile() {
-  const { t } = useTranslation(["profile", "common"]);
+  const { t } = useTranslation(["profile", "common", "layout"]);
   const user = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
 
@@ -234,7 +235,9 @@ export default function Profile() {
   };
 
   return (
-    <div className="p-6 space-y-5 max-w-7xl mx-auto animate-in fade-in duration-150">
+    <div className="p-4 sm:p-6 space-y-5 max-w-7xl mx-auto animate-in fade-in duration-150">
+      <PageHeader title={t("layout:nav.profile")} />
+
       {/* ─── 1. TOP PROFILE HEADER & IDENTITY HERO ─── */}
       <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-2xs space-y-3">
         {/* Alerts */}
@@ -291,7 +294,7 @@ export default function Profile() {
 
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-lg font-bold text-slate-900 truncate">{matchedSupplier.name}</h1>
+                <h2 className="text-lg font-bold text-slate-900 truncate">{matchedSupplier.name}</h2>
                 <span className="font-mono text-xs font-bold px-2 py-0.5 bg-slate-100 text-slate-800 rounded border border-slate-200">
                   {matchedSupplier.supplier_code}
                 </span>

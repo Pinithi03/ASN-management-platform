@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Trans, useTranslation } from "react-i18next";
-import { AlertTriangle, Box, Check, Printer } from "lucide-react";
+import { AlertTriangle, Check, Printer } from "lucide-react";
 import { shipmentService } from "@/services/shipmentService";
 import { getErrorMessage } from "@/services/apiError";
 import { formatDate, formatNumber } from "@/i18n/format";
@@ -17,6 +17,7 @@ import { cn } from "@/utils/cn";
 import { statusBorderClass } from "@/utils/statusStyles";
 import StatusBadge from "@/components/ui/StatusBadge";
 import XmlPanel from "@/components/shipments/XmlPanel";
+import PageHeader from "@/components/ui/PageHeader";
 import {
   LabelPrintModal,
   downloadShipmentLabels,
@@ -106,18 +107,14 @@ export default function ShipmentDetail() {
   const cartons: any[] = data.cartons || [];
 
   return (
-    <div className="mx-auto w-full max-w-screen-2xl space-y-4 p-4 sm:p-6">
+    <div className="mx-auto w-full max-w-screen-2xl space-y-5 p-4 sm:p-6">
       <section className={cn("rounded-lg border border-slate-200 bg-white p-5", statusBorderClass(data.status))}>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="space-y-1.5">
-            <div className="flex flex-wrap items-center gap-2">
-              <Box className="h-5 w-5 text-slate-400" aria-hidden="true" />
-              <h1 className="text-2xl font-semibold text-slate-900">
-                {t("shipments:detail.title", { number: data.shipment_number })}
-              </h1>
-              <StatusBadge status={data.status} label={shipmentStatusLabel(data.status)} />
-            </div>
-            <p className="text-sm text-slate-600">
+          <PageHeader
+            title={t("shipments:detail.title", { number: data.shipment_number })}
+            badge={<StatusBadge status={data.status} label={shipmentStatusLabel(data.status)} />}
+            description={
+            <>
               <Trans
                 t={t}
                 i18nKey="shipments:detail.destination"
@@ -135,8 +132,9 @@ export default function ShipmentDetail() {
                   />
                 </>
               )}
-            </p>
-          </div>
+            </>
+            }
+          />
           <button type="button" onClick={() => setLabelsOpen(true)} className="btn btn-primary">
             <Printer className="h-4 w-4" aria-hidden="true" />
             {t("shipments:detail.printLabels")}

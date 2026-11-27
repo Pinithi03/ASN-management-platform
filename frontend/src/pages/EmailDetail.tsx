@@ -23,6 +23,7 @@ import { emailApi } from "@/services/emailApi";
 import type { EmailAttachment, ParsedData } from "@/types/email";
 import type { EmailsResources } from "@/i18n/resources";
 import { formatDate as formatLocalDate, formatNumber } from "@/i18n/format";
+import PageHeader from "@/components/ui/PageHeader";
 
 type ParsedLabelKey = keyof EmailsResources["parsed"];
 
@@ -589,22 +590,16 @@ export default function EmailDetailPage() {
     <div className="min-h-full">
       {backBar}
 
-      <div className="p-6 space-y-6">
+      <div className="p-4 sm:p-6 space-y-5">
         {/* Header */}
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0 space-y-2">
-            <h1 className="text-2xl font-semibold text-gray-900 break-words">
-              {email.subject || t("detail.noSubject")}
-            </h1>
-            <div className="flex flex-wrap items-center gap-2">
-              {email.email_type && (
-                <span className="px-2 py-0.5 text-xs font-medium bg-blue-50 text-blue-700 rounded">
-                  {email.email_type}
-                </span>
-              )}
-            </div>
-          </div>
+          <PageHeader
+            className="min-w-0"
+            wrapTitle
+            title={email.subject || t("detail.noSubject")}
+            badge={email.email_type ? { label: email.email_type, tone: "neutral" } : undefined}
+          />
 
           <div className="flex flex-wrap items-center gap-2">
             {original && (

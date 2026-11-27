@@ -27,6 +27,7 @@ import {
   ExcelPackingDraft,
 } from "@/utils/draftStorage";
 import { formatDraftAge, formatNumber } from "@/i18n/format";
+import PageHeader from "@/components/ui/PageHeader";
 
 export default function Drafts() {
   const { t } = useTranslation("drafts");
@@ -91,22 +92,14 @@ export default function Drafts() {
   };
 
   return (
-    <div className="h-full flex flex-col overflow-hidden px-4 pt-4 pb-0 sm:px-6 sm:pt-5 sm:pb-0 gap-3">
+    <div className="h-full flex flex-col overflow-hidden px-4 pt-4 pb-0 sm:px-6 sm:pt-6 sm:pb-0 gap-3">
       {/* ─── HEADER ────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-xl font-semibold text-slate-900">{t("header.title")}</h1>
-            {totalCount > 0 && (
-              <span className="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-slate-100 text-slate-700 border border-slate-200">
-                {t("header.active", { count: totalCount })}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {totalCount > 0 && (
-          <div className="flex items-center gap-2">
+      <PageHeader
+        className="mb-2"
+        title={t("header.title")}
+        badge={totalCount > 0 ? { label: t("header.active", { count: totalCount }), tone: "neutral" } : undefined}
+        actions={
+          totalCount > 0 ? (
             <button
               type="button"
               onClick={handleClearAll}
@@ -114,9 +107,9 @@ export default function Drafts() {
             >
               <Trash2 className="w-3.5 h-3.5" /> {t("actions.discardAll")}
             </button>
-          </div>
-        )}
-      </div>
+          ) : undefined
+        }
+      />
 
       {/* ─── TABS FILTER ───────────────────────────────────────── */}
       <div className="flex items-center gap-1 border-b border-slate-200">
