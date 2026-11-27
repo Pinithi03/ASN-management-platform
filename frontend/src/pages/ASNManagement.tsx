@@ -11,6 +11,7 @@ import { supplierApi } from "@/services/supplierApi";
 import { shipmentService } from "@/services/shipmentService";
 import { cn } from "@/utils/cn";
 import type { ASNRecord } from "@/types";
+import PageHeader from "@/components/ui/PageHeader";
 
 const STATUS_OPTIONS = ["ALL","DRAFT","VALIDATED","XML_SENT","SUBMITTED","RECEIVED","ACCEPTED","REJECTED","FAILED","COMPLETED","CANCELLED"] as const;
 
@@ -88,11 +89,11 @@ export default function ASNManagement(){
   });
 
   return(
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">{isAdmin?"ASN Review":"ASN Management"}</h1>
-        <p className="mt-1 text-sm text-gray-500">{isAdmin?`${base.length} advance ship notices to review.`:`${base.length} ASNs created by you.`}</p>
-      </div>
+    <div className="p-4 sm:p-6 space-y-5">
+      <PageHeader
+        title={isAdmin?"ASN Review":"ASN Management"}
+        description={isAdmin?`${base.length} advance ship notices to review.`:`${base.length} ASNs created by you.`}
+      />
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative">

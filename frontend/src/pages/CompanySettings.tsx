@@ -3,16 +3,14 @@
  */
 
 import { mockCompanies } from "@/data/mockData";
+import PageHeader from "@/components/ui/PageHeader";
 
 export default function CompanySettings(){
   const company = mockCompanies[0];
 
   return(
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Company Settings</h1>
-        <p className="mt-1 text-sm text-gray-500">Manage your plant configuration and email settings.</p>
-      </div>
+    <div className="p-4 sm:p-6 space-y-5">
+      <PageHeader title="Company Settings" description="Manage your plant configuration and email settings." />
 
       <div className="rounded-xl border border-gray-200 bg-white p-6">
         <h2 className="mb-4 text-sm font-semibold text-gray-900">Plant Information</h2>

@@ -33,6 +33,7 @@ import {
 } from "@/utils/supplierFieldUpdates";
 import { compressAndEncodeImage } from "@/utils/image";
 import { usePageSize } from "@/hooks/usePageSize";
+import PageHeader from "@/components/ui/PageHeader";
 
 export interface SupplierItem {
   id: string;
@@ -312,19 +313,16 @@ export default function Suppliers() {
 
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-950">
-            Supplier Onboarding & Management
-          </h1>
-        </div>
-        <a href="/suppliers/new" target="_blank" rel="noopener" className="btn btn-primary">
-          <Plus className="h-4 w-4" aria-hidden="true" />
-          <span>Onboard new supplier</span>
-        </a>
-      </div>
+    <div className="p-4 sm:p-6 space-y-5">
+      <PageHeader
+        title="Supplier Onboarding & Management"
+        actions={
+          <a href="/suppliers/new" target="_blank" rel="noopener" className="btn btn-primary">
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            <span>Onboard new supplier</span>
+          </a>
+        }
+      />
 
       {/* Toast Alert */}
       {toastMessage && (

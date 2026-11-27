@@ -21,6 +21,7 @@ import { broadcastInvalidate } from "@/lib/crossTab";
 import { compressAndEncodeImage } from "@/utils/image";
 import { cn } from "@/utils/cn";
 import type { SupplierItem } from "@/pages/Suppliers";
+import PageHeader from "@/components/ui/PageHeader";
 
 const schema = z.object({
   name: z.string().trim().min(1, "Supplier name is required.").max(200, "Use at most 200 characters."),
@@ -227,14 +228,16 @@ export default function SupplierForm() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-4 p-4 sm:p-6">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold text-slate-900">{isEdit ? "Edit supplier" : "Onboard new supplier"}</h1>
-        <button type="button" onClick={() => navigate("/suppliers")} className="btn btn-secondary">
-          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-          Supplier directory
-        </button>
-      </div>
+    <div className="mx-auto w-full max-w-3xl space-y-5 p-4 sm:p-6">
+      <PageHeader
+        title={isEdit ? "Edit supplier" : "Onboard new supplier"}
+        actions={
+          <button type="button" onClick={() => navigate("/suppliers")} className="btn btn-secondary">
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            Supplier directory
+          </button>
+        }
+      />
 
       {savedMessage && (
         <div role="status" className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
