@@ -24,9 +24,9 @@ export type SyncTopic =
 /** Which query keys (first element) belong to each topic. */
 const TOPIC_MATCHERS: Record<SyncTopic, RegExp> = {
   purchaseOrders:
-    /^(purchaseOrder|purchaseOrders|purchaseOrdersOverviewAll|purchaseOrderDetail|purchaseOrderLines|poLine|po|completedOrderHistory|supplierPOsList|adminPOsList|navCountPurchaseOrders)/i,
-  shipments: /shipment|asns/i, // also matches navCountShipments
-  kpi: /stats|kpi|POsList|Shipments$/i,
+    /^(purchaseOrder|purchaseOrders|purchaseOrdersOverviewAll|purchaseOrderDetail|purchaseOrderLines|poLine|po|completedOrderHistory|navCountPurchaseOrders|dashboardOverview)/i,
+  shipments: /shipment|asns|^dashboardOverview/i, // also matches navCountShipments
+  kpi: /stats|kpi|^dashboardOverview/i,
   drafts: /draft/i,
   suppliers: /supplier/i,
   users: /^users/i,

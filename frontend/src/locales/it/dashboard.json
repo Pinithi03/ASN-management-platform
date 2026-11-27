@@ -1,106 +1,105 @@
 {
+  "header": {
+    "title": "Panoramica"
+  },
+  "loading": "Caricamento della panoramica…",
+  "loadFailed": "Impossibile caricare la panoramica. Nuovo tentativo automatico a breve.",
+  "kpi": {
+    "open": {
+      "label": "Ordini aperti",
+      "value_one": "{{count}} OdA",
+      "value_other": "{{count}} OdA",
+      "helper": "{{count}} spediti parzialmente"
+    },
+    "overdue": {
+      "label": "In ritardo",
+      "value_one": "{{count}} ordine",
+      "value_other": "{{count}} ordini",
+      "helper": "La data di consegna è passata"
+    },
+    "due7": {
+      "label": "In scadenza entro 7 giorni",
+      "value_one": "{{count}} ordine",
+      "value_other": "{{count}} ordini",
+      "helper": "{{count}} entro 3 giorni"
+    },
+    "dispatched": {
+      "label": "Spedito questo mese",
+      "value": "{{pieces}} pz",
+      "helper": "{{cartons}} colli · {{shipments}} spedizioni",
+      "trendUp": "↑ {{percent}}% rispetto al mese scorso",
+      "trendDown": "↓ {{percent}}% rispetto al mese scorso"
+    }
+  },
+  "monthly": {
+    "title": "Spedizioni mensili",
+    "seriesPieces": "Pezzi",
+    "tooltipCartons": "{{cartons}} colli · {{shipments}} spedizioni",
+    "thisMonth": "Questo mese: <strong>{{value}} pz</strong>",
+    "empty": "Nessuna spedizione ancora"
+  },
+  "status": {
+    "title": "Stato degli ordini",
+    "open": "Aperti",
+    "partiallyShipped": "Spediti parzialmente",
+    "shipped": "Spediti",
+    "completed": "Completati",
+    "cancelled": "Annullati",
+    "other": "Altro",
+    "centre": "OdA",
+    "updatedByCustomer": "{{count}} aggiornati dal cliente",
+    "empty": "Nessun ordine ancora"
+  },
   "deadlines": {
-    "bucketCritical": "Critici (≤3 gg)",
-    "bucketDue7": "Entro 7 gg",
-    "bucketOnTrack": "In linea (>7 gg)",
-    "bucketOverdue": "In ritardo",
-    "seriesOrders": "Numero ordini",
-    "subtitle": "Pianificazione degli ordini da imballare e spedire per evitare penali dello stabilimento",
-    "targetDates": "Date di spedizione previste",
-    "tileDue3": "Scadenza ≤ 3 giorni",
-    "tileDue7": "Scadenza entro 7 giorni",
-    "tileOnTrack": "In linea",
-    "tileOverdue": "In ritardo",
-    "title": "Prossime scadenze di consegna"
+    "title": "Scadenze di consegna",
+    "overdue": "In ritardo",
+    "due3": "≤ 3 giorni",
+    "due7": "4–7 giorni",
+    "onTrack": "In linea",
+    "seriesOrders": "Ordini",
+    "noDate": "{{count}} senza data di consegna",
+    "empty": "Nessun ordine aperto"
+  },
+  "plants": {
+    "title": "Destinazioni di produzione",
+    "open": "{{count}} aperti",
+    "dispatched": "{{pieces}} pz ({{cartons}} colli)",
+    "noOrders": "Nessun ordine ancora",
+    "other": "Altro / sconosciuto",
+    "openTitle": "Apri gli ordini di acquisto di {{plant}}"
   },
   "dueSoon": {
-    "allOnSchedule": "Tutti gli ordini assegnati sono nei tempi",
-    "daysLeft": "{{days}} gg rimanenti",
-    "dueToday": "Scadenza oggi",
-    "dueTomorrow": "Scadenza domani",
+    "title": "Consegne in scadenza",
+    "empty": "Nessun ordine aperto",
+    "daysLeft": "{{days}} gg rimasti",
+    "dueToday": "Scade oggi",
+    "dueTomorrow": "Scade domani",
     "overdue": "In ritardo ({{days}} gg)",
     "packNow": "Imballa ora",
     "partial": "Parziale",
-    "target": "Prevista: {{date}} · Quantità:",
-    "title": "Consegne in scadenza",
-    "unnamedPo": "Ordine senza nome"
+    "target": "Consegna: {{date}} · Quantità:",
+    "unnamedPo": "OdA senza numero"
   },
-  "fallback": {
-    "apparelItem": "Articolo di abbigliamento",
-    "noDate": "Nessuna data"
+  "recent": {
+    "title": "Spedizioni recenti",
+    "none": "Nessuna spedizione ancora",
+    "line": "{{plant}} · {{cartons}} colli · {{pieces}} pz"
   },
-  "header": {
-    "orderHistory": "Storico ordini ({{count}})",
-    "subtitle": "Volume di spedizioni in tempo reale, preparazione degli ordini attivi e metriche di evasione per stabilimento",
-    "title": "Panoramica"
-  },
-  "kpi": {
-    "dispatchedVolume": {
-      "badge": "Spedito",
-      "label": "Volume spedito",
-      "subtitle": "{{cartons}} cartoni · {{dispatches}} spedizioni",
-      "value": "{{pieces}} pz"
-    },
-    "dueSoon": {
-      "badgeApproaching": "In avvicinamento",
-      "badgeAttention": "Attenzione",
-      "label": "Consegne in scadenza",
-      "subtitle": "{{urgent}} urgenti (≤3 gg)",
-      "subtitleWithOverdue": "{{overdue}} in ritardo · {{urgent}} urgenti (≤3 gg)",
-      "value": "{{count}} ordini"
-    },
-    "partial": {
-      "badge": "{{percent}}% suddiviso",
-      "label": "Evasione parziale",
-      "subtitle": "{{percent}}% completato in totale",
-      "value_one": "{{count}} ordine",
-      "value_many": "{{count}} ordini",
-      "value_other": "{{count}} ordini"
-    },
-    "unprocessed": {
-      "badge": "Aperti",
-      "label": "Ordini da elaborare",
-      "subtitle": "{{percent}}% degli ordini assegnati",
-      "value_one": "{{count}} ordine",
-      "value_many": "{{count}} ordini",
-      "value_other": "{{count}} ordini"
-    }
-  },
-  "lifecycle": {
-    "assignedPos": "Ordini assegnati",
-    "cancelled": "Annullati",
-    "completedBadge": "{{percent}}% completati",
-    "completedShipped": "Completati e spediti",
-    "partial": "Evasione parziale",
-    "subtitle": "I miei ordini assegnati per stato di imballaggio",
-    "title": "Stato di evasione degli ordini",
-    "unprocessed": "Da elaborare (nuovi)",
-    "updated": "Aggiornati / In revisione"
+  "suppliers": {
+    "title": "Prestazioni dei fornitori",
+    "all": "Tutti i fornitori",
+    "open": "{{count}} aperti",
+    "pieces": "{{pieces}} pz",
+    "detail": "{{cartons}} colli · {{shipments}} spedizioni",
+    "pending": "Nessuna spedizione ancora",
+    "empty": "Nessuna attività dei fornitori"
   },
   "links": {
     "allOrders": "Tutti gli ordini",
     "allShipments": "Tutte le spedizioni"
   },
-  "loading": "Caricamento analisi spedizioni fornitore...",
-  "monthly": {
-    "legendCartons": "Cartoni",
-    "legendPieces": "Pezzi",
-    "seriesCartons": "Cartoni",
-    "seriesPieces": "Pezzi spediti",
-    "thisMonth": "Questo mese: <strong>{{value}} pz</strong>",
-    "title": "Volume di spedizioni mensile"
-  },
-  "plants": {
-    "assigned": "Stabilimenti assegnati",
-    "cartons": "({{count}} cartoni)",
-    "footer": "XML DTD standard ed etichette SSCC a 20 cifre",
-    "pieces": "{{value}} pz",
-    "title": "Destinazioni di produzione",
-    "validated": "Stabilimento verificato"
-  },
-  "recent": {
-    "none": "Nessuna spedizione ancora inviata",
-    "plantLine": "Stabilimento: {{plant}} · {{cartons}} cartoni · {{pieces}} pz",
-    "title": "Spedizioni recenti"
+  "fallback": {
+    "apparelItem": "Articolo di abbigliamento",
+    "noDate": "Nessuna data"
   }
 }

@@ -5,8 +5,7 @@
     "tryAgain": "Try again",
     "back": "Back",
     "save": "Save",
-    "saving": "Saving…",
-    "refresh": "Refresh"
+    "saving": "Saving…"
   },
   "poStatus": {
     "ACTIVE": "Active",
@@ -19,10 +18,7 @@
     "SHIPMENT_RECEIVED": "Shipment received"
   },
   "time": {
-    "justNow": "just now",
-    "updatedJustNow": "Updated just now",
-    "updatedSecondsAgo": "Updated {{count}} s ago",
-    "updatedMinutesAgo": "Updated {{count}} min ago"
+    "justNow": "just now"
   },
   "validation": {
     "required": "This field is required.",
