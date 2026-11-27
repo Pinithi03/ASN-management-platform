@@ -5,8 +5,7 @@
     "tryAgain": "Riprova",
     "back": "Indietro",
     "save": "Salva",
-    "saving": "Salvataggio…",
-    "refresh": "Aggiorna"
+    "saving": "Salvataggio…"
   },
   "poStatus": {
     "ACTIVE": "Attivo",
@@ -19,10 +18,7 @@
     "SHIPMENT_RECEIVED": "Spedizione ricevuta"
   },
   "time": {
-    "justNow": "proprio ora",
-    "updatedJustNow": "Aggiornato ora",
-    "updatedSecondsAgo": "Aggiornato {{count}} s fa",
-    "updatedMinutesAgo": "Aggiornato {{count}} min fa"
+    "justNow": "proprio ora"
   },
   "validation": {
     "required": "Questo campo è obbligatorio.",

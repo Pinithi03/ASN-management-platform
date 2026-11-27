@@ -5,8 +5,7 @@
     "tryAgain": "重试",
     "back": "返回",
     "save": "保存",
-    "saving": "正在保存…",
-    "refresh": "刷新"
+    "saving": "正在保存…"
   },
   "poStatus": {
     "ACTIVE": "活动",
@@ -19,10 +18,7 @@
     "SHIPMENT_RECEIVED": "已收货"
   },
   "time": {
-    "justNow": "刚刚",
-    "updatedJustNow": "刚刚更新",
-    "updatedSecondsAgo": "{{count}} 秒前更新",
-    "updatedMinutesAgo": "{{count}} 分钟前更新"
+    "justNow": "刚刚"
   },
   "validation": {
     "required": "此字段为必填项。",

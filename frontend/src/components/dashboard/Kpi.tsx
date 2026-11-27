@@ -1,11 +1,9 @@
 /**
  * KPI building blocks shared by the supplier Overview and the admin dashboard:
- * live-query defaults, count-up number, card, skeleton and "updated" label.
+ * live-query defaults, count-up number, card and skeleton.
  */
 
 import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
-import { useTranslation } from "react-i18next";
-import { RefreshCw } from "lucide-react";
 import { cn } from "@/utils/cn";
 
 /**
@@ -62,13 +60,14 @@ interface KpiCardProps {
   format: (n: number) => string;
   icon: ComponentType<{ className?: string }>;
   iconClassName?: string;
+  /** One short helper line under the value. */
   subtitle?: ReactNode;
-  badge?: ReactNode;
-  badgeClassName?: string;
+  /** Colour for the value, e.g. red when something needs attention. */
+  valueClassName?: string;
   onClick?: () => void;
 }
 
-export function KpiCard({ label, value, format, icon: Icon, iconClassName, subtitle, badge, badgeClassName, onClick }: KpiCardProps) {
+export function KpiCard({ label, value, format, icon: Icon, iconClassName, subtitle, valueClassName, onClick }: KpiCardProps) {
   const shown = useCountUp(value);
   const [changed, setChanged] = useState(false);
   const prev = useRef(value);
@@ -100,17 +99,12 @@ export function KpiCard({ label, value, format, icon: Icon, iconClassName, subti
           <Icon className="h-4 w-4" aria-hidden="true" />
         </span>
       </div>
-      <div className="mb-2 text-2xl font-semibold tabular-nums text-slate-900" aria-live="polite">
+      <div className={cn("mb-2 text-2xl font-semibold tabular-nums text-slate-900", valueClassName)} aria-live="polite">
         {format(Math.round(shown))}
       </div>
-      {(subtitle || badge) && (
-        <div className="mt-auto flex items-center justify-between gap-2 border-t border-slate-100 pt-2 text-sm">
-          <span className="truncate text-slate-500">{subtitle}</span>
-          {badge && (
-            <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset", badgeClassName || "bg-slate-100 text-slate-700 ring-slate-200")}>
-              {badge}
-            </span>
-          )}
+      {subtitle && (
+        <div className="mt-auto border-t border-slate-100 pt-2 text-sm">
+          <span className="block truncate text-slate-500">{subtitle}</span>
         </div>
       )}
     </Wrapper>
@@ -133,46 +127,4 @@ export function KpiSkeleton() {
 /** 4 per row on wide screens, 2 on laptop / tablet, 1 on narrow screens. */
 export function KpiGrid({ children }: { children: ReactNode }) {
   return <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">{children}</div>;
-}
-
-/** Quiet "Updated 25 s ago" label plus a refresh button. */
-export function KpiUpdatedBar({
-  updatedAt,
-  onRefresh,
-  refreshing,
-}: {
-  updatedAt: number;
-  onRefresh: () => void;
-  refreshing: boolean;
-}) {
-  const { t } = useTranslation("common");
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 5_000);
-    return () => clearInterval(id);
-  }, []);
-
-  const secs = updatedAt ? Math.max(0, Math.round((now - updatedAt) / 1000)) : 0;
-  const label =
-    !updatedAt || secs < 10
-      ? t("time.updatedJustNow")
-      : secs < 60
-      ? t("time.updatedSecondsAgo", { count: secs })
-      : t("time.updatedMinutesAgo", { count: Math.floor(secs / 60) });
-
-  return (
-    <div className="flex items-center gap-2 text-sm text-slate-500">
-      <span aria-live="off">{label}</span>
-      <button
-        type="button"
-        onClick={onRefresh}
-        disabled={refreshing}
-        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
-        title={t("actions.refresh")}
-        aria-label={t("actions.refresh")}
-      >
-        <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin motion-reduce:animate-none")} aria-hidden="true" />
-      </button>
-    </div>
-  );
 }
