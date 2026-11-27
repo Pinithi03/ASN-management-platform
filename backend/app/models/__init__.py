@@ -36,6 +36,7 @@ from app.models.packing_slip import PackingSlip
 from app.models.asn import ASNRecord
 from app.models.parser_template import ParserTemplate
 from app.models.hu_sequence import HUSequence
+from app.models.notification import Notification, NotificationRead
 
 __all__ = [
     # Base
@@ -71,4 +72,6 @@ __all__ = [
     "ASNRecord",
     "ParserTemplate",
     "HUSequence",
+    "Notification",
+    "NotificationRead",
 ]

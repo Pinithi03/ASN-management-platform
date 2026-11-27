@@ -25,6 +25,7 @@ from app.models.po_history import POHistory
 from app.models.parsed_data import ParsedData
 from app.models.email_attachment import EmailAttachment
 from app.models.supplier import Supplier
+from app.services import notification_service
 from app.models.po_history import POHistory
 from app.email.mime_decoder import DecodedEmail
 from app.email.classifier import ClassificationResult
@@ -420,6 +421,12 @@ async def save_purchase_order(
             db.add(new_supp)
             await db.flush()
             resolved_supplier_id = new_supp.id
+            await notification_service.notify_admins(
+                db,
+                "SUPPLIER_AUTO_DETECTED",
+                params={"name": new_supp.name, "code": new_supp.supplier_code},
+                link="/suppliers",
+            )
 
     # Filter out any non-positive line items
     active_line_items = [li for li in parsed_po.line_items if getattr(li, "quantity", 0) > 0]
@@ -484,6 +491,8 @@ async def save_purchase_order(
     result = await db.execute(stmt)
     existing = result.scalar_one_or_none()
 
+    is_new_po = not existing
+    po_changed = False
     if existing:
         old_version = existing.version or 1
         old_quantity = existing.quantity
@@ -539,6 +548,7 @@ async def save_purchase_order(
 
         # Record in po_history only if there's a genuine version bump or data update
         if new_version > old_version or has_data_changed:
+            po_changed = True
             old_items = existing.extra_data.get("items", []) if existing.extra_data else []
             changed_fields = {
                 "version": {"old": old_version, "new": new_version},
@@ -589,6 +599,17 @@ async def save_purchase_order(
         logger.info("Created PO: %s (v%d)", po.po_number, po.version)
 
     await db.flush()
+
+    # Supplier: new PO received / PO updated (never breaks ingestion)
+    if po.supplier_id and (is_new_po or po_changed):
+        await notification_service.notify_supplier(
+            db,
+            po.supplier_id,
+            "PO_RECEIVED" if is_new_po else "PO_UPDATED",
+            params={"po": po.po_number, "version": po.version or 1},
+            link=f"/purchase-orders/{po.id}",
+        )
+
     try:
         from app.services.po_service import update_po_statuses
         await update_po_statuses(db, [po.po_number])
@@ -626,6 +647,13 @@ async def process_and_save(
         email_record = await save_email_record(
             db, decoded, classification, company_id, status=status, error_message=err_msg
         )
+        if status == "ERROR":
+            await notification_service.notify_admins(
+                db,
+                "EMAIL_PARSE_ERROR",
+                params={"subject": (decoded.subject or "")[:200]},
+                link=f"/emails/{email_record.id}",
+            )
 
         # 2. Save attachments to MinIO + DB
         attachment_ids = await save_attachments(

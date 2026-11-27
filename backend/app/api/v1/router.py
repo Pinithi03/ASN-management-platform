@@ -15,6 +15,7 @@ from app.api.v1.endpoints import (
     auth,
     emails,
     health,
+    notifications,
     purchase_orders,
     shipments,
     suppliers,
@@ -72,5 +73,11 @@ api_router.include_router(
     suppliers.router,
     prefix="/suppliers",
     tags=["Suppliers"],
+    dependencies=_auth_dep,
+)
+api_router.include_router(
+    notifications.router,
+    prefix="/notifications",
+    tags=["Notifications"],
     dependencies=_auth_dep,
 )

@@ -37,6 +37,7 @@ from app.services.asn_xml_generator_service import (
     validate_asn_xml,
 )
 from app.services.email_sender import send_asn_dispatch_email
+from app.services import notification_service
 
 logger = logging.getLogger(__name__)
 
@@ -453,6 +454,21 @@ async def send_asn_xml(
         )
     except Exception as em_err:
         logger.error("Failed to send ASN email via SMTP: %s", em_err)
+
+    # Supplier: ASN dispatched / failed. Admin: dispatch failed.
+    notif_params = {"shipment": effective_ps_num, "recipient": to_email}
+    notif_link = f"/shipments/{r.shipment_id}#xml" if r.shipment_id else "/shipments"
+    if email_dispatched:
+        await notification_service.notify_supplier(
+            db, r.supplier_id, "ASN_DISPATCHED", params=notif_params, link=notif_link
+        )
+    else:
+        await notification_service.notify_supplier(
+            db, r.supplier_id, "ASN_DISPATCH_FAILED", params=notif_params, link=notif_link
+        )
+        await notification_service.notify_admins(
+            db, "ASN_DISPATCH_FAILED", params={**notif_params, "supplier": supp_name}, link=notif_link
+        )
 
     try:
         await db.commit()
