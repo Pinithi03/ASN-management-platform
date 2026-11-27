@@ -45,7 +45,8 @@
       "selectLine": "Seleziona almeno una riga prima di scaricare il modello.",
       "templateFailed": "Impossibile scaricare il modello personalizzato: {{error}}",
       "xmlFailed": "Impossibile scaricare l'XML ASN: {{error}}",
-      "pastDates": "Queste distinte hanno una data di consegna passata: {{slips}}. Scegli oggi o una data successiva."
+      "pastDates": "Queste distinte hanno una data di consegna passata: {{slips}}. Scegli oggi o una data successiva.",
+      "fileDatesPassed": "La data di consegna nel file è già passata per: {{slips}}. Scegli oggi o una data successiva per queste distinte."
     },
     "errors": {
       "actionRequired": "Azione richiesta",
@@ -324,7 +325,7 @@
       "transmitted": "Trasmessa",
       "xmlTitle": "XML SdDataSlice ufficiale",
       "requested": "Richiesta nell'ordine: {{date}}",
-      "requestedPassed": "Richiesta nell'ordine: {{date}} — già passata. Scegli oggi o una data successiva."
+      "requestedPassed": "Richiesta nell'ordine: {{date}}, già passata. Scegli oggi o una data successiva."
     },
     "toolbar": {
       "back": "Indietro",

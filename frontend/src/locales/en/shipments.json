@@ -44,7 +44,8 @@
       "selectLine": "Please select at least one line item before downloading template.",
       "templateFailed": "Failed to download tailored template: {{error}}",
       "xmlFailed": "Failed to download ASN XML: {{error}}",
-      "pastDates": "These packing slips have a delivery date in the past: {{slips}}. Pick today or a later date."
+      "pastDates": "These packing slips have a delivery date in the past: {{slips}}. Pick today or a later date.",
+      "fileDatesPassed": "The file's delivery date has already passed for: {{slips}}. Pick today or a later date for these packing slips."
     },
     "errors": {
       "actionRequired": "Action Required",
@@ -313,7 +314,7 @@
       "transmitted": "Transmitted",
       "xmlTitle": "Official SdDataSlice XML",
       "requested": "Requested in order: {{date}}",
-      "requestedPassed": "Requested in order: {{date}} — already passed. Pick today or a later date."
+      "requestedPassed": "Requested in order: {{date}}, already passed. Pick today or a later date."
     },
     "toolbar": {
       "back": "Back",
