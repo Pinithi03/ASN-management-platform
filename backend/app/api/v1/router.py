@@ -13,6 +13,7 @@ from app.api.v1.deps import get_current_user
 from app.api.v1.endpoints import (
     asn,
     auth,
+    dashboard,
     emails,
     health,
     notifications,
@@ -79,5 +80,11 @@ api_router.include_router(
     notifications.router,
     prefix="/notifications",
     tags=["Notifications"],
+    dependencies=_auth_dep,
+)
+api_router.include_router(
+    dashboard.router,
+    prefix="/dashboard",
+    tags=["Dashboard"],
     dependencies=_auth_dep,
 )
