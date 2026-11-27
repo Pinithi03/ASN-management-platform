@@ -43,7 +43,9 @@
     "toDispatch": "da spedire",
     "zeroPos": "0 ordini",
     "selectHeading": "Seleziona lo stabilimento di destinazione",
-    "selectHint": "Scegli uno stabilimento, poi apri i suoi ordini di acquisto. Fai doppio clic su una scheda per aprirla direttamente."
+    "selectHint": "Fai clic su uno stabilimento per selezionarlo. Doppio clic o Invio per aprire i suoi ordini di acquisto.",
+    "storeCount_one": "{{count}} magazzino",
+    "storeCount_other": "{{count}} magazzini"
   },
   "header": {
     "title": "Ordini d'acquisto"
